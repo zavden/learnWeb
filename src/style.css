@@ -302,7 +302,6 @@ body {
   flex-direction: column;
   min-height: 0;
   border-bottom: 1px solid var(--border-muted);
-  transition: flex var(--transition-normal);
 }
 
 .editor-panel.collapsed {
@@ -326,6 +325,13 @@ body {
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-muted);
   min-height: var(--panel-header);
+}
+
+/* Make headers of resizable panels show resize cursor */
+#panel-css .panel-header,
+#panel-js .panel-header {
+  cursor: row-resize;
+  user-select: none;
 }
 
 .panel-editor {
@@ -359,6 +365,21 @@ body {
 
 .editor-panel.collapsed .btn-collapse svg {
   transform: rotate(-90deg);
+}
+
+.btn-maximize {
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  /* Push to right */
+  opacity: 0.6;
+  padding: 0;
+}
+
+.btn-maximize:hover {
+  opacity: 1;
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .font-controls {

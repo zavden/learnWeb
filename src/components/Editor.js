@@ -37,7 +37,9 @@ export class Editor {
         this._initEditors();
         this._initButtons();
         this._initShortcuts();
+        this._initResizers();
         this._initPanelControls();
+        this._initMaximizeButtons();
     }
 
     _initShortcuts() {
@@ -46,6 +48,147 @@ export class Editor {
                 e.preventDefault();
                 this._handleModify();
             }
+        });
+    }
+
+    _initResizers() {
+        const setupResizer = (headerId, prevPanelId) => {
+            const currentPanel = document.querySelector(headerId);
+            const header = currentPanel ? currentPanel.querySelector('.panel-header') : null;
+            const prevPanel = document.getElementById(prevPanelId);
+            const container = document.querySelector('.editor-panels');
+
+            if (!header || !prevPanel || !currentPanel || !container) return;
+
+            header.addEventListener('mousedown', (e) => {
+                // Ignore if clicking buttons
+                if (e.target.closest('button')) return;
+
+                e.preventDefault();
+
+                // FORCE RESET: If user drags, we exit "Maximized" or "Collapsed" modes
+                // Remove .collapsed from ALL panels to allow free resizing
+                document.querySelectorAll('.editor-panel').forEach(p => {
+                    p.classList.remove('collapsed');
+                });
+
+                const startY = e.clientY;
+                const totalHeight = container.getBoundingClientRect().height;
+                const panels = document.querySelectorAll('.editor-panel');
+
+                // 1. Calculate ratios based on current pixel usage (which might have just changed if we removed .collapsed)
+                // We must recalculate sizes after removing classes, might need a micro-tick or just force layout
+                // But getting BCR immediately after class removal usually works in modern browsers
+
+                const startRatios = new Map();
+                let currentTotalRatio = 0;
+
+                panels.forEach(p => {
+                    const h = p.getBoundingClientRect().height;
+                    const ratio = h / totalHeight;
+                    startRatios.set(p.id, ratio);
+                    currentTotalRatio += ratio;
+                });
+
+                // Normalize if they result in weird sums (e.g. if we just uncollapsed 32px panels)
+                // If we don't normalize, flex-direction column might leave gaps if sum < 1 (actually flex grows to fill, but let's be precise)
+                // Actually, if we set flex-grow, they will fill regardless of sum, unless sum is very small ??
+                // Better to normalize to 1 for sanity
+
+                if (currentTotalRatio > 0) {
+                    panels.forEach(p => {
+                        const raw = startRatios.get(p.id);
+                        const normalized = raw / currentTotalRatio;
+                        p.style.flex = `${normalized} 1 0px`;
+                        p.style.height = '';
+                        startRatios.set(p.id, normalized);
+                    });
+                }
+
+                const startRatioPrev = startRatios.get(prevPanel.id);
+                const startRatioCurr = startRatios.get(currentPanel.id);
+                // Min pixel height / total height
+                const minRatio = 32 / totalHeight;
+
+                const onMouseMove = (MoveEvent) => {
+                    const deltaPixels = MoveEvent.clientY - startY;
+                    const deltaRatio = deltaPixels / totalHeight;
+
+                    let newRatioPrev = startRatioPrev + deltaRatio;
+                    let newRatioCurr = startRatioCurr - deltaRatio;
+
+                    if (newRatioPrev < minRatio) {
+                        const correction = minRatio - newRatioPrev;
+                        newRatioPrev += correction;
+                        newRatioCurr -= correction;
+                    }
+                    if (newRatioCurr < minRatio) {
+                        const correction = minRatio - newRatioCurr;
+                        newRatioCurr += correction;
+                        newRatioPrev -= correction;
+                    }
+
+                    prevPanel.style.flex = `${newRatioPrev} 1 0px`;
+                    currentPanel.style.flex = `${newRatioCurr} 1 0px`;
+                };
+
+                const onMouseUp = () => {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                };
+
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+        };
+
+        setupResizer('#panel-css', 'panel-html');
+        setupResizer('#panel-js', 'panel-css');
+    }
+
+    _initMaximizeButtons() {
+        // "Maximize" means collapsing the OTHER two panels
+        const panels = ['panel-html', 'panel-css', 'panel-js'];
+
+        panels.forEach(panelId => {
+            const panel = document.getElementById(panelId);
+            if (!panel) return;
+
+            const btnMax = panel.querySelector('.btn-maximize');
+            if (!btnMax) return;
+
+            btnMax.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent drag start if near header
+
+                // Check if this panel is already maximized (others are collapsed)
+                const others = panels.filter(p => p !== panelId).map(id => document.getElementById(id));
+                const allOthersCollapsed = others.every(p => p.classList.contains('collapsed'));
+
+                if (allOthersCollapsed) {
+                    // RESTORE: Remove collapsed from everyone and reset flex to equal
+                    panels.forEach(id => {
+                        const p = document.getElementById(id);
+                        p.classList.remove('collapsed');
+                        // Reset to equal distribution to avoid "black void" issues
+                        // We lose custom ratios, but it guarantees a clean state
+                        p.style.flex = '1 1 0px';
+                        p.style.height = '';
+                    });
+                } else {
+                    // MAXIMIZE: Collapse others, expand current
+                    // We use flex-grow to ensure the maximized panel takes all available space
+                    // Collapsed panels are handled by CSS (flex: 0 0 32px !important)
+                    others.forEach(p => {
+                        p.classList.add('collapsed');
+                        p.style.flex = ''; // Let CSS class handle it
+                    });
+
+                    panel.classList.remove('collapsed');
+                    // Give it a huge flex grow to dominate any remaining space logic
+                    panel.style.flex = '1 1 0px';
+                    panel.style.height = '';
+                }
+            });
         });
     }
 
@@ -75,10 +218,99 @@ export class Editor {
 
         const btnInc = document.getElementById('btn-font-inc');
         const btnDec = document.getElementById('btn-font-dec');
+        const btnAuto = document.getElementById('btn-auto-fit');
 
         if (btnInc && btnDec) {
             btnInc.addEventListener('click', () => updateFont(1));
             btnDec.addEventListener('click', () => updateFont(-1));
+        }
+
+        if (btnAuto) {
+            btnAuto.addEventListener('click', () => {
+                this._handleAutoFit(fontSize);
+            });
+        }
+    }
+
+    _handleAutoFit(currentFontSize) {
+        // Reset all panels first
+        const panels = ['panel-html', 'panel-css', 'panel-js'].map(id => document.getElementById(id));
+        panels.forEach(p => {
+            p.classList.remove('collapsed');
+            p.style.height = '';
+        });
+
+        // Get editors
+        const editors = [this.htmlEditor, this.cssEditor, this.jsEditor];
+
+        // Calculate needed pixels for each
+        // Line height is approx 1.6em. We add padding/margin safety.
+        const lineHeight = currentFontSize * 1.6;
+        const headerHeight = 32;
+        const scrollbarPadding = 20; // Extra space for horizontal Scrollbar if needed
+
+        const neededHeights = editors.map(editor => {
+            const lines = editor.state.doc.lines;
+            return (lines * lineHeight) + headerHeight + scrollbarPadding;
+        });
+
+        // Get total available height
+        const container = document.querySelector('.editor-panels');
+        const availableHeight = container.getBoundingClientRect().height;
+        const minPanelHeight = 32;
+
+        const totalNeeded = neededHeights.reduce((a, b) => a + b, 0);
+
+        if (totalNeeded <= availableHeight) {
+            // Case A: Everything fits! 
+            // We distribute proportionally based on needed height to fill the space
+            // But usually we want them to just be their height. 
+            // Flex requires we fill the space. 
+            // So we use the needed heights as flex-grow weights.
+
+            // However, if one is tiny (3 lines) and others are huge, the tiny one gets huge too in flex-grow.
+            // But the user wants "see all 3". 
+            // Proportional allocation based on content length is exactly what we want.
+            panels.forEach((p, i) => {
+                p.style.flex = `${neededHeights[i]} 1 0px`;
+            });
+
+        } else {
+            // Case B: Content exceeds space. Priority: HTML > CSS > JS.
+            // We implement "Waterfall Allocation" logic.
+
+            // 1. Reserve min height for everyone
+            let remainingSpace = availableHeight - (minPanelHeight * 3);
+            const allocations = [minPanelHeight, minPanelHeight, minPanelHeight];
+
+            // 2. Adjust needed to exclude what we already reserved
+            // If needed < min, we don't need more.
+            const extraNeeded = neededHeights.map(h => Math.max(0, h - minPanelHeight));
+
+            // 3. Give HTML what it needs (clamped to remaining)
+            const takeHtml = Math.min(extraNeeded[0], remainingSpace);
+            allocations[0] += takeHtml;
+            remainingSpace -= takeHtml;
+
+            // 4. Give CSS what it needs
+            if (remainingSpace > 0) {
+                const takeCss = Math.min(extraNeeded[1], remainingSpace);
+                allocations[1] += takeCss;
+                remainingSpace -= takeCss;
+            }
+
+            // 5. Give JS the rest (if any)
+            if (remainingSpace > 0) {
+                // If JS needs more, it gets what's left. 
+                // If it needs less, it gets what's left anyway because we must fill container.
+                allocations[2] += remainingSpace;
+            }
+
+            // Apply as flex-grow based on calculated pixels
+            // We use the calculated pixels as relative weights
+            panels.forEach((p, i) => {
+                p.style.flex = `${allocations[i]} 1 0px`;
+            });
         }
     }
 

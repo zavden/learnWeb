@@ -113,8 +113,7 @@ app.get('/api/topic/:ch/:sec/:top/examples', (req, res) => {
     const files = fs
         .readdirSync(dirPath)
         .filter((f) => f.endsWith('.md'))
-        .sort()
-        .reverse();
+        .sort();
     res.json(files);
 });
 
