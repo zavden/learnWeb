@@ -52,6 +52,12 @@ export class Preview {
       cdnScripts += `  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"><\/script>\n`;
     }
 
+    // D3.js
+    const needsD3 = jsStr.includes('d3.');
+    if (needsD3) {
+      cdnScripts += `  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"><\/script>\n`;
+    }
+
     const doc = `<!DOCTYPE html>
 <html lang="en">
 <head>

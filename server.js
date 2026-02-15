@@ -151,6 +151,65 @@ function animate() {
 animate();
 \`\`\`
 `,
+
+    d3: (name) => `# HTML
+
+\`\`\`html
+<svg id="chart"></svg>
+\`\`\`
+
+# CSS
+
+\`\`\`css
+body { margin: 0; padding: 16px; background: #1a1a2e; color: white; }
+.bar { fill: #58a6ff; }
+.bar:hover { fill: #88d65d; }
+.axis text { fill: #ccc; font-size: 12px; }
+.axis line, .axis path { stroke: #555; }
+\`\`\`
+
+# JavaScript
+
+\`\`\`javascript
+const data = [12, 25, 8, 32, 18, 28, 15, 35, 22, 10];
+const width = 500, height = 300;
+const margin = { top: 20, right: 20, bottom: 30, left: 40 };
+
+const svg = d3.select("#chart")
+  .attr("width", width)
+  .attr("height", height);
+
+const x = d3.scaleBand()
+  .domain(data.map((_, i) => i))
+  .range([margin.left, width - margin.right])
+  .padding(0.2);
+
+const y = d3.scaleLinear()
+  .domain([0, d3.max(data)])
+  .nice()
+  .range([height - margin.bottom, margin.top]);
+
+svg.selectAll(".bar")
+  .data(data)
+  .join("rect")
+    .attr("class", "bar")
+    .attr("x", (d, i) => x(i))
+    .attr("y", d => y(d))
+    .attr("width", x.bandwidth())
+    .attr("height", d => y(0) - y(d))
+    .attr("rx", 4);
+
+svg.append("g")
+  .attr("class", "axis")
+  .attr("transform", \`translate(0,\${height - margin.bottom})\`)
+  .call(d3.axisBottom(x).tickFormat(i => \`#\${i + 1}\`));
+
+svg.append("g")
+  .attr("class", "axis")
+  .attr("transform", \`translate(\${margin.left},0)\`)
+  .call(d3.axisLeft(y));
+\`\`\`
+`,
 };
 
 // ─── GET /api/tree ──────────────────────────────────────
