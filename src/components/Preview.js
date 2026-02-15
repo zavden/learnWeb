@@ -46,6 +46,12 @@ export class Preview {
       cdnScripts += `  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/ScrollTrigger.min.js"><\/script>\n`;
     }
 
+    // Three.js (r160 is the last version with UMD/global build)
+    const needsThree = jsStr.includes('THREE.');
+    if (needsThree) {
+      cdnScripts += `  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"><\/script>\n`;
+    }
+
     const doc = `<!DOCTYPE html>
 <html lang="en">
 <head>

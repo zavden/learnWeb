@@ -105,6 +105,52 @@ gsap.to(".box", {
 });
 \`\`\`
 `,
+
+    threejs: (name) => `# HTML
+
+\`\`\`html
+<canvas id="canvas"></canvas>
+\`\`\`
+
+# CSS
+
+\`\`\`css
+body { margin: 0; overflow: hidden; }
+canvas { display: block; width: 100%; height: 100%; }
+\`\`\`
+
+# JavaScript
+
+\`\`\`javascript
+const canvas = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a2e);
+
+const camera = new THREE.PerspectiveCamera(60, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
+camera.position.z = 4;
+
+const geometry = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+const material = new THREE.MeshStandardMaterial({ color: 0x58a6ff, metalness: 0.4, roughness: 0.5 });
+const cube = new THREE.Mesh(geometry, material);
+scene.add(cube);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+dirLight.position.set(3, 5, 4);
+scene.add(dirLight);
+
+function animate() {
+  requestAnimationFrame(animate);
+  cube.rotation.x += 0.008;
+  cube.rotation.y += 0.012;
+  renderer.render(scene, camera);
+}
+animate();
+\`\`\`
+`,
 };
 
 // ─── GET /api/tree ──────────────────────────────────────
