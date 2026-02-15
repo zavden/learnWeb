@@ -205,6 +205,41 @@ app.post('/api/create', (req, res) => {
         } else if (type === 'topic') {
             targetDir = path.join(MATERIAL_DIR, parentPath);
             prefix = 'top';
+        } else if (type === 'example') {
+            // parentPath should be "ch/sec/top"
+            targetDir = path.join(MATERIAL_DIR, parentPath, 'examples');
+            // Check if examples dir exists, if not create it (should exist for topics)
+            if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
+            // For examples, name is the filename
+            const filename = name.endsWith('.md') ? name : `${name}.md`;
+            const filePath = path.join(targetDir, filename);
+
+            if (fs.existsSync(filePath)) return res.status(409).json({ error: 'Example already exists' });
+
+            // Create basic template
+            const template = `# HTML
+
+\`\`\`html
+<h1>${name}</h1>
+\`\`\`
+
+# CSS
+
+\`\`\`css
+h1 {
+  color: #58a6ff;
+}
+\`\`\`
+
+# JavaScript
+
+\`\`\`javascript
+console.log('Hello from ${name}');
+\`\`\`
+`;
+            fs.writeFileSync(filePath, template, 'utf-8');
+            return res.json({ filename, path: filePath });
         } else {
             return res.status(400).json({ error: 'Invalid type' });
         }

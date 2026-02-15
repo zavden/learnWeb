@@ -15,8 +15,9 @@ import { fetchExamples, fetchExample, saveExample, modifyExample, removeExample,
 import { parseExampleMd, buildExampleMd } from '../utils/markdown.js';
 
 export class Editor {
-    constructor({ onCodeChange }) {
+    constructor({ onCodeChange, onRename }) {
         this.onCodeChange = onCodeChange;
+        this.onRename = onRename;
         this.currentTopicPath = null;
         this.currentFilename = null; // Track loaded filename
 
@@ -35,7 +36,17 @@ export class Editor {
 
         this._initEditors();
         this._initButtons();
+        this._initShortcuts();
         this._initPanelControls();
+    }
+
+    _initShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                this._handleModify();
+            }
+        });
     }
 
     _initPanelControls() {
@@ -134,17 +145,7 @@ export class Editor {
         });
 
         // Modify button - updates current file
-        this.btnModify.addEventListener('click', async () => {
-            if (!this.currentTopicPath || !this.currentFilename) return;
-            const content = buildExampleMd(this.getHTML(), this.getCSS(), this.getJS());
-            try {
-                await modifyExample(this.currentTopicPath, this.currentFilename, content);
-                this._showToast(`Modified: ${this.currentFilename}`, 'success');
-            } catch (err) {
-                console.error(err);
-                this._showToast(`Modify failed: ${err.message}`, 'error');
-            }
-        });
+        this.btnModify.addEventListener('click', () => this._handleModify());
 
         // Remove button - deletes current file
         this.btnRemove.addEventListener('click', async () => {
@@ -179,8 +180,10 @@ export class Editor {
             try {
                 await renameExample(this.currentTopicPath, this.currentFilename, newFilename);
                 this._showToast(`Renamed to: ${newFilename}`, 'success');
+                const oldName = this.currentFilename;
                 this.currentFilename = newFilename;
                 this._updateFilenameDisplay();
+                if (this.onRename) this.onRename(newFilename, oldName);
             } catch (err) {
                 console.error(err);
                 this._showToast(`Rename failed: ${err.message}`, 'error');
@@ -303,6 +306,18 @@ export class Editor {
         toast.textContent = message;
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 3000);
+    }
+
+    async _handleModify() {
+        if (!this.currentTopicPath || !this.currentFilename) return;
+        const content = buildExampleMd(this.getHTML(), this.getCSS(), this.getJS());
+        try {
+            await modifyExample(this.currentTopicPath, this.currentFilename, content);
+            this._showToast(`Modified: ${this.currentFilename}`, 'success');
+        } catch (err) {
+            console.error(err);
+            this._showToast(`Modify failed: ${err.message}`, 'error');
+        }
     }
 
     async loadFirstExample() {

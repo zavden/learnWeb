@@ -6,16 +6,34 @@ import { TheoryViewer } from './components/TheoryViewer.js';
 import { Editor } from './components/Editor.js';
 import { Preview } from './components/Preview.js';
 import { CreateDialog } from './components/CreateDialog.js';
+import { Gallery } from './components/Gallery.js';
 
 class App {
     constructor() {
         this.currentTopicPath = null;
+
+        // UI Elements for View Switching
+        this.galleryView = document.getElementById('gallery-view');
+        this.editorToolbar = document.querySelector('.editor-toolbar');
+        this.editorPanels = document.querySelector('.editor-panels');
+        this.previewColumn = document.getElementById('preview-column');
 
         // Initialize components
         this.preview = new Preview();
 
         this.editor = new Editor({
             onCodeChange: (code) => this.preview.update(code),
+            onRename: () => {
+                // Refresh gallery if renaming happens
+                // But we don't need to show gallery, just refresh its data for next time
+                if (this.currentTopicPath) {
+                    this.gallery.load(this.currentTopicPath);
+                }
+            }
+        });
+
+        this.gallery = new Gallery({
+            onExampleSelect: (filename) => this.loadExample(filename),
         });
 
         this.theoryViewer = new TheoryViewer();
@@ -25,28 +43,59 @@ class App {
             onCreateClick: () => this.openCreateDialog(),
         });
 
+        // Gallery Button
+        const btnGallery = document.getElementById('btn-gallery');
+        if (btnGallery) {
+            btnGallery.addEventListener('click', () => this.showGallery());
+        }
+
         this.createDialog = new CreateDialog({
             onCreated: () => this.sidebar.load(),
         });
 
         // Initial load
         this.sidebar.load();
-
         this._initViewportResizer();
     }
 
     async selectTopic(topicPath, label) {
         this.currentTopicPath = topicPath;
 
-        // Update editor and preview topic
+        // Update components
         this.editor.setTopicPath(topicPath);
         this.preview.setTopicPath(topicPath);
+        this.gallery.currentTopicPath = topicPath; // Sync path
 
         // Load theory content
-        await this.theoryViewer.load(topicPath);
+        this.theoryViewer.load(topicPath);
 
-        // Load first example into editor
-        await this.editor.loadFirstExample();
+        // Show Gallery instead of auto-loading editor
+        await this.gallery.load(topicPath);
+        this.showGallery();
+    }
+
+    async loadExample(filename) {
+        this.showEditor();
+        await this.editor.loadExample(filename);
+    }
+
+    showGallery() {
+        this.galleryView.classList.remove('hidden');
+        this.editorToolbar.classList.add('hidden');
+        this.editorPanels.classList.add('hidden');
+        // Keep preview column visible? It shows the preview of what?
+        // If we are in gallery mode, the preview column (right side) is visible, but empty?
+        // Ah, the layout is: Sidebar | Editor Column | Preview Column.
+        // If I hide Editor Toolbar/Panels, and show Gallery in Editor Column.
+        // Preview Column is still on the right.
+        // Should it show anything? Maybe blank or "Select an example".
+        this.preview.update({ html: '', css: '', js: '' }); // Clear preview
+    }
+
+    showEditor() {
+        this.galleryView.classList.add('hidden');
+        this.editorToolbar.classList.remove('hidden');
+        this.editorPanels.classList.remove('hidden');
     }
 
     _initViewportResizer() {
@@ -91,3 +140,4 @@ class App {
 document.addEventListener('DOMContentLoaded', () => {
     new App();
 });
+

@@ -35,7 +35,16 @@ export class CreateDialog {
             if (type === 'section') {
                 parentPath = this.parentSelect.value;
             } else if (type === 'topic') {
+            } else if (type === 'topic') {
                 parentPath = this.parentSelect.value;
+            } else if (type === 'example') {
+                parentPath = this.parentSelect.value;
+                // Append .md if missing
+                if (!name.endsWith('.md')) {
+                    // We need to modify name, but name is const.
+                    // Actually createItem handles it? No, createItem (api.js) might need it.
+                    // Let's modify api.js createItem later or ensure name has extension here.
+                }
             }
 
             try {
@@ -49,11 +58,19 @@ export class CreateDialog {
         });
     }
 
-    open(tree) {
+    open(tree, preselectedTopicPath = null) {
         this.tree = tree;
         this.nameInput.value = '';
-        this.typeSelect.value = 'chapter';
-        this._updateParentOptions();
+
+        if (preselectedTopicPath) {
+            this.typeSelect.value = 'example';
+            this._updateParentOptions();
+            this.parentSelect.value = preselectedTopicPath;
+        } else {
+            this.typeSelect.value = 'chapter';
+            this._updateParentOptions();
+        }
+
         this.dialog.showModal();
     }
 
@@ -86,8 +103,22 @@ export class CreateDialog {
                     this.parentSelect.appendChild(opt);
                 });
             });
+        } else if (type === 'example') {
+            // Parent is a topic
+            this.parentGroup.style.display = 'block';
+            this.tree.forEach((ch) => {
+                ch.sections.forEach((sec) => {
+                    sec.topics.forEach((top) => {
+                        const opt = document.createElement('option');
+                        opt.value = top.path; // distinct path
+                        opt.textContent = `${ch.label} / ${sec.label} / ${top.label}`;
+                        this.parentSelect.appendChild(opt);
+                    });
+                });
+            });
         }
     }
+
 
     _showToast(message, type = 'success') {
         const toast = document.createElement('div');

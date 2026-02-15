@@ -37,6 +37,15 @@
       <section id="workspace">
         <!-- Editor Column -->
         <div id="editor-column">
+          <!-- Gallery View -->
+          <div id="gallery-view" class="hidden">
+            <div class="gallery-header">
+              <h2>Examples</h2>
+              <!-- Optional: Button to create new example? -->
+            </div>
+            <div id="gallery-grid"></div>
+          </div>
+
           <div class="editor-toolbar">
             <div class="editor-actions">
               <span id="current-filename" class="filename-display"></span>
@@ -84,6 +93,16 @@
                   <path d="M16 21h5v-5" />
                 </svg>
                 Rename
+              </button>
+              <button id="btn-gallery" class="btn btn-secondary" title="View Examples">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                Gallery
               </button>
             </div>
             <div class="font-controls">
@@ -203,7 +222,9 @@
         <select id="create-type">
           <option value="chapter">Chapter</option>
           <option value="section">Section</option>
+          <option value="section">Section</option>
           <option value="topic">Topic</option>
+          <option value="example">Example</option>
         </select>
       </div>
       <div class="form-group" id="parent-group">
