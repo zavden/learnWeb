@@ -44,11 +44,11 @@ export async function saveExample(topicPath, content) {
     return handleResponse(res);
 }
 
-export async function createItem(type, name, parentPath = '') {
+export async function createItem(type, name, parentPath = '', template = 'vanilla') {
     const res = await fetch(`${BASE}/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, name, parentPath }),
+        body: JSON.stringify({ type, name, parentPath, template }),
     });
     return handleResponse(res);
 }

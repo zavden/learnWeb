@@ -11,6 +11,8 @@ export class CreateDialog {
         this.parentSelect = document.getElementById('create-parent');
         this.parentGroup = document.getElementById('parent-group');
         this.nameInput = document.getElementById('create-name');
+        this.templateSelect = document.getElementById('create-template');
+        this.templateGroup = document.getElementById('template-group');
         this.btnCancel = document.getElementById('btn-cancel-create');
 
         this.tree = [];
@@ -35,20 +37,15 @@ export class CreateDialog {
             if (type === 'section') {
                 parentPath = this.parentSelect.value;
             } else if (type === 'topic') {
-            } else if (type === 'topic') {
                 parentPath = this.parentSelect.value;
             } else if (type === 'example') {
                 parentPath = this.parentSelect.value;
-                // Append .md if missing
-                if (!name.endsWith('.md')) {
-                    // We need to modify name, but name is const.
-                    // Actually createItem handles it? No, createItem (api.js) might need it.
-                    // Let's modify api.js createItem later or ensure name has extension here.
-                }
             }
 
+            const template = (type === 'example') ? this.templateSelect.value : 'vanilla';
+
             try {
-                await createItem(type, name, parentPath);
+                await createItem(type, name, parentPath, template);
                 this.dialog.close();
                 this._showToast(`Created ${type}: ${name}`, 'success');
                 this.onCreated();
@@ -77,6 +74,9 @@ export class CreateDialog {
     _updateParentOptions() {
         const type = this.typeSelect.value;
         this.parentSelect.innerHTML = '';
+
+        // Show template selector only for examples
+        this.templateGroup.style.display = (type === 'example') ? 'block' : 'none';
 
         if (type === 'chapter') {
             this.parentGroup.style.display = 'none';
