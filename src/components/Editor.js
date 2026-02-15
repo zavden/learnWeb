@@ -8,7 +8,7 @@ import { css } from '@codemirror/lang-css';
 import { javascript } from '@codemirror/lang-javascript';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { bracketMatching, indentOnInput } from '@codemirror/language';
-import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
+import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap } from '@codemirror/autocomplete';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 
 import { fetchExamples, fetchExample, saveExample, modifyExample, removeExample, renameExample } from '../utils/api.js';
@@ -336,11 +336,13 @@ export class Editor {
                     ...defaultKeymap,
                     ...historyKeymap,
                     ...closeBracketsKeymap,
+                    ...completionKeymap,
                     ...searchKeymap,
                     indentWithTab,
                 ]),
                 langExtension,
                 oneDark,
+                autocompletion(),
                 updateListener,
                 EditorView.theme({
                     '&': { height: '100%' },
