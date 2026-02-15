@@ -26,19 +26,20 @@ export class Sidebar {
             const chDiv = document.createElement('div');
             chDiv.className = 'tree-chapter';
 
-            // Chapter item
-            const chItem = this._createItem(chapter.label, 'chapter-item', true);
+            // Chapter item - COLLAPSED by default
+            const chItem = this._createItem(chapter.label, 'chapter-item', true, false);
             chDiv.appendChild(chItem);
 
-            // Sections container
+            // Sections container - COLLAPSED by default
             const sectionsDiv = document.createElement('div');
-            sectionsDiv.className = 'tree-children';
+            sectionsDiv.className = 'tree-children collapsed';
 
             chapter.sections.forEach((section) => {
                 const secDiv = document.createElement('div');
                 secDiv.className = 'tree-section';
 
-                const secItem = this._createItem(section.label, 'section-item', true);
+                // Section item - EXPANDED by default (so when chapter opens, topics are visible)
+                const secItem = this._createItem(section.label, 'section-item', true, true);
                 secDiv.appendChild(secItem);
 
                 // Topics container
@@ -58,15 +59,6 @@ export class Sidebar {
                     btnAdd.addEventListener('click', (e) => {
                         e.stopPropagation(); // Prevent topic selection
                         // Open create dialog pre-filled for this topic
-                        // We need to pass the topic path to the create dialog
-                        // But CreateDialog expects a parent selection.
-                        // We can modify openCreateDialog or just open it and let user select?
-                        // User said: "boton + que me permita crear un nuevo ejemplo en ese topico".
-                        // So it should reference this topic.
-                        // For now, let's trigger the global create click, but maybe we can improve context later.
-                        // Or better: call a specific method on main app?
-                        // The Sidebar constructor has onCreateClick.
-                        // Let's pass the context.
                         if (this.onCreateClick) {
                             this.onCreateClick(topic.path);
                         }
@@ -100,13 +92,14 @@ export class Sidebar {
         });
     }
 
-    _createItem(label, className, hasArrow) {
+    _createItem(label, className, hasArrow, isExpanded = false) {
         const div = document.createElement('div');
         div.className = `tree-item ${className}`;
 
         if (hasArrow) {
             const arrow = document.createElement('span');
-            arrow.className = 'arrow expanded';
+            // Only add 'expanded' class if isExpanded is true
+            arrow.className = isExpanded ? 'arrow expanded' : 'arrow';
             arrow.textContent = '▶';
             div.appendChild(arrow);
         }
