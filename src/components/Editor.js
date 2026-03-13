@@ -27,6 +27,7 @@ export class Editor {
         this.currentTopicPath = null;
         this.currentFilename = null;
         this.currentDocument = createEmptyExampleDocument();
+        this.compileDiagnostics = [];
         this.editors = [];
         this.fontSize = 13;
 
@@ -200,6 +201,7 @@ export class Editor {
     setTopicPath(path) {
         this.currentTopicPath = path;
         this.currentFilename = null;
+        this.compileDiagnostics = [];
         this._applyDocument(createEmptyExampleDocument(), { notify: false });
         this._updateButtonStates();
         this._updateFilenameDisplay();
@@ -207,6 +209,7 @@ export class Editor {
 
     _applyDocument(documentModel, { notify = true } = {}) {
         this.currentDocument = cloneExampleDocument(documentModel);
+        this.compileDiagnostics = [];
         this._renderPanels();
         this._updateStatus();
         this._updateButtonStates();
@@ -312,7 +315,7 @@ export class Editor {
     }
 
     _createEditor(container, block) {
-        const langExtension = this._getLanguageExtension(block.type);
+        const langExtensions = this._getLanguageExtensions(block.type);
         const updateListener = EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
             this._setBlockContent(block.id, update.state.doc.toString());
@@ -338,7 +341,7 @@ export class Editor {
                     ...searchKeymap,
                     indentWithTab,
                 ]),
-                langExtension,
+                ...langExtensions,
                 oneDark,
                 autocompletion(),
                 updateListener,
@@ -352,20 +355,23 @@ export class Editor {
         return new EditorView({ state, parent: container });
     }
 
-    _getLanguageExtension(type) {
+    _getLanguageExtensions(type) {
         switch (type) {
             case 'html':
             case 'svg':
-                return html();
+                return [html()];
+            case 'pug':
+                return [];
             case 'css':
             case 'scss':
             case 'sass':
-                return css();
+                return [css()];
             case 'javascript':
+                return [javascript()];
             case 'typescript':
-                return javascript();
+                return [javascript({ typescript: true })];
             default:
-                return html();
+                return [];
         }
     }
 
@@ -526,7 +532,13 @@ export class Editor {
     _updateStatus() {
         if (!this.statusDisplay) return;
 
-        const diagnostics = this.currentDocument.diagnostics || [];
+        const structuralDiagnostics = this.currentDocument.diagnostics || [];
+        const structuralErrors = structuralDiagnostics.filter((diagnostic) => diagnostic.level === 'error');
+        const structuralWarnings = structuralDiagnostics.filter((diagnostic) => diagnostic.level !== 'error');
+        const diagnostics = structuralErrors.length > 0
+            ? structuralErrors
+            : (this.compileDiagnostics.length > 0 ? this.compileDiagnostics : structuralWarnings);
+
         if (diagnostics.length === 0) {
             this.statusDisplay.textContent = '';
             this.statusDisplay.className = 'editor-status hidden';
@@ -539,6 +551,11 @@ export class Editor {
 
         this.statusDisplay.textContent = `${primary.message}${suffix}`;
         this.statusDisplay.className = `editor-status ${primary.level === 'error' ? 'error' : 'warning'}`;
+    }
+
+    setCompileDiagnostics(diagnostics = []) {
+        this.compileDiagnostics = diagnostics;
+        this._updateStatus();
     }
 
     _triggerChange() {

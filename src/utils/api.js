@@ -77,3 +77,12 @@ export async function renameExample(topicPath, oldFilename, newFilename) {
     });
     return handleResponse(res);
 }
+
+export async function compileExample({ document, content }) {
+    const res = await fetch(`${BASE}/compile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ document, content }),
+    });
+    return handleResponse(res);
+}

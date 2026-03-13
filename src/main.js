@@ -11,15 +11,38 @@ import { Gallery } from './components/Gallery.js';
 class App {
     constructor() {
         this.currentTopicPath = null;
+        this.sidebarMinWidth = 220;
+        this.sidebarMaxWidth = 520;
+        this.workspaceMinEditorWidth = 280;
+        this.previewMinWidth = 320;
+        this.sidebarWidthStorageKey = 'learncode.sidebar.width';
+        this.sidebarCollapsedStorageKey = 'learncode.sidebar.collapsed';
+        this.previewWidthMode = 'full';
+        this.customPreviewWidth = 375;
 
         // UI Elements for View Switching
+        this.appShell = document.getElementById('app');
+        this.sidebarElement = document.getElementById('sidebar');
+        this.sidebarToggle = document.getElementById('btn-toggle-sidebar');
+        this.sidebarResizer = document.getElementById('sidebar-resizer');
+        this.workspaceElement = document.getElementById('workspace');
+        this.editorColumn = document.getElementById('editor-column');
+        this.workspaceResizer = document.getElementById('workspace-resizer');
         this.galleryView = document.getElementById('gallery-view');
         this.editorToolbar = document.querySelector('.editor-toolbar');
         this.editorPanels = document.querySelector('.editor-panels');
         this.previewColumn = document.getElementById('preview-column');
+        this.previewFrame = document.getElementById('preview-frame');
+        this.viewportSelect = document.getElementById('viewport-select');
+        this.viewportSlider = document.getElementById('viewport-slider');
+        this.viewportWidthDisplay = document.getElementById('viewport-width-display');
 
         // Initialize components
-        this.preview = new Preview();
+        this.preview = new Preview({
+            onCompileStateChange: (diagnostics) => {
+                this.editor?.setCompileDiagnostics(diagnostics);
+            },
+        });
 
         this.editor = new Editor({
             onCodeChange: (documentModel) => this.preview.update(documentModel),
@@ -58,7 +81,9 @@ class App {
 
         // Initial load
         this.sidebar.load();
+        this._initSidebarControls();
         this._initViewportResizer();
+        this._initWorkspaceResizer();
     }
 
     async selectTopic(topicPath, label) {
@@ -95,35 +120,218 @@ class App {
     }
 
     _initViewportResizer() {
-        const viewportSelect = document.getElementById('viewport-select');
-        const slider = document.getElementById('viewport-slider');
-        const display = document.getElementById('viewport-width-display');
-        const previewFrame = document.getElementById('preview-frame');
+        if (!this.viewportSelect || !this.viewportSlider || !this.viewportWidthDisplay || !this.previewFrame) return;
 
-        if (!viewportSelect || !slider || !display || !previewFrame) return;
+        this.viewportSelect.addEventListener('change', (event) => {
+            if (event.target.value === '100%') {
+                this._applyFullPreviewWidth();
+                return;
+            }
 
-        const updatePreview = (width) => {
-            previewFrame.style.width = width;
-            if (width === '100%') {
-                display.textContent = 'Full';
-                slider.value = slider.max;
+            this._applyCustomPreviewWidth(event.target.value);
+        });
+
+        this.viewportSlider.addEventListener('input', (event) => {
+            this._applyCustomPreviewWidth(event.target.value);
+        });
+    }
+
+    _initSidebarControls() {
+        if (!this.appShell || !this.sidebarElement || !this.sidebarToggle || !this.sidebarResizer) return;
+
+        const storedWidth = this._readStoredNumber(this.sidebarWidthStorageKey, 280);
+        const isCollapsed = window.localStorage.getItem(this.sidebarCollapsedStorageKey) === '1';
+
+        this._setSidebarWidth(storedWidth, { persist: false });
+        this._setSidebarCollapsed(isCollapsed, { persist: false });
+
+        this.sidebarToggle.addEventListener('click', () => {
+            const nextState = !this.appShell.classList.contains('sidebar-collapsed');
+            this._setSidebarCollapsed(nextState);
+        });
+
+        this.sidebarResizer.addEventListener('mousedown', (event) => this._startSidebarResize(event));
+
+        window.addEventListener('resize', () => {
+            const currentWidth = this._readStoredNumber(
+                this.sidebarWidthStorageKey,
+                this.sidebarElement.getBoundingClientRect().width || 280,
+            );
+            this._setSidebarWidth(currentWidth, { persist: false });
+        });
+    }
+
+    _readStoredNumber(key, fallback) {
+        const value = Number.parseInt(window.localStorage.getItem(key) || '', 10);
+        return Number.isFinite(value) ? value : fallback;
+    }
+
+    _getSidebarBounds() {
+        const maxWidth = Math.max(this.sidebarMinWidth, Math.min(this.sidebarMaxWidth, window.innerWidth - 280));
+        return {
+            min: this.sidebarMinWidth,
+            max: maxWidth,
+        };
+    }
+
+    _setSidebarWidth(width, { persist = true } = {}) {
+        const { min, max } = this._getSidebarBounds();
+        const nextWidth = Math.max(min, Math.min(max, Number(width) || min));
+
+        this.appShell.style.setProperty('--sidebar-width', `${nextWidth}px`);
+
+        if (!persist) return;
+        window.localStorage.setItem(this.sidebarWidthStorageKey, String(nextWidth));
+    }
+
+    _setSidebarCollapsed(collapsed, { persist = true } = {}) {
+        this.appShell.classList.toggle('sidebar-collapsed', collapsed);
+        this.sidebarElement.setAttribute('aria-hidden', String(collapsed));
+
+        const label = collapsed ? 'Show navigation' : 'Hide navigation';
+        this.sidebarToggle.title = label;
+        this.sidebarToggle.setAttribute('aria-label', label);
+        this.sidebarToggle.setAttribute('aria-expanded', String(!collapsed));
+
+        if (!persist) return;
+        window.localStorage.setItem(this.sidebarCollapsedStorageKey, collapsed ? '1' : '0');
+    }
+
+    _startSidebarResize(event) {
+        if (this.appShell.classList.contains('sidebar-collapsed')) return;
+
+        event.preventDefault();
+
+        const startX = event.clientX;
+        const startWidth = this.sidebarElement.getBoundingClientRect().width;
+        let nextWidth = startWidth;
+
+        this.sidebarResizer.classList.add('resizing');
+        document.body.classList.add('is-resizing-sidebar');
+
+        const onMouseMove = (moveEvent) => {
+            nextWidth = startWidth + (moveEvent.clientX - startX);
+            this._setSidebarWidth(nextWidth, { persist: false });
+        };
+
+        const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            this.sidebarResizer.classList.remove('resizing');
+            document.body.classList.remove('is-resizing-sidebar');
+            this._setSidebarWidth(nextWidth);
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    }
+
+    _initWorkspaceResizer() {
+        if (!this.workspaceElement || !this.workspaceResizer || !this.previewColumn) return;
+
+        const initialWidth = Math.round(this.previewColumn.getBoundingClientRect().width || 640);
+        this._setPreviewColumnWidth(initialWidth);
+        this._applyFullPreviewWidth();
+
+        this.workspaceResizer.addEventListener('mousedown', (event) => this._startWorkspaceResize(event));
+
+        window.addEventListener('resize', () => {
+            if (this.previewWidthMode === 'full') {
+                this._applyFullPreviewWidth();
             } else {
-                const px = parseInt(width, 10);
-                display.textContent = `${px}px`;
-                slider.value = px;
+                this._applyCustomPreviewWidth(this.customPreviewWidth);
+            }
+        });
+    }
+
+    _getWorkspaceBounds() {
+        const workspaceWidth = this.workspaceElement?.getBoundingClientRect().width || window.innerWidth;
+        const dividerWidth = this.workspaceResizer?.getBoundingClientRect().width || 10;
+        const maxWidth = Math.max(
+            this.previewMinWidth,
+            Math.round(workspaceWidth - this.workspaceMinEditorWidth - dividerWidth),
+        );
+
+        return {
+            min: this.previewMinWidth,
+            max: maxWidth,
+        };
+    }
+
+    _setPreviewColumnWidth(width) {
+        const { min, max } = this._getWorkspaceBounds();
+        const nextWidth = Math.max(min, Math.min(max, Math.round(Number(width) || min)));
+        this.appShell.style.setProperty('--preview-column-width', `${nextWidth}px`);
+        return nextWidth;
+    }
+
+    _syncPreviewControls(width, mode = 'custom') {
+        if (!this.viewportSlider || !this.viewportWidthDisplay || !this.viewportSelect) return;
+
+        if (mode === 'full') {
+            this.viewportWidthDisplay.textContent = 'Full';
+            this.viewportSlider.value = Math.min(Number(this.viewportSlider.max), width);
+            this.viewportSelect.value = '100%';
+            return;
+        }
+
+        this.viewportWidthDisplay.textContent = `${width}px`;
+        this.viewportSlider.value = Math.min(Number(this.viewportSlider.max), width);
+        this.viewportSelect.value = 'custom';
+    }
+
+    _applyFullPreviewWidth() {
+        if (!this.previewFrame) return;
+
+        const columnWidth = Math.round(this.previewColumn?.getBoundingClientRect().width || this.previewMinWidth);
+        this.previewFrame.style.width = '100%';
+        this.previewWidthMode = 'full';
+        this._syncPreviewControls(columnWidth, 'full');
+    }
+
+    _applyCustomPreviewWidth(width) {
+        if (!this.previewFrame) return;
+
+        const nextWidth = Math.max(this.previewMinWidth, Math.round(Number.parseInt(width, 10) || this.previewMinWidth));
+        this.previewFrame.style.width = `${nextWidth}px`;
+        this.previewWidthMode = 'custom';
+        this.customPreviewWidth = nextWidth;
+        this._syncPreviewControls(nextWidth, 'custom');
+    }
+
+    _startWorkspaceResize(event) {
+        if (!this.workspaceResizer || !this.previewColumn) return;
+
+        event.preventDefault();
+
+        const startX = event.clientX;
+        const startWidth = this.previewColumn.getBoundingClientRect().width;
+        let nextWidth = startWidth;
+
+        this.workspaceResizer.classList.add('resizing');
+        document.body.classList.add('is-resizing-workspace');
+
+        const onMouseMove = (moveEvent) => {
+            nextWidth = startWidth - (moveEvent.clientX - startX);
+            this._setPreviewColumnWidth(nextWidth);
+            if (this.previewWidthMode === 'full') {
+                this._applyFullPreviewWidth();
             }
         };
 
-        viewportSelect.addEventListener('change', (e) => {
-            updatePreview(e.target.value);
-        });
+        const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            this.workspaceResizer.classList.remove('resizing');
+            document.body.classList.remove('is-resizing-workspace');
+            this._setPreviewColumnWidth(nextWidth);
+            if (this.previewWidthMode === 'full') {
+                this._applyFullPreviewWidth();
+            }
+        };
 
-        slider.addEventListener('input', (e) => {
-            const px = e.target.value;
-            previewFrame.style.width = `${px}px`;
-            display.textContent = `${px}px`;
-            viewportSelect.value = 'custom';
-        });
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
     }
 
     openCreateDialog(preselectedTopicPath = null) {

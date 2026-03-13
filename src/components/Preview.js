@@ -1,12 +1,15 @@
-import { renderExampleDocument } from '../utils/exampleRenderer.js';
+import { compileExample } from '../utils/api.js';
+import { renderCompiledExampleDocument } from '../utils/exampleRenderer.js';
 
 export class Preview {
-    constructor() {
+    constructor({ onCompileStateChange } = {}) {
         this.iframe = document.getElementById('preview-frame');
         this.btnRefresh = document.getElementById('btn-refresh');
         this._debounceTimer = null;
         this._currentTopicPath = null;
         this._lastDocument = null;
+        this._renderToken = 0;
+        this._onCompileStateChange = onCompileStateChange;
 
         this.btnRefresh.addEventListener('click', () => {
             if (this._lastDocument) this.update(this._lastDocument);
@@ -28,11 +31,45 @@ export class Preview {
 
     clear() {
         this._lastDocument = null;
+        this._renderToken += 1;
         clearTimeout(this._debounceTimer);
-        this.iframe.srcdoc = renderExampleDocument({ blocks: [] }, this._currentTopicPath);
+        this.iframe.srcdoc = renderCompiledExampleDocument({}, this._currentTopicPath, []);
+        this._emitCompileState([]);
     }
 
-    _render(documentModel) {
-        this.iframe.srcdoc = renderExampleDocument(documentModel, this._currentTopicPath);
+    async _render(documentModel) {
+        const renderToken = ++this._renderToken;
+
+        try {
+            const result = await compileExample({ document: documentModel });
+            if (renderToken !== this._renderToken) return;
+
+            const diagnostics = result.compileDiagnostics || [];
+            this.iframe.srcdoc = renderCompiledExampleDocument(
+                result.compiledDocument,
+                this._currentTopicPath,
+                diagnostics
+            );
+            this._emitCompileState(diagnostics);
+        } catch (err) {
+            if (renderToken !== this._renderToken) return;
+
+            const diagnostics = [
+                {
+                    level: 'error',
+                    code: 'preview-compile-request-failed',
+                    message: err.message,
+                },
+            ];
+
+            this.iframe.srcdoc = renderCompiledExampleDocument({}, this._currentTopicPath, diagnostics);
+            this._emitCompileState(diagnostics);
+        }
+    }
+
+    _emitCompileState(diagnostics) {
+        if (this._onCompileStateChange) {
+            this._onCompileStateChange(diagnostics);
+        }
     }
 }

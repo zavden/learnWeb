@@ -1,986 +1,467 @@
-# Plan de Implementacion: Sesiones Dinamicas por Estructura Markdown
+# Plan de Implementacion: Consola de Runtime por Markdown
 
 ## Objetivo
 
-Evolucionar el editor para que la cantidad y el tipo de paneles visibles dependan de la estructura real del archivo Markdown del ejemplo.
+Agregar una consola visual debajo del preview, estilo CodePen, orientada a depurar ejemplos con `JavaScript` o `TypeScript`.
 
-Casos esperados en la primera iteracion:
+La consola debe:
 
-- `HTML`
-- `HTML + CSS`
-- `HTML + CSS + JavaScript`
-- `SVG`
-- `SVG + CSS`
-- `SVG + CSS + JavaScript`
+- existir solo cuando el Markdown del ejemplo la habilite
+- conservar el historial aunque el preview se vuelva a renderizar
+- mostrar el orden de ejecucion
+- mostrar `log`, `info`, `warn`, `error`
+- mostrar errores reales de runtime y `unhandledrejection`
+- quedar preparada para ejecutar comandos en una fase posterior
+- permitir aumentar y disminuir el zoom de fuente de la consola
 
-Requisito clave:
+## Conclusiones de la Evaluacion
 
-- `HTML` y `SVG` deben comportarse como variantes del bloque de marcado principal
-- el editor no debe mostrar paneles vacios o irrelevantes
-- el sistema debe quedar preparado para soportar en el futuro `SCSS` / `SASS` y `TypeScript`, sin implementarlos todavia
+### 1. La base tecnica ya existe y la dificultad es razonable
 
-## Estado Actual
+El proyecto ya tiene un punto central de render del preview:
 
-Hoy el proyecto asume un formato fijo de tres bloques:
+- [src/components/Preview.js](/home/zavden/Learning/Web/learnWeb/src/components/Preview.js)
+- [src/utils/exampleRenderer.js](/home/zavden/Learning/Web/learnWeb/src/utils/exampleRenderer.js)
 
-- `HTML`
-- `CSS`
-- `JavaScript`
+Eso hace viable interceptar el runtime del `iframe` sin tocar cada ejemplo por separado.
 
-Ese supuesto esta repetido en varias capas:
+Estimacion:
 
-- parser y serializacion del ejemplo en `src/utils/markdown.js`
-- carga y guardado en `src/components/Editor.js`
-- estructura fija de tres paneles en `index.html`
-- preview en `src/components/Preview.js`
-- preview de galeria en `src/components/Gallery.js`
-- plantilla de creacion de ejemplos en `server.js`
+- consola basica con logs, warnings, errores y persistencia entre rerenders: `4/10` a `5/10`
+- consola con ejecucion de comandos tipo REPL: `6/10` a `7/10`
 
-Consecuencia:
+### 2. El cuello de botella actual no es el preview, es el modelo de documento
 
-- si el Markdown contiene solo `HTML`, el sistema sigue pensando en tres paneles
-- si se introduce `SVG`, hoy no existe una representacion nativa para ese bloque
-- agregar nuevos lenguajes con el diseño actual obligaria a seguir duplicando logica
+Hoy el parser de ejemplos solo entiende bloques de codigo y headings:
 
-## Estado Actual Tras la Implementacion v1
+- [src/utils/markdown.js](/home/zavden/Learning/Web/learnWeb/src/utils/markdown.js)
 
-La base ya no esta en el estado descrito arriba. Hoy el proyecto ya cuenta con una primera iteracion funcional del modelo dinamico:
+No existe metadata de documento para cosas como:
 
-- existe un registro central de bloques en `src/config/exampleBlocks.js`
-- el parser ya trabaja por bloques en `src/utils/markdown.js`
-- el editor ya renderiza paneles dinamicos segun el documento cargado
-- el preview y la galeria ya comparten un renderizador comun
-- el sistema ya entra en modo seguro cuando encuentra bloques no soportados
-- `SCSS`, `SASS` y `TypeScript` ya estan registrados como lenguajes conocidos pero deshabilitados
+- `console: true`
+- configuracion inicial de consola
+- futuras flags de runtime
 
-Conclusión:
+Conclusion:
 
-- la arquitectura ya esta en un punto donde agregar nuevos lenguajes es viable
-- pero `Pug`, `SCSS`, `SASS` y `TypeScript` ya no son solo "nuevos bloques"
-- ahora el cuello de botella real es la ausencia de una etapa de compilacion / transformacion antes del preview
+- antes de dibujar la consola, hay que extender el formato del Markdown para soportar metadata de ejemplo
 
-## Conclusiones de la Evaluacion para Pug, SCSS, SASS y TypeScript
+### 3. La consola no debe vivir dentro del iframe
 
-### 1. El parser y el editor actual si soportan el crecimiento del modelo
+Hoy el `iframe` se reemplaza en cada render con `srcdoc`.
 
-La parte estructural mas costosa ya esta resuelta:
+Si el historial vive dentro del propio preview:
 
-- el sistema ya no depende de `html/css/js` fijos
-- la sesion se deriva de los bloques cargados
-- el editor puede mostrar cualquier combinacion de `markup`, `style` y `script`
+- se va a perder en cada recarga
+- no se va a poder ver el orden real entre ejecuciones
+- ejecutar comandos despues sera mas dificil
 
-Conclusión:
+Conclusion:
 
-- no hace falta otro refactor grande del layout para soportar `Pug`, `SCSS`, `SASS` y `TypeScript`
-- la siguiente iteracion debe enfocarse en compilacion, no en estructura
+- el `iframe` solo debe emitir eventos
+- el historial debe vivir en la app principal, fuera del `iframe`
 
-### 2. El renderizador actual solo inyecta texto; no compila nada
+### 4. "Errores y warnings reales" necesita una definicion precisa
 
-Hoy el preview:
+Lo que si es factible capturar de forma fiable:
 
-- toma el bloque `markup` y lo inserta tal cual en el `body`
-- toma el bloque `style` y lo inserta tal cual en `<style>`
-- toma el bloque `script` y lo inserta tal cual en `<script>`
+- `console.log`
+- `console.info`
+- `console.warn`
+- `console.error`
+- `window.onerror`
+- `unhandledrejection`
+- errores de runtime del script del usuario
+- diagnosticos de compilacion ya existentes
 
-Esto funciona para:
+Lo que no se puede prometer capturar al 100% desde codigo de pagina:
 
-- `HTML`
-- `SVG`
-- `CSS`
-- `JavaScript`
+- todos los warnings internos de DevTools del navegador
+- todos los warnings de red, CSP o deprecations generados solo por el browser
 
-Pero no funciona para:
+Conclusion:
 
-- `Pug`, porque debe compilar a HTML
-- `SCSS` / `SASS`, porque deben compilar a CSS
-- `TypeScript`, porque debe transpilar a JavaScript
+- la primera version debe mostrar todos los errores y warnings observables desde el runtime del `iframe`
+- no debe venderse como clon completo de la consola del navegador
 
-Conclusión:
+### 5. La implementacion debe quedar lista para comandos futuros
 
-- la siguiente capa obligatoria es un pipeline de compilacion entre el documento fuente y el preview
+Si la consola se hace solo como visor de texto, luego habra que rehacerla para soportar input.
 
-### 3. Hay que separar errores estructurales de errores de compilacion
+La direccion correcta desde el inicio es:
 
-Hoy el sistema trata un bloque no soportado como error estructural y entra en modo seguro.
+- un canal `postMessage` bidireccional entre app e `iframe`
+- eventos con `renderId`
+- store de consola por ejemplo
+- base para pedir evaluaciones futuras al contexto vivo del preview
 
-Eso esta bien para:
+## Contrato Propuesto de Markdown
 
-- un lenguaje desconocido
-- multiples bloques invalidos por slot
-- documentos que no cumplen el contrato del editor
+### Opcion recomendada
 
-Pero no alcanza para los nuevos lenguajes, porque hay dos categorias distintas:
+Agregar metadata de documento al inicio del archivo.
 
-- errores de estructura del documento
-- errores de compilacion del contenido fuente
+Ejemplo minimo:
 
-Ejemplo:
+```md
+---
+console: true
+---
 
-- un bloque `typescript` bien formado puede ser estructuralmente valido
-- pero su contenido puede no transpilar
+# HTML
+```html
+<button id="run">Run</button>
+```
 
-Conclusión:
+# JavaScript
+```javascript
+console.log('ready');
+```
+```
 
-- un error de compilacion no debe bloquear `Save`
-- un error estructural si debe bloquear `Modify`
-- el modelo necesita dos canales de diagnostico separados
+### Extension futura compatible
 
-### 4. Pug necesita una decision de alcance muy clara
+```md
+---
+console:
+  enabled: true
+  open: true
+  height: 180
+  fontSize: 12
+---
+```
 
-`Pug` no es solo "otro lenguaje de markup"; es un preprocesador.
+### Decision recomendada
 
-Implicaciones:
+Primera iteracion:
 
-- compila a HTML
-- puede usar `include` y `extends`
-- puede depender de archivos externos o de un contexto de datos
+- soportar `console: true|false`
+- no guardar en Markdown el zoom real que el usuario vaya cambiando en la UI
+- tratar `open`, `height` y `fontSize` como futuras extensiones
 
-Conclusión recomendada para v1 de `Pug`:
+Razon:
 
-- soportar solo `Pug` inline dentro del mismo archivo Markdown
-- no soportar `include`, `extends` ni mixins distribuidos en archivos
-- no introducir variables externas ni data bindings del lado del compilador
+- minimiza el cambio inicial
+- evita sobredisenar la metadata
+- mantiene claro que el Markdown habilita la herramienta, pero la preferencia visual sigue siendo del usuario
 
-Razón:
+## Modelo de Datos Objetivo
 
-- mantiene el modelo de "un ejemplo = un archivo"
-- evita resolver imports de filesystem dentro del compilador
-- reduce mucho el riesgo de romper el preview en vivo
-
-### 5. SCSS y SASS son viables, pero hay que decidir el nivel de soporte
-
-Hay dos niveles posibles:
-
-- transpilar solo el contenido inline del bloque actual
-- soportar tambien imports parciales y resolucion entre archivos
-
-Conclusión recomendada para primera version:
-
-- soportar compilacion inline de `SCSS` y `SASS`
-- no soportar `@use`, `@forward` ni imports que dependan de resolver archivos del proyecto
-
-Razón:
-
-- el proyecto actual no tiene una capa de resolucion de dependencias entre examples
-- meter eso ahora convertiria el preview en un mini bundler
-
-### 6. TypeScript debe empezar como transpile-only
-
-`TypeScript` tiene dos niveles de ambicion:
-
-- transpilar TS a JS para preview
-- hacer type-checking real con diagnosticos completos
-
-Conclusión recomendada para primera version:
-
-- implementar solo transpile-only
-- no bloquear preview ni guardado por errores de tipos avanzados
-- no introducir pipeline completo de chequeo semantico
-
-Razón:
-
-- para preview local, lo que importa es generar JS ejecutable rapido
-- type-checking completo agrega bastante complejidad y costo en tiempo de respuesta
-
-### 7. La mejor opcion para compilar es del lado cliente, preferiblemente en worker
-
-Opciones evaluadas:
-
-- compilar en backend
-- compilar en frontend en el hilo principal
-- compilar en frontend dentro de un Web Worker
-
-Conclusión recomendada:
-
-- compilar en frontend
-- mover la compilacion a un `Web Worker` si el costo empieza a sentirse en la UI
-
-Razones:
-
-- el preview cambia con cada edicion
-- hacer round-trip al backend en cada tecla complicaria el flujo y agregaria latencia
-- el backend actual esta orientado a filesystem, no a servir como compilador interactivo
-
-Nota:
-
-- se puede empezar en hilo principal para simplificar
-- pero el plan debe dejar claro que el destino correcto es worker si `pug`, `sass` y `typescript` empiezan a degradar la experiencia
-
-### 8. Pug necesita tratamiento especial en el editor
-
-Para `SCSS`, `SASS` y `TypeScript` se puede tolerar una primera version con extensiones cercanas:
-
-- `css()` para `scss` y `sass`
-- `javascript({ typescript: true })` o equivalente para `typescript`
-
-Para `Pug`, en cambio:
-
-- no existe soporte nativo equivalente ya instalado en el repo
-- probablemente haga falta una extension dedicada o un fallback temporal a texto plano
-
-Conclusión recomendada:
-
-- primera version: permitir editar `Pug` aunque sea con modo texto plano si no hay grammar adecuada
-- mejora posterior: integrar syntax highlighting real para `Pug`
-
-### 9. El modelo de documento debe distinguir "source blocks" de "compiled output"
-
-Hoy el documento sirve para dos cosas a la vez:
-
-- representar lo que el usuario edita
-- representar lo que se inyecta al preview
-
-Con lenguajes compilados eso ya no alcanza.
-
-Conclusión:
-
-- el sistema necesita un modelo fuente y un modelo compilado
-
-Ejemplo conceptual:
+El documento parseado debe crecer a algo como esto:
 
 ```js
 {
-  sourceDocument: {
-    blocks: [
-      { slot: "markup", type: "pug", content: "h1 Hello" },
-      { slot: "style", type: "scss", content: "$c: red; h1 { color: $c; }" },
-      { slot: "script", type: "typescript", content: "const title: string = 'Hi';" }
-    ]
-  },
-  compiledDocument: {
-    html: "<h1>Hello</h1>",
-    css: "h1 { color: red; }",
-    js: "const title = 'Hi';"
+  sessionId: 'html-javascript',
+  blocks: [...],
+  diagnostics: [...],
+  unsupportedBlocks: [...],
+  metadata: {
+    console: {
+      enabled: true
+    }
   }
 }
 ```
 
-### 10. El impacto en backend es menor que en frontend
-
-El backend necesita pocos cambios para esta etapa:
-
-- presets nuevos
-- posiblemente validacion minima de tipos aceptados
-- ninguna transformacion en tiempo real si el compilador vive en frontend
-
-Conclusión:
-
-- el grueso del trabajo esta en frontend
-- especialmente en parser, renderizador, preview y diagnosticos
-
-## Resultado Deseado
-
-Al abrir un archivo Markdown:
-
-- el parser detecta los bloques soportados presentes
-- la app infiere una "sesion" a partir de esos bloques
-- el editor renderiza solo los paneles necesarios
-- el preview usa un renderizador compatible con esa sesion
-- `Save` y `Modify` serializan solo los bloques existentes
-
-Ejemplos:
-
-### Caso 1: solo HTML
-
-````md
-# HTML
-
-```html
-<h1>Hello</h1>
-```
-````
-
-Resultado esperado:
-
-- un solo panel `HTML`
-- preview funcional
-- guardado sin bloques `CSS` o `JavaScript`
-
-### Caso 2: SVG + CSS
-
-````md
-# SVG
-
-```svg
-<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" /></svg>
-```
-
-# CSS
-
-```css
-svg { width: 200px; }
-```
-````
-
-Resultado esperado:
-
-- panel `SVG`
-- panel `CSS`
-- sin panel `JavaScript`
-- preview funcional
-
-## Decisiones de Diseño
-
-### 1. La deteccion sera implicita por estructura del Markdown
-
-No se agregara frontmatter obligatorio en esta fase.
-
-La sesion se inferira a partir de los bloques presentes en el archivo.
-
-Ventajas:
-
-- no rompe el flujo actual
-- evita duplicar metadata con informacion ya expresada en el contenido
-- mantiene el ejemplo portable como un unico archivo Markdown
-
-### 2. El parser dejara de ser fijo y pasara a ser orientado a bloques
-
-En lugar de devolver:
-
-```js
-{ html, css, js }
-```
-
-debe devolver algo de esta forma:
+La consola en frontend debe tener un store separado:
 
 ```js
 {
-  sessionId: "svg-css",
-  blocks: [
+  topicPath: '...',
+  filename: 'ex01.md',
+  entries: [
     {
-      slot: "markup",
-      type: "svg",
-      language: "svg",
-      heading: "SVG",
-      content: "<svg>...</svg>"
-    },
-    {
-      slot: "style",
-      type: "css",
-      language: "css",
-      heading: "CSS",
-      content: "svg { width: 200px; }"
+      id: '...',
+      renderId: 3,
+      level: 'log',
+      origin: 'runtime',
+      message: ['ready'],
+      timestamp: 1710000000000
     }
-  ],
-  diagnostics: []
+  ]
 }
 ```
 
-Puntos importantes:
+## Arquitectura Recomendada
 
-- `slot` representa la familia funcional del bloque
-- `type` representa la variante concreta
-- `language` representa el lenguaje del fence Markdown
-- `diagnostics` acumula warnings o errores de validacion
+### 1. Bridge dentro del iframe
 
-### 3. El concepto central sera `slot`, no archivo fijo
+El HTML generado por [src/utils/exampleRenderer.js](/home/zavden/Learning/Web/learnWeb/src/utils/exampleRenderer.js) debe inyectar un script bootstrap antes del script del usuario.
 
-Slots activos en v1:
+Ese bootstrap debe:
 
-- `markup`: `html` o `svg`
-- `style`: `css`
-- `script`: `javascript`
+- parchear `console.log`, `console.info`, `console.warn`, `console.error`
+- escuchar `window.error`
+- escuchar `window.unhandledrejection`
+- enviar mensajes al padre con `window.parent.postMessage(...)`
+- etiquetar cada mensaje con `renderId`
 
-Slots reservados para fases futuras:
+### 2. Store de consola en el padre
 
-- `markup`: `pug`
-- `style`: `scss`, `sass`
-- `script`: `typescript`
+[src/components/Preview.js](/home/zavden/Learning/Web/learnWeb/src/components/Preview.js) debe escuchar `message` events del `iframe` y pasarlos a un componente de consola.
 
-Reglas de v1:
+El store debe:
 
-- debe existir exactamente un bloque `markup`
-- puede existir cero o un bloque `style`
-- puede existir cero o un bloque `script`
-- no se permitira mezclar `html` y `svg` en el mismo archivo
+- conservar entradas entre rerenders del mismo ejemplo
+- insertar separadores por corrida, por ejemplo `Run #1`, `Run #2`
+- limpiarse solo cuando el usuario lo pida o cuando se cambie de ejemplo
 
-### 4. La sesion sera derivada, no almacenada
+### 3. UI debajo del preview
 
-Ejemplos:
+La consola debe vivir debajo de [index.html](/home/zavden/Learning/Web/learnWeb/index.html) en la columna del preview.
 
-- `html`
-- `html-css`
-- `html-css-javascript`
-- `svg`
-- `svg-css`
-- `svg-css-javascript`
+Primera version:
 
-La sesion se calcula a partir de los bloques detectados. No se guardara como campo extra.
+- panel colapsable
+- scroll vertical
+- boton `Clear`
+- botones `A-` y `A+`
+- badge por nivel (`LOG`, `WARN`, `ERROR`)
 
-### 5. Las extensiones futuras deben entrar por registro, no por `if` sueltos
+### 4. Gating por Markdown
 
-Se creara un registro de bloques soportados, por ejemplo:
+La UI de consola no debe aparecer siempre.
 
-```js
-const BLOCK_REGISTRY = {
-  html: { slot: "markup", label: "HTML", enabled: true },
-  svg: { slot: "markup", label: "SVG", enabled: true },
-  css: { slot: "style", label: "CSS", enabled: true },
-  javascript: { slot: "script", label: "JavaScript", enabled: true },
-  js: { aliasOf: "javascript" },
-  scss: { slot: "style", label: "SCSS", enabled: false },
-  sass: { slot: "style", label: "SASS", enabled: false },
-  typescript: { slot: "script", label: "TypeScript", enabled: false },
-  ts: { aliasOf: "typescript" }
-};
-```
+Regla:
 
-Esto resuelve dos cosas:
+- si `metadata.console.enabled !== true`, no se muestra consola
+- si no hay script block y la consola no esta habilitada, no se monta nada relacionado
+- si la consola esta habilitada aunque no haya script, puede mostrarse vacia para registrar errores de runtime o futuros comandos
 
-- mantener v1 limitada a `HTML` / `SVG` / `CSS` / `JavaScript`
-- dejar preparada la arquitectura para activar nuevos tipos despues
+## Fases de Implementacion
 
-## Alcance de la Primera Implementacion
-
-Incluido:
-
-- deteccion dinamica de bloques desde el Markdown
-- soporte de `HTML`, `SVG`, `CSS`, `JavaScript`
-- paneles dinamicos en el editor
-- serializacion dinamica al guardar
-- preview dinamico
-- galeria reutilizando el mismo parser y el mismo renderizador
-- manejo seguro de estructuras no soportadas
-
-No incluido:
-
-- compilacion de `SCSS` o `SASS`
-- transpilar `TypeScript`
-- compilar `Pug`
-- soporte de multiples bloques del mismo slot
-- soporte de texto libre intercalado entre bloques de ejemplo
-- migracion automatica masiva de archivos
-
-## Requisitos Funcionales
-
-### Requisitos de parsing
-
-- detectar bloques por fence Markdown
-- aceptar aliases como `js` para `javascript`
-- aceptar `html` o `svg` como bloque principal de marcado
-- preservar el orden logico de bloques detectados
-- si aparece un bloque no soportado, no permitir perdida silenciosa de datos
-
-### Requisitos de UI
-
-- mostrar solo paneles presentes en el archivo
-- ajustar resize, maximize y collapse a un numero variable de paneles
-- mantener el preview sincronizado con los bloques visibles
-- mostrar mensajes de error claros cuando el archivo no sea valido
-
-### Requisitos de guardado
-
-- `Save` y `Modify` deben serializar solo los bloques cargados
-- no se deben reintroducir bloques ausentes
-- no se deben inventar bloques vacios
-
-### Requisitos de compatibilidad
-
-- los ejemplos actuales `HTML + CSS + JavaScript` deben seguir funcionando sin cambios
-- un archivo con solo `HTML` debe abrir y guardar correctamente
-- un archivo `SVG + CSS` debe abrir y guardar correctamente
-
-## Riesgos Tecnicos que hay que Resolver
-
-### 1. El editor actual esta cableado a tres instancias fijas
-
-Hoy existen:
-
-- `htmlEditor`
-- `cssEditor`
-- `jsEditor`
-
-Eso debe reemplazarse por una estructura dinamica como:
-
-```js
-this.editorsBySlot = new Map();
-```
-
-o:
-
-```js
-this.editors = [
-  { slot: "markup", type: "html", view: ... },
-  { slot: "style", type: "css", view: ... }
-];
-```
-
-### 2. El DOM del editor esta hardcodeado
-
-Hoy `index.html` trae tres paneles fijos.
-
-Eso debe cambiarse por:
-
-- un contenedor vacio
-- paneles creados dinamicamente desde JavaScript
-
-Si no se hace eso, cada nuevo lenguaje obligara a tocar el HTML base otra vez.
-
-### 3. El preview y la galeria usan modelos diferentes
-
-Ahora el preview principal y la galeria reconstruyen documentos por caminos separados.
-
-Eso debe unificarse en un renderizador comun para evitar divergencias.
-
-### 4. Riesgo de perdida de informacion con bloques no soportados
-
-Caso peligroso:
-
-- el parser detecta un bloque `typescript`
-- la UI no lo muestra
-- el usuario guarda
-- el archivo se sobrescribe y el bloque se pierde
-
-Mitigacion obligatoria:
-
-- si el archivo contiene bloques no soportados, el sistema debe entrar en modo seguro
-- en modo seguro no se debe permitir `Modify` hasta que el archivo sea entendido completamente o se haga una migracion explicita
-
-## Enfoque de Implementacion por Fases
-
-## Fase 0: Definir la especificacion del formato
+## Fase 1: Metadata de Documento
 
 Objetivo:
 
-- formalizar el contrato de ejemplo Markdown para esta evolucion
+- permitir que el ejemplo active capacidades de runtime desde Markdown
 
-Entregables:
+Cambios:
 
-- lista oficial de bloques soportados en v1
-- reglas de validacion
-- aliases permitidos
-- orden de serializacion
+- extender [src/utils/markdown.js](/home/zavden/Learning/Web/learnWeb/src/utils/markdown.js) para parsear metadata al inicio
+- extender `buildExampleDocument(...)` para serializar esa metadata
+- definir valores por defecto seguros cuando no haya metadata
 
-Decisiones de esta fase:
+Decision tecnica recomendada:
 
-- fuente de verdad: lenguaje del fence Markdown
-- headings visibles: se mantienen, pero no son la unica fuente de interpretacion
-- orden de guardado canonico: `markup`, `style`, `script`
-
-## Fase 1: Reescribir el parser y el builder
-
-Archivos principales:
-
-- `src/utils/markdown.js`
-
-Objetivo:
-
-- pasar de regex fijas a un parser orientado a bloques
-
-Tareas:
-
-- crear `parseExampleDocument(text)`
-- crear `buildExampleDocument(documentModel)`
-- crear normalizacion de aliases: `js -> javascript`, `ts -> typescript`
-- crear validacion de slots permitidos
-- crear `diagnostics`
+- implementar parser minimo propio
+- evitar introducir una dependencia YAML si no hace falta en esta iteracion
 
 Resultado esperado:
 
-- el parser puede devolver configuraciones variables
-- el builder solo serializa los bloques presentes
+- un ejemplo puede declarar `console: true`
 
-## Fase 2: Introducir un registro central de bloques y sesiones
-
-Archivos principales:
-
-- `src/utils/markdown.js`
-- nuevo archivo sugerido: `src/config/exampleBlocks.js`
+## Fase 2: Shell de Consola en la UI
 
 Objetivo:
 
-- evitar reglas dispersas en el codigo
+- crear el panel visual debajo del preview
 
-Tareas:
+Cambios:
 
-- definir metadata por tipo de bloque
-- definir etiqueta visible
-- definir slot funcional
-- definir si esta habilitado en v1
-- definir extension de CodeMirror asociada
+- actualizar [index.html](/home/zavden/Learning/Web/learnWeb/index.html) para alojar la consola
+- actualizar [src/style.css](/home/zavden/Learning/Web/learnWeb/src/style.css) para layout, scroll, badges y controles de zoom
+- crear componente nuevo, por ejemplo `src/components/ConsolePanel.js`
 
 Resultado esperado:
 
-- la app puede preguntar "que paneles debo renderizar" sin condicionales duplicados
+- la consola puede abrirse/cerrarse debajo del preview
+- tiene controles de clear y zoom
 
-## Fase 3: Refactor del editor a paneles dinamicos
-
-Archivos principales:
-
-- `index.html`
-- `src/components/Editor.js`
-- `src/style.css`
+## Fase 3: Runtime Bridge
 
 Objetivo:
 
-- renderizar paneles a partir del documento parseado
+- capturar la actividad real del JS/TS ejecutado
 
-Tareas:
+Cambios:
 
-- reemplazar paneles fijos por generacion dinamica
-- crear una fabrica de paneles
-- soportar `n` paneles, no solo tres
-- adaptar resize vertical a lista dinamica
-- adaptar maximize y collapse a paneles generados
-- adaptar lectura y escritura de contenido a `documentModel.blocks`
+- modificar [src/utils/exampleRenderer.js](/home/zavden/Learning/Web/learnWeb/src/utils/exampleRenderer.js) para inyectar bootstrap de consola
+- emitir `postMessage` hacia el parent
+- mover el script del usuario a un bloque separado del bootstrap para no perder errores de parseo
 
 Resultado esperado:
 
-- si el archivo tiene 1 bloque, se ve 1 panel
-- si tiene 2, se ven 2
-- si tiene 3, se ven 3
+- `console.log`, `console.warn`, `console.error`, errores y promesas rechazadas llegan a la app
 
-## Fase 4: Refactor del preview a renderizador unificado
-
-Archivos principales:
-
-- `src/components/Preview.js`
-- `src/components/Gallery.js`
-- nuevo archivo sugerido: `src/utils/exampleRenderer.js`
+## Fase 4: Persistencia Entre Rerenders
 
 Objetivo:
 
-- tener una sola ruta de render para preview principal y galeria
+- que la consola no se vacie en cada recompilacion del preview
 
-Tareas:
+Cambios:
 
-- crear `renderExampleDocument(documentModel, topicPath)`
-- inyectar `markup` en el `body`
-- inyectar estilos agregados
-- inyectar script si existe
-- reutilizar el mismo renderizador en galeria
+- almacenar las entradas en el parent
+- asignar `renderId` incremental desde [src/components/Preview.js](/home/zavden/Learning/Web/learnWeb/src/components/Preview.js)
+- agregar marcador de corrida antes de cada nuevo render
 
-Consideracion especial para SVG:
+Regla de limpieza recomendada:
 
-- en v1 no hace falta un motor aparte
-- se puede insertar el bloque SVG dentro del `body` como markup principal
+- `Refresh` no limpia
+- cambio de codigo no limpia
+- `Clear` manual si limpia
+- cambiar de archivo si limpia
 
 Resultado esperado:
 
-- el preview funciona igual desde editor y galeria
-- `SVG + CSS` renderiza correctamente
+- se ve el orden de ejecucion de varias corridas seguidas
 
-## Fase 5: Guardado, carga y modo seguro
-
-Archivos principales:
-
-- `src/components/Editor.js`
-- `src/utils/api.js`
+## Fase 5: Integracion con Diagnosticos de Compilacion
 
 Objetivo:
 
-- asegurar que no haya corrupcion o perdida de contenido
+- unificar errores de compilacion y errores de runtime sin mezclarlos mal
 
-Tareas:
+Cambios:
 
-- almacenar el `documentModel` cargado
-- actualizarlo al editar
-- serializar desde ese modelo
-- bloquear `Modify` si hay `diagnostics` de tipo fatal
-- mostrar banner o toast cuando el archivo tenga estructura invalida o no soportada
+- mantener compile diagnostics como categoria separada
+- decidir si aparecen en el panel de consola o en una sub-seccion del mismo
+
+Decision recomendada:
+
+- mostrarlos en la consola con `origin: compile`
+- no reemplazar el estado visual de error ya existente del editor
 
 Resultado esperado:
 
-- no se sobrescriben archivos que el editor no entiende completamente
+- el usuario ve en un solo lugar los problemas observables del ejemplo
 
-## Fase 6: Crear flujo de plantillas por sesion
-
-Archivos principales:
-
-- `src/components/CreateDialog.js`
-- `server.js`
+## Fase 6: Preparacion de REPL
 
 Objetivo:
 
-- permitir crear ejemplos nuevos que ya nazcan con la estructura correcta
+- dejar listo el protocolo para ejecutar comandos despues
 
-Tareas:
+Cambios:
 
-- agregar selector de plantilla de ejemplo en el dialogo
-- plantillas minimas sugeridas:
-  - `HTML`
-  - `HTML + CSS`
-  - `HTML + CSS + JavaScript`
-  - `SVG`
-  - `SVG + CSS`
-  - `SVG + CSS + JavaScript`
-- modificar `POST /api/create` para aceptar plantilla o `sessionPreset`
+- definir mensajes `console:eval-request` y `console:eval-result`
+- reservar area de input en el componente, aunque pueda quedar deshabilitada inicialmente
+- documentar que la evaluacion correra dentro del mismo contexto del `iframe`
 
 Resultado esperado:
 
-- un usuario puede crear un ejemplo nuevo sin tener que borrar bloques manualmente
+- la segunda iteracion no requiere rehacer el bridge
 
-## Fase 7: Pruebas manuales y regresion
-
-Casos minimos obligatorios:
-
-- abrir ejemplo legacy `HTML + CSS + JavaScript`
-- abrir ejemplo `HTML`
-- abrir ejemplo `HTML + CSS`
-- abrir ejemplo `SVG`
-- abrir ejemplo `SVG + CSS`
-- abrir ejemplo `SVG + CSS + JavaScript`
-- modificar y guardar cada uno
-- abrir galeria y verificar preview en cada uno
-- validar que archivos con bloque no soportado no se sobrescriban silenciosamente
-
-## Fase 8: Introducir pipeline de compilacion fuente -> preview
-
-Archivos principales:
-
-- nuevo archivo sugerido: `src/utils/exampleCompiler.js`
-- `src/components/Preview.js`
-- `src/components/Gallery.js`
+## Fase 7: Zoom de Fuente
 
 Objetivo:
 
-- separar el documento que el usuario edita del artefacto que consume el preview
+- controlar el tamaño del texto de consola de forma independiente del editor
 
-Tareas:
+Cambios:
 
-- crear `compileExampleDocument(sourceDocument)`
-- devolver `compiledDocument` con `html`, `css`, `js`
-- devolver `compileDiagnostics`
-- hacer que preview y galeria rendericen desde el resultado compilado
-
-Resultado esperado:
-
-- el sistema deja de asumir que el bloque fuente ya esta listo para inyectarse
-
-## Fase 9: Habilitar TypeScript como script compilado
-
-Archivos principales:
-
-- `src/config/exampleBlocks.js`
-- `src/components/Editor.js`
-- `src/utils/exampleCompiler.js`
-- `package.json`
-
-Objetivo:
-
-- soportar bloques `typescript` como alternativa de `script`
-
-Tareas:
-
-- agregar dependencia `typescript`
-- habilitar `typescript` en el registro
-- compilar con `transpileModule` o equivalente
-- mantener `Modify` habilitado aunque existan errores de compilacion
-- usar extension de editor compatible con TS
+- estado local de `consoleFontSize`
+- botones `A-` y `A+`
+- persistencia opcional en `localStorage`
 
 Resultado esperado:
 
-- un archivo `HTML + TypeScript` o `SVG + TypeScript` se puede editar y previsualizar
+- la consola se puede leer mejor sin tocar el editor
 
-## Fase 10: Habilitar SCSS y SASS como estilos compilados
+## Riesgos y Puntos Delicados
 
-Archivos principales:
+### 1. Serializacion de objetos
 
-- `src/config/exampleBlocks.js`
-- `src/components/Editor.js`
-- `src/utils/exampleCompiler.js`
-- `package.json`
+`console.log(window)` o estructuras circulares no pueden enviarse tal cual por `postMessage`.
 
-Objetivo:
+Solucion recomendada:
 
-- soportar bloques `scss` y `sass` como alternativas de `style`
+- serializador seguro con profundidad limitada
+- strings cortadas a un maximo razonable
+- representaciones explicitas para `Error`, arrays, objetos, funciones y nodos DOM
 
-Tareas:
+### 2. Errores de parseo de JS
 
-- agregar dependencia `sass`
-- habilitar `scss` y `sass` en el registro
-- compilar con `compileString` o equivalente
-- mostrar errores de compilacion en preview sin bloquear guardado
-- arrancar con soporte inline, sin resolver imports externos
+Si el JS del usuario tiene error de sintaxis, un `try/catch` normal no lo captura.
 
-Resultado esperado:
+Solucion recomendada:
 
-- un archivo `HTML + SCSS`
-- un archivo `SVG + SASS`
-- ambos deben compilar a CSS valido para el preview
+- bootstrap en un `<script>` propio
+- script del usuario en otro `<script>` separado
+- captura por `window.onerror`
 
-## Fase 11: Habilitar Pug como markup compilado
+### 3. Seguridad del canal de mensajes
 
-Archivos principales:
+Debe filtrarse lo que llega a `window.message`.
 
-- `src/config/exampleBlocks.js`
-- `src/components/Editor.js`
-- `src/utils/exampleCompiler.js`
-- `package.json`
+Solucion recomendada:
 
-Objetivo:
+- validar `event.source === iframe.contentWindow`
+- validar `type`
+- ignorar mensajes externos
 
-- soportar bloques `pug` como alternativa de `markup`
+### 4. Comportamiento con `console: false`
 
-Tareas:
+La consola debe desaparecer por completo.
 
-- agregar dependencia `pug`
-- habilitar `pug` en el registro
-- compilar `pug` a HTML antes del preview
-- limitar el alcance inicial a `Pug` inline
-- no soportar `include`, `extends` ni resolucion de archivos externos
-- usar modo texto plano o grammar dedicada si se decide añadirla
+Decision recomendada:
 
-Resultado esperado:
+- no renderizar el panel
+- no montar listeners de runtime innecesarios para ese preview
 
-- un archivo `Pug`
-- un archivo `Pug + SCSS`
-- un archivo `Pug + TypeScript`
-- todos deben compilar correctamente al preview
+## Alcance de la Primera Implementacion Recomendada
 
-## Fase 12: Separar diagnosticos estructurales y diagnosticos de compilacion
+### Incluye
 
-Archivos principales:
+- metadata `console: true`
+- panel de consola debajo del preview
+- logs persistentes entre rerenders del mismo ejemplo
+- `log`, `info`, `warn`, `error`
+- `window.onerror`
+- `unhandledrejection`
+- boton `Clear`
+- zoom de fuente simple
+- soporte para `JavaScript` y `TypeScript`
 
-- `src/utils/markdown.js`
-- `src/utils/exampleCompiler.js`
-- `src/components/Editor.js`
-- `src/components/Preview.js`
+### No incluye todavia
 
-Objetivo:
-
-- no mezclar "documento invalido" con "codigo fuente con error"
-
-Tareas:
-
-- mantener `diagnostics` estructurales en el parser
-- agregar `compileDiagnostics` en el compilador
-- bloquear `Modify` solo con errores estructurales
-- mostrar errores de compilacion en preview y status bar
-
-Resultado esperado:
-
-- un ejemplo con TS mal transpilado o SCSS mal cerrado puede seguir guardandose
-- un ejemplo con estructura Markdown invalida no debe sobrescribirse
-
-## Fase 13: Migracion de presets y ejemplos de prueba
-
-Archivos principales:
-
-- `src/config/exampleBlocks.js`
-- `server.js`
-- `material/`
-
-Objetivo:
-
-- disponer de casos reales para validar los nuevos compiladores
-
-Tareas:
-
-- agregar presets:
-  - `pug`
-  - `pug-scss`
-  - `pug-typescript`
-  - `html-scss`
-  - `svg-sass`
-  - `html-typescript`
-- agregar ejemplos manuales de prueba en `material/`
-
-Resultado esperado:
-
-- el proyecto trae muestras listas para probar cada lenguaje nuevo
-
-## Cambios de Estructura Recomendados
-
-### Nuevo modelo sugerido
-
-```js
-type ExampleBlock = {
-  slot: "markup" | "style" | "script";
-  type: string;
-  language: string;
-  heading: string;
-  content: string;
-};
-
-type ExampleDocument = {
-  sessionId: string;
-  blocks: ExampleBlock[];
-  diagnostics: Array<{
-    level: "warning" | "error";
-    code: string;
-    message: string;
-  }>;
-};
-```
-
-### Nuevos helpers sugeridos
-
-- `parseExampleDocument(text)`
-- `buildExampleDocument(document)`
-- `deriveSessionId(blocks)`
-- `validateExampleDocument(document)`
-- `renderExampleDocument(document, topicPath)`
-- `getCodeMirrorExtension(blockType)`
+- input ejecutable tipo REPL
+- autocompletado en consola
+- `console.table`
+- `group/groupCollapsed`
+- expandir objetos como DevTools
+- captura perfecta de todos los warnings internos del browser
 
 ## Criterios de Aceptacion
 
-Se considerara completado este objetivo cuando:
+### Para la primera entrega
 
-- el editor deje de depender de tres paneles fijos
-- la estructura del Markdown determine los paneles visibles
-- `HTML` y `SVG` funcionen como alternativas del bloque principal
-- `CSS` y `JavaScript` sean opcionales
-- los ejemplos actuales sigan cargando
-- el preview y la galeria usen el mismo pipeline de render
-- no exista perdida silenciosa de datos en archivos con bloques no soportados
-- la arquitectura quede lista para habilitar `SCSS`, `SASS` y `TypeScript` mas adelante
+- un ejemplo sin `console: true` no muestra consola
+- un ejemplo con `console: true` si muestra consola
+- `console.log('a')` aparece en consola
+- `console.warn('b')` aparece como warning
+- `throw new Error('x')` aparece como error de runtime
+- `Promise.reject(new Error('y'))` aparece como `unhandledrejection`
+- modificar el codigo y rerenderizar no borra el historial previo
+- `Clear` vacia la consola
+- cambiar de ejemplo reinicia la consola del ejemplo anterior
+- `A-` y `A+` cambian el tamaño de fuente de la consola
 
-## Criterios de Aceptacion para la Siguiente Iteracion
+### Para la segunda entrega
 
-Se considerara completada la etapa `Pug` / `SCSS` / `SASS` / `TypeScript` cuando:
+- existe input de consola
+- se puede evaluar codigo en el contexto vivo del preview
+- el resultado vuelve al panel de consola
 
-- exista un pipeline de compilacion independiente del parser
-- `Pug` compile a HTML antes del preview
-- `SCSS` y `SASS` compilen a CSS antes del preview
-- `TypeScript` transpile a JavaScript antes del preview
-- preview y galeria usen el mismo compilador
-- los errores de compilacion no se mezclen con los errores estructurales
-- `Modify` siga bloqueado solo por errores estructurales
-- el sistema siga pudiendo guardar codigo fuente aun cuando falle su compilacion
-- los ejemplos legacy con `HTML`, `CSS` y `JavaScript` sigan funcionando sin cambios
+## Archivos que Seguramente Cambiaran
 
-## Fuera de Alcance Inmediato para la Siguiente Iteracion
+- [PLAN.md](/home/zavden/Learning/Web/learnWeb/PLAN.md)
+- [src/utils/markdown.js](/home/zavden/Learning/Web/learnWeb/src/utils/markdown.js)
+- [src/components/Preview.js](/home/zavden/Learning/Web/learnWeb/src/components/Preview.js)
+- [src/utils/exampleRenderer.js](/home/zavden/Learning/Web/learnWeb/src/utils/exampleRenderer.js)
+- [index.html](/home/zavden/Learning/Web/learnWeb/index.html)
+- [src/style.css](/home/zavden/Learning/Web/learnWeb/src/style.css)
+- nuevo componente probable: `src/components/ConsolePanel.js`
 
-No se deberia intentar en esta misma tarea:
+## Estado
 
-- soportar `include` / `extends` de `Pug`
-- soportar `@use`, `@forward` o imports complejos de `SCSS` / `SASS`
-- hacer type-checking completo de `TypeScript`
-- introducir un bundler de modulos para examples
-- soportar plugins arbitrarios de lenguajes
-- reescribir completamente la UX de teoria o sidebar
+Listo para empezar la implementacion.
 
-Si se mezcla eso con esta iteracion, el riesgo de romper el preview y degradar la experiencia de edicion sube innecesariamente.
+Orden recomendado:
 
-## Orden Recomendado de Ejecucion
-
-1. Parser y modelo de documento
-2. Registro central de bloques
-3. Renderizador unificado
-4. Editor dinamico
-5. Guardado seguro
-6. Plantillas de creacion
-7. Pruebas de regresion
-
-## Orden Recomendado de Ejecucion para Pug / SCSS / SASS / TypeScript
-
-1. Pipeline de compilacion
-2. Separacion de diagnosticos estructurales y de compilacion
-3. Habilitar `TypeScript`
-4. Habilitar `SCSS`
-5. Habilitar `SASS`
-6. Habilitar `Pug`
-7. Presets nuevos y ejemplos reales
-8. Evaluar si la compilacion debe moverse a `Web Worker`
-
-## Notas para la Implementacion
-
-- Para `SVG`, en la primera iteracion se puede reutilizar la extension de `html()` de CodeMirror si no se quiere agregar una dependencia nueva todavia.
-- El parser debe ser tolerante con headings, pero estricto con fences y lenguajes.
-- El sistema debe priorizar seguridad de datos sobre comodidad: si no entiende el archivo, no debe sobrescribirlo.
-- La galeria no debe tener una logica paralela distinta al editor; ambos deben depender del mismo parser y del mismo renderizador.
-- Para `TypeScript`, la primera implementacion debe ser transpile-only.
-- Para `SCSS` y `SASS`, la primera implementacion debe ser inline-only.
-- Para `Pug`, la primera implementacion debe ser inline-only y sin includes.
-- Si el costo de compilacion empieza a sentirse durante la escritura, mover el compilador a `Web Worker` debe pasar de recomendacion a requisito.
+1. metadata en Markdown
+2. shell visual de consola
+3. bridge de runtime
+4. persistencia entre rerenders
+5. zoom de fuente

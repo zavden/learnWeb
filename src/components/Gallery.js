@@ -1,6 +1,5 @@
-import { fetchExamples, fetchExample } from '../utils/api.js';
-import { parseExampleDocument } from '../utils/markdown.js';
-import { renderExampleDocument } from '../utils/exampleRenderer.js';
+import { compileExample, fetchExamples, fetchExample } from '../utils/api.js';
+import { renderCompiledExampleDocument } from '../utils/exampleRenderer.js';
 
 export class Gallery {
     constructor({ onExampleSelect }) {
@@ -56,10 +55,14 @@ export class Gallery {
         try {
             const data = await fetchExample(this.currentTopicPath, filename);
             if (data?.content) {
-                const documentModel = parseExampleDocument(data.content);
+                const result = await compileExample({ content: data.content });
                 const iframe = document.createElement('iframe');
                 iframe.sandbox = 'allow-scripts';
-                iframe.srcdoc = renderExampleDocument(documentModel, this.currentTopicPath);
+                iframe.srcdoc = renderCompiledExampleDocument(
+                    result.compiledDocument,
+                    this.currentTopicPath,
+                    result.compileDiagnostics || []
+                );
                 preview.appendChild(iframe);
             }
         } catch (err) {

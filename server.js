@@ -3,6 +3,12 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+    buildExampleDocument,
+    createExampleDocumentFromPreset,
+    parseExampleDocument,
+} from './src/utils/markdown.js';
+import { compileExampleDocument } from './src/utils/exampleCompiler.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,108 +46,6 @@ function ensureDir(dirPath) {
     if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
     }
-}
-
-function buildExampleTemplate(sessionPreset = 'html-css-javascript', name = 'example') {
-    const escapedName = name.replace(/`/g, '');
-
-    const templates = {
-        html: `# HTML
-
-\`\`\`html
-<h1>${escapedName}</h1>
-\`\`\`
-`,
-        'html-css': `# HTML
-
-\`\`\`html
-<h1 class="title">${escapedName}</h1>
-\`\`\`
-
-# CSS
-
-\`\`\`css
-.title {
-  color: #58a6ff;
-}
-\`\`\`
-`,
-        'html-css-javascript': `# HTML
-
-\`\`\`html
-<h1 class="title">${escapedName}</h1>
-\`\`\`
-
-# CSS
-
-\`\`\`css
-.title {
-  color: #58a6ff;
-}
-\`\`\`
-
-# JavaScript
-
-\`\`\`javascript
-console.log('Hello from ${escapedName}');
-\`\`\`
-`,
-        svg: `# SVG
-
-\`\`\`svg
-<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-  <circle cx="60" cy="60" r="44" fill="#58a6ff" />
-</svg>
-\`\`\`
-`,
-        'svg-css': `# SVG
-
-\`\`\`svg
-<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-  <circle class="dot" cx="60" cy="60" r="44" />
-</svg>
-\`\`\`
-
-# CSS
-
-\`\`\`css
-.dot {
-  fill: #58a6ff;
-}
-\`\`\`
-`,
-        'svg-css-javascript': `# SVG
-
-\`\`\`svg
-<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-  <circle class="dot" cx="60" cy="60" r="44" />
-</svg>
-\`\`\`
-
-# CSS
-
-\`\`\`css
-.dot {
-  fill: #58a6ff;
-  transition: transform 200ms ease;
-}
-\`\`\`
-
-# JavaScript
-
-\`\`\`javascript
-const dot = document.querySelector('.dot');
-if (dot) {
-  dot.addEventListener('click', () => {
-    dot.style.transform = 'scale(0.9)';
-    setTimeout(() => { dot.style.transform = ''; }, 150);
-  });
-}
-\`\`\`
-`,
-    };
-
-    return templates[sessionPreset] || templates['html-css-javascript'];
 }
 
 // ─── GET /api/tree ──────────────────────────────────────
@@ -289,6 +193,34 @@ app.put('/api/topic/:ch/:sec/:top/examples/*', (req, res) => {
     res.json({ oldFilename: file, newFilename });
 });
 
+// ─── POST /api/compile ───────────────────────────────────
+
+app.post('/api/compile', (req, res) => {
+    try {
+        const sourceDocument = req.body?.document
+            || parseExampleDocument(req.body?.content || '');
+        const result = compileExampleDocument(sourceDocument);
+
+        res.json({
+            document: sourceDocument,
+            compiledDocument: result.compiledDocument,
+            compileDiagnostics: result.compileDiagnostics,
+        });
+    } catch (err) {
+        res.status(500).json({
+            error: err.message,
+            compiledDocument: { html: '', css: '', js: '' },
+            compileDiagnostics: [
+                {
+                    level: 'error',
+                    code: 'compile-request-failed',
+                    message: err.message,
+                },
+            ],
+        });
+    }
+});
+
 // ─── POST /api/create ───────────────────────────────────
 
 app.post('/api/create', (req, res) => {
@@ -318,7 +250,12 @@ app.post('/api/create', (req, res) => {
 
             if (fs.existsSync(filePath)) return res.status(409).json({ error: 'Example already exists' });
 
-            const template = buildExampleTemplate(sessionPreset, name);
+            const sourceDocument = createExampleDocumentFromPreset(sessionPreset || 'html-css-javascript');
+            sourceDocument.blocks = sourceDocument.blocks.map((block) => ({
+                ...block,
+                content: block.content.replace(/Hello World/g, name).replace(/Hello from Pug/g, name).replace(/SCSS preset/g, name),
+            }));
+            const template = buildExampleDocument(sourceDocument);
             fs.writeFileSync(filePath, template, 'utf-8');
             return res.json({ filename, path: filePath, sessionPreset: sessionPreset || 'html-css-javascript' });
         } else {
