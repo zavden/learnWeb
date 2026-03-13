@@ -1,6 +1,6 @@
 # LearnCode
 
-Aplicacion local para estudiar HTML, CSS y JavaScript a partir de material organizado en carpetas y archivos Markdown.
+Aplicacion local para estudiar tecnologias web a partir de material organizado en carpetas y archivos Markdown.
 
 La app combina:
 
@@ -9,6 +9,7 @@ La app combina:
 - edicion de codigo con CodeMirror 6
 - renderizado de teoria en Markdown
 - previsualizacion en vivo en un `iframe`
+- compilacion local de `Pug`, `SCSS`, `SASS`, `TypeScript` y React `single-file`
 
 La idea central del proyecto es simple: el contenido no vive en una base de datos, vive en el filesystem dentro de la carpeta `material/`. El backend solo lee y escribe esos archivos, y el frontend actua como explorador, editor y visor.
 
@@ -38,8 +39,11 @@ Permite:
 - navegar por un arbol de capitulos, secciones y topics
 - leer teoria de cada topic desde un archivo `main.md`
 - ver una galeria de ejemplos guardados para cada topic
-- abrir un ejemplo y editar su HTML, CSS y JavaScript por separado
+- abrir un ejemplo y editar solo los paneles que realmente usa
 - ver una previsualizacion en vivo del resultado
+- trabajar con ejemplos clasicos (`HTML`, `SVG`, `CSS`, `JavaScript`)
+- trabajar con ejemplos compilados (`Pug`, `SCSS`, `SASS`, `TypeScript`)
+- trabajar con ejemplos React `single-file` usando `JSX` o `TSX`
 - crear, guardar, modificar, renombrar y eliminar ejemplos
 - crear nuevos capitulos, secciones, topics y ejemplos
 
@@ -51,6 +55,7 @@ Permite:
 - JavaScript vanilla con modulos ES
 - CodeMirror 6
 - `marked` para renderizar Markdown
+- React y ReactDOM para el modo React `single-file`
 
 ### Backend
 
@@ -58,6 +63,10 @@ Permite:
 - Express
 - CORS
 - `fs` y `path` del runtime de Node para operar sobre el filesystem
+- `pug` para compilar ejemplos `Pug`
+- `sass` para compilar `SCSS` y `SASS`
+- `typescript` para transpilar `TypeScript`
+- `esbuild` para compilar `JSX` y `TSX`
 
 ## Arquitectura general
 
@@ -73,7 +82,7 @@ Responsabilidades:
 - cargar el arbol de navegacion
 - cargar teoria y ejemplos
 - mostrar la galeria
-- montar los tres editores
+- montar paneles dinamicos de edicion
 - actualizar el preview en vivo
 - llamar a la API del backend
 
@@ -89,6 +98,7 @@ Responsabilidades:
 - crear carpetas y archivos nuevos
 - modificar, renombrar y borrar ejemplos
 - servir assets locales de cada topic
+- compilar ejemplos antes de enviarlos al preview
 
 ### Comunicacion entre ambos
 
@@ -159,7 +169,9 @@ La teoria se renderiza con `marked` y aparece en el panel lateral de teoria.
 
 ### 2. Ejemplos: archivos `.md` dentro de `examples/`
 
-Cada ejemplo se guarda como Markdown, pero no como texto libre. El parser del proyecto espera exactamente tres bloques:
+Cada ejemplo se guarda como Markdown estructurado. El parser no trabaja con texto libre: espera bloques fenced con lenguajes soportados y, opcionalmente, un frontmatter simple al inicio.
+
+#### Formato clasico
 
 ~~~~md
 # HTML
@@ -183,13 +195,78 @@ console.log('Hello');
 ```
 ~~~~
 
-El frontend extrae esos tres bloques y los reparte en:
+#### Sesiones dinamicas
 
-- editor HTML
-- editor CSS
-- editor JavaScript
+El sistema soporta combinaciones como:
 
-Cuando vuelves a guardar, el sistema reconstruye ese Markdown con el mismo formato.
+- solo `HTML`
+- `HTML + CSS`
+- `HTML + CSS + JavaScript`
+- `SVG + CSS`
+- `Pug + SCSS`
+- `Pug + TypeScript`
+- `HTML + SASS + TypeScript`
+
+Los paneles visibles del editor dependen de los bloques reales del archivo.
+
+#### Frontmatter simple
+
+El archivo puede arrancar con metadata simple:
+
+~~~~md
+---
+framework: react
+---
+~~~~
+
+Notas:
+
+- el parser actual soporta pares `clave: valor` simples
+- no es un parser YAML completo
+- hoy se usa sobre todo para `framework: react`
+
+#### React `single-file`
+
+Para React, el archivo usa `framework: react` y un bloque `JSX` o `TSX`.
+
+Ejemplo:
+
+~~~~md
+---
+framework: react
+---
+
+# JSX
+
+```jsx
+function App() {
+  const [count, setCount] = React.useState(0);
+
+  return (
+    <button type="button" onClick={() => setCount(count + 1)}>
+      Clicked {count} times
+    </button>
+  );
+}
+```
+
+# CSS
+
+```css
+button {
+  padding: 10px 14px;
+}
+```
+~~~~
+
+En ese modo:
+
+- no escribes `HTML` base manual
+- no escribes `div#root`
+- no escribes `ReactDOM.createRoot(...)`
+- la plataforma genera el shell y monta `App` automaticamente
+
+Cuando vuelves a guardar, el sistema reconstruye el Markdown respetando la metadata y los bloques activos.
 
 ### 3. Assets por topic
 
@@ -242,8 +319,8 @@ Cuando haces click en un topic:
 Cuando eliges un ejemplo desde la galeria o desde el boton `Load`:
 
 - se pide el archivo Markdown al backend
-- se parsean los bloques `HTML`, `CSS` y `JavaScript`
-- cada bloque se carga en su editor correspondiente
+- se parsean los bloques y la metadata
+- cada bloque visible se carga en su editor correspondiente
 - el preview se actualiza automaticamente
 
 ### 4. Edicion y preview
@@ -252,8 +329,9 @@ Cada vez que cambias codigo:
 
 - el editor dispara un callback
 - el preview espera 300 ms
+- el backend compila el documento si hace falta
 - se reconstruye un documento HTML completo dentro del `iframe`
-- se inyectan el HTML, CSS y JS actuales
+- se inyecta el resultado compilado actual
 
 Si el JavaScript lanza un error, el preview intenta mostrar el mensaje al final del `body`.
 
@@ -306,7 +384,13 @@ Cuando creas un `Topic`, el backend tambien crea:
 - `assets/`
 - `main.md`
 
-Cuando creas un `Example`, el backend genera una plantilla minima con bloques de HTML, CSS y JavaScript.
+Cuando creas un `Example`, el backend genera una plantilla minima segun el preset elegido.
+
+Actualmente el dialogo incluye presets para:
+
+- sesiones clasicas
+- sesiones con `SCSS`, `SASS` y `TypeScript`
+- React `single-file` con `JSX` o `TSX`
 
 ## Instalacion
 
@@ -386,33 +470,6 @@ Importante:
 
 Devuelve el arbol completo de navegacion.
 
-Respuesta aproximada:
-
-```json
-[
-  {
-    "id": "ch01-css",
-    "label": "css",
-    "number": 1,
-    "sections": [
-      {
-        "id": "sec01-selectors",
-        "label": "selectors",
-        "number": 1,
-        "topics": [
-          {
-            "id": "top01-class-selector",
-            "label": "class selector",
-            "number": 1,
-            "path": "ch01-css/sec01-selectors/top01-class-selector"
-          }
-        ]
-      }
-    ]
-  }
-]
-```
-
 ### `GET /api/topic/:ch/:sec/:top/main`
 
 Devuelve el contenido de `main.md`.
@@ -475,16 +532,26 @@ Body:
 {
   "type": "chapter | section | topic | example",
   "name": "nombre",
-  "parentPath": "ruta/opcional"
+  "parentPath": "ruta/opcional",
+  "sessionPreset": "opcional"
 }
 ```
 
-Comportamiento por tipo:
+### `POST /api/compile`
 
-- `chapter`: crea carpeta `chNN-slug`
-- `section`: crea carpeta `secNN-slug` dentro del capitulo indicado
-- `topic`: crea carpeta `topNN-slug` y ademas `examples/`, `assets/` y `main.md`
-- `example`: crea un archivo `.md` dentro de `examples/`
+Compila un documento fuente y devuelve:
+
+- `document`
+- `compiledDocument`
+- `compileDiagnostics`
+
+Es la ruta que usa el preview para soportar:
+
+- `Pug`
+- `SCSS`
+- `SASS`
+- `TypeScript`
+- React `single-file`
 
 ### `GET /api/topic/:ch/:sec/:top/assets/:file`
 
@@ -503,6 +570,8 @@ learnWeb/
   src/
     main.js
     style.css
+    config/
+      exampleBlocks.js
     components/
       Sidebar.js
       TheoryViewer.js
@@ -513,13 +582,15 @@ learnWeb/
     utils/
       api.js
       markdown.js
+      exampleCompiler.js
+      exampleRenderer.js
 ```
 
 ### Descripcion de archivos importantes
 
 #### `server.js`
 
-Backend Express. Lee y escribe el filesystem, construye el arbol, crea contenido y sirve assets.
+Backend Express. Lee y escribe el filesystem, construye el arbol, crea contenido, compila documentos y sirve assets.
 
 #### `src/main.js`
 
@@ -535,11 +606,11 @@ Pide `main.md` y lo renderiza como HTML a partir de Markdown.
 
 #### `src/components/Editor.js`
 
-Configura tres editores CodeMirror, sincroniza el preview y maneja guardar, cargar, modificar, renombrar y eliminar.
+Configura paneles dinamicos de CodeMirror, sincroniza el preview y maneja guardar, cargar, modificar, renombrar y eliminar.
 
 #### `src/components/Preview.js`
 
-Construye el documento final que se inyecta en el `iframe` de preview.
+Coordina la compilacion y construye el documento final que se inyecta en el `iframe` de preview.
 
 #### `src/components/Gallery.js`
 
@@ -555,7 +626,15 @@ Capa de acceso a la API del backend.
 
 #### `src/utils/markdown.js`
 
-Parser y generador del formato Markdown usado para los ejemplos.
+Parser y generador del formato Markdown usado para los ejemplos, incluyendo metadata simple.
+
+#### `src/utils/exampleCompiler.js`
+
+Pipeline de compilacion para `Pug`, `SCSS`, `SASS`, `TypeScript` y React `single-file`.
+
+#### `src/utils/exampleRenderer.js`
+
+Convierte el documento compilado en el `srcdoc` final del `iframe`.
 
 ## Detalles importantes de funcionamiento
 
@@ -576,15 +655,24 @@ Como no hay base de datos:
 
 ### La galeria no es solo una lista
 
-Cada tarjeta intenta cargar el ejemplo y renderizar una mini preview en un `iframe`.
+Cada tarjeta intenta cargar el ejemplo, compilarlo si hace falta y renderizar una mini preview en un `iframe`.
 
-### Los editores son independientes
+### Los editores son dinamicos
 
-La interfaz separa claramente:
+La interfaz ya no asume tres paneles fijos.
 
-- HTML
-- CSS
-- JavaScript
+Segun el ejemplo cargado, puede mostrar:
+
+- `HTML`
+- `SVG`
+- `Pug`
+- `CSS`
+- `SCSS`
+- `SASS`
+- `JavaScript`
+- `TypeScript`
+- `JSX`
+- `TSX`
 
 Ademas incluye:
 
@@ -596,30 +684,46 @@ Ademas incluye:
 
 ### Responsive preview
 
-El panel de preview permite cambiar ancho de viewport con:
+El panel de preview tiene dos niveles de ancho:
 
-- presets
-- slider manual
+- ancho general del panel preview, moviendo el separador entre editor y preview
+- ancho interno del `iframe`, usando presets o slider manual
 
-Esto ayuda a probar el resultado en distintos anchos.
+Si el viewport interno es mas pequeno que el panel general, se ve fondo gris detras.
+
+### React `single-file`
+
+El modo React actual esta pensado para aprendizaje atomico:
+
+- un bloque `JSX` o `TSX`
+- `CSS` opcional
+- shell HTML oculto
+- montaje automatico de `App`
+
+Ejemplos listos para probar:
+
+- [react-jsx.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec00-test/top00-test/examples/react-jsx.md)
+- [react-jsx-css.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec00-test/top00-test/examples/react-jsx-css.md)
+- [react-tsx.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec00-test/top00-test/examples/react-tsx.md)
+- [react-tsx-css.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec00-test/top00-test/examples/react-tsx-css.md)
 
 ## Limitaciones actuales
-
-Estas limitaciones describen el estado actual del codigo:
 
 - no hay autenticacion ni control de permisos
 - no hay base de datos
 - no hay edicion de `main.md` desde la interfaz
 - `npm run preview` no representa un despliegue completo del proyecto
-- algunas partes de la UI muestran señales de implementacion incompleta o iterativa
+- no existe todavia consola de runtime dentro de la app
+- React solo existe en modo `single-file`
 
-Ejemplos concretos:
+Limitaciones tecnicas actuales:
 
-- el boton `+` sobre un topic intenta crear un ejemplo contextual, pero ese flujo no queda completamente conectado en la orquestacion principal
-- el dialogo de creacion tiene pequenos detalles de logica duplicada
-- la lista de tipos del dialogo repite `Section` dos veces
+- el frontmatter no es YAML completo; solo soporta pares simples `clave: valor`
+- React `single-file` no soporta `import` ni `export` dentro del ejemplo
+- React `single-file` exige una funcion o componente top-level llamada `App`
+- React `single-file` no soporta multiples archivos todavia
+- el bundle de preview para React es grande porque empaqueta runtime en cada ejemplo
 - algunas rutas de API codifican nombres de archivo y otras no, asi que nombres exoticos pueden generar problemas
-- la galeria renderiza previews, pero no esta tan alineada como el preview principal en soporte de assets por topic
 
 ## Solucion de problemas
 
@@ -648,6 +752,16 @@ Revisa:
 - que el topic actual sea el correcto
 - que uses una ruta relativa valida desde el HTML del ejemplo
 
+### Un ejemplo React no renderiza
+
+Revisa:
+
+- que el archivo tenga `framework: react` en el frontmatter
+- que exista exactamente un bloque `JSX` o `TSX`
+- que el archivo defina un componente top-level `App`
+- que no uses `import` ni `export` en la version `single-file`
+- que los errores de compilacion no aparezcan en la barra de estado del editor
+
 ### `Modify`, `Rename` o `Remove` estan deshabilitados
 
 Eso es esperado si todavia no hay un archivo activo cargado. Primero debes:
@@ -673,6 +787,7 @@ Luego recarga la app para que el backend vuelva a leer el arbol.
 
 Actualmente el repositorio ya trae contenido de ejemplo dentro de `material/`, incluyendo topics como:
 
+- tests / test / test
 - CSS / selectors
 - SVG basics / coordinates
 - JavaScript / basics

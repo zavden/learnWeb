@@ -23,10 +23,14 @@ function buildDiagnosticsMarkup(diagnostics = []) {
 
 export function renderCompiledExampleDocument(compiledDocument = {}, topicPath = '', diagnostics = []) {
     const assetBase = topicPath ? `/api/topic/${topicPath}/assets/` : '';
+    const framework = compiledDocument.framework || '';
     const html = compiledDocument.html || '';
     const css = compiledDocument.css || '';
     const js = compiledDocument.js || '';
     const diagnosticsMarkup = buildDiagnosticsMarkup(diagnostics);
+    const baseStyles = framework === 'react'
+        ? 'body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; } #root { min-height: calc(100vh - 32px); }'
+        : 'body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }';
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -35,7 +39,7 @@ export function renderCompiledExampleDocument(compiledDocument = {}, topicPath =
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   ${assetBase ? `<base href="${assetBase}">` : ''}
   <style>
-    body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    ${baseStyles}
     ${css}
   </style>
 </head>

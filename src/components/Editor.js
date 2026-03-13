@@ -17,6 +17,8 @@ import {
     createEmptyExampleDocument,
     hasBlockingDiagnostics,
     parseExampleDocument,
+    synchronizeDocument,
+    updateDocumentFileContent,
 } from '../utils/markdown.js';
 
 export class Editor {
@@ -30,13 +32,18 @@ export class Editor {
         this.compileDiagnostics = [];
         this.editors = [];
         this.fontSize = 13;
+        this.layoutModeStorageKey = 'learncode.editor.layout';
+        this.layoutMode = this._readLayoutMode();
+        this.activeFileId = null;
 
-        this.panelsContainer = document.querySelector('.editor-panels');
+        this.workspace = document.querySelector('.editor-panels');
         this.btnSave = document.getElementById('btn-save');
         this.btnLoad = document.getElementById('btn-load');
         this.btnModify = document.getElementById('btn-modify');
         this.btnRemove = document.getElementById('btn-remove');
         this.btnRename = document.getElementById('btn-rename');
+        this.btnLayout = document.getElementById('btn-editor-layout');
+        this.btnAutoFit = document.getElementById('btn-auto-fit');
         this.filenameDisplay = document.getElementById('current-filename');
         this.statusDisplay = document.getElementById('editor-status');
         this.loadDropdown = document.getElementById('load-dropdown');
@@ -45,13 +52,20 @@ export class Editor {
         this._initButtons();
         this._initShortcuts();
         this._initPanelControls();
+        this._initLayoutControls();
+        this._updateFontSize(0);
         this._applyDocument(createEmptyExampleDocument(), { notify: false });
     }
 
+    _readLayoutMode() {
+        const stored = window.localStorage.getItem(this.layoutModeStorageKey);
+        return stored === 'tabs' ? 'tabs' : 'panels';
+    }
+
     _initShortcuts() {
-        document.addEventListener('keydown', (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-                e.preventDefault();
+        document.addEventListener('keydown', (event) => {
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+                event.preventDefault();
                 this._handleModify();
             }
         });
@@ -60,16 +74,26 @@ export class Editor {
     _initPanelControls() {
         const btnInc = document.getElementById('btn-font-inc');
         const btnDec = document.getElementById('btn-font-dec');
-        const btnAuto = document.getElementById('btn-auto-fit');
 
         if (btnInc && btnDec) {
             btnInc.addEventListener('click', () => this._updateFontSize(1));
             btnDec.addEventListener('click', () => this._updateFontSize(-1));
         }
 
-        if (btnAuto) {
-            btnAuto.addEventListener('click', () => this._handleAutoFit());
+        if (this.btnAutoFit) {
+            this.btnAutoFit.addEventListener('click', () => this._handleAutoFit());
         }
+    }
+
+    _initLayoutControls() {
+        if (!this.btnLayout) return;
+
+        this.btnLayout.addEventListener('click', () => {
+            const nextMode = this.layoutMode === 'panels' ? 'tabs' : 'panels';
+            this._setLayoutMode(nextMode);
+        });
+
+        this._updateLayoutButton();
     }
 
     _updateFontSize(delta) {
@@ -91,9 +115,9 @@ export class Editor {
                 this._updateButtonStates();
                 this._updateFilenameDisplay();
                 this._showToast(`Saved: ${result.filename}`, 'success');
-            } catch (err) {
-                console.error(err);
-                this._showToast(`Failed to save: ${err.message}`, 'error');
+            } catch (error) {
+                console.error(error);
+                this._showToast(`Failed to save: ${error.message}`, 'error');
             }
         });
 
@@ -111,9 +135,9 @@ export class Editor {
                 this._updateButtonStates();
                 this._updateFilenameDisplay();
                 this._showToast('Example deleted', 'success');
-            } catch (err) {
-                console.error(err);
-                this._showToast(`Delete failed: ${err.message}`, 'error');
+            } catch (error) {
+                console.error(error);
+                this._showToast(`Delete failed: ${error.message}`, 'error');
             }
         });
 
@@ -131,9 +155,9 @@ export class Editor {
                 this._updateFilenameDisplay();
                 this._showToast(`Renamed to: ${newFilename}`, 'success');
                 if (this.onRename) this.onRename(newFilename, oldFilename);
-            } catch (err) {
-                console.error(err);
-                this._showToast(`Rename failed: ${err.message}`, 'error');
+            } catch (error) {
+                console.error(error);
+                this._showToast(`Rename failed: ${error.message}`, 'error');
             }
         });
 
@@ -149,8 +173,8 @@ export class Editor {
             this.loadDropdown.classList.remove('hidden');
         });
 
-        document.addEventListener('click', (e) => {
-            if (!this.btnLoad.contains(e.target) && !this.loadDropdown.contains(e.target)) {
+        document.addEventListener('click', (event) => {
+            if (!this.btnLoad.contains(event.target) && !this.loadDropdown.contains(event.target)) {
                 this.loadDropdown.classList.add('hidden');
             }
         });
@@ -208,9 +232,10 @@ export class Editor {
     }
 
     _applyDocument(documentModel, { notify = true } = {}) {
-        this.currentDocument = cloneExampleDocument(documentModel);
+        this.currentDocument = synchronizeDocument(cloneExampleDocument(documentModel));
         this.compileDiagnostics = [];
-        this._renderPanels();
+        this._ensureActiveFile();
+        this._renderWorkspace();
         this._updateStatus();
         this._updateButtonStates();
 
@@ -219,24 +244,93 @@ export class Editor {
         }
     }
 
-    _renderPanels() {
-        this._destroyEditors();
-        this.panelsContainer.innerHTML = '';
+    _ensureActiveFile() {
+        const files = this.currentDocument.files || [];
 
-        if (this.currentDocument.blocks.length === 0) {
-            const empty = document.createElement('div');
-            empty.className = 'editor-empty-state';
-            empty.textContent = 'Select an example from the gallery to begin.';
-            this.panelsContainer.appendChild(empty);
+        if (files.length === 0) {
+            this.activeFileId = null;
             return;
         }
 
-        this.currentDocument.blocks.forEach((block, index) => {
-            const definition = getBlockDefinition(block.type);
+        if (!files.some((file) => file.id === this.activeFileId)) {
+            this.activeFileId = files[0].id;
+        }
+    }
+
+    _setLayoutMode(mode, { persist = true, rerender = true } = {}) {
+        this.layoutMode = mode === 'tabs' ? 'tabs' : 'panels';
+
+        if (persist) {
+            window.localStorage.setItem(this.layoutModeStorageKey, this.layoutMode);
+        }
+
+        this._updateLayoutButton();
+        this._updatePanelControlStates();
+
+        if (rerender) {
+            this._renderWorkspace();
+        }
+    }
+
+    _updateLayoutButton() {
+        if (!this.btnLayout) return;
+
+        const label = this.layoutMode === 'panels' ? 'Tabs' : 'Panels';
+        const description = this.layoutMode === 'panels'
+            ? 'Switch to tabs view'
+            : 'Switch to vertical panels';
+        const labelNode = this.btnLayout.querySelector('.editor-layout-label');
+
+        if (labelNode) {
+            labelNode.textContent = label;
+        } else {
+            this.btnLayout.textContent = label;
+        }
+
+        this.btnLayout.title = description;
+        this.btnLayout.setAttribute('aria-label', description);
+        this.btnLayout.dataset.mode = this.layoutMode;
+    }
+
+    _updatePanelControlStates() {
+        if (!this.btnAutoFit) return;
+        this.btnAutoFit.disabled = this.layoutMode !== 'panels' || (this.currentDocument.files || []).length === 0;
+    }
+
+    _renderWorkspace() {
+        this._destroyEditors();
+        this.workspace.innerHTML = '';
+        this.workspace.dataset.layoutMode = this.layoutMode;
+        this._ensureActiveFile();
+
+        if ((this.currentDocument.files || []).length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'editor-empty-state';
+            empty.textContent = 'Select an example from the gallery to begin.';
+            this.workspace.appendChild(empty);
+            this._updatePanelControlStates();
+            return;
+        }
+
+        if (this.layoutMode === 'tabs') {
+            this._renderTabsLayout();
+        } else {
+            this._renderPanelsLayout();
+        }
+
+        this._updatePanelControlStates();
+    }
+
+    _renderPanelsLayout() {
+        const stack = document.createElement('div');
+        stack.className = 'editor-panels-stack';
+
+        this.currentDocument.files.forEach((file, index) => {
+            const definition = this._getFileDefinition(file);
             const panel = document.createElement('div');
             panel.className = 'editor-panel';
-            panel.dataset.slot = block.slot;
-            panel.dataset.type = block.type;
+            panel.dataset.fileId = file.id;
+            panel.dataset.language = file.language;
             panel.style.flex = '1 1 0px';
 
             const header = document.createElement('div');
@@ -255,9 +349,19 @@ export class Editor {
                 </svg>
             `;
 
-            const badge = document.createElement('span');
-            badge.className = `lang-badge ${definition.badgeClass}`;
-            badge.textContent = definition.badgeLabel;
+            const badge = this._createBadge(definition);
+            const pathLabel = document.createElement('span');
+            pathLabel.className = 'panel-path';
+            pathLabel.textContent = file.path;
+            pathLabel.title = file.path;
+
+            header.appendChild(btnCollapse);
+            header.appendChild(badge);
+            header.appendChild(pathLabel);
+
+            if (file.role) {
+                header.appendChild(this._createRolePill(file.role));
+            }
 
             const btnMaximize = document.createElement('button');
             btnMaximize.className = 'btn-icon btn-maximize';
@@ -271,59 +375,174 @@ export class Editor {
                     <line x1="3" y1="21" x2="10" y2="14"></line>
                 </svg>
             `;
+            header.appendChild(btnMaximize);
 
             const editorHost = document.createElement('div');
             editorHost.className = 'panel-editor';
 
-            header.appendChild(btnCollapse);
-            header.appendChild(badge);
-            header.appendChild(btnMaximize);
             panel.appendChild(header);
             panel.appendChild(editorHost);
-            this.panelsContainer.appendChild(panel);
+            stack.appendChild(panel);
 
-            const view = this._createEditor(editorHost, block);
+            const view = this._createEditor(editorHost, file);
 
-            btnCollapse.addEventListener('click', (e) => {
-                e.stopPropagation();
+            btnCollapse.addEventListener('click', (event) => {
+                event.stopPropagation();
                 panel.classList.toggle('collapsed');
             });
 
-            btnMaximize.addEventListener('click', (e) => {
-                e.stopPropagation();
+            btnMaximize.addEventListener('click', (event) => {
+                event.stopPropagation();
                 this._toggleMaximize(panel);
             });
 
-            header.addEventListener('mousedown', (e) => {
-                if (index === 0 || e.target.closest('button')) return;
-                this._startResize(panel.previousElementSibling, panel, e);
+            header.addEventListener('mousedown', (event) => {
+                if (index === 0 || event.target.closest('button')) return;
+                this._startResize(panel.previousElementSibling, panel, event);
             });
 
             this.editors.push({
-                id: block.id,
-                slot: block.slot,
-                type: block.type,
+                id: file.id,
                 panel,
                 view,
             });
         });
+
+        this.workspace.appendChild(stack);
+    }
+
+    _renderTabsLayout() {
+        const layout = document.createElement('div');
+        layout.className = 'editor-tabs-layout';
+
+        const header = document.createElement('div');
+        header.className = 'editor-tabs-header';
+
+        const nav = document.createElement('div');
+        nav.className = 'editor-tabs-nav';
+
+        this.currentDocument.files.forEach((file) => {
+            const definition = this._getFileDefinition(file);
+            const tab = document.createElement('button');
+            tab.type = 'button';
+            tab.className = `editor-tab ${file.id === this.activeFileId ? 'active' : ''}`;
+            tab.title = file.path;
+
+            tab.appendChild(this._createBadge(definition));
+
+            const label = document.createElement('span');
+            label.className = 'editor-tab-label';
+            label.textContent = file.name || file.path;
+            tab.appendChild(label);
+
+            tab.addEventListener('click', () => {
+                this.activeFileId = file.id;
+                this._renderWorkspace();
+            });
+
+            nav.appendChild(tab);
+        });
+
+        const menu = document.createElement('div');
+        menu.className = 'editor-file-menu';
+
+        const select = document.createElement('select');
+        select.className = 'editor-file-select';
+        select.setAttribute('aria-label', 'Select file');
+
+        this.currentDocument.files.forEach((file) => {
+            const option = document.createElement('option');
+            option.value = file.id;
+            option.textContent = file.path;
+            option.selected = file.id === this.activeFileId;
+            select.appendChild(option);
+        });
+
+        select.addEventListener('change', (event) => {
+            this.activeFileId = event.target.value;
+            this._renderWorkspace();
+        });
+
+        menu.appendChild(select);
+        header.appendChild(nav);
+        header.appendChild(menu);
+        layout.appendChild(header);
+
+        const activeFile = this._getActiveFile();
+        const meta = document.createElement('div');
+        meta.className = 'editor-tab-meta';
+        meta.appendChild(this._createBadge(this._getFileDefinition(activeFile)));
+
+        const pathLabel = document.createElement('span');
+        pathLabel.className = 'file-path-label';
+        pathLabel.textContent = activeFile.path;
+        pathLabel.title = activeFile.path;
+        meta.appendChild(pathLabel);
+
+        if (activeFile.role) {
+            meta.appendChild(this._createRolePill(activeFile.role));
+        }
+
+        layout.appendChild(meta);
+
+        const editorHost = document.createElement('div');
+        editorHost.className = 'editor-tab-surface';
+        layout.appendChild(editorHost);
+
+        const view = this._createEditor(editorHost, activeFile);
+        this.editors.push({
+            id: activeFile.id,
+            panel: editorHost,
+            view,
+        });
+
+        this.workspace.appendChild(layout);
+    }
+
+    _getActiveFile() {
+        this._ensureActiveFile();
+        return this.currentDocument.files.find((file) => file.id === this.activeFileId) || this.currentDocument.files[0];
+    }
+
+    _createBadge(definition) {
+        const badge = document.createElement('span');
+        badge.className = `lang-badge ${definition.badgeClass}`;
+        badge.textContent = definition.badgeLabel;
+        return badge;
+    }
+
+    _createRolePill(role) {
+        const pill = document.createElement('span');
+        pill.className = 'file-role-pill';
+        pill.textContent = role;
+        return pill;
+    }
+
+    _getFileDefinition(file) {
+        const definition = getBlockDefinition(file?.language || '');
+        if (definition) return definition;
+
+        return {
+            badgeClass: 'preview',
+            badgeLabel: (file?.language || 'file').toUpperCase(),
+        };
     }
 
     _destroyEditors() {
-        this.editors.forEach((entry) => entry.view.destroy());
+        this.editors.forEach((entry) => entry.view?.destroy());
         this.editors = [];
     }
 
-    _createEditor(container, block) {
-        const langExtensions = this._getLanguageExtensions(block.type);
+    _createEditor(container, file) {
+        const langExtensions = this._getLanguageExtensions(file.language);
         const updateListener = EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
-            this._setBlockContent(block.id, update.state.doc.toString());
+            this._setFileContent(file.id, update.state.doc.toString());
             this._triggerChange();
         });
 
         const state = EditorState.create({
-            doc: block.content || '',
+            doc: file.content || '',
             extensions: [
                 lineNumbers(),
                 highlightActiveLine(),
@@ -357,11 +576,13 @@ export class Editor {
 
     _getLanguageExtensions(type) {
         switch (type) {
+            case 'jsx':
+                return [javascript({ jsx: true })];
+            case 'tsx':
+                return [javascript({ jsx: true, typescript: true })];
             case 'html':
             case 'svg':
                 return [html()];
-            case 'pug':
-                return [];
             case 'css':
             case 'scss':
             case 'sass':
@@ -370,20 +591,18 @@ export class Editor {
                 return [javascript()];
             case 'typescript':
                 return [javascript({ typescript: true })];
+            case 'pug':
             default:
                 return [];
         }
     }
 
-    _setBlockContent(blockId, content) {
-        const block = this.currentDocument.blocks.find((entry) => entry.id === blockId);
-        if (!block) return;
-        block.content = content;
-        this.currentDocument.sessionId = this.currentDocument.blocks.map((entry) => entry.type).join('-');
+    _setFileContent(fileId, content) {
+        this.currentDocument = updateDocumentFileContent(this.currentDocument, fileId, content);
     }
 
     _getPanels() {
-        return Array.from(this.panelsContainer.querySelectorAll('.editor-panel'));
+        return Array.from(this.workspace.querySelectorAll('.editor-panel'));
     }
 
     _toggleMaximize(activePanel) {
@@ -418,7 +637,7 @@ export class Editor {
         const panels = this._getPanels();
         panels.forEach((panel) => panel.classList.remove('collapsed'));
 
-        const containerHeight = this.panelsContainer.getBoundingClientRect().height;
+        const containerHeight = this.workspace.getBoundingClientRect().height;
         const startY = event.clientY;
         const startPrevHeight = prevPanel.getBoundingClientRect().height;
         const startCurrentHeight = currentPanel.getBoundingClientRect().height;
@@ -455,6 +674,8 @@ export class Editor {
     }
 
     _handleAutoFit() {
+        if (this.layoutMode !== 'panels') return;
+
         const panels = this._getPanels();
         if (panels.length === 0 || this.editors.length === 0) return;
 
@@ -467,7 +688,7 @@ export class Editor {
         const headerHeight = 32;
         const scrollbarPadding = 20;
         const minPanelHeight = 32;
-        const availableHeight = this.panelsContainer.getBoundingClientRect().height;
+        const availableHeight = this.workspace.getBoundingClientRect().height;
 
         const neededHeights = this.editors.map((entry) => {
             const lines = entry.view.state.doc.lines;
@@ -506,14 +727,15 @@ export class Editor {
     _updateButtonStates() {
         const hasFile = Boolean(this.currentFilename);
         const hasTopic = Boolean(this.currentTopicPath);
-        const hasBlocks = this.currentDocument.blocks.length > 0;
+        const hasContent = (this.currentDocument.files || []).length > 0;
         const isSafeToWrite = !hasBlockingDiagnostics(this.currentDocument);
 
-        this.btnSave.disabled = !hasTopic || !hasBlocks || !isSafeToWrite;
+        this.btnSave.disabled = !hasTopic || !hasContent || !isSafeToWrite;
         this.btnLoad.disabled = !hasTopic;
         this.btnModify.disabled = !hasFile || !isSafeToWrite;
         this.btnRemove.disabled = !hasFile;
         this.btnRename.disabled = !hasFile;
+        this._updatePanelControlStates();
     }
 
     _updateFilenameDisplay() {
@@ -580,9 +802,9 @@ export class Editor {
         try {
             await modifyExample(this.currentTopicPath, this.currentFilename, content);
             this._showToast(`Modified: ${this.currentFilename}`, 'success');
-        } catch (err) {
-            console.error(err);
-            this._showToast(`Modify failed: ${err.message}`, 'error');
+        } catch (error) {
+            console.error(error);
+            this._showToast(`Modify failed: ${error.message}`, 'error');
         }
     }
 }

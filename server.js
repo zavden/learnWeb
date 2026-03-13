@@ -195,11 +195,11 @@ app.put('/api/topic/:ch/:sec/:top/examples/*', (req, res) => {
 
 // ─── POST /api/compile ───────────────────────────────────
 
-app.post('/api/compile', (req, res) => {
+app.post('/api/compile', async (req, res) => {
     try {
         const sourceDocument = req.body?.document
             || parseExampleDocument(req.body?.content || '');
-        const result = compileExampleDocument(sourceDocument);
+        const result = await compileExampleDocument(sourceDocument);
 
         res.json({
             document: sourceDocument,
@@ -228,6 +228,13 @@ app.post('/api/create', (req, res) => {
         const { type, name, parentPath, sessionPreset } = req.body; // type: 'chapter' | 'section' | 'topic'
         let targetDir;
         let prefix;
+        const replaceTemplateTokens = (content = '') => String(content)
+            .replaceAll('__EXAMPLE_NAME__', name)
+            .replace(/Hello World/g, name)
+            .replace(/Hello from Pug/g, name)
+            .replace(/SCSS preset/g, name)
+            .replace(/Hello React/g, name)
+            .replace(/React TSX Todo/g, name);
 
         if (type === 'chapter') {
             targetDir = MATERIAL_DIR;
@@ -253,7 +260,11 @@ app.post('/api/create', (req, res) => {
             const sourceDocument = createExampleDocumentFromPreset(sessionPreset || 'html-css-javascript');
             sourceDocument.blocks = sourceDocument.blocks.map((block) => ({
                 ...block,
-                content: block.content.replace(/Hello World/g, name).replace(/Hello from Pug/g, name).replace(/SCSS preset/g, name),
+                content: replaceTemplateTokens(block.content),
+            }));
+            sourceDocument.files = sourceDocument.files.map((file) => ({
+                ...file,
+                content: replaceTemplateTokens(file.content),
             }));
             const template = buildExampleDocument(sourceDocument);
             fs.writeFileSync(filePath, template, 'utf-8');
