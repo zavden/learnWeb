@@ -22,10 +22,8 @@ class App {
         this.preview = new Preview();
 
         this.editor = new Editor({
-            onCodeChange: (code) => this.preview.update(code),
+            onCodeChange: (documentModel) => this.preview.update(documentModel),
             onRename: () => {
-                // Refresh gallery if renaming happens
-                // But we don't need to show gallery, just refresh its data for next time
                 if (this.currentTopicPath) {
                     this.gallery.load(this.currentTopicPath);
                 }
@@ -40,7 +38,7 @@ class App {
 
         this.sidebar = new Sidebar({
             onTopicSelect: (path, label) => this.selectTopic(path, label),
-            onCreateClick: () => this.openCreateDialog(),
+            onCreateClick: (topicPath) => this.openCreateDialog(topicPath),
         });
 
         // Gallery Button
@@ -50,7 +48,12 @@ class App {
         }
 
         this.createDialog = new CreateDialog({
-            onCreated: () => this.sidebar.load(),
+            onCreated: ({ type, parentPath }) => {
+                this.sidebar.load();
+                if (type === 'example' && parentPath === this.currentTopicPath) {
+                    this.gallery.load(this.currentTopicPath);
+                }
+            },
         });
 
         // Initial load
@@ -64,12 +67,11 @@ class App {
         // Update components
         this.editor.setTopicPath(topicPath);
         this.preview.setTopicPath(topicPath);
-        this.gallery.currentTopicPath = topicPath; // Sync path
+        this.gallery.currentTopicPath = topicPath;
 
         // Load theory content
         this.theoryViewer.load(topicPath);
 
-        // Show Gallery instead of auto-loading editor
         await this.gallery.load(topicPath);
         this.showGallery();
     }
@@ -83,13 +85,7 @@ class App {
         this.galleryView.classList.remove('hidden');
         this.editorToolbar.classList.add('hidden');
         this.editorPanels.classList.add('hidden');
-        // Keep preview column visible? It shows the preview of what?
-        // If we are in gallery mode, the preview column (right side) is visible, but empty?
-        // Ah, the layout is: Sidebar | Editor Column | Preview Column.
-        // If I hide Editor Toolbar/Panels, and show Gallery in Editor Column.
-        // Preview Column is still on the right.
-        // Should it show anything? Maybe blank or "Select an example".
-        this.preview.update({ html: '', css: '', js: '' }); // Clear preview
+        this.preview.clear();
     }
 
     showEditor() {
@@ -130,9 +126,9 @@ class App {
         });
     }
 
-    openCreateDialog() {
+    openCreateDialog(preselectedTopicPath = null) {
         const tree = this.sidebar.getTree();
-        this.createDialog.open(tree);
+        this.createDialog.open(tree, preselectedTopicPath);
     }
 }
 
@@ -140,4 +136,3 @@ class App {
 document.addEventListener('DOMContentLoaded', () => {
     new App();
 });
-

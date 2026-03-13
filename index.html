@@ -129,73 +129,10 @@
               <div class="dropdown-header">Select Example</div>
               <ul id="load-list"></ul>
             </div>
+            <div id="editor-status" class="editor-status hidden"></div>
           </div>
 
-          <div class="editor-panels">
-            <div class="editor-panel" id="panel-html">
-              <div class="panel-header">
-                <button class="btn-icon btn-collapse" title="Toggle Panel">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </button>
-                <span class="lang-badge html">HTML</span>
-                <button class="btn-icon btn-maximize" title="Maximize Panel">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="15 3 21 3 21 9"></polyline>
-                    <polyline points="9 21 3 21 3 15"></polyline>
-                    <line x1="21" y1="3" x2="14" y2="10"></line>
-                    <line x1="3" y1="21" x2="10" y2="14"></line>
-                  </svg>
-                </button>
-              </div>
-              <div class="panel-editor" id="editor-html"></div>
-            </div>
-            <div class="editor-panel" id="panel-css">
-              <div class="panel-header">
-                <button class="btn-icon btn-collapse" title="Toggle Panel">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </button>
-                <span class="lang-badge css">CSS</span>
-                <button class="btn-icon btn-maximize" title="Maximize Panel">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="15 3 21 3 21 9"></polyline>
-                    <polyline points="9 21 3 21 3 15"></polyline>
-                    <line x1="21" y1="3" x2="14" y2="10"></line>
-                    <line x1="3" y1="21" x2="10" y2="14"></line>
-                  </svg>
-                </button>
-              </div>
-              <div class="panel-editor" id="editor-css"></div>
-            </div>
-            <div class="editor-panel" id="panel-js">
-              <div class="panel-header">
-                <button class="btn-icon btn-collapse" title="Toggle Panel">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </button>
-                <span class="lang-badge js">JS</span>
-                <button class="btn-icon btn-maximize" title="Maximize Panel">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="15 3 21 3 21 9"></polyline>
-                    <polyline points="9 21 3 21 3 15"></polyline>
-                    <line x1="21" y1="3" x2="14" y2="10"></line>
-                    <line x1="3" y1="21" x2="10" y2="14"></line>
-                  </svg>
-                </button>
-              </div>
-              <div class="panel-editor" id="editor-js"></div>
-            </div>
-          </div>
+          <div class="editor-panels"></div>
         </div>
 
         <!-- Preview Column -->
@@ -257,7 +194,6 @@
         <select id="create-type">
           <option value="chapter">Chapter</option>
           <option value="section">Section</option>
-          <option value="section">Section</option>
           <option value="topic">Topic</option>
           <option value="example">Example</option>
         </select>
@@ -265,6 +201,10 @@
       <div class="form-group" id="parent-group">
         <label for="create-parent">Parent</label>
         <select id="create-parent"></select>
+      </div>
+      <div class="form-group" id="preset-group" style="display: none;">
+        <label for="create-preset">Example Preset</label>
+        <select id="create-preset"></select>
       </div>
       <div class="form-group">
         <label for="create-name">Name</label>

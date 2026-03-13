@@ -42,6 +42,108 @@ function ensureDir(dirPath) {
     }
 }
 
+function buildExampleTemplate(sessionPreset = 'html-css-javascript', name = 'example') {
+    const escapedName = name.replace(/`/g, '');
+
+    const templates = {
+        html: `# HTML
+
+\`\`\`html
+<h1>${escapedName}</h1>
+\`\`\`
+`,
+        'html-css': `# HTML
+
+\`\`\`html
+<h1 class="title">${escapedName}</h1>
+\`\`\`
+
+# CSS
+
+\`\`\`css
+.title {
+  color: #58a6ff;
+}
+\`\`\`
+`,
+        'html-css-javascript': `# HTML
+
+\`\`\`html
+<h1 class="title">${escapedName}</h1>
+\`\`\`
+
+# CSS
+
+\`\`\`css
+.title {
+  color: #58a6ff;
+}
+\`\`\`
+
+# JavaScript
+
+\`\`\`javascript
+console.log('Hello from ${escapedName}');
+\`\`\`
+`,
+        svg: `# SVG
+
+\`\`\`svg
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="60" cy="60" r="44" fill="#58a6ff" />
+</svg>
+\`\`\`
+`,
+        'svg-css': `# SVG
+
+\`\`\`svg
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <circle class="dot" cx="60" cy="60" r="44" />
+</svg>
+\`\`\`
+
+# CSS
+
+\`\`\`css
+.dot {
+  fill: #58a6ff;
+}
+\`\`\`
+`,
+        'svg-css-javascript': `# SVG
+
+\`\`\`svg
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <circle class="dot" cx="60" cy="60" r="44" />
+</svg>
+\`\`\`
+
+# CSS
+
+\`\`\`css
+.dot {
+  fill: #58a6ff;
+  transition: transform 200ms ease;
+}
+\`\`\`
+
+# JavaScript
+
+\`\`\`javascript
+const dot = document.querySelector('.dot');
+if (dot) {
+  dot.addEventListener('click', () => {
+    dot.style.transform = 'scale(0.9)';
+    setTimeout(() => { dot.style.transform = ''; }, 150);
+  });
+}
+\`\`\`
+`,
+    };
+
+    return templates[sessionPreset] || templates['html-css-javascript'];
+}
+
 // ─── GET /api/tree ──────────────────────────────────────
 
 app.get('/api/tree', (req, res) => {
@@ -191,7 +293,7 @@ app.put('/api/topic/:ch/:sec/:top/examples/*', (req, res) => {
 
 app.post('/api/create', (req, res) => {
     try {
-        const { type, name, parentPath } = req.body; // type: 'chapter' | 'section' | 'topic'
+        const { type, name, parentPath, sessionPreset } = req.body; // type: 'chapter' | 'section' | 'topic'
         let targetDir;
         let prefix;
 
@@ -216,29 +318,9 @@ app.post('/api/create', (req, res) => {
 
             if (fs.existsSync(filePath)) return res.status(409).json({ error: 'Example already exists' });
 
-            // Create basic template
-            const template = `# HTML
-
-\`\`\`html
-<h1>${name}</h1>
-\`\`\`
-
-# CSS
-
-\`\`\`css
-h1 {
-  color: #58a6ff;
-}
-\`\`\`
-
-# JavaScript
-
-\`\`\`javascript
-console.log('Hello from ${name}');
-\`\`\`
-`;
+            const template = buildExampleTemplate(sessionPreset, name);
             fs.writeFileSync(filePath, template, 'utf-8');
-            return res.json({ filename, path: filePath });
+            return res.json({ filename, path: filePath, sessionPreset: sessionPreset || 'html-css-javascript' });
         } else {
             return res.status(400).json({ error: 'Invalid type' });
         }

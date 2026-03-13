@@ -294,6 +294,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 0;
 }
 
 .editor-panel {
@@ -327,9 +328,7 @@ body {
   min-height: var(--panel-header);
 }
 
-/* Make headers of resizable panels show resize cursor */
-#panel-css .panel-header,
-#panel-js .panel-header {
+.panel-header.resizable {
   cursor: row-resize;
   user-select: none;
 }
@@ -415,6 +414,11 @@ body {
   color: var(--html-color);
 }
 
+.lang-badge.svg {
+  background: rgba(57, 210, 192, 0.15);
+  color: var(--accent-cyan);
+}
+
 .lang-badge.css {
   background: rgba(88, 166, 255, 0.15);
   color: var(--css-color);
@@ -428,6 +432,37 @@ body {
 .lang-badge.preview {
   background: rgba(63, 185, 80, 0.15);
   color: var(--preview-color);
+}
+
+.editor-empty-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.editor-status {
+  flex-basis: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.editor-status.warning {
+  background: rgba(240, 136, 62, 0.15);
+  color: var(--accent-orange);
+  border: 1px solid rgba(240, 136, 62, 0.25);
+}
+
+.editor-status.error {
+  background: rgba(248, 81, 73, 0.12);
+  color: var(--accent-red);
+  border: 1px solid rgba(248, 81, 73, 0.28);
 }
 
 /* ── Preview Column ── */
@@ -679,6 +714,10 @@ dialog h2 {
 
 .toast.error {
   background: linear-gradient(135deg, #dc2626, #f87171);
+}
+
+.toast.warning {
+  background: linear-gradient(135deg, #b45309, #f59e0b);
 }
 
 @keyframes toast-in {
