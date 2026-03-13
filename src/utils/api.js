@@ -14,8 +14,23 @@ async function handleResponse(res) {
     return res.json();
 }
 
-export async function fetchTree() {
-    const res = await fetch(`${BASE}/tree`);
+export async function fetchTree(options = {}) {
+    const params = new URLSearchParams();
+    if (options.includeHidden) {
+        params.set('includeHidden', '1');
+    }
+
+    const query = params.toString();
+    const res = await fetch(`${BASE}/tree${query ? `?${query}` : ''}`);
+    return handleResponse(res);
+}
+
+export async function setChapterHidden(chapterId, hidden = true) {
+    const res = await fetch(`${BASE}/tree/chapters/${encodeURIComponent(chapterId)}/hidden`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hidden }),
+    });
     return handleResponse(res);
 }
 
@@ -78,7 +93,7 @@ export async function renameExample(topicPath, oldFilename, newFilename) {
     return handleResponse(res);
 }
 
-export async function compileExample({ document, content }) {
+export async function requestCompileExample({ document, content }) {
     const res = await fetch(`${BASE}/compile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

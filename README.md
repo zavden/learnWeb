@@ -9,7 +9,8 @@ La app combina:
 - edicion de codigo con CodeMirror 6
 - renderizado de teoria en Markdown
 - previsualizacion en vivo en un `iframe`
-- compilacion local de `Pug`, `SCSS`, `SASS`, `TypeScript` y React `single-file`
+- compilacion local de `Pug`, `SCSS`, `SASS`, `TypeScript`, React y Vue
+- consola runtime opt-in, modo ejercicio y comparacion intento vs solucion
 
 La idea central del proyecto es simple: el contenido no vive en una base de datos, vive en el filesystem dentro de la carpeta `material/`. El backend solo lee y escribe esos archivos, y el frontend actua como explorador, editor y visor.
 
@@ -42,8 +43,14 @@ Permite:
 - abrir un ejemplo y editar solo los paneles que realmente usa
 - ver una previsualizacion en vivo del resultado
 - trabajar con ejemplos clasicos (`HTML`, `SVG`, `CSS`, `JavaScript`)
+- tratar `HTML` como fragmento de `body`, con `HTML-B` como alias explicito
+- trabajar con `HTML-FULL` cuando necesites escribir un documento HTML completo
 - trabajar con ejemplos compilados (`Pug`, `SCSS`, `SASS`, `TypeScript`)
-- trabajar con ejemplos React `single-file` usando `JSX` o `TSX`
+- trabajar con React `single-file` y `multi-file`
+- trabajar con Vue `single-file`, `multi-file` y `.vue` SFC controlados
+- alternar entre layout por paneles verticales o tabs
+- usar consola runtime opt-in por ejemplo
+- usar modo ejercicio con pistas, archivos ocultos y comparacion
 - crear, guardar, modificar, renombrar y eliminar ejemplos
 - crear nuevos capitulos, secciones, topics y ejemplos
 
@@ -55,7 +62,9 @@ Permite:
 - JavaScript vanilla con modulos ES
 - CodeMirror 6
 - `marked` para renderizar Markdown
-- React y ReactDOM para el modo React `single-file`
+- React y ReactDOM para modos React
+- Vue runtime y compiladores de Vue para modos Vue
+- `Web Worker` para orquestacion y cache de compilacion en cliente
 
 ### Backend
 
@@ -66,7 +75,8 @@ Permite:
 - `pug` para compilar ejemplos `Pug`
 - `sass` para compilar `SCSS` y `SASS`
 - `typescript` para transpilar `TypeScript`
-- `esbuild` para compilar `JSX` y `TSX`
+- `esbuild` para compilar `JSX`, `TSX` y bundles multi-file
+- `@vue/compiler-dom` y `@vue/compiler-sfc` para templates y SFC de Vue
 
 ## Arquitectura general
 
@@ -84,6 +94,8 @@ Responsabilidades:
 - mostrar la galeria
 - montar paneles dinamicos de edicion
 - actualizar el preview en vivo
+- orquestar compilaciones con cache desde un `Web Worker`
+- mostrar consola runtime y panel de ejercicio
 - llamar a la API del backend
 
 ### 2. Backend
@@ -99,6 +111,7 @@ Responsabilidades:
 - modificar, renombrar y borrar ejemplos
 - servir assets locales de cada topic
 - compilar ejemplos antes de enviarlos al preview
+- cachear resultados de compilacion repetidos
 
 ### Comunicacion entre ambos
 
@@ -200,6 +213,8 @@ console.log('Hello');
 El sistema soporta combinaciones como:
 
 - solo `HTML`
+- solo `HTML-B`
+- solo `HTML-FULL`
 - `HTML + CSS`
 - `HTML + CSS + JavaScript`
 - `SVG + CSS`
@@ -209,6 +224,10 @@ El sistema soporta combinaciones como:
 
 Los paneles visibles del editor dependen de los bloques reales del archivo.
 
+`HTML` y `HTML-B` significan lo mismo: contenido que se inyecta dentro del `<body>` generado por la app. No debes escribir `<!DOCTYPE html>`, `<html>`, `<head>` ni `<body>` dentro de esos bloques.
+
+`HTML-FULL` es distinto: representa un documento HTML completo y el preview no lo envuelve dentro de otro `<!DOCTYPE html><html>...</html>`. En este modo, los estilos y scripts deben vivir dentro del propio documento; no se deben mezclar bloques `CSS` o `JavaScript` separados.
+
 #### Frontmatter simple
 
 El archivo puede arrancar con metadata simple:
@@ -216,6 +235,9 @@ El archivo puede arrancar con metadata simple:
 ~~~~md
 ---
 framework: react
+mode: multi-file
+entry: src/main.jsx
+console: true
 ---
 ~~~~
 
@@ -223,7 +245,74 @@ Notas:
 
 - el parser actual soporta pares `clave: valor` simples
 - no es un parser YAML completo
-- hoy se usa sobre todo para `framework: react`
+- se usa para framework, modo, entry, consola, ejercicios y progresion
+
+Claves soportadas mas importantes:
+
+- `framework: react | vue`
+- `mode: multi-file`
+- `entry: ruta/del/entry`
+- `console: true | false`
+- `exercise: true`
+- `exercise_title`
+- `exercise_instructions`
+- `exercise_hints`
+- `exercise_locked_files`
+- `exercise_reference_files`
+- `exercise_solution_files`
+- `exercise_compare_pairs`
+- `exercise_solution_example`
+- `example_stage: minimal | intermediate | common-error | exercise | final-solution`
+
+#### Formato multi-file
+
+Cuando el documento usa archivos virtuales, cada archivo vive dentro del mismo Markdown con encabezados `@file`.
+
+Ejemplo:
+
+~~~~md
+---
+framework: react
+mode: multi-file
+entry: src/main.jsx
+console: true
+---
+
+## @file src/main.jsx
+## @lang jsx
+## @role entry
+
+```jsx
+import { createRoot } from 'react-dom/client';
+import { App } from './App.jsx';
+
+createRoot(document.getElementById('root')).render(<App />);
+```
+
+## @file src/App.jsx
+## @lang jsx
+## @role app
+
+```jsx
+export function App() {
+  return <main>Hello</main>;
+}
+```
+
+## @file src/styles.css
+## @lang css
+## @role style
+
+```css
+main { color: red; }
+```
+~~~~
+
+Campos importantes:
+
+- `@file`: ruta virtual del archivo
+- `@lang`: lenguaje real del archivo
+- `@role`: rol semantico (`entry`, `app`, `component`, `style`, etc.)
 
 #### React `single-file`
 
@@ -268,6 +357,19 @@ En ese modo:
 
 Cuando vuelves a guardar, el sistema reconstruye el Markdown respetando la metadata y los bloques activos.
 
+#### React y Vue multi-file
+
+La app ya soporta proyectos pequenos multi-file dentro de un solo `.md`:
+
+- React multi-file con `jsx`, `tsx`, `js`, `ts`, `css`, `scss`, `sass` y `json`
+- Vue multi-file con `html`, `js`, `ts`, `css`, `scss`, `sass`, `json` y `.vue`
+- Vue SFC controlado con `<template>`, `<script>`, `<script setup>`, `lang="ts"`, `<style scoped>`, `scss` y `sass`
+
+El editor puede mostrarlos en:
+
+- `Panels`: varios archivos a la vez en vertical
+- `Tabs`: un archivo activo por vez con tabs y selector
+
 ### 3. Assets por topic
 
 Cada topic puede tener una carpeta `assets/`.
@@ -292,6 +394,12 @@ Si `diagram.png` existe en `assets/`, el preview principal puede resolverlo desd
 ```txt
 /api/topic/:ch/:sec/:top/assets/diagram.png
 ```
+
+Para proyectos `React` y `Vue` multi-file, la politica actual es:
+
+- `JSON` virtual dentro del mismo Markdown: soportado
+- imagenes, fuentes o binarios virtuales dentro del mismo Markdown: no soportado
+- recursos locales simples en `assets/` del topic: soportado por URL relativa
 
 ## Flujo de uso dentro de la app
 
@@ -329,11 +437,17 @@ Cada vez que cambias codigo:
 
 - el editor dispara un callback
 - el preview espera 300 ms
-- el backend compila el documento si hace falta
+- un cliente de compilacion con `Web Worker` reutiliza cache y, si hace falta, llama al backend
 - se reconstruye un documento HTML completo dentro del `iframe`
 - se inyecta el resultado compilado actual
 
-Si el JavaScript lanza un error, el preview intenta mostrar el mensaje al final del `body`.
+Si `console: true` esta activo en el ejemplo:
+
+- aparece una consola debajo del preview
+- captura `console.log/info/warn/error`
+- captura `window.onerror` y `unhandledrejection`
+- permite ejecutar comandos manuales
+- mantiene historial por ejemplo y soporta filtros, zoom y resize
 
 ### 5. Guardado
 
@@ -390,7 +504,11 @@ Actualmente el dialogo incluye presets para:
 
 - sesiones clasicas
 - sesiones con `SCSS`, `SASS` y `TypeScript`
-- React `single-file` con `JSX` o `TSX`
+- React `single-file`
+- React `multi-file`
+- Vue `single-file`
+- Vue `multi-file`
+- Vue SFC
 
 ## Instalacion
 
@@ -453,6 +571,14 @@ Importante:
 
 - este comando no empaqueta ni despliega el backend
 - el proyecto no trae una estrategia de produccion completa lista
+
+### `npm test`
+
+Ejecuta la suite automatica completa con `node --test`.
+
+### `npm run test:watch`
+
+Ejecuta la suite en modo watch.
 
 ### `npm run preview`
 
@@ -551,7 +677,10 @@ Es la ruta que usa el preview para soportar:
 - `SCSS`
 - `SASS`
 - `TypeScript`
-- React `single-file`
+- React `single-file` y `multi-file`
+- Vue `single-file`, `multi-file` y `.vue`
+
+Tambien devuelve `compileMeta` con informacion de cache cuando aplica.
 
 ### `GET /api/topic/:ch/:sec/:top/assets/:file`
 
@@ -572,18 +701,29 @@ learnWeb/
     style.css
     config/
       exampleBlocks.js
+      fileTemplates.js
     components/
       Sidebar.js
       TheoryViewer.js
       Editor.js
+      ExercisePanel.js
       Preview.js
       Gallery.js
       CreateDialog.js
     utils/
       api.js
+      compileCache.js
+      compileClient.js
+      exerciseComparison.js
       markdown.js
       exampleCompiler.js
       exampleRenderer.js
+    workers/
+      compileWorker.js
+  tests/
+    metadata-validation.test.mjs
+    document-roundtrip.test.mjs
+    framework-compilation.test.mjs
 ```
 
 ### Descripcion de archivos importantes
@@ -606,11 +746,15 @@ Pide `main.md` y lo renderiza como HTML a partir de Markdown.
 
 #### `src/components/Editor.js`
 
-Configura paneles dinamicos de CodeMirror, sincroniza el preview y maneja guardar, cargar, modificar, renombrar y eliminar.
+Configura paneles dinamicos de CodeMirror, soporta layout `Panels/Tabs`, ejercicio, archivos virtuales y maneja guardar, cargar, modificar, renombrar y eliminar.
+
+#### `src/components/ExercisePanel.js`
+
+Panel superior del modo ejercicio: instrucciones, pistas, comparacion y controles de revelado.
 
 #### `src/components/Preview.js`
 
-Coordina la compilacion y construye el documento final que se inyecta en el `iframe` de preview.
+Coordina la compilacion, la consola runtime y construye el documento final que se inyecta en el `iframe` de preview.
 
 #### `src/components/Gallery.js`
 
@@ -624,17 +768,33 @@ Maneja el dialogo para crear nuevos nodos de contenido.
 
 Capa de acceso a la API del backend.
 
+#### `src/utils/compileClient.js`
+
+Cliente de compilacion del frontend. Usa `Web Worker` y fallback directo al backend.
+
+#### `src/utils/compileCache.js`
+
+Helpers para claves estables y clonacion serializable de resultados de compilacion.
+
+#### `src/utils/exerciseComparison.js`
+
+Resuelve pares intento/solucion y genera comparaciones por linea para el modo ejercicio.
+
 #### `src/utils/markdown.js`
 
 Parser y generador del formato Markdown usado para los ejemplos, incluyendo metadata simple.
 
 #### `src/utils/exampleCompiler.js`
 
-Pipeline de compilacion para `Pug`, `SCSS`, `SASS`, `TypeScript` y React `single-file`.
+Pipeline de compilacion para `Pug`, `SCSS`, `SASS`, `TypeScript`, React y Vue.
 
 #### `src/utils/exampleRenderer.js`
 
 Convierte el documento compilado en el `srcdoc` final del `iframe`.
+
+#### `src/workers/compileWorker.js`
+
+Worker del frontend para cachear y deduplicar compilaciones repetidas.
 
 ## Detalles importantes de funcionamiento
 
@@ -677,10 +837,44 @@ Segun el ejemplo cargado, puede mostrar:
 Ademas incluye:
 
 - resize vertical entre paneles
+- switch entre `Panels` y `Tabs`
 - colapsar paneles
 - maximizar un panel
 - aumentar y disminuir tamano de fuente
 - auto-fit de paneles segun contenido
+
+### Modo ejercicio
+
+Cuando `exercise: true` esta presente:
+
+- aparece un panel superior con instrucciones
+- pueden existir pistas progresivas
+- puede haber archivos bloqueados, de referencia o solucion ocultos
+- puedes comparar intento vs solucion
+- la comparacion puede venir del mismo Markdown o de otro ejemplo enlazado
+
+La galeria tambien soporta `example_stage` para ordenar y etiquetar ejemplos como progresion didactica.
+
+### Consola runtime
+
+La consola no aparece siempre. Solo se activa si el ejemplo define:
+
+```md
+---
+console: true
+---
+```
+
+Capacidades actuales:
+
+- logs, warnings y errores
+- promesas rechazadas
+- ejecucion manual de comandos
+- filtros por nivel
+- zoom de fuente
+- colapsado y resize
+- stacks runtime mas legibles
+- deduplicacion de errores repetidos
 
 ### Responsive preview
 
@@ -691,14 +885,12 @@ El panel de preview tiene dos niveles de ancho:
 
 Si el viewport interno es mas pequeno que el panel general, se ve fondo gris detras.
 
-### React `single-file`
+### React y Vue
 
-El modo React actual esta pensado para aprendizaje atomico:
+El proyecto ya cubre dos niveles pedagogicos:
 
-- un bloque `JSX` o `TSX`
-- `CSS` opcional
-- shell HTML oculto
-- montaje automatico de `App`
+- ejemplos atomicos `single-file`
+- mini-proyectos `multi-file` dentro de un solo Markdown
 
 Ejemplos listos para probar:
 
@@ -706,6 +898,31 @@ Ejemplos listos para probar:
 - [react-jsx-css.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec00-test/top00-test/examples/react-jsx-css.md)
 - [react-tsx.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec00-test/top00-test/examples/react-tsx.md)
 - [react-tsx-css.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec00-test/top00-test/examples/react-tsx-css.md)
+- [vue-javascript.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec00-test/top00-test/examples/vue-javascript.md)
+- [vue-typescript.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec00-test/top00-test/examples/vue-typescript.md)
+- [react-project-jsx.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec00-test/top00-test/examples/react-project-jsx.md)
+- [react-project-tsx.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec00-test/top00-test/examples/react-project-tsx.md)
+- [vue-project-javascript.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec00-test/top00-test/examples/vue-project-javascript.md)
+- [vue-project-sfc-typescript.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec00-test/top00-test/examples/vue-project-sfc-typescript.md)
+
+#### Limitaciones de React
+
+- React `single-file` solo usa un bloque `JSX` o `TSX`
+- React `single-file` no soporta `import` ni `export`
+- React `single-file` exige un componente top-level llamado `App`
+- React `single-file` no usa bloques `HTML`, `JavaScript` o `TypeScript` separados; el shell HTML y el montaje se generan automaticamente
+- React `multi-file` si soporta `json` virtual, pero no assets binarios virtuales dentro del mismo Markdown
+
+#### Limitaciones de Vue
+
+- Vue `single-file` no usa formato `.vue`; usa un bloque `HTML` como template y un bloque `JavaScript` o `TypeScript` con `export default`
+- Vue `single-file` no soporta imports relativos
+- Vue `single-file` solo acepta `HTML` como template; `SVG`, `Pug` o `HTML-FULL` no aplican a ese modo
+- Vue `multi-file` requiere `entry` valido en `JavaScript` o `TypeScript`
+- los archivos `.vue` SFC solo existen en modo `multi-file`
+- Vue SFC soporta un subconjunto controlado: `<template>` HTML normal, `<script>` o `<script setup>` en JS/TS, y estilos normales o `scss`/`sass`
+- Vue SFC no soporta `template src`, `script src`, `style src`, CSS modules ni custom blocks
+- Vue `multi-file` si soporta `json` virtual, pero no assets binarios virtuales dentro del mismo Markdown
 
 ## Limitaciones actuales
 
@@ -713,17 +930,23 @@ Ejemplos listos para probar:
 - no hay base de datos
 - no hay edicion de `main.md` desde la interfaz
 - `npm run preview` no representa un despliegue completo del proyecto
-- no existe todavia consola de runtime dentro de la app
-- React solo existe en modo `single-file`
 
 Limitaciones tecnicas actuales:
 
 - el frontmatter no es YAML completo; solo soporta pares simples `clave: valor`
+- React `single-file` solo admite un bloque `JSX` o `TSX`
 - React `single-file` no soporta `import` ni `export` dentro del ejemplo
 - React `single-file` exige una funcion o componente top-level llamada `App`
-- React `single-file` no soporta multiples archivos todavia
+- Vue `single-file` no usa `.vue` y requiere `HTML` como template
+- Vue `single-file` no soporta imports relativos
+- Vue `multi-file` requiere `entry` valido en `JavaScript` o `TypeScript`
+- los proyectos `React` y `Vue` multi-file si soportan archivos `json` virtuales
+- los proyectos multi-file no soportan todavia assets binarios virtuales como `png`, `jpg`, `woff` o `mp4`
+- Vue SFC es controlado: no soporta `template src`, `script src`, `style src`, CSS modules ni custom blocks
+- para imagenes y recursos locales debes usar la carpeta `assets/` del topic
 - el bundle de preview para React es grande porque empaqueta runtime en cada ejemplo
 - algunas rutas de API codifican nombres de archivo y otras no, asi que nombres exoticos pueden generar problemas
+- la compilacion sigue ocurriendo realmente en el backend; el `Web Worker` actual orquesta cache y deduplicacion, no reemplaza todavia el compilador de servidor
 
 ## Solucion de problemas
 
@@ -762,6 +985,24 @@ Revisa:
 - que no uses `import` ni `export` en la version `single-file`
 - que los errores de compilacion no aparezcan en la barra de estado del editor
 
+### Un ejemplo Vue no renderiza
+
+Revisa:
+
+- que el archivo tenga `framework: vue` si aplica
+- que el modo `single-file` use `HTML` como template
+- que el modo `single-file` exporte `default`
+- que el modo `multi-file` tenga `entry` valido
+- que un `.vue` no use features fuera del alcance soportado
+
+### La consola no aparece
+
+Revisa:
+
+- que el ejemplo tenga `console: true`
+- que el preview no este en galeria sino en editor
+- que la consola no este colapsada
+
 ### `Modify`, `Rename` o `Remove` estan deshabilitados
 
 Eso es esperado si todavia no hay un archivo activo cargado. Primero debes:
@@ -793,3 +1034,10 @@ Actualmente el repositorio ya trae contenido de ejemplo dentro de `material/`, i
 - JavaScript / basics
 
 Eso permite abrir la app y probar el flujo sin tener que crear contenido desde cero.
+
+La suite automatica actual cubre:
+
+- parser y metadata
+- round-trip de serializacion
+- compilacion representativa de modos legacy, React y Vue
+- ejercicios, consola y rendering basico

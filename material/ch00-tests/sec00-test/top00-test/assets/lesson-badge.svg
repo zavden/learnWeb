@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title desc">
+  <title id="title">Lesson badge</title>
+  <desc id="desc">Simple badge used by JSON project examples.</desc>
+  <defs>
+    <linearGradient id="g" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+  </defs>
+  <rect width="96" height="96" rx="24" fill="url(#g)" />
+  <path d="M28 32h40v8H28zm0 16h28v8H28zm0 16h40v8H28z" fill="#eff6ff" />
+</svg>

@@ -4,6 +4,7 @@ import './style.css';
 import { Sidebar } from './components/Sidebar.js';
 import { TheoryViewer } from './components/TheoryViewer.js';
 import { Editor } from './components/Editor.js';
+import { ExercisePanel } from './components/ExercisePanel.js';
 import { Preview } from './components/Preview.js';
 import { CreateDialog } from './components/CreateDialog.js';
 import { Gallery } from './components/Gallery.js';
@@ -15,6 +16,10 @@ class App {
         this.sidebarMaxWidth = 520;
         this.workspaceMinEditorWidth = 280;
         this.previewMinWidth = 320;
+        this.previewFrameMinHeight = 180;
+        this.previewConsoleMinHeight = 132;
+        this.previewConsoleDefaultHeight = 220;
+        this.sessionStorageKey = 'learncode.session';
         this.sidebarWidthStorageKey = 'learncode.sidebar.width';
         this.sidebarCollapsedStorageKey = 'learncode.sidebar.collapsed';
         this.previewWidthMode = 'full';
@@ -32,7 +37,11 @@ class App {
         this.editorToolbar = document.querySelector('.editor-toolbar');
         this.editorPanels = document.querySelector('.editor-panels');
         this.previewColumn = document.getElementById('preview-column');
+        this.previewHeader = document.querySelector('.preview-header');
         this.previewFrame = document.getElementById('preview-frame');
+        this.previewFrameContainer = document.getElementById('preview-frame-container');
+        this.previewConsole = document.getElementById('preview-console');
+        this.previewConsoleResizer = document.getElementById('preview-console-resizer');
         this.viewportSelect = document.getElementById('viewport-select');
         this.viewportSlider = document.getElementById('viewport-slider');
         this.viewportWidthDisplay = document.getElementById('viewport-width-display');
@@ -44,8 +53,24 @@ class App {
             },
         });
 
+        this.exercisePanel = new ExercisePanel({
+            onRevealHint: () => this.editor.revealNextExerciseHint(),
+            onRevealReferences: () => this.editor.revealExerciseReferences(),
+            onRevealSolution: () => this.editor.revealExerciseSolutions(),
+            onSelectComparisonPair: (pairId) => this.editor.selectExerciseComparisonPair(pairId),
+            onToggleCollapse: () => this.editor.toggleExerciseNotesCollapsed(),
+            onToggleComparison: () => this.editor.toggleExerciseComparison(),
+        });
+
         this.editor = new Editor({
-            onCodeChange: (documentModel) => this.preview.update(documentModel),
+            onCodeChange: (documentModel) => {
+                this.exercisePanel.render(this.editor.getExercisePresentation());
+                this.preview.update(documentModel, {
+                    sessionKey: this._getPreviewSessionKey(documentModel),
+                });
+            },
+            onExerciseStateChange: (presentation) => this.exercisePanel.render(presentation),
+            onSessionStateChange: () => this._persistSessionState(),
             onRename: () => {
                 if (this.currentTopicPath) {
                     this.gallery.load(this.currentTopicPath);
@@ -79,14 +104,22 @@ class App {
             },
         });
 
-        // Initial load
-        this.sidebar.load();
         this._initSidebarControls();
         this._initViewportResizer();
         this._initWorkspaceResizer();
+        this._initConsoleResizer();
+        this._bootstrap().catch((error) => {
+            console.error('Failed to bootstrap application state.', error);
+        });
     }
 
-    async selectTopic(topicPath, label) {
+    async _bootstrap() {
+        await this.sidebar.load();
+        await this._restoreSessionState();
+    }
+
+    async selectTopic(topicPath, label, { persist = true } = {}) {
+        this.sidebar.setActive(topicPath);
         this.currentTopicPath = topicPath;
 
         // Update components
@@ -96,20 +129,30 @@ class App {
 
         // Load theory content
         this.theoryViewer.load(topicPath);
+        this.exercisePanel.clear();
 
         await this.gallery.load(topicPath);
         this.showGallery();
+
+        if (persist) {
+            this._persistSessionState();
+        }
     }
 
-    async loadExample(filename) {
+    async loadExample(filename, { persist = true } = {}) {
         this.showEditor();
         await this.editor.loadExample(filename);
+
+        if (persist) {
+            this._persistSessionState();
+        }
     }
 
     showGallery() {
         this.galleryView.classList.remove('hidden');
         this.editorToolbar.classList.add('hidden');
         this.editorPanels.classList.add('hidden');
+        this.exercisePanel.clear();
         this.preview.clear();
     }
 
@@ -230,17 +273,35 @@ class App {
         if (!this.workspaceElement || !this.workspaceResizer || !this.previewColumn) return;
 
         const initialWidth = Math.round(this.previewColumn.getBoundingClientRect().width || 640);
-        this._setPreviewColumnWidth(initialWidth);
-        this._applyFullPreviewWidth();
+        this._setPreviewColumnWidth(initialWidth, { persist: false });
+        this._applyFullPreviewWidth({ persist: false });
 
         this.workspaceResizer.addEventListener('mousedown', (event) => this._startWorkspaceResize(event));
 
         window.addEventListener('resize', () => {
             if (this.previewWidthMode === 'full') {
-                this._applyFullPreviewWidth();
+                this._applyFullPreviewWidth({ persist: false });
             } else {
-                this._applyCustomPreviewWidth(this.customPreviewWidth);
+                this._applyCustomPreviewWidth(this.customPreviewWidth, { persist: false });
             }
+        });
+    }
+
+    _initConsoleResizer() {
+        if (!this.previewColumn || !this.previewConsoleResizer) return;
+
+        this._setConsoleHeight(this.previewConsoleDefaultHeight, { persist: false });
+        this.previewConsoleResizer.addEventListener('mousedown', (event) => this._startConsoleResize(event));
+
+        window.addEventListener('resize', () => {
+            const currentHeight = Number.parseInt(
+                this.previewColumn.style.getPropertyValue('--preview-console-height') || '',
+                10,
+            );
+            this._setConsoleHeight(
+                Number.isFinite(currentHeight) ? currentHeight : this.previewConsoleDefaultHeight,
+                { persist: false },
+            );
         });
     }
 
@@ -258,11 +319,45 @@ class App {
         };
     }
 
-    _setPreviewColumnWidth(width) {
+    _setPreviewColumnWidth(width, { persist = true } = {}) {
         const { min, max } = this._getWorkspaceBounds();
         const nextWidth = Math.max(min, Math.min(max, Math.round(Number(width) || min)));
         this.appShell.style.setProperty('--preview-column-width', `${nextWidth}px`);
+
+        if (persist) {
+            this._persistSessionState();
+        }
+
         return nextWidth;
+    }
+
+    _getConsoleBounds() {
+        const previewColumnHeight = this.previewColumn?.getBoundingClientRect().height || window.innerHeight;
+        const previewHeaderHeight = this.previewHeader?.getBoundingClientRect().height || 40;
+        const resizerHeight = this.previewConsoleResizer?.getBoundingClientRect().height || 10;
+        const maxHeight = Math.max(
+            this.previewConsoleMinHeight,
+            Math.round(previewColumnHeight - previewHeaderHeight - resizerHeight - this.previewFrameMinHeight),
+        );
+
+        return {
+            min: this.previewConsoleMinHeight,
+            max: maxHeight,
+        };
+    }
+
+    _setConsoleHeight(height, { persist = true } = {}) {
+        if (!this.previewColumn) return this.previewConsoleDefaultHeight;
+
+        const { min, max } = this._getConsoleBounds();
+        const nextHeight = Math.max(min, Math.min(max, Math.round(Number(height) || min)));
+        this.previewColumn.style.setProperty('--preview-console-height', `${nextHeight}px`);
+
+        if (persist) {
+            this._persistSessionState();
+        }
+
+        return nextHeight;
     }
 
     _syncPreviewControls(width, mode = 'custom') {
@@ -280,16 +375,20 @@ class App {
         this.viewportSelect.value = 'custom';
     }
 
-    _applyFullPreviewWidth() {
+    _applyFullPreviewWidth({ persist = true } = {}) {
         if (!this.previewFrame) return;
 
         const columnWidth = Math.round(this.previewColumn?.getBoundingClientRect().width || this.previewMinWidth);
         this.previewFrame.style.width = '100%';
         this.previewWidthMode = 'full';
         this._syncPreviewControls(columnWidth, 'full');
+
+        if (persist) {
+            this._persistSessionState();
+        }
     }
 
-    _applyCustomPreviewWidth(width) {
+    _applyCustomPreviewWidth(width, { persist = true } = {}) {
         if (!this.previewFrame) return;
 
         const nextWidth = Math.max(this.previewMinWidth, Math.round(Number.parseInt(width, 10) || this.previewMinWidth));
@@ -297,6 +396,10 @@ class App {
         this.previewWidthMode = 'custom';
         this.customPreviewWidth = nextWidth;
         this._syncPreviewControls(nextWidth, 'custom');
+
+        if (persist) {
+            this._persistSessionState();
+        }
     }
 
     _startWorkspaceResize(event) {
@@ -313,9 +416,9 @@ class App {
 
         const onMouseMove = (moveEvent) => {
             nextWidth = startWidth - (moveEvent.clientX - startX);
-            this._setPreviewColumnWidth(nextWidth);
+            this._setPreviewColumnWidth(nextWidth, { persist: false });
             if (this.previewWidthMode === 'full') {
-                this._applyFullPreviewWidth();
+                this._applyFullPreviewWidth({ persist: false });
             }
         };
 
@@ -324,14 +427,184 @@ class App {
             document.removeEventListener('mouseup', onMouseUp);
             this.workspaceResizer.classList.remove('resizing');
             document.body.classList.remove('is-resizing-workspace');
-            this._setPreviewColumnWidth(nextWidth);
+            this._setPreviewColumnWidth(nextWidth, { persist: false });
             if (this.previewWidthMode === 'full') {
-                this._applyFullPreviewWidth();
+                this._applyFullPreviewWidth({ persist: false });
             }
+            this._persistSessionState();
         };
 
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
+    }
+
+    _startConsoleResize(event) {
+        if (!this.previewConsoleResizer || !this.previewConsole || this.previewConsoleResizer.classList.contains('hidden')) {
+            return;
+        }
+
+        event.preventDefault();
+
+        const startY = event.clientY;
+        const startHeight = this.previewConsole.getBoundingClientRect().height || this.previewConsoleDefaultHeight;
+        let nextHeight = startHeight;
+
+        this.previewConsoleResizer.classList.add('resizing');
+        document.body.classList.add('is-resizing-console');
+
+        const onMouseMove = (moveEvent) => {
+            nextHeight = startHeight - (moveEvent.clientY - startY);
+            this._setConsoleHeight(nextHeight, { persist: false });
+        };
+
+        const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            this.previewConsoleResizer.classList.remove('resizing');
+            document.body.classList.remove('is-resizing-console');
+            this._setConsoleHeight(nextHeight);
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    }
+
+    _readSessionState() {
+        try {
+            const raw = window.localStorage.getItem(this.sessionStorageKey);
+            if (!raw) return null;
+
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : null;
+        } catch {
+            return null;
+        }
+    }
+
+    _captureSessionState() {
+        const editorState = this.editor?.getSessionState?.() || {};
+        const previewColumnWidth = Math.round(this.previewColumn?.getBoundingClientRect().width || 0);
+
+        return {
+            version: 1,
+            topicPath: this.currentTopicPath || '',
+            exampleFilename: this.editor?.currentFilename || '',
+            editor: {
+                activeFileId: editorState.activeFileId || '',
+                collapsedFileIds: Array.isArray(editorState.collapsedFileIds) ? editorState.collapsedFileIds : [],
+                layoutMode: editorState.layoutMode || 'panels',
+                maximizedFileId: editorState.maximizedFileId || '',
+            },
+            preview: {
+                columnWidth: previewColumnWidth || this.previewMinWidth,
+                consoleHeight: Number.parseInt(
+                    this.previewColumn?.style.getPropertyValue('--preview-console-height') || '',
+                    10,
+                ) || this.previewConsoleDefaultHeight,
+                customWidth: this.previewWidthMode === 'custom' ? this.customPreviewWidth : null,
+                widthMode: this.previewWidthMode,
+            },
+        };
+    }
+
+    _getPreviewSessionKey(documentModel) {
+        const parts = [
+            this.currentTopicPath || '',
+            this.editor?.currentFilename || documentModel?.sessionId || 'draft',
+        ];
+
+        return parts.join('::');
+    }
+
+    _persistSessionState() {
+        try {
+            window.localStorage.setItem(this.sessionStorageKey, JSON.stringify(this._captureSessionState()));
+        } catch {
+            // Ignore storage errors so editing remains functional.
+        }
+    }
+
+    _findTopicByPath(topicPath) {
+        for (const chapter of this.sidebar.getTree()) {
+            for (const section of chapter.sections || []) {
+                const topic = (section.topics || []).find((entry) => entry.path === topicPath);
+                if (topic) return topic;
+            }
+        }
+
+        return null;
+    }
+
+    _restorePreviewState(previewState = {}) {
+        const columnWidth = Number.isFinite(previewState.columnWidth)
+            ? previewState.columnWidth
+            : Number.parseInt(previewState.columnWidth, 10);
+        if (Number.isFinite(columnWidth) && columnWidth > 0) {
+            this._setPreviewColumnWidth(columnWidth, { persist: false });
+        }
+
+        const consoleHeight = Number.isFinite(previewState.consoleHeight)
+            ? previewState.consoleHeight
+            : Number.parseInt(previewState.consoleHeight, 10);
+        this._setConsoleHeight(
+            Number.isFinite(consoleHeight) && consoleHeight > 0
+                ? consoleHeight
+                : this.previewConsoleDefaultHeight,
+            { persist: false },
+        );
+
+        const customWidth = Number.isFinite(previewState.customWidth)
+            ? previewState.customWidth
+            : Number.parseInt(previewState.customWidth, 10);
+
+        if (previewState.widthMode === 'custom' && Number.isFinite(customWidth) && customWidth > 0) {
+            this._applyCustomPreviewWidth(customWidth, { persist: false });
+            return;
+        }
+
+        this._applyFullPreviewWidth({ persist: false });
+    }
+
+    async _restoreSessionState() {
+        const sessionState = this._readSessionState();
+        if (!sessionState) return;
+
+        this._restorePreviewState(sessionState.preview || {});
+
+        const topicPath = typeof sessionState.topicPath === 'string' ? sessionState.topicPath.trim() : '';
+        if (!topicPath) {
+            this.editor.restoreSessionState(sessionState.editor || {});
+            this._persistSessionState();
+            return;
+        }
+
+        const topic = this._findTopicByPath(topicPath);
+        if (!topic) {
+            this.editor.restoreSessionState(sessionState.editor || {});
+            this._persistSessionState();
+            return;
+        }
+
+        await this.selectTopic(topic.path, topic.label, { persist: false });
+        this.editor.restoreSessionState(sessionState.editor || {});
+
+        const exampleFilename = typeof sessionState.exampleFilename === 'string'
+            ? sessionState.exampleFilename.trim()
+            : '';
+        if (!exampleFilename) {
+            this._persistSessionState();
+            return;
+        }
+
+        try {
+            await this.loadExample(exampleFilename, { persist: false });
+            this.editor.restoreSessionState(sessionState.editor || {});
+        } catch (error) {
+            console.warn('Failed to restore previous example session.', error);
+            this.showGallery();
+        }
+
+        this._persistSessionState();
     }
 
     openCreateDialog(preselectedTopicPath = null) {

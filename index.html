@@ -29,6 +29,17 @@
         </button>
       </div>
       <nav id="nav-tree"></nav>
+      <div id="sidebar-tree-controls" class="sidebar-tree-controls">
+        <button id="btn-toggle-hidden-chapters" class="btn btn-secondary sidebar-tree-button" type="button">
+          Show Hidden
+        </button>
+        <button id="btn-collapse-tree" class="btn btn-secondary sidebar-tree-button" type="button">
+          Collapse All
+        </button>
+        <button id="btn-expand-tree" class="btn btn-secondary sidebar-tree-button" type="button">
+          Expand Visible
+        </button>
+      </div>
     </aside>
     <div id="sidebar-dock">
       <button id="btn-toggle-sidebar" class="btn-icon" title="Hide navigation" aria-label="Hide navigation"
@@ -55,6 +66,43 @@
             </div>
             <div id="gallery-grid"></div>
           </div>
+
+          <section id="exercise-panel" class="exercise-panel hidden">
+            <div class="exercise-panel-header">
+              <div class="exercise-panel-heading">
+                <p class="exercise-panel-kicker">Exercise Mode</p>
+                <h2 id="exercise-title">Exercise</h2>
+                <p id="exercise-summary" class="exercise-panel-summary"></p>
+              </div>
+              <div class="exercise-panel-header-actions">
+                <button id="btn-exercise-toggle" type="button" class="btn btn-secondary">Hide Notes</button>
+              </div>
+            </div>
+            <div id="exercise-panel-body" class="exercise-panel-body">
+              <div class="exercise-panel-actions">
+                <button id="btn-exercise-hint" type="button" class="btn btn-secondary hidden">Show Hint</button>
+                <button id="btn-exercise-references" type="button" class="btn btn-secondary hidden">Reveal Reference Files</button>
+                <button id="btn-exercise-solution" type="button" class="btn btn-secondary hidden">Reveal Solution Files</button>
+                <button id="btn-exercise-compare" type="button" class="btn btn-secondary hidden">Show Comparison</button>
+              </div>
+              <ol id="exercise-instructions" class="exercise-panel-list"></ol>
+              <div id="exercise-hints-section" class="exercise-hints hidden">
+                <h3>Hints</h3>
+                <ul id="exercise-hints-list" class="exercise-panel-list"></ul>
+              </div>
+              <section id="exercise-comparison-section" class="exercise-comparison hidden">
+                <div class="exercise-comparison-toolbar">
+                  <label id="exercise-comparison-select-label" class="exercise-comparison-select hidden">
+                    <span>Compare File</span>
+                    <select id="exercise-comparison-select"></select>
+                  </label>
+                  <p id="exercise-comparison-meta" class="exercise-comparison-meta"></p>
+                </div>
+                <p id="exercise-comparison-status" class="exercise-comparison-status hidden"></p>
+                <div id="exercise-comparison-grid" class="exercise-comparison-grid"></div>
+              </section>
+            </div>
+          </section>
 
           <div class="editor-toolbar">
             <div class="editor-actions">
@@ -115,6 +163,16 @@
                 Gallery
               </button>
             </div>
+            <div class="editor-file-actions">
+              <button id="btn-add-file" class="btn btn-secondary" disabled>+ Block</button>
+              <button id="btn-duplicate-file" class="btn btn-secondary" disabled>Duplicate</button>
+              <button id="btn-edit-file" class="btn btn-secondary" disabled>Edit File</button>
+              <button id="btn-delete-file" class="btn btn-secondary" disabled>Delete File</button>
+              <label id="entry-select-group" class="entry-select-group hidden">
+                <span class="entry-select-label">Entry</span>
+                <select id="entry-select" class="editor-file-select" aria-label="Select entry file"></select>
+              </label>
+            </div>
             <div class="font-controls">
               <button id="btn-editor-layout" class="btn btn-secondary btn-layout-toggle" title="Switch editor layout">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -158,24 +216,30 @@
         <div id="preview-column">
           <div class="preview-header">
             <span class="lang-badge preview">Preview</span>
-            <select id="viewport-select" class="viewport-select">
-              <option value="100%">Full Width</option>
-              <option value="375px">Mobile S (375px)</option>
-              <option value="425px">Mobile L (425px)</option>
-              <option value="768px">Tablet (768px)</option>
-              <option value="1024px">Desktop (1024px)</option>
-              <option value="custom" hidden>Custom</option>
-            </select>
-            <input type="range" id="viewport-slider" class="viewport-slider" min="320" max="1440" step="10"
-              value="1440">
-            <span id="viewport-width-display" class="viewport-value">Full</span>
-            <button id="btn-refresh" class="btn-icon" title="Refresh preview">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="23 4 23 10 17 10" />
-                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-              </svg>
-            </button>
+            <div class="preview-header-controls">
+              <select id="viewport-select" class="viewport-select">
+                <option value="100%">Full Width</option>
+                <option value="375px">Mobile S (375px)</option>
+                <option value="425px">Mobile L (425px)</option>
+                <option value="768px">Tablet (768px)</option>
+                <option value="1024px">Desktop (1024px)</option>
+                <option value="custom" hidden>Custom</option>
+              </select>
+              <input type="range" id="viewport-slider" class="viewport-slider" min="320" max="1440" step="10"
+                value="1440">
+              <span id="viewport-width-display" class="viewport-value">Full</span>
+              <button id="btn-console-override" class="btn btn-secondary preview-console-trigger" type="button"
+                title="Enable console for this example only" aria-pressed="false">
+                Open Console
+              </button>
+              <button id="btn-refresh" class="btn-icon" title="Refresh preview">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="23 4 23 10 17 10" />
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                </svg>
+              </button>
+            </div>
           </div>
           <div id="preview-frame-container">
             <iframe id="preview-frame" sandbox="allow-scripts allow-modals"></iframe>
@@ -199,6 +263,43 @@
               </div>
             </aside>
           </div>
+          <div id="preview-console-resizer" class="preview-console-resizer hidden" title="Resize console"></div>
+          <section id="preview-console" class="preview-console hidden" aria-live="polite">
+            <div class="preview-console-header">
+              <span class="lang-badge preview">Console</span>
+              <div id="preview-console-controls" class="preview-console-controls">
+                <div class="preview-console-filters" role="group" aria-label="Console filters">
+                  <button class="preview-console-filter active" data-level="all" type="button">All</button>
+                  <button class="preview-console-filter active" data-level="log" type="button">Log</button>
+                  <button class="preview-console-filter active" data-level="info" type="button">Info</button>
+                  <button class="preview-console-filter active" data-level="warn" type="button">Warn</button>
+                  <button class="preview-console-filter active" data-level="error" type="button">Error</button>
+                </div>
+                <div class="preview-console-zoom">
+                  <button id="btn-console-font-dec" class="btn btn-secondary preview-console-zoom-btn" type="button" title="Decrease console font">A-</button>
+                  <button id="btn-console-font-inc" class="btn btn-secondary preview-console-zoom-btn" type="button" title="Increase console font">A+</button>
+                </div>
+                <span id="preview-console-count" class="preview-console-count">0 entries</span>
+                <button id="btn-clear-console" class="btn btn-secondary preview-console-clear" type="button">Clear</button>
+              </div>
+              <button id="btn-toggle-console" class="btn-icon preview-console-toggle" type="button" title="Collapse console" aria-label="Collapse console" aria-expanded="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="18 15 12 9 6 15" />
+                </svg>
+              </button>
+            </div>
+            <div id="preview-console-body" class="preview-console-body">
+              <div id="preview-console-output" class="preview-console-output">
+                <div id="preview-console-empty" class="preview-console-empty">Console disabled for this example.</div>
+              </div>
+              <form id="preview-console-form" class="preview-console-form">
+                <span class="preview-console-prompt">&gt;</span>
+                <input id="preview-console-input" class="preview-console-input" type="text" placeholder="Run code inside the preview context" autocomplete="off" spellcheck="false" />
+                <button id="btn-run-console" class="btn btn-secondary preview-console-run" type="submit">Run</button>
+              </form>
+            </div>
+          </section>
         </div>
       </section>
     </main>
@@ -232,6 +333,33 @@
       <div class="form-actions">
         <button type="button" class="btn btn-secondary" id="btn-cancel-create">Cancel</button>
         <button type="submit" class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="editor-file-dialog">
+    <form id="editor-file-form" method="dialog">
+      <h2 id="editor-file-dialog-title">Create File</h2>
+      <div id="editor-file-path-group" class="form-group">
+        <label for="editor-file-path">Path</label>
+        <input id="editor-file-path" type="text" placeholder="src/NewFile.tsx" />
+      </div>
+      <div id="editor-file-template-group" class="form-group hidden">
+        <label for="editor-file-template">Template</label>
+        <select id="editor-file-template"></select>
+      </div>
+      <div class="form-group">
+        <label for="editor-file-language">Language</label>
+        <select id="editor-file-language"></select>
+      </div>
+      <div id="editor-file-role-group" class="form-group">
+        <label for="editor-file-role">Role</label>
+        <select id="editor-file-role"></select>
+      </div>
+      <p id="editor-file-dialog-hint" class="dialog-hint"></p>
+      <div class="form-actions">
+        <button id="editor-file-dialog-cancel" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="editor-file-dialog-confirm" type="submit" class="btn btn-primary">Create</button>
       </div>
     </form>
   </dialog>

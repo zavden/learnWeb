@@ -1,5 +1,15 @@
-import { compileExample, fetchExamples, fetchExample } from '../utils/api.js';
+import { fetchExamples, fetchExample } from '../utils/api.js';
+import { compileExample } from '../utils/compileClient.js';
 import { renderCompiledExampleDocument } from '../utils/exampleRenderer.js';
+import { getExampleStage, parseExampleDocument } from '../utils/markdown.js';
+
+const EXAMPLE_STAGE_META = {
+    minimal: { label: 'Minimal', rank: 0, className: 'stage-minimal' },
+    intermediate: { label: 'Intermediate', rank: 1, className: 'stage-intermediate' },
+    'common-error': { label: 'Common Error', rank: 2, className: 'stage-common-error' },
+    exercise: { label: 'Exercise', rank: 3, className: 'stage-exercise' },
+    'final-solution': { label: 'Final Solution', rank: 4, className: 'stage-final-solution' },
+};
 
 export class Gallery {
     constructor({ onExampleSelect }) {
@@ -38,10 +48,16 @@ export class Gallery {
             return;
         }
 
-        for (const filename of examples) {
-            const card = await this.createCard(filename);
-            this.grid.appendChild(card);
-        }
+        const cards = await Promise.all(examples.map((filename) => this.createCard(filename)));
+        cards
+            .sort((left, right) => {
+                if (left.stageRank !== right.stageRank) {
+                    return left.stageRank - right.stageRank;
+                }
+
+                return left.filename.localeCompare(right.filename);
+            })
+            .forEach((card) => this.grid.appendChild(card.element));
     }
 
     async createCard(filename) {
@@ -55,7 +71,14 @@ export class Gallery {
         try {
             const data = await fetchExample(this.currentTopicPath, filename);
             if (data?.content) {
-                const result = await compileExample({ content: data.content });
+                const documentModel = parseExampleDocument(data.content);
+                const stage = getExampleStage(documentModel);
+                const stageMeta = EXAMPLE_STAGE_META[stage] || null;
+                if (stageMeta) {
+                    div.dataset.stage = stage;
+                    div.dataset.stageRank = String(stageMeta.rank);
+                }
+                const result = await compileExample({ document: documentModel });
                 const iframe = document.createElement('iframe');
                 iframe.sandbox = 'allow-scripts';
                 iframe.srcdoc = renderCompiledExampleDocument(
@@ -82,6 +105,15 @@ export class Gallery {
         title.textContent = filename;
         footer.appendChild(title);
 
+        const stage = div.dataset.stage || '';
+        const stageMeta = EXAMPLE_STAGE_META[stage] || null;
+        if (stageMeta) {
+            const badge = document.createElement('span');
+            badge.className = `card-stage-badge ${stageMeta.className}`;
+            badge.textContent = stageMeta.label;
+            footer.appendChild(badge);
+        }
+
         div.appendChild(preview);
         div.appendChild(footer);
 
@@ -91,6 +123,10 @@ export class Gallery {
             }
         });
 
-        return div;
+        return {
+            element: div,
+            filename,
+            stageRank: stageMeta?.rank ?? Number.MAX_SAFE_INTEGER,
+        };
     }
 }

@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "concurrently \"vite\" \"node server.js\"",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test",
+    "test:watch": "node --test --watch"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.15.0",
@@ -19,6 +21,7 @@
     "@codemirror/state": "^6.4.1",
     "@codemirror/theme-one-dark": "^6.1.2",
     "@codemirror/view": "^6.26.0",
+    "@vue/compiler-dom": "^3.5.30",
     "codemirror": "^6.0.1",
     "cors": "^2.8.5",
     "esbuild": "^0.27.4",
@@ -28,7 +31,8 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "sass": "^1.93.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vue": "^3.5.30"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
