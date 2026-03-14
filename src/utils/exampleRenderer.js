@@ -479,7 +479,10 @@ function buildShaderRuntimeScript({
     const SHADER_CONTROL_SOURCE = 'learncode-shader-control';
     const canvas = document.getElementById('shader-canvas');
     const shell = document.getElementById('shader-shell');
+    const stage = document.querySelector('.shader-stage');
     const stageMeta = document.querySelector('.shader-stage__meta');
+    const stageOverlay = document.querySelector('.shader-stage__overlay');
+    const resizeButton = document.getElementById('shader-resize-button');
     const status = document.getElementById('shader-status');
     const statusTitle = document.getElementById('shader-status-title');
     const statusMessage = document.getElementById('shader-status-message');
@@ -619,6 +622,21 @@ function buildShaderRuntimeScript({
       }
     }
 
+    function postShaderResizeRequest(resolution) {
+      try {
+        window.parent?.postMessage({
+          source: MESSAGE_SOURCE,
+          renderId: payload.renderId,
+          kind: 'shader-resize-request',
+          level: 'info',
+          timestamp: Date.now(),
+          resolution,
+        }, '*');
+      } catch {
+        // Ignore bridge failures so the shader can keep rendering.
+      }
+    }
+
     function render() {
       initCanvasSize();
 
@@ -646,6 +664,8 @@ function buildShaderRuntimeScript({
       let lastReportTime = null;
       let reportFrameCount = 0;
       let paused = Boolean(payload.controls?.paused);
+      const stillFrame = Boolean(payload.controls?.stillFrame);
+      let resizeState = null;
       const customUniforms = normalizeCustomUniforms(payload.controls?.customUniforms);
       const textureResources = normalizeTextures(payload.controls?.textures);
       const mouseState = {
@@ -654,6 +674,11 @@ function buildShaderRuntimeScript({
         y: 0,
       };
       const uniformLocations = {};
+
+      function scheduleDraw() {
+        if (didCleanup || animationFrameId) return;
+        animationFrameId = requestAnimationFrame(drawFrame);
+      }
 
       function updateMouseState(event) {
         const rect = canvas.getBoundingClientRect();
@@ -674,19 +699,81 @@ function buildShaderRuntimeScript({
 
       function handlePointerMove(event) {
         updateMouseState(event);
+        scheduleDraw();
       }
 
       function handlePointerDown(event) {
         mouseState.pressed = true;
         updateMouseState(event);
+        scheduleDraw();
       }
 
       function handlePointerUp() {
         mouseState.pressed = false;
+        scheduleDraw();
       }
 
       function handlePointerLeave() {
         mouseState.pressed = false;
+        scheduleDraw();
+      }
+
+      function setResizeOverlayActive(active) {
+        if (!stageOverlay) return;
+        stageOverlay.classList.toggle('is-active', Boolean(active));
+      }
+
+      function handleResizeMove(event) {
+        if (!resizeState) return;
+
+        const deltaX = event.clientX - resizeState.startX;
+        const deltaY = event.clientY - resizeState.startY;
+        const nextResolution = normalizeResolution({
+          width: Math.round(resizeState.startResolution.width + deltaX),
+          height: Math.round(resizeState.startResolution.height + deltaY),
+        });
+
+        if (!nextResolution) return;
+        if (nextResolution.width === resizeState.lastWidth && nextResolution.height === resizeState.lastHeight) {
+          return;
+        }
+
+        resizeState.lastWidth = nextResolution.width;
+        resizeState.lastHeight = nextResolution.height;
+        postShaderResizeRequest(nextResolution);
+      }
+
+      function stopResize() {
+        if (!resizeState) return;
+
+        resizeState = null;
+        setResizeOverlayActive(false);
+        if (resizeButton) {
+          resizeButton.dataset.active = 'false';
+        }
+        window.removeEventListener('pointermove', handleResizeMove);
+        window.removeEventListener('pointerup', stopResize);
+        window.removeEventListener('pointercancel', stopResize);
+      }
+
+      function handleResizeStart(event) {
+        if (!resizeButton) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        const startResolution = normalizeResolution(payload.resolution) || { width: canvas.width, height: canvas.height };
+        resizeState = {
+          lastHeight: startResolution.height,
+          lastWidth: startResolution.width,
+          startResolution,
+          startX: event.clientX,
+          startY: event.clientY,
+        };
+        resizeButton.dataset.active = 'true';
+        setResizeOverlayActive(true);
+        window.addEventListener('pointermove', handleResizeMove);
+        window.addEventListener('pointerup', stopResize);
+        window.addEventListener('pointercancel', stopResize);
       }
 
       function resetRuntimeState() {
@@ -814,11 +901,13 @@ function buildShaderRuntimeScript({
               }
 
               postTextureSnapshot();
+              scheduleDraw();
             };
             image.onerror = () => {
               if (didCleanup) return;
               resource.status = 'error';
               postTextureSnapshot();
+              scheduleDraw();
             };
             image.src = objectUrl;
             resource.image = image;
@@ -828,6 +917,7 @@ function buildShaderRuntimeScript({
             resource.status = 'error';
             console.error(error);
             postTextureSnapshot();
+            scheduleDraw();
           });
       }
 
@@ -842,17 +932,22 @@ function buildShaderRuntimeScript({
           if (nextResolution) {
             payload.resolution = nextResolution;
           }
+          scheduleDraw();
           return;
         }
 
         if (data.action === 'set-paused') {
           paused = Boolean(data.paused);
           previousFrameTime = null;
+          lastReportTime = null;
+          reportFrameCount = 0;
+          scheduleDraw();
           return;
         }
 
         if (data.action === 'reset-runtime') {
           resetRuntimeState();
+          scheduleDraw();
           return;
         }
 
@@ -861,6 +956,7 @@ function buildShaderRuntimeScript({
           if (targetUniform) {
             targetUniform.value = cloneUniformValue(data.value);
           }
+          scheduleDraw();
           return;
         }
 
@@ -871,12 +967,14 @@ function buildShaderRuntimeScript({
             resource.height = 0;
             initializeTexture(resource);
           });
+          scheduleDraw();
         }
       }
 
       const cleanup = () => {
         if (didCleanup || !gl) return;
         didCleanup = true;
+        stopResize();
         if (animationFrameId) {
           cancelAnimationFrame(animationFrameId);
           animationFrameId = 0;
@@ -887,6 +985,7 @@ function buildShaderRuntimeScript({
         canvas.removeEventListener('pointercancel', handlePointerLeave);
         window.removeEventListener('pointerup', handlePointerUp);
         window.removeEventListener('message', handleControlMessage);
+        resizeButton?.removeEventListener('pointerdown', handleResizeStart);
         textureResources.forEach((resource) => {
           if (resource.image) {
             resource.image.onload = null;
@@ -933,8 +1032,9 @@ function buildShaderRuntimeScript({
         apply(location);
       }
 
-      function drawFrame(now) {
+      function drawFrame(now, shouldSchedule = !stillFrame) {
         if (didCleanup) return;
+        animationFrameId = 0;
 
         initCanvasSize();
         gl.viewport(0, 0, canvas.width, canvas.height);
@@ -1021,7 +1121,9 @@ function buildShaderRuntimeScript({
 
         if (lastReportTime == null || now - lastReportTime >= 120 || frameCount === 0) {
           const elapsedSinceReport = lastReportTime == null ? 0 : now - lastReportTime;
-          const fps = elapsedSinceReport > 0
+          const fps = paused
+            ? 0
+            : elapsedSinceReport > 0
             ? (reportFrameCount * 1000) / elapsedSinceReport
             : 0;
 
@@ -1061,7 +1163,9 @@ function buildShaderRuntimeScript({
         if (!paused) {
           frameCount += 1;
         }
-        animationFrameId = requestAnimationFrame(drawFrame);
+        if (!paused && shouldSchedule) {
+          scheduleDraw();
+        }
       }
 
       try {
@@ -1122,9 +1226,10 @@ function buildShaderRuntimeScript({
         canvas.addEventListener('pointercancel', handlePointerLeave);
         window.addEventListener('pointerup', handlePointerUp);
         window.addEventListener('message', handleControlMessage);
+        resizeButton?.addEventListener('pointerdown', handleResizeStart);
 
         clearStatus();
-        animationFrameId = requestAnimationFrame(drawFrame);
+        scheduleDraw();
       } catch (error) {
         cleanup();
         throw error;
@@ -1161,8 +1266,10 @@ export function renderShaderExampleDocument(documentModel = {}, options = {}) {
         && Number.isFinite(shaderControls.currentResolution.height)
         ? shaderControls.currentResolution
         : resolution;
-    const customUniforms = Array.isArray(shaderControls?.customUniforms)
-        ? shaderControls.customUniforms.map((uniform) => ({
+    const customUniformSource = Array.isArray(shaderControls?.customUniforms)
+        ? shaderControls.customUniforms
+        : (shaderConfig.customUniforms || []);
+    const customUniforms = customUniformSource.map((uniform) => ({
             name: uniform.name,
             type: uniform.type,
             value: Array.isArray(uniform.value)
@@ -1170,8 +1277,7 @@ export function renderShaderExampleDocument(documentModel = {}, options = {}) {
                 : typeof uniform.value === 'boolean'
                     ? uniform.value
                     : Number(uniform.value),
-        }))
-        : [];
+        }));
     const textures = Array.isArray(shaderControls?.textures) && shaderControls.textures.length > 0
         ? shaderControls.textures.map((texture) => ({
             assetPath: texture.assetPath,
@@ -1249,9 +1355,6 @@ export function renderShaderExampleDocument(documentModel = {}, options = {}) {
     }
 
     .shader-stage__meta {
-      position: absolute;
-      right: 12px;
-      bottom: 12px;
       padding: 6px 8px;
       border-radius: 999px;
       background: rgba(2, 6, 23, 0.72);
@@ -1260,6 +1363,59 @@ export function renderShaderExampleDocument(documentModel = {}, options = {}) {
       letter-spacing: 0.04em;
       text-transform: uppercase;
       backdrop-filter: blur(10px);
+    }
+
+    .shader-stage__corner-hotspot {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 136px;
+      height: 52px;
+      z-index: 2;
+    }
+
+    .shader-stage__overlay {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 120ms ease, transform 120ms ease;
+      pointer-events: none;
+      z-index: 3;
+    }
+
+    .shader-stage__corner-hotspot:hover + .shader-stage__overlay,
+    .shader-stage__overlay:hover,
+    .shader-stage__overlay:focus-within,
+    .shader-stage__overlay.is-active {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .shader-stage__resize {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 999px;
+      background: rgba(2, 6, 23, 0.72);
+      color: rgba(226, 232, 240, 0.88);
+      cursor: nwse-resize;
+      backdrop-filter: blur(10px);
+    }
+
+    .shader-stage__resize:hover,
+    .shader-stage__resize[data-active="true"] {
+      background: rgba(15, 23, 42, 0.92);
+      border-color: rgba(63, 185, 80, 0.28);
+      color: #d1fae5;
     }
 
     .shader-status {
@@ -1296,7 +1452,18 @@ export function renderShaderExampleDocument(documentModel = {}, options = {}) {
   <main id="shader-shell" class="shader-shell">
     <section class="shader-stage">
       <canvas id="shader-canvas" width="${runtimeResolution.width}" height="${runtimeResolution.height}"></canvas>
-      <div class="shader-stage__meta">${runtimeResolution.width} x ${runtimeResolution.height}</div>
+      <div class="shader-stage__corner-hotspot" aria-hidden="true"></div>
+      <div class="shader-stage__overlay">
+        <div class="shader-stage__meta">${runtimeResolution.width} x ${runtimeResolution.height}</div>
+        <button id="shader-resize-button" class="shader-stage__resize" type="button" title="Drag to resize shader" aria-label="Drag to resize shader">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="8 3 3 3 3 8"></polyline>
+            <polyline points="16 21 21 21 21 16"></polyline>
+            <line x1="4" y1="4" x2="10" y2="10"></line>
+            <line x1="14" y1="14" x2="20" y2="20"></line>
+          </svg>
+        </button>
+      </div>
       ${buildShaderStatusMarkup(statusTitle, statusMessage)}
     </section>
     ${diagnosticsMarkup}
@@ -1306,8 +1473,9 @@ export function renderShaderExampleDocument(documentModel = {}, options = {}) {
         consoleEnabled,
         controls: {
             customUniforms,
-            paused: Boolean(shaderControls?.paused),
+            paused: shaderControls?.paused === undefined ? true : Boolean(shaderControls.paused),
             resolution: runtimeResolution,
+            stillFrame: Boolean(shaderControls?.stillFrame),
             textures,
         },
         renderId,

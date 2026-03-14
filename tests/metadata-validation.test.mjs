@@ -16,6 +16,7 @@ import {
     removeDocumentFile,
     setDocumentEntryPath,
     updateDocumentHiddenFiles,
+    updateShaderResolution,
     updateShaderUniformDefinitions,
     updateDocumentFileDetails,
 } from '../src/utils/markdown.js';
@@ -167,6 +168,37 @@ void main() {
         'u_mouse_pressed',
         'u_frame',
     ]);
+});
+
+test('shader resolution metadata can be updated from runtime controls before saving', () => {
+    const documentModel = parseExampleDocument(`---
+renderer: shader
+resolution: 800x600
+---
+
+# Vertex
+
+\`\`\`vertex
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+\`\`\`
+
+# Fragment
+
+\`\`\`fragment
+precision mediump float;
+
+void main() {
+  gl_FragColor = vec4(1.0);
+}
+\`\`\``);
+    const nextDocument = updateShaderResolution(documentModel, { width: 1280, height: 720 });
+
+    assert.equal(nextDocument.metadata.resolution, '1280x720');
+    assert.deepEqual(getShaderConfig(nextDocument).resolution, { width: 1280, height: 720 });
 });
 
 test('shader documents parse metadata-driven custom uniforms', () => {
@@ -745,6 +777,131 @@ void main() {
     assert.match(rendered, /window\.addEventListener\('pointerup', handlePointerUp\)/);
     assert.match(rendered, /window\.addEventListener\('message', handleControlMessage\)/);
     assert.match(rendered, /mouseState\.y = \(1 - clampedY\) \* canvas\.height/);
+    assert.match(rendered, /shader-resize-request/);
+    assert.match(rendered, /shader-stage__corner-hotspot/);
+    assert.match(rendered, /shader-resize-button/);
+});
+
+test('shader renderer can emit a still-frame gallery preview without animation loop scheduling', () => {
+    const documentModel = parseExampleDocument(`---
+renderer: shader
+resolution: 320x180
+---
+
+# Vertex
+
+\`\`\`vertex
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+\`\`\`
+
+# Fragment
+
+\`\`\`fragment
+precision mediump float;
+
+uniform float u_time;
+
+void main() {
+  gl_FragColor = vec4(vec3(step(0.5, sin(u_time) * 0.5 + 0.5)), 1.0);
+}
+\`\`\``);
+    const rendered = renderShaderExampleDocument(documentModel, {
+        diagnostics: documentModel.diagnostics,
+        renderId: 12,
+        shaderControls: {
+            paused: true,
+            stillFrame: true,
+        },
+    });
+
+    assert.match(rendered, /"stillFrame"\s*:\s*true/);
+    assert.match(rendered, /function scheduleDraw\(\)/);
+    assert.match(rendered, /function drawFrame\(now, shouldSchedule = !stillFrame\)/);
+    assert.match(rendered, /if \(!paused && shouldSchedule\) \{\s*scheduleDraw\(\);/);
+});
+
+test('shader renderer defaults to paused runtime when no explicit controls are provided', () => {
+    const documentModel = parseExampleDocument(`---
+renderer: shader
+resolution: 320x180
+---
+
+# Vertex
+
+\`\`\`vertex
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+\`\`\`
+
+# Fragment
+
+\`\`\`fragment
+precision mediump float;
+
+uniform float u_time;
+
+void main() {
+  gl_FragColor = vec4(vec3(u_time), 1.0);
+}
+\`\`\``);
+    const rendered = renderShaderExampleDocument(documentModel, {
+        diagnostics: documentModel.diagnostics,
+        renderId: 14,
+    });
+
+    assert.match(rendered, /"paused"\s*:\s*true/);
+    assert.match(rendered, /const fps = paused\s*\?\s*0/);
+});
+
+test('shader renderer uses metadata custom uniforms when no runtime overrides are provided', () => {
+    const documentModel = parseExampleDocument(`---
+renderer: shader
+resolution: 320x180
+shader_uniforms: intensity:float=0.85|invert:bool=false|focus:vec2=0.5,0.5
+---
+
+# Vertex
+
+\`\`\`vertex
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+\`\`\`
+
+# Fragment
+
+\`\`\`fragment
+precision mediump float;
+
+uniform float intensity;
+uniform bool invert;
+uniform vec2 focus;
+
+void main() {
+  gl_FragColor = vec4(intensity, focus.x, focus.y, invert ? 0.0 : 1.0);
+}
+\`\`\``);
+    const rendered = renderShaderExampleDocument(documentModel, {
+        diagnostics: documentModel.diagnostics,
+        renderId: 13,
+        shaderControls: {
+            paused: true,
+            stillFrame: true,
+        },
+    });
+
+    assert.match(rendered, /"name":"intensity"/);
+    assert.match(rendered, /"type":"bool"/);
+    assert.match(rendered, /"name":"focus"/);
 });
 
 test('shader renderer shows a fallback state when the shader document is incomplete', () => {

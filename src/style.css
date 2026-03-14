@@ -92,6 +92,21 @@ body.is-resizing-console {
   user-select: none;
 }
 
+.drag-shield {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  background: transparent;
+}
+
+.drag-shield.is-ew-resize {
+  cursor: ew-resize;
+}
+
+.drag-shield.is-ns-resize {
+  cursor: ns-resize;
+}
+
 /* scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;
@@ -1664,8 +1679,42 @@ dialog h2 {
   min-width: 0;
 }
 
-.file-visibility-state select {
+.file-visibility-toggle {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   width: 100%;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.file-visibility-toggle-btn {
+  padding: 8px 10px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: 600 11px/1.2 var(--font-sans);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.file-visibility-toggle-btn:hover {
+  color: var(--text-primary);
+}
+
+.file-visibility-toggle-btn.active {
+  color: var(--text-primary);
+  background: rgba(88, 166, 255, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(88, 166, 255, 0.22);
+}
+
+.file-visibility-row.is-hidden .file-visibility-toggle-btn.active {
+  background: rgba(240, 136, 62, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(240, 136, 62, 0.28);
 }
 
 .shader-uniform-vector-inputs,
@@ -1974,8 +2023,7 @@ dialog h2 {
   min-height: 180px;
   justify-content: center;
   /* Center the iframe */
-  background: #f0f0f0;
-  /* Light bg to show viewport contrast */
+  background: #000;
   overflow: hidden;
   position: relative;
   /* For absolute positioning of overlay */
@@ -2253,6 +2301,13 @@ dialog h2 {
     rgba(255, 255, 255, 0.02);
 }
 
+.preview-shader-metric-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .preview-shader-metric-label {
   color: var(--text-muted);
   font: 10px/1.2 var(--font-mono);
@@ -2302,6 +2357,21 @@ dialog h2 {
   font: 11px/1.3 var(--font-mono);
 }
 
+.preview-shader-uniforms-header-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.preview-shader-runtime-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
 .preview-shader-controls {
   display: flex;
   align-items: end;
@@ -2316,6 +2386,28 @@ dialog h2 {
   display: grid;
   gap: 6px;
   min-width: 180px;
+}
+
+.preview-shader-resolution-editor {
+  flex: 1 1 420px;
+}
+
+.preview-shader-resolution-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.preview-shader-dimension-control {
+  display: grid;
+  gap: 6px;
+}
+
+.preview-shader-dimension-label {
+  color: var(--text-muted);
+  font: 10px/1.2 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .preview-shader-control-label {
@@ -2340,17 +2432,36 @@ dialog h2 {
   border-color: rgba(63, 185, 80, 0.4);
 }
 
+.preview-shader-summary-preset {
+  display: grid;
+  gap: 6px;
+  min-width: 220px;
+  align-content: start;
+  padding: 10px 12px;
+  border: 1px solid rgba(63, 185, 80, 0.16);
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(180deg, rgba(63, 185, 80, 0.08), rgba(63, 185, 80, 0.03)),
+    rgba(255, 255, 255, 0.02);
+}
+
 .preview-shader-action {
-  align-self: end;
-  min-width: 116px;
-  padding: 8px 12px;
-  font-size: 11px;
+  width: 28px;
+  height: 28px;
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .preview-shader-action.is-active {
   border-color: rgba(63, 185, 80, 0.32);
   background: rgba(63, 185, 80, 0.14);
   color: #c6f6d5;
+}
+
+.preview-shader-action:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
 }
 
 .preview-shader-uniform-list {

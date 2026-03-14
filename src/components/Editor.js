@@ -11,6 +11,7 @@ import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 
 import { getBlockDefinition, normalizeBlockType } from '../config/exampleBlocks.js';
 import { buildFrameworkFileTemplate, getFrameworkFileTemplateOptions } from '../config/fileTemplates.js';
+import { glslLanguage } from '../editor/glslLanguage.js';
 import { fetchExamples, fetchExample, saveExample, modifyExample, removeExample, renameExample } from '../utils/api.js';
 import { resolveExerciseComparison } from '../utils/exerciseComparison.js';
 import {
@@ -31,6 +32,7 @@ import {
     setDocumentEntryPath,
     synchronizeDocument,
     updateDocumentHiddenFiles,
+    updateShaderResolution,
     updateShaderUniformDefinitions,
     updateDocumentFileDetails,
     updateDocumentFileContent,
@@ -41,7 +43,8 @@ const SHADER_UNIFORM_TYPE_OPTIONS = ['float', 'int', 'bool', 'vec2', 'vec3', 've
 const SHADER_BUILT_IN_UNIFORM_NAMES = ['u_time', 'u_delta', 'u_resolution', 'u_mouse', 'u_mouse_pressed', 'u_frame'];
 
 export class Editor {
-    constructor({ onCodeChange, onExerciseStateChange, onRename, onSessionStateChange }) {
+    constructor({ getShaderPersistedState, onCodeChange, onExerciseStateChange, onRename, onSessionStateChange }) {
+        this.getShaderPersistedState = getShaderPersistedState;
         this.onCodeChange = onCodeChange;
         this.onExerciseStateChange = onExerciseStateChange;
         this.onRename = onRename;
@@ -716,27 +719,27 @@ export class Editor {
             meta.appendChild(title);
             meta.appendChild(details);
 
-            const state = document.createElement('label');
+            const state = document.createElement('div');
             state.className = 'file-visibility-state';
 
-            const select = document.createElement('select');
-            select.dataset.fileKey = entry.key;
+            const toggle = document.createElement('div');
+            toggle.className = 'file-visibility-toggle';
+            toggle.setAttribute('role', 'group');
+            toggle.setAttribute('aria-label', `Visibility for ${entry.file.path}`);
 
-            const visibleOption = document.createElement('option');
-            visibleOption.value = 'visible';
-            visibleOption.textContent = 'Visible';
-            visibleOption.selected = !isHidden;
+            const visibleButton = document.createElement('button');
+            visibleButton.type = 'button';
+            visibleButton.className = 'file-visibility-toggle-btn';
+            visibleButton.textContent = 'Visible';
 
-            const hiddenOption = document.createElement('option');
-            hiddenOption.value = 'hidden';
-            hiddenOption.textContent = 'Hidden';
-            hiddenOption.selected = isHidden;
+            const hiddenButton = document.createElement('button');
+            hiddenButton.type = 'button';
+            hiddenButton.className = 'file-visibility-toggle-btn';
+            hiddenButton.textContent = 'Hidden';
 
-            select.appendChild(visibleOption);
-            select.appendChild(hiddenOption);
-            select.addEventListener('change', () => {
+            const applyHiddenState = (nextHidden) => {
                 const nextHiddenKeys = new Set(this._getFileVisibilityDialogHiddenKeys());
-                if (select.value === 'hidden') {
+                if (nextHidden) {
                     nextHiddenKeys.add(entry.key);
                     row.classList.add('is-hidden');
                 } else {
@@ -745,10 +748,20 @@ export class Editor {
                 }
 
                 this.fileVisibilityDialogState.hiddenKeys = Array.from(nextHiddenKeys);
+                visibleButton.classList.toggle('active', !nextHidden);
+                hiddenButton.classList.toggle('active', nextHidden);
+                visibleButton.setAttribute('aria-pressed', String(!nextHidden));
+                hiddenButton.setAttribute('aria-pressed', String(nextHidden));
                 this._syncFileVisibilityDialogHint();
-            });
+            };
 
-            state.appendChild(select);
+            visibleButton.addEventListener('click', () => applyHiddenState(false));
+            hiddenButton.addEventListener('click', () => applyHiddenState(true));
+            applyHiddenState(isHidden);
+
+            toggle.appendChild(visibleButton);
+            toggle.appendChild(hiddenButton);
+            state.appendChild(toggle);
 
             row.appendChild(meta);
             row.appendChild(state);
@@ -1806,13 +1819,16 @@ const title = ref('${componentName}');
         this.btnSave.addEventListener('click', async () => {
             if (!this.currentTopicPath || hasBlockingDiagnostics(this.currentDocument)) return;
 
-            const content = buildExampleDocument(this.currentDocument);
+            const documentToPersist = this._getPersistableDocument();
+            const content = buildExampleDocument(documentToPersist);
 
             try {
                 const result = await saveExample(this.currentTopicPath, content);
                 this.currentFilename = result.filename;
+                this.currentDocument = documentToPersist;
                 this._updateButtonStates();
                 this._updateFilenameDisplay();
+                this._triggerChange();
                 this._emitSessionStateChange();
                 this._showToast(`Saved: ${result.filename}`, 'success');
             } catch (error) {
@@ -2414,7 +2430,7 @@ const title = ref('${componentName}');
         switch (type) {
             case 'vertex':
             case 'fragment':
-                return [];
+                return [glslLanguage()];
             case 'jsx':
                 return [javascript({ jsx: true })];
             case 'tsx':
@@ -2704,13 +2720,29 @@ const title = ref('${componentName}');
         setTimeout(() => toast.remove(), 3000);
     }
 
+    _getPersistableDocument() {
+        if (!this._isShaderDocument() || !this.getShaderPersistedState) {
+            return this.currentDocument;
+        }
+
+        const persistedState = this.getShaderPersistedState();
+        if (!persistedState?.resolution) {
+            return this.currentDocument;
+        }
+
+        return updateShaderResolution(this.currentDocument, persistedState.resolution);
+    }
+
     async _handleModify() {
         if (!this.currentTopicPath || !this.currentFilename || hasBlockingDiagnostics(this.currentDocument)) return;
 
-        const content = buildExampleDocument(this.currentDocument);
+        const documentToPersist = this._getPersistableDocument();
+        const content = buildExampleDocument(documentToPersist);
 
         try {
             await modifyExample(this.currentTopicPath, this.currentFilename, content);
+            this.currentDocument = documentToPersist;
+            this._triggerChange();
             this._showToast(`Modified: ${this.currentFilename}`, 'success');
         } catch (error) {
             console.error(error);

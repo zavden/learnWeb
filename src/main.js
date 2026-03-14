@@ -42,6 +42,7 @@ class App {
         this.previewFrameContainer = document.getElementById('preview-frame-container');
         this.previewConsole = document.getElementById('preview-console');
         this.previewConsoleResizer = document.getElementById('preview-console-resizer');
+        this.dragShield = document.getElementById('drag-shield');
         this.viewportSelect = document.getElementById('viewport-select');
         this.viewportSlider = document.getElementById('viewport-slider');
         this.viewportWidthDisplay = document.getElementById('viewport-width-display');
@@ -63,6 +64,7 @@ class App {
         });
 
         this.editor = new Editor({
+            getShaderPersistedState: () => this.preview.getShaderPersistedState(),
             onCodeChange: (documentModel) => {
                 this.exercisePanel.render(this.editor.getExercisePresentation());
                 this.preview.update(documentModel, {
@@ -240,6 +242,20 @@ class App {
         window.localStorage.setItem(this.sidebarCollapsedStorageKey, collapsed ? '1' : '0');
     }
 
+    _showDragShield(direction = 'ew') {
+        if (!this.dragShield) return;
+
+        this.dragShield.classList.remove('hidden', 'is-ew-resize', 'is-ns-resize');
+        this.dragShield.classList.add(direction === 'ns' ? 'is-ns-resize' : 'is-ew-resize');
+    }
+
+    _hideDragShield() {
+        if (!this.dragShield) return;
+
+        this.dragShield.classList.add('hidden');
+        this.dragShield.classList.remove('is-ew-resize', 'is-ns-resize');
+    }
+
     _startSidebarResize(event) {
         if (this.appShell.classList.contains('sidebar-collapsed')) return;
 
@@ -251,6 +267,8 @@ class App {
 
         this.sidebarResizer.classList.add('resizing');
         document.body.classList.add('is-resizing-sidebar');
+        this._showDragShield('ew');
+        const dragTarget = this.dragShield || document;
 
         const onMouseMove = (moveEvent) => {
             nextWidth = startWidth + (moveEvent.clientX - startX);
@@ -258,15 +276,16 @@ class App {
         };
 
         const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
+            dragTarget.removeEventListener('mousemove', onMouseMove);
+            dragTarget.removeEventListener('mouseup', onMouseUp);
             this.sidebarResizer.classList.remove('resizing');
             document.body.classList.remove('is-resizing-sidebar');
+            this._hideDragShield();
             this._setSidebarWidth(nextWidth);
         };
 
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
+        dragTarget.addEventListener('mousemove', onMouseMove);
+        dragTarget.addEventListener('mouseup', onMouseUp);
     }
 
     _initWorkspaceResizer() {
@@ -413,6 +432,8 @@ class App {
 
         this.workspaceResizer.classList.add('resizing');
         document.body.classList.add('is-resizing-workspace');
+        this._showDragShield('ew');
+        const dragTarget = this.dragShield || document;
 
         const onMouseMove = (moveEvent) => {
             nextWidth = startWidth - (moveEvent.clientX - startX);
@@ -423,10 +444,11 @@ class App {
         };
 
         const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
+            dragTarget.removeEventListener('mousemove', onMouseMove);
+            dragTarget.removeEventListener('mouseup', onMouseUp);
             this.workspaceResizer.classList.remove('resizing');
             document.body.classList.remove('is-resizing-workspace');
+            this._hideDragShield();
             this._setPreviewColumnWidth(nextWidth, { persist: false });
             if (this.previewWidthMode === 'full') {
                 this._applyFullPreviewWidth({ persist: false });
@@ -434,8 +456,8 @@ class App {
             this._persistSessionState();
         };
 
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
+        dragTarget.addEventListener('mousemove', onMouseMove);
+        dragTarget.addEventListener('mouseup', onMouseUp);
     }
 
     _startConsoleResize(event) {
@@ -451,6 +473,8 @@ class App {
 
         this.previewConsoleResizer.classList.add('resizing');
         document.body.classList.add('is-resizing-console');
+        this._showDragShield('ns');
+        const dragTarget = this.dragShield || document;
 
         const onMouseMove = (moveEvent) => {
             nextHeight = startHeight - (moveEvent.clientY - startY);
@@ -458,15 +482,16 @@ class App {
         };
 
         const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
+            dragTarget.removeEventListener('mousemove', onMouseMove);
+            dragTarget.removeEventListener('mouseup', onMouseUp);
             this.previewConsoleResizer.classList.remove('resizing');
             document.body.classList.remove('is-resizing-console');
+            this._hideDragShield();
             this._setConsoleHeight(nextHeight);
         };
 
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
+        dragTarget.addEventListener('mousemove', onMouseMove);
+        dragTarget.addEventListener('mouseup', onMouseUp);
     }
 
     _readSessionState() {

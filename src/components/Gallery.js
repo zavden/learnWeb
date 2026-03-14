@@ -1,7 +1,7 @@
 import { fetchExamples, fetchExample } from '../utils/api.js';
 import { compileExample } from '../utils/compileClient.js';
-import { renderCompiledExampleDocument } from '../utils/exampleRenderer.js';
-import { getExampleStage, parseExampleDocument } from '../utils/markdown.js';
+import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../utils/exampleRenderer.js';
+import { getExampleStage, isShaderDocument, parseExampleDocument } from '../utils/markdown.js';
 
 const EXAMPLE_STAGE_META = {
     minimal: { label: 'Minimal', rank: 0, className: 'stage-minimal' },
@@ -78,14 +78,28 @@ export class Gallery {
                     div.dataset.stage = stage;
                     div.dataset.stageRank = String(stageMeta.rank);
                 }
-                const result = await compileExample({ document: documentModel });
                 const iframe = document.createElement('iframe');
                 iframe.sandbox = 'allow-scripts';
-                iframe.srcdoc = renderCompiledExampleDocument(
-                    result.compiledDocument,
-                    this.currentTopicPath,
-                    result.compileDiagnostics || []
-                );
+
+                if (isShaderDocument(documentModel)) {
+                    iframe.srcdoc = renderShaderExampleDocument(documentModel, {
+                        diagnostics: documentModel.diagnostics || [],
+                        renderId: 0,
+                        shaderControls: {
+                            paused: true,
+                            stillFrame: true,
+                        },
+                        topicPath: this.currentTopicPath,
+                    });
+                } else {
+                    const result = await compileExample({ document: documentModel });
+                    iframe.srcdoc = renderCompiledExampleDocument(
+                        result.compiledDocument,
+                        this.currentTopicPath,
+                        result.compileDiagnostics || []
+                    );
+                }
+
                 preview.appendChild(iframe);
             }
         } catch (err) {

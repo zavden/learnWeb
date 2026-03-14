@@ -2777,6 +2777,29 @@ export function updateShaderUniformDefinitions(documentModel, uniforms = []) {
     return reparseDocument(nextDocument);
 }
 
+export function updateShaderResolution(documentModel, resolution = null) {
+    const nextDocument = cloneExampleDocument(documentModel);
+    if (!isShaderDocument(nextDocument)) return nextDocument;
+
+    const width = Number.isFinite(resolution?.width)
+        ? resolution.width
+        : Number.parseInt(resolution?.width, 10);
+    const height = Number.isFinite(resolution?.height)
+        ? resolution.height
+        : Number.parseInt(resolution?.height, 10);
+
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+        return nextDocument;
+    }
+
+    nextDocument.metadata = {
+        ...(nextDocument.metadata || {}),
+        resolution: normalizeResolutionMetadataValue(`${Math.round(width)}x${Math.round(height)}`),
+    };
+
+    return reparseDocument(nextDocument);
+}
+
 export function updateDocumentHiddenFiles(documentModel, hiddenKeys = []) {
     const nextDocument = cloneExampleDocument(documentModel);
     const visibilityEntries = getDocumentFileVisibilityEntries(nextDocument);

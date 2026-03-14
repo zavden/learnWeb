@@ -20,6 +20,19 @@ const SHADER_RESOLUTION_PRESETS = [
     { height: 900, label: 'Wide 1600 x 900', width: 1600 },
     { height: 1080, label: 'Full HD 1920 x 1080', width: 1920 },
 ];
+const SHADER_RESOLUTION_LIMITS = {
+    height: { max: 1500, min: 64 },
+    width: { max: 1500, min: 64 },
+};
+const SHADER_PAUSE_ICON = `
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <line x1="10" y1="5" x2="10" y2="19"></line>
+  <line x1="14" y1="5" x2="14" y2="19"></line>
+</svg>`;
+const SHADER_PLAY_ICON = `
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <polygon points="8 5 19 12 8 19 8 5"></polygon>
+</svg>`;
 
 function cloneShaderUniformValue(value) {
     if (Array.isArray(value)) {
@@ -70,7 +83,6 @@ export class Preview {
         this.btnToggleShaderControls = document.getElementById('btn-toggle-shader-controls');
         this.shaderPanel = document.getElementById('preview-shader-panel');
         this.shaderFps = document.getElementById('preview-shader-fps');
-        this.shaderResolution = document.getElementById('preview-shader-resolution');
         this.shaderFrame = document.getElementById('preview-shader-frame');
         this.shaderUpdated = document.getElementById('preview-shader-updated');
         this.shaderUniformList = document.getElementById('preview-shader-uniform-list');
@@ -79,6 +91,10 @@ export class Preview {
         this.shaderTextureList = document.getElementById('preview-shader-texture-list');
         this.shaderTextureEmpty = document.getElementById('preview-shader-texture-empty');
         this.shaderResolutionSelect = document.getElementById('preview-shader-resolution-select');
+        this.shaderWidthRange = document.getElementById('preview-shader-width-range');
+        this.shaderWidthInput = document.getElementById('preview-shader-width-input');
+        this.shaderHeightRange = document.getElementById('preview-shader-height-range');
+        this.shaderHeightInput = document.getElementById('preview-shader-height-input');
         this.btnShaderTogglePause = document.getElementById('btn-shader-toggle-pause');
         this.btnShaderReset = document.getElementById('btn-shader-reset');
         this._debounceTimer = null;
@@ -125,6 +141,8 @@ export class Preview {
         this.shaderResolutionSelect?.addEventListener('change', (event) => {
             this._handleShaderResolutionChange(event.target.value);
         });
+        this._bindShaderResolutionAxisControls('width', this.shaderWidthRange, this.shaderWidthInput);
+        this._bindShaderResolutionAxisControls('height', this.shaderHeightRange, this.shaderHeightInput);
         this.btnShaderTogglePause?.addEventListener('click', () => this._toggleShaderPause());
         this.btnShaderReset?.addEventListener('click', () => this._resetShaderRuntime());
         this.btnToggleShaderControls?.addEventListener('click', () => this._toggleShaderEditorControlsCollapsed());
@@ -135,6 +153,26 @@ export class Preview {
 
     setTopicPath(topicPath) {
         this._currentTopicPath = topicPath;
+    }
+
+    getShaderPersistedState() {
+        if (!isShaderDocument(this._lastDocument)) return null;
+
+        const currentResolution = this._shaderControls?.currentResolution
+            || this._shaderControls?.baseResolution
+            || getShaderConfig(this._lastDocument)?.resolution
+            || null;
+
+        if (!currentResolution) {
+            return null;
+        }
+
+        return {
+            resolution: {
+                height: currentResolution.height,
+                width: currentResolution.width,
+            },
+        };
     }
 
     update(documentModel, { sessionKey = '' } = {}) {
@@ -412,6 +450,11 @@ export class Preview {
             if (this._runtimeMode !== 'shader') return;
             this._updateShaderStats(event.data);
             this._renderShaderPanel();
+            return;
+        }
+        if (event.data.kind === 'shader-resize-request') {
+            if (this._runtimeMode !== 'shader') return;
+            this._applyShaderResolution(event.data.resolution);
             return;
         }
         if (!this._consoleEnabled) return;
@@ -718,7 +761,7 @@ export class Preview {
             currentResolution: normalizedResolution,
             customUniforms: [],
             textures: [],
-            paused: false,
+            paused: true,
         };
     }
 
@@ -740,6 +783,58 @@ export class Preview {
             width: Number.parseInt(match[1], 10),
             height: Number.parseInt(match[2], 10),
         });
+    }
+
+    _getShaderResolutionLimit(axis = 'width') {
+        return SHADER_RESOLUTION_LIMITS[axis] || SHADER_RESOLUTION_LIMITS.width;
+    }
+
+    _clampShaderResolutionAxis(axis = 'width', rawValue, fallbackValue = 800) {
+        const parsedValue = Number.parseInt(rawValue, 10);
+        if (!Number.isFinite(parsedValue)) {
+            return fallbackValue;
+        }
+
+        const limit = this._getShaderResolutionLimit(axis);
+        return Math.max(limit.min, Math.min(limit.max, Math.round(parsedValue)));
+    }
+
+    _syncShaderResolutionAxisControl(rangeInput, valueInput, nextValue) {
+        const normalizedValue = String(nextValue);
+
+        if (rangeInput && document.activeElement !== rangeInput && rangeInput.value !== normalizedValue) {
+            rangeInput.value = normalizedValue;
+        }
+
+        if (valueInput && document.activeElement !== valueInput && valueInput.value !== normalizedValue) {
+            valueInput.value = normalizedValue;
+        }
+    }
+
+    _bindShaderResolutionAxisControls(axis, rangeInput, valueInput) {
+        if (rangeInput) {
+            rangeInput.addEventListener('input', () => {
+                this._handleShaderResolutionAxisChange(axis, rangeInput.value);
+            });
+        }
+
+        if (valueInput) {
+            valueInput.addEventListener('input', () => {
+                this._handleShaderResolutionAxisChange(axis, valueInput.value, { allowIncomplete: true });
+            });
+            valueInput.addEventListener('change', () => {
+                this._handleShaderResolutionAxisChange(axis, valueInput.value, { force: true });
+            });
+            valueInput.addEventListener('blur', () => {
+                this._handleShaderResolutionAxisChange(axis, valueInput.value, { force: true });
+            });
+            valueInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    valueInput.blur();
+                }
+            });
+        }
     }
 
     _syncShaderControls({ sessionKey = '', resolution = null, customUniforms = [], textures = [], reset = false } = {}) {
@@ -834,8 +929,6 @@ export class Preview {
     }
 
     _renderShaderResolutionOptions() {
-        if (!this.shaderResolutionSelect) return;
-
         const options = this._buildShaderResolutionOptions();
         const currentResolution = this._shaderControls?.currentResolution || this._shaderControls?.baseResolution;
         const baseResolution = this._shaderControls?.baseResolution || currentResolution;
@@ -846,7 +939,7 @@ export class Preview {
         const optionsSignature = JSON.stringify(options);
         const needsOptionsRefresh = this._shaderResolutionOptionsSignature !== optionsSignature;
 
-        if (needsOptionsRefresh) {
+        if (this.shaderResolutionSelect && needsOptionsRefresh) {
             this.shaderResolutionSelect.innerHTML = '';
             options.forEach((option) => {
                 const node = document.createElement('option');
@@ -855,11 +948,21 @@ export class Preview {
                 this.shaderResolutionSelect.appendChild(node);
             });
             this._shaderResolutionOptionsSignature = optionsSignature;
+        } else if (!this.shaderResolutionSelect) {
+            this._shaderResolutionOptionsSignature = optionsSignature;
         }
 
-        if (this._shaderResolutionSelectionValue !== selectedValue || this.shaderResolutionSelect.value !== selectedValue) {
+        if (
+            this.shaderResolutionSelect
+            && (this._shaderResolutionSelectionValue !== selectedValue || this.shaderResolutionSelect.value !== selectedValue)
+        ) {
             this.shaderResolutionSelect.value = selectedValue;
             this._shaderResolutionSelectionValue = selectedValue;
+        }
+
+        if (currentResolution) {
+            this._syncShaderResolutionAxisControl(this.shaderWidthRange, this.shaderWidthInput, currentResolution.width);
+            this._syncShaderResolutionAxisControl(this.shaderHeightRange, this.shaderHeightInput, currentResolution.height);
         }
     }
 
@@ -873,6 +976,24 @@ export class Preview {
         }, '*');
     }
 
+    _applyShaderResolution(nextResolution, { syncPanel = true } = {}) {
+        if (this._runtimeMode !== 'shader' || !this._shaderControls || !nextResolution) return;
+
+        const normalizedResolution = this._normalizeShaderResolution(nextResolution);
+        this._shaderControls.currentResolution = normalizedResolution;
+        this._shaderStats.resolution = normalizedResolution;
+        this._shaderStats.uniforms.u_resolution = [normalizedResolution.width, normalizedResolution.height];
+
+        if (syncPanel) {
+            this._renderShaderPanel();
+        }
+
+        this._sendShaderControlMessage({
+            action: 'set-resolution',
+            resolution: normalizedResolution,
+        });
+    }
+
     _handleShaderResolutionChange(value) {
         if (this._runtimeMode !== 'shader' || !this._shaderControls) return;
 
@@ -881,14 +1002,33 @@ export class Preview {
             : this._parseShaderResolution(value);
         if (!nextResolution) return;
 
-        this._shaderControls.currentResolution = nextResolution;
-        this._shaderStats.resolution = nextResolution;
-        this._shaderStats.uniforms.u_resolution = [nextResolution.width, nextResolution.height];
-        this._renderShaderPanel();
-        this._sendShaderControlMessage({
-            action: 'set-resolution',
-            resolution: nextResolution,
-        });
+        this._applyShaderResolution(nextResolution);
+    }
+
+    _handleShaderResolutionAxisChange(axis, rawValue, { allowIncomplete = false, force = false } = {}) {
+        if (this._runtimeMode !== 'shader' || !this._shaderControls) return;
+
+        const currentResolution = this._shaderControls.currentResolution || this._shaderControls.baseResolution;
+        const fallbackValue = Number.isFinite(currentResolution?.[axis]) ? currentResolution[axis] : 800;
+        const parsedValue = Number.parseInt(rawValue, 10);
+
+        if (!Number.isFinite(parsedValue)) {
+            if (!allowIncomplete || force) {
+                this._syncShaderResolutionAxisControl(
+                    axis === 'width' ? this.shaderWidthRange : this.shaderHeightRange,
+                    axis === 'width' ? this.shaderWidthInput : this.shaderHeightInput,
+                    fallbackValue,
+                );
+            }
+            return;
+        }
+
+        const nextResolution = {
+            ...(currentResolution || this._normalizeShaderResolution()),
+            [axis]: this._clampShaderResolutionAxis(axis, parsedValue, fallbackValue),
+        };
+
+        this._applyShaderResolution(nextResolution);
     }
 
     _toggleShaderPause() {
@@ -1217,7 +1357,7 @@ export class Preview {
             fps: null,
             frame: 0,
             lastUpdated: 0,
-            paused: false,
+            paused: true,
             resolution: width && height ? { width, height } : null,
             textures: [],
             uniforms: {
@@ -1310,7 +1450,7 @@ export class Preview {
     }
 
     _renderShaderPanel() {
-        if (!this.shaderPanel || !this.shaderFps || !this.shaderResolution || !this.shaderFrame || !this.shaderUpdated || !this.shaderUniformList) {
+        if (!this.shaderPanel || !this.shaderFps || !this.shaderFrame || !this.shaderUpdated || !this.shaderUniformList) {
             return;
         }
 
@@ -1322,16 +1462,20 @@ export class Preview {
         this.shaderFps.textContent = Number.isFinite(stats.fps) && stats.fps > 0
             ? `${Math.round(stats.fps)}`
             : '--';
-        this.shaderResolution.textContent = resolution
-            ? `${resolution.width} x ${resolution.height}`
-            : '--';
         this.shaderFrame.textContent = Number.isFinite(stats.frame) ? String(stats.frame) : '--';
         this.shaderUpdated.textContent = stats.lastUpdated
             ? `${stats.paused ? 'Paused' : 'Updated'} ${new Date(stats.lastUpdated).toLocaleTimeString()}`
             : 'Waiting for first frame';
         if (this.btnShaderTogglePause) {
-            this.btnShaderTogglePause.textContent = stats.paused ? 'Resume Time' : 'Pause Time';
+            const nextLabel = stats.paused ? 'Resume time' : 'Pause time';
+            this.btnShaderTogglePause.innerHTML = stats.paused ? SHADER_PLAY_ICON : SHADER_PAUSE_ICON;
+            this.btnShaderTogglePause.title = nextLabel;
+            this.btnShaderTogglePause.setAttribute('aria-label', nextLabel);
             this.btnShaderTogglePause.classList.toggle('is-active', stats.paused);
+        }
+        if (this.btnShaderReset) {
+            this.btnShaderReset.title = 'Reset runtime';
+            this.btnShaderReset.setAttribute('aria-label', 'Reset runtime');
         }
 
         this.shaderUniformList.innerHTML = '';
