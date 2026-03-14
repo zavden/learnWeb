@@ -1,3 +1,4 @@
+import { completeFromList, snippetCompletion } from '@codemirror/autocomplete';
 import { StreamLanguage } from '@codemirror/language';
 
 const GLSL_KEYWORDS = new Set([
@@ -128,6 +129,14 @@ const GLSL_BUILTINS = new Set([
 ]);
 
 const GLSL_BOOLEAN_LITERALS = new Set(['true', 'false']);
+const GLSL_SHADER_RUNTIME_UNIFORMS = [
+    'u_time',
+    'u_delta',
+    'u_resolution',
+    'u_mouse',
+    'u_mouse_pressed',
+    'u_frame',
+];
 
 export function classifyGlslIdentifier(identifier = '') {
     const value = String(identifier || '');
@@ -138,6 +147,130 @@ export function classifyGlslIdentifier(identifier = '') {
     if (GLSL_BOOLEAN_LITERALS.has(value)) return 'bool';
     if (GLSL_BUILTINS.has(value)) return 'variableName.standard';
     return 'variableName';
+}
+
+function buildKeywordCompletion(label) {
+    return {
+        label,
+        type: 'keyword',
+        info: 'GLSL keyword',
+    };
+}
+
+function buildTypeCompletion(label) {
+    return {
+        label,
+        type: 'type',
+        info: 'GLSL type',
+    };
+}
+
+function buildBuiltinCompletion(label, detail = 'GLSL builtin') {
+    return {
+        label,
+        type: 'function',
+        info: detail,
+    };
+}
+
+function buildVariableCompletion(label, detail) {
+    return {
+        label,
+        type: 'variable',
+        info: detail,
+    };
+}
+
+const GLSL_SNIPPET_COMPLETIONS = [
+    snippetCompletion(
+        [
+            'void main() {',
+            '\t${}',
+            '}',
+        ].join('\n'),
+        {
+            label: 'main()',
+            type: 'snippet',
+            detail: 'Entry point',
+            info: 'Insert a `main()` function scaffold.',
+        },
+    ),
+    snippetCompletion(
+        'precision ${mediump} float;',
+        {
+            label: 'precision mediump float',
+            type: 'snippet',
+            detail: 'Precision qualifier',
+            info: 'Insert a precision declaration for fragment shaders.',
+        },
+    ),
+    snippetCompletion(
+        'uniform ${float} ${name};',
+        {
+            label: 'uniform ...',
+            type: 'snippet',
+            detail: 'Uniform declaration',
+            info: 'Insert a basic uniform declaration.',
+        },
+    ),
+    snippetCompletion(
+        'varying ${vec2} ${name};',
+        {
+            label: 'varying ...',
+            type: 'snippet',
+            detail: 'Varying declaration',
+            info: 'Insert a varying declaration shared between vertex and fragment shaders.',
+        },
+    ),
+    snippetCompletion(
+        'attribute vec2 a_position;',
+        {
+            label: 'attribute a_position',
+            type: 'snippet',
+            detail: 'Fullscreen quad input',
+            info: 'Insert the common `a_position` attribute used by this app shader runtime.',
+        },
+    ),
+    snippetCompletion(
+        'vec2(${x}, ${y})',
+        {
+            label: 'vec2()',
+            type: 'snippet',
+            detail: 'vec2 constructor',
+            info: 'Insert a `vec2` constructor snippet.',
+        },
+    ),
+    snippetCompletion(
+        'vec3(${x}, ${y}, ${z})',
+        {
+            label: 'vec3()',
+            type: 'snippet',
+            detail: 'vec3 constructor',
+            info: 'Insert a `vec3` constructor snippet.',
+        },
+    ),
+    snippetCompletion(
+        'vec4(${x}, ${y}, ${z}, ${w})',
+        {
+            label: 'vec4()',
+            type: 'snippet',
+            detail: 'vec4 constructor',
+            info: 'Insert a `vec4` constructor snippet.',
+        },
+    ),
+];
+
+export function getGlslCompletionEntries() {
+    return [
+        ...GLSL_SNIPPET_COMPLETIONS,
+        ...Array.from(GLSL_KEYWORDS, buildKeywordCompletion),
+        ...Array.from(GLSL_QUALIFIERS, buildKeywordCompletion),
+        ...Array.from(GLSL_TYPES, buildTypeCompletion),
+        ...Array.from(GLSL_BUILTINS, (label) => buildBuiltinCompletion(label)),
+        ...Array.from(GLSL_BOOLEAN_LITERALS, (label) => buildVariableCompletion(label, 'Boolean literal')),
+        ...GLSL_SHADER_RUNTIME_UNIFORMS.map((label) => buildVariableCompletion(label, 'Runtime uniform exposed by the shader preview')),
+        buildVariableCompletion('a_position', 'Common vertex attribute used by the fullscreen quad runtime'),
+    ];
 }
 
 function readBlockComment(stream, state) {
@@ -262,7 +395,13 @@ const glslStreamParser = {
 };
 
 const glslLanguageSupport = StreamLanguage.define(glslStreamParser);
+const glslCompletionSource = completeFromList(getGlslCompletionEntries());
 
 export function glslLanguage() {
-    return glslLanguageSupport;
+    return [
+        glslLanguageSupport,
+        glslLanguageSupport.data.of({
+            autocomplete: glslCompletionSource,
+        }),
+    ];
 }

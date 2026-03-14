@@ -348,6 +348,30 @@ app.post('/api/create', (req, res) => {
 
 // ─── Serve topic assets ─────────────────────────────────
 
+app.get('/api/topic/:ch/:sec/:top/assets', (req, res) => {
+    try {
+        const { ch, sec, top } = req.params;
+        const assetsDir = path.join(MATERIAL_DIR, ch, sec, top, 'assets');
+
+        if (!fs.existsSync(assetsDir) || !fs.statSync(assetsDir).isDirectory()) {
+            return res.json([]);
+        }
+
+        const assets = fs.readdirSync(assetsDir, { withFileTypes: true })
+            .filter((entry) => entry.isFile() && !entry.name.startsWith('.'))
+            .map((entry) => ({
+                filename: entry.name,
+                path: entry.name,
+                url: `/api/topic/${encodeURIComponent(ch)}/${encodeURIComponent(sec)}/${encodeURIComponent(top)}/assets/${encodeURIComponent(entry.name)}`,
+            }))
+            .sort((left, right) => left.filename.localeCompare(right.filename));
+
+        res.json(assets);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/topic/:ch/:sec/:top/assets/:file', (req, res) => {
     const { ch, sec, top, file } = req.params;
     const filePath = path.join(MATERIAL_DIR, ch, sec, top, 'assets', file);

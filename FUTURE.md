@@ -1,48 +1,50 @@
 # FUTURE
 
-Ideas futuras para este proyecto, separadas por dificultad estimada de implementacion.
+Ideas futuras para este proyecto, separadas por dificultad estimada.
 
-La columna mas importante aqui no es solo la complejidad tecnica, sino tambien la utilidad real para aprender frontend con la app.
+Nota:
+- este archivo ya no repite mejoras que ya quedaron implementadas
+- el criterio principal sigue siendo utilidad real para aprender frontend
 
 ## Facil
 
-- Autocomplete y snippets basicos para shaders, HTML, CSS y JS.  
-  Utilidad para aprendizaje: alta.  
-  Ayuda mucho a escribir mas rapido y a descubrir APIs, pero no cambia la arquitectura del proyecto.
+- Boton para colapsar el panel flotante de errores del editor.  
+  Utilidad para aprendizaje: media.  
+  Mejora ergonomia cuando hay muchos diagnosticos, sin cambiar el flujo actual.
 
-- Color picker para uniforms `vec3` y `vec4` en shaders.  
-  Utilidad para aprendizaje: alta.  
-  Es muy util para explorar color, mezcla y gradientes sin estar probando numeros manualmente.
+- Persistir scroll y cursor por archivo dentro del editor.  
+  Utilidad para aprendizaje: media.  
+  Muy comodo cuando un ejemplo multi-file empieza a crecer y cambias mucho entre tabs.
 
-- Selector visual de texturas shader desde `assets/` en vez de escribir `shader_textures` a mano.  
+- Boton rapido para clonar el ejemplo actual a un nuevo archivo `.md`.  
   Utilidad para aprendizaje: media-alta.  
-  Reduce friccion y evita errores de metadata.
+  Facilita practicar sobre una base conocida sin miedo a romper el original.
 
-- Gutter markers y resaltado visual de linea con errores de compilacion.  
-  Utilidad para aprendizaje: alta.  
-  Hace mas claro donde esta el problema, sobre todo en React, Vue, TypeScript y shaders.
-
-- Historial de comandos en la consola runtime.  
+- Atajos y ayuda de teclado visibles desde un modal pequeño.  
   Utilidad para aprendizaje: media.  
-  Es comodo para repetir pruebas, aunque no cambia mucho la capacidad pedagogica base.
+  Hace mas descubrible cosas como quick open, consola, resize y layouts.
 
-- Boton para restaurar rapidamente layout, tabs visibles y paneles del editor.  
+- Boton para copiar errores o logs desde la consola runtime.  
   Utilidad para aprendizaje: media.  
-  Mejora ergonomia, sobre todo en sesiones largas.
+  Ayuda a compartir errores o guardarlos como referencia durante ejercicios.
 
-- Busqueda rapida de archivos abiertos dentro del editor `Tabs/Panels`.  
+- Boton `Reload Textures` en shaders.  
   Utilidad para aprendizaje: media.  
-  Empieza a ser util cuando los ejemplos multi-file crecen.
+  Comodo cuando se edita un asset del topic y se quiere refrescar sin recargar todo el ejemplo.
 
-- Mejor documentacion contextual dentro de la UI para metadata especial (`console`, `exercise`, `shader_uniforms`, `shader_textures`).  
-  Utilidad para aprendizaje: alta.  
-  Reduce la necesidad de salir al README.
+- Mejor feedback visual en el panel de texturas shader (`ready`, `error`, `upload-error`).  
+  Utilidad para aprendizaje: media-alta.  
+  Hace mas claro cuando una textura falla por metadata, formato o carga.
+
+- Busqueda de texto simple dentro del archivo activo con UI propia.  
+  Utilidad para aprendizaje: media.  
+  Aunque CodeMirror ya da base, una UI mas visible puede ayudar a principiantes.
 
 ## Moderado
 
 - Validaciones automaticas para ejercicios, con checklist y tests simples por ejemplo.  
   Utilidad para aprendizaje: muy alta.  
-  Haría que el modo ejercicio pase de ser solo guiado a ser realmente evaluable.
+  Haria que el modo ejercicio pase de ser guiado a ser realmente evaluable.
 
 - Comparador intento vs solucion mas inteligente, con diff visual mas claro y resaltado semantico.  
   Utilidad para aprendizaje: alta.  
@@ -50,15 +52,15 @@ La columna mas importante aqui no es solo la complejidad tecnica, sino tambien l
 
 - Consola runtime mas cercana a DevTools, con `console.table`, `group`, mejor inspeccion de objetos y filtros persistentes.  
   Utilidad para aprendizaje: media-alta.  
-  Muy util para JS, TS, React y Vue, aunque no es estrictamente necesaria para principiantes.
+  Muy util para JS, TS, React y Vue.
 
-- Inspector simple del DOM y del arbol React/Vue del preview.  
+- Inspector simple del DOM del preview.  
   Utilidad para aprendizaje: alta.  
-  Ayudaria mucho a entender render, estructura final y relacion entre codigo y resultado.
+  Ayudaria mucho a conectar el HTML renderizado con el resultado final.
 
 - Import helper para assets y JSON dentro de mini-proyectos, con UI mas guiada.  
   Utilidad para aprendizaje: media-alta.  
-  Hace mas faciles ejemplos “semi reales” sin subir demasiado la complejidad mental del alumno.
+  Haria mas faciles ejemplos semi reales sin exigir editar metadata a mano.
 
 - Plantillas y generadores de ejercicios por framework (`Vanilla`, `React`, `Vue`, `Shaders`).  
   Utilidad para aprendizaje: alta.  
@@ -68,17 +70,17 @@ La columna mas importante aqui no es solo la complejidad tecnica, sino tambien l
   Utilidad para aprendizaje: alta.  
   Ya hay base, pero una version mas precisa reduciria mucho la friccion al depurar.
 
-- Persistencia completa del estado del ejemplo por archivo, incluyendo scroll y cursor del editor.  
-  Utilidad para aprendizaje: media.  
-  Es comodo, pero menos importante que consola, ejercicios o diagnosticos.
-
-- Exportar o clonar un ejemplo a un topic nuevo desde la interfaz.  
+- Exportar o clonar un ejemplo a otro topic desde la interfaz.  
   Utilidad para aprendizaje: media-alta.  
-  Facilita crear variantes y practicar sobre una base conocida.
+  Facilita crear variantes y ejercicios derivados.
 
 - Selector de framework o tipo de ejemplo mas guiado al crear ejemplos nuevos.  
   Utilidad para aprendizaje: media.  
-  Sirve mas para autores de contenido que para estudiantes.
+  Sirve mas para autores de contenido que para estudiantes, pero reduce errores.
+
+- Inspector basico de uniforms, texturas y estado WebGL para shaders.  
+  Utilidad para aprendizaje: alta.  
+  Seria muy util para entender por que un shader no responde como esperas.
 
 ## Complejo
 
@@ -110,6 +112,10 @@ La columna mas importante aqui no es solo la complejidad tecnica, sino tambien l
   Utilidad para aprendizaje: media-baja.  
   Interesante y atractivo, pero mas orientado a creatividad avanzada que a aprendizaje base.
 
+- Inspector de arbol React y Vue del preview.  
+  Utilidad para aprendizaje: alta.  
+  Muy potente pedagogicamente, pero bastante mas costoso que un inspector DOM simple.
+
 - Sandboxing mas fuerte por ejemplo, con limites mas finos para runtime y aislamiento de errores.  
   Utilidad para aprendizaje: baja-media.  
   Importante como robustez de producto, no tanto como mejora pedagogica inmediata.
@@ -124,18 +130,18 @@ La columna mas importante aqui no es solo la complejidad tecnica, sino tambien l
 
 ## Prioridad sugerida
 
-Si el objetivo principal sigue siendo aprendizaje local, las mejoras con mejor retorno serian estas:
+Si el objetivo principal sigue siendo aprendizaje local, las mejoras con mejor retorno ahora serian estas:
 
-- Validaciones automaticas para ejercicios.
-- Gutter markers y salto visual a errores.
-- Inspector simple del DOM / render final.
-- Color picker para shaders.
-- Selector visual de texturas shader.
-- Consola runtime un poco mas potente.
+1. Validaciones automaticas para ejercicios.
+2. Inspector simple del DOM del preview.
+3. Mejoras de source maps y stacks navegables.
+4. Inspector basico de uniforms y estado WebGL para shaders.
+5. Consola runtime mas cercana a DevTools.
 
-Si el objetivo cambia hacia una plataforma mas completa o mas “realista”, entonces las prioridades complejas serian:
+Si el objetivo cambia hacia una plataforma mas completa o mas realista, entonces las prioridades complejas serian:
 
-- dependencias externas por ejemplo
-- React/Vue mini-project mas libres
-- shader multipass
-- pipeline de compilacion mas avanzado
+1. dependencias externas por ejemplo
+2. React/Vue mini-project mas libres
+3. shader multipass
+4. inspector de arbol React/Vue
+5. pipeline de compilacion mas avanzado

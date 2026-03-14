@@ -36,6 +36,7 @@ class App {
         this.galleryView = document.getElementById('gallery-view');
         this.editorToolbar = document.querySelector('.editor-toolbar');
         this.editorPanels = document.querySelector('.editor-panels');
+        this.btnResetLayout = document.getElementById('btn-reset-layout');
         this.previewColumn = document.getElementById('preview-column');
         this.previewHeader = document.querySelector('.preview-header');
         this.previewFrame = document.getElementById('preview-frame');
@@ -51,6 +52,9 @@ class App {
         this.preview = new Preview({
             onCompileStateChange: (diagnostics) => {
                 this.editor?.setCompileDiagnostics(diagnostics);
+            },
+            onRequestShaderUniformEdit: (uniformName) => {
+                this.editor?.openShaderUniformDialog?.(uniformName);
             },
         });
 
@@ -110,6 +114,7 @@ class App {
         this._initViewportResizer();
         this._initWorkspaceResizer();
         this._initConsoleResizer();
+        this._initLayoutResetControl();
         this._bootstrap().catch((error) => {
             console.error('Failed to bootstrap application state.', error);
         });
@@ -324,6 +329,10 @@ class App {
         });
     }
 
+    _initLayoutResetControl() {
+        this.btnResetLayout?.addEventListener('click', () => this._resetLayoutState());
+    }
+
     _getWorkspaceBounds() {
         const workspaceWidth = this.workspaceElement?.getBoundingClientRect().width || window.innerWidth;
         const dividerWidth = this.workspaceResizer?.getBoundingClientRect().width || 10;
@@ -379,6 +388,12 @@ class App {
         return nextHeight;
     }
 
+    _getDefaultPreviewColumnWidth() {
+        const preferredWidth = Math.min(Math.round(window.innerWidth * 0.48), 640);
+        const { min, max } = this._getWorkspaceBounds();
+        return Math.max(min, Math.min(max, preferredWidth));
+    }
+
     _syncPreviewControls(width, mode = 'custom') {
         if (!this.viewportSlider || !this.viewportWidthDisplay || !this.viewportSelect) return;
 
@@ -419,6 +434,15 @@ class App {
         if (persist) {
             this._persistSessionState();
         }
+    }
+
+    _resetLayoutState() {
+        this.editor?.resetLayoutState?.();
+        this.preview?.resetLayoutState?.();
+        this._setPreviewColumnWidth(this._getDefaultPreviewColumnWidth(), { persist: false });
+        this._setConsoleHeight(this.previewConsoleDefaultHeight, { persist: false });
+        this._applyFullPreviewWidth({ persist: false });
+        this._persistSessionState();
     }
 
     _startWorkspaceResize(event) {

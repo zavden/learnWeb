@@ -979,6 +979,17 @@ function parseShaderTextureMetadataValue(value = '') {
     };
 }
 
+function serializeShaderTextureDeclaration(texture = {}) {
+    const name = String(texture?.name || '').trim();
+    const assetPath = normalizeVirtualPath(texture?.assetPath || '');
+
+    if (!name || !/^[A-Za-z_]\w*$/.test(name) || !assetPath) {
+        return '';
+    }
+
+    return `${name}=${assetPath}`;
+}
+
 function normalizeEditorHiddenFileKey(value = '') {
     const text = String(value || '').trim();
     if (!text) return '';
@@ -2771,6 +2782,25 @@ export function updateShaderUniformDefinitions(documentModel, uniforms = []) {
         metadata.shader_uniforms = declarations.join('|');
     } else {
         delete metadata.shader_uniforms;
+    }
+
+    nextDocument.metadata = metadata;
+    return reparseDocument(nextDocument);
+}
+
+export function updateShaderTextureDefinitions(documentModel, textures = []) {
+    const nextDocument = cloneExampleDocument(documentModel);
+    const declarations = Array.isArray(textures)
+        ? textures.map((texture) => serializeShaderTextureDeclaration(texture)).filter(Boolean)
+        : [];
+    const metadata = {
+        ...(nextDocument.metadata || {}),
+    };
+
+    if (declarations.length > 0) {
+        metadata.shader_textures = declarations.join('|');
+    } else {
+        delete metadata.shader_textures;
     }
 
     nextDocument.metadata = metadata;

@@ -45,6 +45,11 @@ export async function fetchExamples(topicPath) {
     return handleResponse(res);
 }
 
+export async function fetchTopicAssets(topicPath) {
+    const res = await fetch(`${BASE}/topic/${topicPath}/assets`);
+    return handleResponse(res);
+}
+
 export async function fetchExample(topicPath, filename) {
     const res = await fetch(`${BASE}/topic/${topicPath}/examples/${encodeURIComponent(filename)}`);
     return handleResponse(res);

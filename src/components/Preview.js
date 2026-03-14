@@ -1,6 +1,13 @@
 import { compileExample } from '../utils/compileClient.js';
+import {
+    createConsoleHistorySession,
+    navigateConsoleHistory,
+    rememberConsoleCommand,
+    resetConsoleHistoryNavigation,
+} from '../utils/consoleHistory.js';
 import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../utils/exampleRenderer.js';
 import { getShaderConfig, isShaderDocument } from '../utils/markdown.js';
+import { shaderAlphaToUnit, shaderHexToVec, shaderVecToHex } from '../utils/shaderColor.js';
 import { validateShaderPreviewDocument } from '../utils/shaderPreviewDiagnostics.js';
 
 const SHADER_BUILT_IN_UNIFORMS = [
@@ -58,7 +65,7 @@ function cloneShaderUniformControl(control = null) {
 }
 
 export class Preview {
-    constructor({ onCompileStateChange } = {}) {
+    constructor({ onCompileStateChange, onRequestShaderUniformEdit } = {}) {
         this.iframe = document.getElementById('preview-frame');
         this.btnRefresh = document.getElementById('btn-refresh');
         this.btnConsoleOverride = document.getElementById('btn-console-override');
@@ -86,6 +93,15 @@ export class Preview {
         this.shaderFrame = document.getElementById('preview-shader-frame');
         this.shaderUpdated = document.getElementById('preview-shader-updated');
         this.shaderUniformList = document.getElementById('preview-shader-uniform-list');
+        this.shaderTexturePanel = document.getElementById('preview-shader-texture-panel');
+        this.shaderTextureSummary = document.getElementById('preview-shader-texture-summary');
+        this.btnToggleShaderTextures = document.getElementById('btn-toggle-shader-textures');
+        this.shaderTextureViewer = document.getElementById('preview-shader-texture-viewer');
+        this.shaderTextureTabs = document.getElementById('preview-shader-texture-tabs');
+        this.shaderTextureStage = document.getElementById('preview-shader-texture-stage');
+        this.shaderTextureStageEmpty = document.getElementById('preview-shader-texture-stage-empty');
+        this.shaderTextureImage = document.getElementById('preview-shader-texture-image');
+        this.shaderTextureCaption = document.getElementById('preview-shader-texture-caption');
         this.shaderCustomList = document.getElementById('preview-shader-custom-list');
         this.shaderCustomEmpty = document.getElementById('preview-shader-custom-empty');
         this.shaderTextureList = document.getElementById('preview-shader-texture-list');
@@ -103,6 +119,7 @@ export class Preview {
         this._lastSessionKey = '';
         this._renderToken = 0;
         this._onCompileStateChange = onCompileStateChange;
+        this._onRequestShaderUniformEdit = onRequestShaderUniformEdit;
         this._runtimeMode = 'none';
         this._consoleEnabled = false;
         this._consoleMetadataEnabled = false;
@@ -110,6 +127,8 @@ export class Preview {
         this._consoleEntries = [];
         this._consoleSequence = 0;
         this._consoleSessionKey = '';
+        this._consoleHistoryBySession = new Map();
+        this._consoleHistory = createConsoleHistorySession();
         this._consoleFilters = new Set(['log', 'info', 'warn', 'error']);
         this._consoleFontSize = 12;
         this._consoleCollapsed = false;
@@ -121,6 +140,9 @@ export class Preview {
         this._shaderResolutionSelectionValue = '';
         this._shaderCustomUniformsSignature = '';
         this._shaderTexturesSignature = '';
+        this._shaderTextureTabsSignature = '';
+        this._shaderTextureViewerExpanded = false;
+        this._activeShaderTextureName = '';
         this._shaderStats = this._createEmptyShaderStats();
 
         this.btnRefresh.addEventListener('click', () => {
@@ -135,6 +157,8 @@ export class Preview {
             event.preventDefault();
             this._executeConsoleCommand();
         });
+        this.consoleInput?.addEventListener('keydown', (event) => this._handleConsoleInputKeydown(event));
+        this.consoleInput?.addEventListener('input', () => this._handleConsoleInputChange());
         this.consoleFilterButtons.forEach((button) => {
             button.addEventListener('click', () => this._toggleConsoleFilter(button.dataset.level || ''));
         });
@@ -145,6 +169,7 @@ export class Preview {
         this._bindShaderResolutionAxisControls('height', this.shaderHeightRange, this.shaderHeightInput);
         this.btnShaderTogglePause?.addEventListener('click', () => this._toggleShaderPause());
         this.btnShaderReset?.addEventListener('click', () => this._resetShaderRuntime());
+        this.btnToggleShaderTextures?.addEventListener('click', () => this._toggleShaderTextureViewer());
         this.btnToggleShaderControls?.addEventListener('click', () => this._toggleShaderEditorControlsCollapsed());
         window.addEventListener('message', (event) => this._handleRuntimeMessage(event));
         this._applyConsoleFontSize();
@@ -273,6 +298,7 @@ export class Preview {
             this._clearConsoleEntries();
             this._consoleSessionKey = normalizedSessionKey;
             this._consoleManualOverride = false;
+            this._restoreConsoleHistorySession(normalizedSessionKey);
             this._resetShaderStats(shaderResolution);
         }
 
@@ -308,6 +334,7 @@ export class Preview {
 
     _resetConsoleSession() {
         this._consoleSessionKey = '';
+        this._consoleHistory = createConsoleHistorySession();
         this._runtimeMode = 'none';
         this._consoleMetadataEnabled = false;
         this._consoleManualOverride = false;
@@ -319,6 +346,9 @@ export class Preview {
         this._shaderResolutionSelectionValue = '';
         this._shaderCustomUniformsSignature = '';
         this._shaderTexturesSignature = '';
+        this._shaderTextureTabsSignature = '';
+        this._shaderTextureViewerExpanded = false;
+        this._activeShaderTextureName = '';
         this._resetShaderStats(null);
         this._syncConsoleVisibility();
     }
@@ -327,6 +357,50 @@ export class Preview {
         this._consoleEntries = [];
         this._consoleSequence = 0;
         this._renderConsoleEntries();
+    }
+
+    _restoreConsoleHistorySession(sessionKey = '') {
+        const normalizedSessionKey = String(sessionKey || '').trim() || '__draft__';
+        const storedSession = this._consoleHistoryBySession.get(normalizedSessionKey);
+        this._consoleHistory = createConsoleHistorySession(storedSession);
+
+        if (this.consoleInput) {
+            this.consoleInput.value = '';
+        }
+    }
+
+    _persistConsoleHistorySession() {
+        const normalizedSessionKey = String(this._consoleSessionKey || '').trim() || '__draft__';
+        this._consoleHistoryBySession.set(normalizedSessionKey, createConsoleHistorySession(this._consoleHistory));
+    }
+
+    _setConsoleInputValue(value = '') {
+        if (!this.consoleInput) return;
+        this.consoleInput.value = value;
+        const nextPosition = this.consoleInput.value.length;
+        this.consoleInput.setSelectionRange(nextPosition, nextPosition);
+    }
+
+    _handleConsoleInputChange() {
+        if (!this.consoleInput) return;
+
+        this._consoleHistory = resetConsoleHistoryNavigation(this._consoleHistory, this.consoleInput.value);
+        this._persistConsoleHistorySession();
+    }
+
+    _handleConsoleInputKeydown(event) {
+        if (!this._consoleEnabled || !this.consoleInput) return;
+        if (event.metaKey || event.ctrlKey || event.altKey) return;
+        if (!['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+
+        const direction = event.key === 'ArrowUp' ? -1 : 1;
+        const result = navigateConsoleHistory(this._consoleHistory, this.consoleInput.value, direction);
+        if (!result.changed) return;
+
+        event.preventDefault();
+        this._consoleHistory = result.session;
+        this._persistConsoleHistorySession();
+        this._setConsoleInputValue(result.value);
     }
 
     _syncConsoleVisibility() {
@@ -597,6 +671,9 @@ export class Preview {
         const command = this.consoleInput.value.trim();
         if (!command) return;
 
+        this._consoleHistory = rememberConsoleCommand(this._consoleHistory, command);
+        this._persistConsoleHistorySession();
+
         const commandId = `cmd-${Date.now()}-${++this._consoleCommandId}`;
         this._appendConsoleEntry({
             kind: 'command',
@@ -624,7 +701,7 @@ export class Preview {
             commandId,
         }, '*');
 
-        this.consoleInput.value = '';
+        this._setConsoleInputValue('');
     }
 
     _renderConsoleEntries() {
@@ -859,6 +936,9 @@ export class Preview {
             this._shaderResolutionSelectionValue = '';
             this._shaderCustomUniformsSignature = '';
             this._shaderTexturesSignature = '';
+            this._shaderTextureTabsSignature = '';
+            this._shaderTextureViewerExpanded = false;
+            this._activeShaderTextureName = '';
             return;
         }
 
@@ -1074,6 +1154,21 @@ export class Preview {
         })));
     }
 
+    _buildShaderTextureAssetUrl(assetPath = '') {
+        if (!this._currentTopicPath || !assetPath) return '';
+        return `/api/topic/${this._currentTopicPath}/assets/${encodeURIComponent(assetPath)}`;
+    }
+
+    _toggleShaderTextureViewer() {
+        const textures = this._shaderStats.textures?.length
+            ? this._shaderStats.textures
+            : (this._shaderControls?.textures || []);
+        if (!textures.length) return;
+
+        this._shaderTextureViewerExpanded = !this._shaderTextureViewerExpanded;
+        this._renderShaderTexturePreview();
+    }
+
     _renderShaderCustomUniformControls() {
         if (!this.shaderCustomList || !this.shaderCustomEmpty) return;
 
@@ -1111,6 +1206,17 @@ export class Preview {
             meta.appendChild(name);
             meta.appendChild(type);
             item.appendChild(meta);
+
+            if (typeof this._onRequestShaderUniformEdit === 'function') {
+                const editButton = document.createElement('button');
+                editButton.type = 'button';
+                editButton.className = 'btn btn-secondary preview-shader-custom-edit';
+                editButton.textContent = 'Edit';
+                editButton.addEventListener('click', () => {
+                    this._onRequestShaderUniformEdit(uniform.name);
+                });
+                item.appendChild(editButton);
+            }
 
             const controls = document.createElement('div');
             controls.className = 'preview-shader-custom-controls';
@@ -1204,6 +1310,61 @@ export class Preview {
                 controls.appendChild(rangeWrap);
             } else if (getShaderVectorSize(uniform.type) > 0) {
                 const vectorSize = getShaderVectorSize(uniform.type);
+                const normalizedVector = this._normalizeShaderCustomUniformValue(uniform.type, uniform.value);
+
+                if (vectorSize >= 3) {
+                    const colorRow = document.createElement('div');
+                    colorRow.className = 'preview-shader-color-control';
+
+                    const colorInput = document.createElement('input');
+                    colorInput.type = 'color';
+                    colorInput.className = 'preview-shader-color-input';
+                    colorInput.value = shaderVecToHex(normalizedVector);
+                    colorInput.title = `Pick color for ${uniform.name}`;
+                    colorInput.addEventListener('input', () => {
+                        const nextRgb = shaderHexToVec(colorInput.value);
+                        const currentValue = Array.isArray(uniform.value)
+                            ? [...uniform.value]
+                            : Array.from({ length: vectorSize }, () => 0);
+
+                        currentValue[0] = nextRgb[0];
+                        currentValue[1] = nextRgb[1];
+                        currentValue[2] = nextRgb[2];
+                        this._handleShaderCustomUniformChange(uniform.name, currentValue);
+                    });
+                    colorRow.appendChild(colorInput);
+
+                    if (vectorSize === 4) {
+                        const alphaWrap = document.createElement('div');
+                        alphaWrap.className = 'preview-shader-alpha-range';
+
+                        const alphaLabel = document.createElement('span');
+                        alphaLabel.className = 'preview-shader-alpha-label';
+                        alphaLabel.textContent = `Alpha ${shaderAlphaToUnit(normalizedVector[3], 1).toFixed(2)}`;
+
+                        const alphaSlider = document.createElement('input');
+                        alphaSlider.type = 'range';
+                        alphaSlider.min = '0';
+                        alphaSlider.max = '1';
+                        alphaSlider.step = '0.01';
+                        alphaSlider.className = 'preview-shader-custom-range-input';
+                        alphaSlider.value = String(shaderAlphaToUnit(normalizedVector[3], 1));
+                        alphaSlider.addEventListener('input', () => {
+                            const currentValue = Array.isArray(uniform.value)
+                                ? [...uniform.value]
+                                : Array.from({ length: vectorSize }, () => 0);
+                            currentValue[3] = shaderAlphaToUnit(alphaSlider.value, 1);
+                            this._handleShaderCustomUniformChange(uniform.name, currentValue);
+                        });
+
+                        alphaWrap.appendChild(alphaLabel);
+                        alphaWrap.appendChild(alphaSlider);
+                        colorRow.appendChild(alphaWrap);
+                    }
+
+                    controls.appendChild(colorRow);
+                }
+
                 const row = document.createElement('div');
                 row.className = 'preview-shader-custom-control-row';
                 ['x', 'y', 'z', 'w'].slice(0, vectorSize).forEach((axis, index) => {
@@ -1211,7 +1372,7 @@ export class Preview {
                     input.type = 'number';
                     input.step = '0.01';
                     input.className = 'preview-shader-custom-input';
-                    input.value = String(Array.isArray(uniform.value) ? uniform.value[index] ?? 0 : 0);
+                    input.value = String(Array.isArray(normalizedVector) ? normalizedVector[index] ?? 0 : 0);
                     input.placeholder = axis;
                     input.addEventListener('change', () => {
                         const currentValue = Array.isArray(uniform.value)
@@ -1293,6 +1454,84 @@ export class Preview {
 
             this.shaderTextureList.appendChild(item);
         });
+    }
+
+    _renderShaderTexturePreview() {
+        if (
+            !this.shaderTexturePanel
+            || !this.shaderTextureSummary
+            || !this.btnToggleShaderTextures
+            || !this.shaderTextureViewer
+            || !this.shaderTextureTabs
+            || !this.shaderTextureStage
+            || !this.shaderTextureStageEmpty
+            || !this.shaderTextureImage
+            || !this.shaderTextureCaption
+        ) {
+            return;
+        }
+
+        const textures = this._shaderStats.textures?.length
+            ? this._shaderStats.textures
+            : (this._shaderControls?.textures || []);
+        const hasTextures = textures.length > 0;
+
+        this.shaderTexturePanel.classList.toggle('hidden', !hasTextures);
+        this.shaderTextureSummary.textContent = hasTextures
+            ? `${textures.length} texture${textures.length === 1 ? '' : 's'}`
+            : 'No textures';
+        this.btnToggleShaderTextures.textContent = this._shaderTextureViewerExpanded ? 'Hide Textures' : 'Show Textures';
+        this.btnToggleShaderTextures.disabled = !hasTextures;
+        this.shaderTextureViewer.classList.toggle('hidden', !hasTextures || !this._shaderTextureViewerExpanded);
+
+        if (!hasTextures) {
+            this._shaderTextureTabsSignature = '';
+            this._activeShaderTextureName = '';
+            this.shaderTextureTabs.innerHTML = '';
+            this.shaderTextureStage.classList.add('hidden');
+            this.shaderTextureStageEmpty.classList.remove('hidden');
+            return;
+        }
+
+        const activeTextureExists = textures.some((texture) => texture.name === this._activeShaderTextureName);
+        if (!activeTextureExists) {
+            this._activeShaderTextureName = textures[0].name;
+        }
+
+        const tabsSignature = `${this._serializeShaderTextures(textures)}::${this._activeShaderTextureName}`;
+        if (tabsSignature !== this._shaderTextureTabsSignature) {
+            this._shaderTextureTabsSignature = tabsSignature;
+            this.shaderTextureTabs.innerHTML = '';
+
+            textures.forEach((texture) => {
+                const tab = document.createElement('button');
+                tab.type = 'button';
+                tab.className = 'preview-shader-texture-tab';
+                tab.textContent = texture.name;
+                tab.setAttribute('role', 'tab');
+                tab.setAttribute('aria-selected', String(texture.name === this._activeShaderTextureName));
+                tab.classList.toggle('is-active', texture.name === this._activeShaderTextureName);
+                tab.addEventListener('click', () => {
+                    if (this._activeShaderTextureName === texture.name) return;
+                    this._activeShaderTextureName = texture.name;
+                    this._renderShaderTexturePreview();
+                });
+                this.shaderTextureTabs.appendChild(tab);
+            });
+        }
+
+        const activeTexture = textures.find((texture) => texture.name === this._activeShaderTextureName) || textures[0];
+        if (!activeTexture) {
+            this.shaderTextureStage.classList.add('hidden');
+            this.shaderTextureStageEmpty.classList.remove('hidden');
+            return;
+        }
+
+        this.shaderTextureStageEmpty.classList.add('hidden');
+        this.shaderTextureStage.classList.remove('hidden');
+        this.shaderTextureImage.src = this._buildShaderTextureAssetUrl(activeTexture.assetPath);
+        this.shaderTextureImage.alt = `${activeTexture.name} texture preview`;
+        this.shaderTextureCaption.textContent = `${activeTexture.assetPath || 'asset'} • ${activeTexture.status || 'idle'}${activeTexture.width > 0 && activeTexture.height > 0 ? ` • ${activeTexture.width} x ${activeTexture.height}` : ''}`;
     }
 
     _normalizeShaderCustomUniformValue(type, value) {
@@ -1459,6 +1698,7 @@ export class Preview {
         this._renderShaderResolutionOptions();
         this._renderShaderCustomUniformControls();
         this._renderShaderTextureStatus();
+        this._renderShaderTexturePreview();
         this.shaderFps.textContent = Number.isFinite(stats.fps) && stats.fps > 0
             ? `${Math.round(stats.fps)}`
             : '--';
@@ -1495,6 +1735,15 @@ export class Preview {
             item.appendChild(uniformValue);
             this.shaderUniformList.appendChild(item);
         });
+    }
+
+    resetLayoutState() {
+        this._consoleCollapsed = false;
+        this._shaderEditorControlsCollapsed = false;
+        this._shaderTextureViewerExpanded = false;
+        this._activeShaderTextureName = '';
+        this._shaderTextureTabsSignature = '';
+        this._syncConsoleVisibility();
     }
 
     _emitCompileState(diagnostics) {

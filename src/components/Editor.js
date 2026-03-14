@@ -1,5 +1,14 @@
-import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from '@codemirror/view';
-import { EditorState } from '@codemirror/state';
+import {
+    Decoration,
+    EditorView,
+    GutterMarker,
+    gutterLineClass,
+    keymap,
+    lineNumbers,
+    highlightActiveLine,
+    highlightActiveLineGutter,
+} from '@codemirror/view';
+import { EditorState, RangeSet, RangeSetBuilder, StateEffect, StateField } from '@codemirror/state';
 import { defaultKeymap, indentWithTab, history, historyKeymap } from '@codemirror/commands';
 import { html } from '@codemirror/lang-html';
 import { css } from '@codemirror/lang-css';
@@ -12,8 +21,15 @@ import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { getBlockDefinition, normalizeBlockType } from '../config/exampleBlocks.js';
 import { buildFrameworkFileTemplate, getFrameworkFileTemplateOptions } from '../config/fileTemplates.js';
 import { glslLanguage } from '../editor/glslLanguage.js';
-import { fetchExamples, fetchExample, saveExample, modifyExample, removeExample, renameExample } from '../utils/api.js';
+import {
+    cssLearningSupport,
+    htmlLearningSupport,
+    javascriptLearningSupport,
+} from '../editor/learningCompletions.js';
+import { vueScriptEnterCommand } from '../editor/vueSmartEnter.js';
+import { fetchExamples, fetchExample, fetchTopicAssets, saveExample, modifyExample, removeExample, renameExample } from '../utils/api.js';
 import { resolveExerciseComparison } from '../utils/exerciseComparison.js';
+import { buildQuickOpenMatches } from '../utils/fileQuickOpen.js';
 import {
     buildExampleDocument,
     cloneExampleDocument,
@@ -33,6 +49,7 @@ import {
     synchronizeDocument,
     updateDocumentHiddenFiles,
     updateShaderResolution,
+    updateShaderTextureDefinitions,
     updateShaderUniformDefinitions,
     updateDocumentFileDetails,
     updateDocumentFileContent,
@@ -41,6 +58,101 @@ import {
 
 const SHADER_UNIFORM_TYPE_OPTIONS = ['float', 'int', 'bool', 'vec2', 'vec3', 'vec4'];
 const SHADER_BUILT_IN_UNIFORM_NAMES = ['u_time', 'u_delta', 'u_resolution', 'u_mouse', 'u_mouse_pressed', 'u_frame'];
+const setEditorDiagnosticsEffect = StateEffect.define();
+const EMPTY_EDITOR_DIAGNOSTICS = Object.freeze({
+    decorations: Decoration.none,
+    gutterClasses: RangeSet.empty,
+});
+
+class DiagnosticGutterMarker extends GutterMarker {
+    constructor(severity) {
+        super();
+        this.severity = severity;
+        this.elementClass = `cm-diagnostic-gutter-${severity}`;
+    }
+
+    eq(other) {
+        return other.severity === this.severity;
+    }
+}
+
+function getDiagnosticSeverity(level = '') {
+    return level === 'error' ? 'error' : 'warning';
+}
+
+function buildEditorDiagnosticSets(doc, diagnostics = []) {
+    if (!Array.isArray(diagnostics) || diagnostics.length === 0) {
+        return EMPTY_EDITOR_DIAGNOSTICS;
+    }
+
+    const lines = new Map();
+    diagnostics.forEach((diagnostic) => {
+        const lineNumber = Number.isFinite(diagnostic?.line)
+            ? Math.max(1, Math.trunc(diagnostic.line))
+            : null;
+        if (!lineNumber) return;
+
+        const clampedLine = Math.min(lineNumber, doc.lines);
+        const severity = getDiagnosticSeverity(diagnostic.level);
+        const existing = lines.get(clampedLine);
+
+        if (!existing || (existing.severity !== 'error' && severity === 'error')) {
+            lines.set(clampedLine, { severity });
+        }
+    });
+
+    if (lines.size === 0) {
+        return EMPTY_EDITOR_DIAGNOSTICS;
+    }
+
+    const decorationBuilder = new RangeSetBuilder();
+    const gutterClassBuilder = new RangeSetBuilder();
+
+    Array.from(lines.entries())
+        .sort((first, second) => first[0] - second[0])
+        .forEach(([lineNumber, entry]) => {
+            const line = doc.line(lineNumber);
+            decorationBuilder.add(
+                line.from,
+                line.from,
+                Decoration.line({ class: `cm-diagnostic-line cm-diagnostic-line-${entry.severity}` }),
+            );
+            gutterClassBuilder.add(line.from, line.from, new DiagnosticGutterMarker(entry.severity));
+        });
+
+    return {
+        decorations: decorationBuilder.finish(),
+        gutterClasses: gutterClassBuilder.finish(),
+    };
+}
+
+const editorDiagnosticsField = StateField.define({
+    create() {
+        return EMPTY_EDITOR_DIAGNOSTICS;
+    },
+    update(value, transaction) {
+        let nextValue = value;
+
+        if (transaction.docChanged) {
+            nextValue = {
+                decorations: nextValue.decorations.map(transaction.changes),
+                gutterClasses: nextValue.gutterClasses.map(transaction.changes),
+            };
+        }
+
+        for (const effect of transaction.effects) {
+            if (effect.is(setEditorDiagnosticsEffect)) {
+                return buildEditorDiagnosticSets(transaction.state.doc, effect.value);
+            }
+        }
+
+        return nextValue;
+    },
+    provide: (field) => [
+        EditorView.decorations.from(field, (value) => value.decorations),
+        gutterLineClass.from(field, (value) => value.gutterClasses),
+    ],
+});
 
 export class Editor {
     constructor({ getShaderPersistedState, onCodeChange, onExerciseStateChange, onRename, onSessionStateChange }) {
@@ -67,7 +179,6 @@ export class Editor {
         this.exerciseComparisonSourceStatus = 'idle';
         this.exerciseComparisonRequestId = 0;
         this.pendingNavigationTarget = null;
-
         this.workspace = document.querySelector('.editor-panels');
         this.btnSave = document.getElementById('btn-save');
         this.btnLoad = document.getElementById('btn-load');
@@ -76,15 +187,18 @@ export class Editor {
         this.btnRename = document.getElementById('btn-rename');
         this.btnAddFile = document.getElementById('btn-add-file');
         this.btnEditShaderUniforms = document.getElementById('btn-edit-shader-uniforms');
+        this.btnEditShaderTextures = document.getElementById('btn-edit-shader-textures');
         this.btnEditFileVisibility = document.getElementById('btn-edit-file-visibility');
         this.btnDuplicateFile = document.getElementById('btn-duplicate-file');
         this.btnEditFile = document.getElementById('btn-edit-file');
         this.btnDeleteFile = document.getElementById('btn-delete-file');
+        this.btnQuickOpenFile = document.getElementById('btn-quick-open-file');
         this.btnLayout = document.getElementById('btn-editor-layout');
+        this.btnContextHints = document.getElementById('btn-editor-context-hints');
         this.btnAutoFit = document.getElementById('btn-auto-fit');
         this.entrySelectGroup = document.getElementById('entry-select-group');
         this.entrySelect = document.getElementById('entry-select');
-        this.filenameDisplay = document.getElementById('current-filename');
+        this.previewFilenameDisplay = document.getElementById('preview-current-filename');
         this.statusDisplay = document.getElementById('editor-status');
         this.loadDropdown = document.getElementById('load-dropdown');
         this.loadList = document.getElementById('load-list');
@@ -123,15 +237,43 @@ export class Editor {
         this.shaderUniformRangeStep = document.getElementById('shader-uniform-range-step');
         this.shaderUniformDialogHint = document.getElementById('shader-uniform-dialog-hint');
         this.shaderUniformDialogTypeHint = document.getElementById('shader-uniform-dialog-type-hint');
+        this.shaderUniformDialogMode = document.getElementById('shader-uniform-dialog-mode');
         this.btnShaderUniformAdd = document.getElementById('btn-shader-uniform-add');
+        this.btnShaderUniformReset = document.getElementById('btn-shader-uniform-reset');
         this.btnShaderUniformCancel = document.getElementById('btn-shader-uniform-cancel');
         this.btnShaderUniformApply = document.getElementById('btn-shader-uniform-apply');
+        this.shaderTextureDialog = document.getElementById('shader-texture-dialog');
+        this.shaderTextureList = document.getElementById('shader-texture-list');
+        this.shaderTextureEmpty = document.getElementById('shader-texture-empty');
+        this.shaderTextureName = document.getElementById('shader-texture-name');
+        this.shaderTextureAsset = document.getElementById('shader-texture-asset');
+        this.shaderTextureAssets = document.getElementById('shader-texture-assets');
+        this.shaderTextureAssetsEmpty = document.getElementById('shader-texture-assets-empty');
+        this.shaderTextureDialogMode = document.getElementById('shader-texture-dialog-mode');
+        this.shaderTextureDialogHint = document.getElementById('shader-texture-dialog-hint');
+        this.btnShaderTextureAdd = document.getElementById('btn-shader-texture-add');
+        this.btnShaderTextureReset = document.getElementById('btn-shader-texture-reset');
+        this.btnShaderTextureCancel = document.getElementById('btn-shader-texture-cancel');
+        this.btnShaderTextureApply = document.getElementById('btn-shader-texture-apply');
         this.fileVisibilityDialog = document.getElementById('editor-file-visibility-dialog');
         this.fileVisibilityList = document.getElementById('editor-file-visibility-list');
         this.fileVisibilityEmpty = document.getElementById('editor-file-visibility-empty');
         this.fileVisibilityHint = document.getElementById('editor-file-visibility-hint');
         this.btnFileVisibilityCancel = document.getElementById('editor-file-visibility-cancel');
         this.btnFileVisibilityApply = document.getElementById('editor-file-visibility-apply');
+        this.quickOpenDialog = document.getElementById('editor-quick-open-dialog');
+        this.quickOpenInput = document.getElementById('editor-quick-open-input');
+        this.quickOpenList = document.getElementById('editor-quick-open-list');
+        this.quickOpenEmpty = document.getElementById('editor-quick-open-empty');
+        this.quickOpenHint = document.getElementById('editor-quick-open-hint');
+        this.btnQuickOpenCancel = document.getElementById('editor-quick-open-cancel');
+        this.btnQuickOpenConfirm = document.getElementById('editor-quick-open-open');
+        this.btnQuickOpenCloseIcon = document.getElementById('editor-quick-open-close-icon');
+        this.contextHintsDialog = document.getElementById('editor-context-hints-dialog');
+        this.contextHintsDialogContent = document.getElementById('editor-context-hints-dialog-content');
+        this.contextHintsDialogNote = document.getElementById('editor-context-hints-dialog-note');
+        this.btnContextHintsDialogClose = document.getElementById('editor-context-hints-dialog-close');
+        this.btnContextHintsDialogCloseIcon = document.getElementById('editor-context-hints-dialog-close-icon');
         this.fileContextMenu = document.getElementById('editor-file-context-menu');
         this.btnContextHideFile = document.getElementById('btn-context-hide-file');
         this.fileDialogState = {
@@ -142,10 +284,21 @@ export class Editor {
             templateId: 'custom',
         };
         this.shaderUniformDialogState = {
+            editingIndex: null,
             uniforms: [],
+        };
+        this.shaderTextureDialogState = {
+            assets: [],
+            editingIndex: null,
+            selectedAssetPath: '',
+            textures: [],
         };
         this.fileVisibilityDialogState = {
             hiddenKeys: [],
+        };
+        this.quickOpenState = {
+            matches: [],
+            selectedIndex: 0,
         };
         this.fileContextMenuState = {
             fileId: null,
@@ -156,8 +309,11 @@ export class Editor {
         this._initPanelControls();
         this._initLayoutControls();
         this._initFileControls();
+        this._initQuickOpenDialog();
         this._initShaderUniformDialog();
+        this._initShaderTextureDialog();
         this._initFileVisibilityDialog();
+        this._initContextHintsDialog();
         this._updateFontSize(0);
         this._applyDocument(createEmptyExampleDocument(), { notify: false });
     }
@@ -201,6 +357,14 @@ export class Editor {
             : null;
         this.exerciseState = this._sanitizeExerciseState(sessionState.exercise || {});
         this.panelState = this._sanitizePanelState(sessionState);
+        this._renderWorkspace();
+        this._emitExerciseStateChange();
+        this._emitSessionStateChange();
+    }
+
+    resetLayoutState() {
+        this.panelState = this._sanitizePanelState();
+        this._setLayoutMode('panels', { persist: true, rerender: false, emit: false });
         this._renderWorkspace();
         this._emitExerciseStateChange();
         this._emitSessionStateChange();
@@ -359,6 +523,10 @@ export class Editor {
             this._isExerciseFileVisible(file)
             && !hiddenFileIds.has(file.id)
         ));
+    }
+
+    _getQuickOpenMatches(query = '') {
+        return buildQuickOpenMatches(this._getVisibleFiles(), query);
     }
 
     getExercisePresentation() {
@@ -574,7 +742,14 @@ export class Editor {
         this._updateLayoutButton();
     }
 
+    _initContextHintsDialog() {
+        this.btnContextHints?.addEventListener('click', () => this._openContextHintsDialog());
+        this.btnContextHintsDialogClose?.addEventListener('click', () => this.contextHintsDialog?.close());
+        this.btnContextHintsDialogCloseIcon?.addEventListener('click', () => this.contextHintsDialog?.close());
+    }
+
     _initFileControls() {
+        this.btnQuickOpenFile?.addEventListener('click', () => this._openQuickOpenDialog());
         this.btnAddFile?.addEventListener('click', () => this._openFileDialog('create'));
         this.btnDuplicateFile?.addEventListener('click', () => this._handleDuplicateFile());
         this.btnEditFile?.addEventListener('click', () => this._openFileDialog('edit'));
@@ -612,12 +787,39 @@ export class Editor {
         });
     }
 
+    _initQuickOpenDialog() {
+        this.quickOpenInput?.addEventListener('input', () => this._renderQuickOpenMatches());
+        this.quickOpenInput?.addEventListener('keydown', (event) => this._handleQuickOpenKeydown(event));
+        this.btnQuickOpenCancel?.addEventListener('click', () => this.quickOpenDialog?.close());
+        this.btnQuickOpenCloseIcon?.addEventListener('click', () => this.quickOpenDialog?.close());
+        this.btnQuickOpenConfirm?.addEventListener('click', () => this._openSelectedQuickOpenMatch());
+        this.quickOpenDialog?.addEventListener('close', () => {
+            this.quickOpenState = {
+                matches: [],
+                selectedIndex: 0,
+            };
+
+            if (this.quickOpenInput) {
+                this.quickOpenInput.value = '';
+            }
+        });
+    }
+
     _initShaderUniformDialog() {
         this.btnEditShaderUniforms?.addEventListener('click', () => this._openShaderUniformDialog());
         this.shaderUniformType?.addEventListener('change', () => this._syncShaderUniformDialogTypeFields());
         this.btnShaderUniformAdd?.addEventListener('click', () => this._handleAddShaderUniform());
+        this.btnShaderUniformReset?.addEventListener('click', () => this._resetShaderUniformDialogForm());
         this.btnShaderUniformCancel?.addEventListener('click', () => this.shaderUniformDialog?.close());
         this.btnShaderUniformApply?.addEventListener('click', () => this._applyShaderUniformDialog());
+    }
+
+    _initShaderTextureDialog() {
+        this.btnEditShaderTextures?.addEventListener('click', () => this._openShaderTextureDialog());
+        this.btnShaderTextureAdd?.addEventListener('click', () => this._handleAddShaderTexture());
+        this.btnShaderTextureReset?.addEventListener('click', () => this._resetShaderTextureDialogForm());
+        this.btnShaderTextureCancel?.addEventListener('click', () => this.shaderTextureDialog?.close());
+        this.btnShaderTextureApply?.addEventListener('click', () => this._applyShaderTextureDialog());
     }
 
     _initFileVisibilityDialog() {
@@ -896,6 +1098,274 @@ export class Editor {
         this.shaderUniformDialogHint.classList.toggle('is-error', type === 'error');
     }
 
+    _getContextHints() {
+        const metadata = this.currentDocument?.metadata || {};
+        const hints = [];
+
+        if (metadata.console === true && !this._isShaderDocument()) {
+            hints.push({
+                accent: 'console',
+                body: '`console: true` enables the runtime console below the preview for this example. Logs, errors and manual commands stay scoped to the current preview.',
+                label: 'console',
+                title: 'Runtime Console',
+            });
+        }
+
+        if (this._isExerciseMode()) {
+            hints.push({
+                accent: 'exercise',
+                body: '`exercise: true` enables guided mode. Related `exercise_*` keys can lock files, hide references or solutions, and enable comparison flows.',
+                label: 'exercise',
+                title: 'Exercise Metadata',
+            });
+        }
+
+        if (this._isShaderDocument()) {
+            hints.push({
+                accent: 'shader',
+                body: '`renderer: shader` switches the preview to WebGL. `resolution: WIDTHxHEIGHT` defines the base canvas, and saving persists the current shader resolution back to frontmatter.',
+                label: 'renderer / resolution',
+                title: 'Shader Runtime',
+            });
+
+            hints.push({
+                accent: 'uniforms',
+                body: metadata.shader_uniforms
+                    ? '`shader_uniforms` defines custom controls using `name:type=value[min,max,step]`. You can edit them from the `Uniforms` button and the dialog writes that metadata for you.'
+                    : 'No `shader_uniforms` are defined yet. Use the `Uniforms` button to create custom controls and serialize them into frontmatter automatically.',
+                label: 'shader_uniforms',
+                title: 'Custom Uniforms',
+            });
+
+            hints.push({
+                accent: 'textures',
+                body: metadata.shader_textures
+                    ? '`shader_textures` maps sampler names to files in the current topic `assets/` folder using `sampler=asset-file`.'
+                    : 'Shader textures are declared with `shader_textures` and must point to files in the current topic `assets/` folder.',
+                label: 'shader_textures',
+                title: 'Local Textures',
+            });
+        }
+
+        return hints;
+    }
+
+    _renderContextHints() {
+        const hints = this._getContextHints();
+        const hasHints = hints.length > 0;
+
+        if (this.btnContextHints) {
+            this.btnContextHints.classList.toggle('hidden', !hasHints);
+            this.btnContextHints.disabled = !hasHints;
+            this.btnContextHints.title = hasHints
+                ? `Show ${hints.length} context tip${hints.length === 1 ? '' : 's'}`
+                : 'No context tips for this example';
+        }
+
+        if (!this.contextHintsDialogContent) {
+            return;
+        }
+
+        this.contextHintsDialogContent.innerHTML = '';
+        this.contextHintsDialogNote.textContent = hasHints
+            ? `${hints.length} hint${hints.length === 1 ? '' : 's'} for the current example`
+            : 'No metadata tips for the current example.';
+
+        if (!hasHints) {
+            if (this.contextHintsDialog?.open) {
+                this.contextHintsDialog.close();
+            }
+            return;
+        }
+
+        this.contextHintsDialogContent.appendChild(this._buildContextHintsContent(hints));
+    }
+
+    _buildContextHintsContent(hints) {
+        const grid = document.createElement('div');
+        grid.className = `editor-context-hints-grid ${hints.length > 1 ? 'is-cascade' : 'is-single'}`;
+
+        hints.forEach((hint) => {
+            const item = document.createElement('details');
+            item.className = `editor-context-hint editor-context-hint-${hint.accent}`;
+            item.open = hints.length === 1;
+
+            const summary = document.createElement('summary');
+            summary.className = 'editor-context-hint-summary';
+
+            const summaryMeta = document.createElement('div');
+            summaryMeta.className = 'editor-context-hint-summary-meta';
+
+            const label = document.createElement('span');
+            label.className = 'editor-context-hint-label';
+            label.textContent = hint.label;
+            summaryMeta.appendChild(label);
+
+            const heading = document.createElement('strong');
+            heading.className = 'editor-context-hint-title';
+            heading.textContent = hint.title;
+            summaryMeta.appendChild(heading);
+
+            const summaryAction = document.createElement('span');
+            summaryAction.className = 'editor-context-hint-summary-action';
+            summaryAction.textContent = 'Open';
+
+            summary.appendChild(summaryMeta);
+            summary.appendChild(summaryAction);
+
+            const body = document.createElement('p');
+            body.className = 'editor-context-hint-body';
+            body.textContent = hint.body;
+
+            item.appendChild(summary);
+            item.appendChild(body);
+            grid.appendChild(item);
+        });
+
+        return grid;
+    }
+
+    _openContextHintsDialog() {
+        const hints = this._getContextHints();
+        if (!this.contextHintsDialog || hints.length === 0) return;
+
+        this.contextHintsDialogContent.innerHTML = '';
+        this.contextHintsDialogContent.appendChild(this._buildContextHintsContent(hints));
+        this.contextHintsDialogNote.textContent = `${hints.length} hint${hints.length === 1 ? '' : 's'} for the current example`;
+        this.contextHintsDialog.showModal();
+    }
+
+    _openQuickOpenDialog() {
+        if (!this.quickOpenDialog || !this.quickOpenInput) return;
+        if (this._getVisibleFiles().length === 0) return;
+
+        this.quickOpenInput.value = '';
+        this._renderQuickOpenMatches();
+        this.quickOpenDialog.showModal();
+        this.quickOpenInput.focus();
+        this.quickOpenInput.select();
+    }
+
+    _renderQuickOpenMatches() {
+        if (!this.quickOpenList || !this.quickOpenEmpty || !this.btnQuickOpenConfirm) return;
+
+        const matches = this._getQuickOpenMatches(this.quickOpenInput?.value || '');
+        const previousSelectionId = this.quickOpenState.matches[this.quickOpenState.selectedIndex]?.id || '';
+        let selectedIndex = matches.findIndex((file) => file.id === previousSelectionId);
+
+        if (selectedIndex < 0) {
+            selectedIndex = matches.length > 0 ? 0 : -1;
+        }
+
+        this.quickOpenState = {
+            matches,
+            selectedIndex,
+        };
+
+        this.quickOpenList.innerHTML = '';
+        this.quickOpenEmpty.classList.toggle('hidden', matches.length > 0);
+        this.btnQuickOpenConfirm.disabled = matches.length === 0;
+
+        matches.forEach((file, index) => {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = `editor-quick-open-item${index === selectedIndex ? ' is-active' : ''}`;
+            item.setAttribute('role', 'option');
+            item.setAttribute('aria-selected', String(index === selectedIndex));
+
+            item.addEventListener('click', () => {
+                this.quickOpenState.selectedIndex = index;
+                this._openFileFromQuickPicker(file);
+            });
+
+            item.addEventListener('mousemove', () => {
+                if (this.quickOpenState.selectedIndex === index) return;
+                this.quickOpenState.selectedIndex = index;
+                this._renderQuickOpenMatches();
+            });
+
+            const meta = document.createElement('div');
+            meta.className = 'editor-quick-open-item-meta';
+            meta.appendChild(this._createBadge(this._getFileDefinition(file)));
+
+            const path = document.createElement('strong');
+            path.className = 'editor-quick-open-item-path';
+            path.textContent = file.path;
+            meta.appendChild(path);
+
+            if (file.role) {
+                meta.appendChild(this._createRolePill(file.role));
+            }
+
+            const detail = document.createElement('div');
+            detail.className = 'editor-quick-open-item-detail';
+            detail.textContent = file.name && file.name !== file.path
+                ? `${file.name} • ${file.language}`
+                : file.language;
+
+            item.appendChild(meta);
+            item.appendChild(detail);
+            this.quickOpenList.appendChild(item);
+        });
+    }
+
+    _handleQuickOpenKeydown(event) {
+        if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) {
+            return;
+        }
+
+        if (!this.quickOpenState.matches.length) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+            }
+            return;
+        }
+
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            this.quickOpenState.selectedIndex = Math.min(
+                this.quickOpenState.matches.length - 1,
+                this.quickOpenState.selectedIndex + 1,
+            );
+            this._renderQuickOpenMatches();
+            return;
+        }
+
+        if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            this.quickOpenState.selectedIndex = Math.max(0, this.quickOpenState.selectedIndex - 1);
+            this._renderQuickOpenMatches();
+            return;
+        }
+
+        event.preventDefault();
+        this._openSelectedQuickOpenMatch();
+    }
+
+    _openSelectedQuickOpenMatch() {
+        const file = this.quickOpenState.matches[this.quickOpenState.selectedIndex] || null;
+        if (!file) return;
+        this._openFileFromQuickPicker(file);
+    }
+
+    _openFileFromQuickPicker(file) {
+        if (!file?.id) return;
+
+        this.quickOpenDialog?.close();
+        this.pendingNavigationTarget = { file };
+
+        if (this.layoutMode === 'tabs' && file.id !== this.activeFileId) {
+            this.activeFileId = file.id;
+            this._renderWorkspace();
+            this._emitSessionStateChange();
+            return;
+        }
+
+        this.activeFileId = file.id;
+        this._flushPendingNavigation();
+        this._emitSessionStateChange();
+    }
+
     _syncShaderUniformDialogTypeFields() {
         const type = this.shaderUniformType?.value || 'float';
         const isBoolean = type === 'bool';
@@ -936,6 +1406,7 @@ export class Editor {
     }
 
     _resetShaderUniformDialogForm() {
+        this.shaderUniformDialogState.editingIndex = null;
         if (this.shaderUniformName) this.shaderUniformName.value = '';
         if (this.shaderUniformType) this.shaderUniformType.value = 'float';
         if (this.shaderUniformDefaultScalar) {
@@ -950,7 +1421,17 @@ export class Editor {
         if (this.shaderUniformRangeMax) this.shaderUniformRangeMax.value = '';
         if (this.shaderUniformRangeStep) this.shaderUniformRangeStep.value = '';
         this._syncShaderUniformDialogTypeFields();
-        this._setShaderUniformDialogHint('Names must be unique and cannot reuse built-in uniforms.');
+        if (this.shaderUniformDialogMode) {
+            this.shaderUniformDialogMode.textContent = 'Adding uniform';
+            this.shaderUniformDialogMode.classList.add('hidden');
+        }
+        if (this.btnShaderUniformReset) {
+            this.btnShaderUniformReset.classList.add('hidden');
+        }
+        if (this.btnShaderUniformAdd) {
+            this.btnShaderUniformAdd.textContent = 'Add Uniform';
+        }
+        this._setShaderUniformDialogHint('This dialog writes `shader_uniforms` in frontmatter. Names must be unique and cannot reuse built-in uniforms.');
     }
 
     _serializeShaderUniformPreview(uniform = {}) {
@@ -968,6 +1449,56 @@ export class Editor {
             : '';
 
         return `${type} = ${defaultValue}${range}`;
+    }
+
+    _fillShaderUniformDialogForm(uniform = {}, index = null) {
+        this.shaderUniformDialogState.editingIndex = Number.isInteger(index) ? index : null;
+
+        if (this.shaderUniformName) this.shaderUniformName.value = String(uniform.name || '');
+        if (this.shaderUniformType) this.shaderUniformType.value = String(uniform.type || 'float');
+
+        const type = String(uniform.type || 'float');
+        if (type === 'bool') {
+            if (this.shaderUniformDefaultBool) {
+                this.shaderUniformDefaultBool.value = uniform.defaultValue ? 'true' : 'false';
+            }
+        } else if (this._getShaderVectorSize(type) > 0) {
+            const vectorSize = this._getShaderVectorSize(type);
+            const values = Array.isArray(uniform.defaultValue)
+                ? uniform.defaultValue
+                : Array.from({ length: vectorSize }, () => 0);
+            this.shaderUniformVectorInputs.forEach((input, componentIndex) => {
+                if (!input) return;
+                input.value = componentIndex < vectorSize ? String(values[componentIndex] ?? 0) : '0';
+            });
+        } else if (this.shaderUniformDefaultScalar) {
+            this.shaderUniformDefaultScalar.value = String(uniform.defaultValue ?? 0);
+        }
+
+        if (uniform.control?.kind === 'range') {
+            if (this.shaderUniformRangeMin) this.shaderUniformRangeMin.value = String(uniform.control.min);
+            if (this.shaderUniformRangeMax) this.shaderUniformRangeMax.value = String(uniform.control.max);
+            if (this.shaderUniformRangeStep) this.shaderUniformRangeStep.value = String(uniform.control.step);
+        } else {
+            if (this.shaderUniformRangeMin) this.shaderUniformRangeMin.value = '';
+            if (this.shaderUniformRangeMax) this.shaderUniformRangeMax.value = '';
+            if (this.shaderUniformRangeStep) this.shaderUniformRangeStep.value = '';
+        }
+
+        this._syncShaderUniformDialogTypeFields();
+
+        if (this.shaderUniformDialogMode) {
+            this.shaderUniformDialogMode.textContent = `Editing ${uniform.name || 'uniform'}`;
+            this.shaderUniformDialogMode.classList.remove('hidden');
+        }
+        if (this.btnShaderUniformReset) {
+            this.btnShaderUniformReset.classList.remove('hidden');
+        }
+        if (this.btnShaderUniformAdd) {
+            this.btnShaderUniformAdd.textContent = 'Update Uniform';
+        }
+
+        this._setShaderUniformDialogHint('Edit the selected uniform and press `Update Uniform` to keep the metadata in sync.');
     }
 
     _renderShaderUniformDialogList() {
@@ -1001,19 +1532,320 @@ export class Editor {
             meta.appendChild(name);
             meta.appendChild(details);
 
+            const actions = document.createElement('div');
+            actions.className = 'shader-uniform-item-actions';
+
+            const editButton = document.createElement('button');
+            editButton.type = 'button';
+            editButton.className = 'btn btn-secondary shader-uniform-item-edit';
+            editButton.textContent = 'Edit';
+            editButton.addEventListener('click', () => {
+                this._fillShaderUniformDialogForm(uniform, index);
+                this.shaderUniformName?.focus();
+            });
+
             const removeButton = document.createElement('button');
             removeButton.type = 'button';
             removeButton.className = 'btn btn-secondary shader-uniform-item-remove';
             removeButton.textContent = 'Remove';
             removeButton.addEventListener('click', () => {
                 this.shaderUniformDialogState.uniforms.splice(index, 1);
+                if (this.shaderUniformDialogState.editingIndex === index) {
+                    this._resetShaderUniformDialogForm();
+                } else if (
+                    Number.isInteger(this.shaderUniformDialogState.editingIndex)
+                    && this.shaderUniformDialogState.editingIndex > index
+                ) {
+                    this.shaderUniformDialogState.editingIndex -= 1;
+                }
                 this._renderShaderUniformDialogList();
             });
 
             item.appendChild(meta);
-            item.appendChild(removeButton);
+            actions.appendChild(editButton);
+            actions.appendChild(removeButton);
+            item.appendChild(actions);
             this.shaderUniformList.appendChild(item);
         });
+    }
+
+    _cloneShaderTexture(texture = {}) {
+        return {
+            assetPath: String(texture?.assetPath || '').trim(),
+            name: String(texture?.name || '').trim(),
+        };
+    }
+
+    _getShaderTextureDialogState() {
+        return Array.isArray(this.shaderTextureDialogState.textures)
+            ? this.shaderTextureDialogState.textures
+            : [];
+    }
+
+    _setShaderTextureDialogHint(message, type = 'info') {
+        if (!this.shaderTextureDialogHint) return;
+        this.shaderTextureDialogHint.textContent = message;
+        this.shaderTextureDialogHint.classList.toggle('is-error', type === 'error');
+    }
+
+    _cloneShaderTexturesFromDocument() {
+        if (!this._isShaderDocument()) return [];
+
+        return getShaderConfig(this.currentDocument).textures
+            .map((texture) => this._cloneShaderTexture(texture));
+    }
+
+    _setShaderTextureDialogSelectedAsset(assetPath = '') {
+        const normalizedAssetPath = String(assetPath || '').trim();
+        this.shaderTextureDialogState.selectedAssetPath = normalizedAssetPath;
+        if (this.shaderTextureAsset) {
+            this.shaderTextureAsset.value = normalizedAssetPath;
+        }
+        this._renderShaderTextureAssetOptions();
+    }
+
+    _resetShaderTextureDialogForm() {
+        this.shaderTextureDialogState.editingIndex = null;
+        if (this.shaderTextureName) this.shaderTextureName.value = '';
+        this._setShaderTextureDialogSelectedAsset('');
+
+        if (this.shaderTextureDialogMode) {
+            this.shaderTextureDialogMode.textContent = 'Adding texture';
+            this.shaderTextureDialogMode.classList.add('hidden');
+        }
+        if (this.btnShaderTextureReset) {
+            this.btnShaderTextureReset.classList.add('hidden');
+        }
+        if (this.btnShaderTextureAdd) {
+            this.btnShaderTextureAdd.textContent = 'Add Texture';
+        }
+        this._setShaderTextureDialogHint('Sampler names must be unique and must match the sampler uniforms in your shader.');
+    }
+
+    _fillShaderTextureDialogForm(texture = {}, index = null) {
+        this.shaderTextureDialogState.editingIndex = Number.isInteger(index) ? index : null;
+        if (this.shaderTextureName) this.shaderTextureName.value = String(texture.name || '');
+        this._setShaderTextureDialogSelectedAsset(texture.assetPath || '');
+
+        if (this.shaderTextureDialogMode) {
+            this.shaderTextureDialogMode.textContent = `Editing ${texture.name || 'texture'}`;
+            this.shaderTextureDialogMode.classList.remove('hidden');
+        }
+        if (this.btnShaderTextureReset) {
+            this.btnShaderTextureReset.classList.remove('hidden');
+        }
+        if (this.btnShaderTextureAdd) {
+            this.btnShaderTextureAdd.textContent = 'Update Texture';
+        }
+
+        this._setShaderTextureDialogHint('Edit the selected mapping and press `Update Texture` to keep `shader_textures` in sync.');
+    }
+
+    _renderShaderTextureDialogList() {
+        if (!this.shaderTextureList || !this.shaderTextureEmpty) return;
+
+        const textures = this._getShaderTextureDialogState();
+        this.shaderTextureList.innerHTML = '';
+
+        if (textures.length === 0) {
+            this.shaderTextureList.appendChild(this.shaderTextureEmpty);
+            this.shaderTextureEmpty.classList.remove('hidden');
+            return;
+        }
+
+        this.shaderTextureEmpty.classList.add('hidden');
+        textures.forEach((texture, index) => {
+            const item = document.createElement('div');
+            item.className = 'shader-uniform-item';
+
+            const meta = document.createElement('div');
+            meta.className = 'shader-uniform-item-meta';
+
+            const name = document.createElement('strong');
+            name.className = 'shader-uniform-item-name';
+            name.textContent = texture.name;
+
+            const details = document.createElement('span');
+            details.className = 'shader-uniform-item-details';
+            details.textContent = texture.assetPath;
+
+            meta.appendChild(name);
+            meta.appendChild(details);
+
+            const actions = document.createElement('div');
+            actions.className = 'shader-uniform-item-actions';
+
+            const editButton = document.createElement('button');
+            editButton.type = 'button';
+            editButton.className = 'btn btn-secondary shader-uniform-item-edit';
+            editButton.textContent = 'Edit';
+            editButton.addEventListener('click', () => {
+                this._fillShaderTextureDialogForm(texture, index);
+                this.shaderTextureName?.focus();
+            });
+
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'btn btn-secondary shader-uniform-item-remove';
+            removeButton.textContent = 'Remove';
+            removeButton.addEventListener('click', () => {
+                this.shaderTextureDialogState.textures.splice(index, 1);
+                if (this.shaderTextureDialogState.editingIndex === index) {
+                    this._resetShaderTextureDialogForm();
+                } else if (
+                    Number.isInteger(this.shaderTextureDialogState.editingIndex)
+                    && this.shaderTextureDialogState.editingIndex > index
+                ) {
+                    this.shaderTextureDialogState.editingIndex -= 1;
+                }
+                this._renderShaderTextureDialogList();
+            });
+
+            item.appendChild(meta);
+            actions.appendChild(editButton);
+            actions.appendChild(removeButton);
+            item.appendChild(actions);
+            this.shaderTextureList.appendChild(item);
+        });
+    }
+
+    _renderShaderTextureAssetOptions() {
+        if (!this.shaderTextureAssets || !this.shaderTextureAssetsEmpty) return;
+
+        const assets = Array.isArray(this.shaderTextureDialogState.assets)
+            ? this.shaderTextureDialogState.assets
+            : [];
+
+        this.shaderTextureAssets.innerHTML = '';
+
+        if (assets.length === 0) {
+            this.shaderTextureAssets.appendChild(this.shaderTextureAssetsEmpty);
+            this.shaderTextureAssetsEmpty.classList.remove('hidden');
+            return;
+        }
+
+        this.shaderTextureAssetsEmpty.classList.add('hidden');
+        assets.forEach((asset) => {
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = `shader-texture-asset${asset.path === this.shaderTextureDialogState.selectedAssetPath ? ' is-selected' : ''}`;
+            card.addEventListener('click', () => {
+                this._setShaderTextureDialogSelectedAsset(asset.path);
+            });
+
+            const image = document.createElement('img');
+            image.className = 'shader-texture-asset-preview';
+            image.src = asset.url;
+            image.alt = asset.filename;
+
+            const label = document.createElement('span');
+            label.className = 'shader-texture-asset-label';
+            label.textContent = asset.filename;
+
+            card.appendChild(image);
+            card.appendChild(label);
+            this.shaderTextureAssets.appendChild(card);
+        });
+    }
+
+    _readShaderTextureDialogDraft() {
+        return {
+            assetPath: String(this.shaderTextureDialogState.selectedAssetPath || '').trim(),
+            name: String(this.shaderTextureName?.value || '').trim(),
+        };
+    }
+
+    _validateShaderTextureDraft(draft) {
+        const editingIndex = Number.isInteger(this.shaderTextureDialogState.editingIndex)
+            ? this.shaderTextureDialogState.editingIndex
+            : null;
+
+        if (!draft.name) {
+            return 'Enter a sampler name.';
+        }
+
+        if (!/^[A-Za-z_]\w*$/.test(draft.name)) {
+            return 'Sampler names must start with a letter or underscore and only use letters, numbers or underscores.';
+        }
+
+        if (!draft.assetPath) {
+            return 'Select an asset from the topic assets list.';
+        }
+
+        if (this._getShaderTextureDialogState().some((texture, index) => texture.name === draft.name && index !== editingIndex)) {
+            return 'That sampler name already exists in this document.';
+        }
+
+        return null;
+    }
+
+    _handleAddShaderTexture() {
+        const draft = this._readShaderTextureDialogDraft();
+        const validationError = this._validateShaderTextureDraft(draft);
+
+        if (validationError) {
+            this._setShaderTextureDialogHint(validationError, 'error');
+            return;
+        }
+
+        const nextTexture = this._cloneShaderTexture(draft);
+        if (Number.isInteger(this.shaderTextureDialogState.editingIndex)) {
+            this.shaderTextureDialogState.textures.splice(this.shaderTextureDialogState.editingIndex, 1, nextTexture);
+        } else {
+            this.shaderTextureDialogState.textures.push(nextTexture);
+        }
+
+        this._renderShaderTextureDialogList();
+        this._resetShaderTextureDialogForm();
+        this.shaderTextureName?.focus();
+    }
+
+    async _openShaderTextureDialog() {
+        if (!this._isShaderDocument()) {
+            this._showToast('Texture editing is only available for shader documents.', 'error');
+            return;
+        }
+
+        if (!this.shaderTextureDialog) return;
+
+        this.shaderTextureDialogState.textures = this._cloneShaderTexturesFromDocument();
+        this.shaderTextureDialogState.assets = [];
+        this._renderShaderTextureDialogList();
+        this._renderShaderTextureAssetOptions();
+        this._resetShaderTextureDialogForm();
+        this._setShaderTextureDialogHint('Loading topic assets…');
+
+        try {
+            this.shaderTextureDialogState.assets = this.currentTopicPath
+                ? await fetchTopicAssets(this.currentTopicPath)
+                : [];
+            this._renderShaderTextureAssetOptions();
+            this._setShaderTextureDialogHint(
+                this.shaderTextureDialogState.assets.length > 0
+                    ? 'Sampler names must be unique and must match the sampler uniforms in your shader.'
+                    : 'No assets were found in this topic. Add image files to the topic `assets/` folder first.'
+            );
+        } catch (error) {
+            this.shaderTextureDialogState.assets = [];
+            this._renderShaderTextureAssetOptions();
+            this._setShaderTextureDialogHint(`Failed to load topic assets: ${error.message}`, 'error');
+        }
+
+        this.shaderTextureDialog.showModal();
+        this.shaderTextureName?.focus();
+    }
+
+    _applyShaderTextureDialog() {
+        if (!this._isShaderDocument()) {
+            this.shaderTextureDialog?.close();
+            return;
+        }
+
+        const nextDocument = updateShaderTextureDefinitions(this.currentDocument, this._getShaderTextureDialogState());
+        this._applyDocument(nextDocument);
+        this._emitSessionStateChange();
+        this.shaderTextureDialog?.close();
+        this._showToast('Shader textures updated.', 'success');
     }
 
     _readShaderUniformDialogDraft() {
@@ -1059,6 +1891,10 @@ export class Editor {
     }
 
     _validateShaderUniformDraft(draft) {
+        const editingIndex = Number.isInteger(this.shaderUniformDialogState.editingIndex)
+            ? this.shaderUniformDialogState.editingIndex
+            : null;
+
         if (!draft.name) {
             return 'Enter a uniform name.';
         }
@@ -1075,7 +1911,7 @@ export class Editor {
             return 'Built-in uniforms cannot be redefined here.';
         }
 
-        if (this._getShaderUniformDialogState().some((uniform) => uniform.name === draft.name)) {
+        if (this._getShaderUniformDialogState().some((uniform, index) => uniform.name === draft.name && index !== editingIndex)) {
             return 'That uniform name already exists in this document.';
         }
 
@@ -1126,10 +1962,17 @@ export class Editor {
             return;
         }
 
-        this.shaderUniformDialogState.uniforms.push(this._cloneShaderUniform({
+        const nextUniform = this._cloneShaderUniform({
             ...draft,
             value: Array.isArray(draft.defaultValue) ? [...draft.defaultValue] : draft.defaultValue,
-        }));
+        });
+
+        if (Number.isInteger(this.shaderUniformDialogState.editingIndex)) {
+            this.shaderUniformDialogState.uniforms.splice(this.shaderUniformDialogState.editingIndex, 1, nextUniform);
+        } else {
+            this.shaderUniformDialogState.uniforms.push(nextUniform);
+        }
+
         this._renderShaderUniformDialogList();
         this._resetShaderUniformDialogForm();
         if (this.shaderUniformName) {
@@ -1137,7 +1980,7 @@ export class Editor {
         }
     }
 
-    _openShaderUniformDialog() {
+    _openShaderUniformDialog(uniformName = null) {
         if (!this._isShaderDocument()) {
             this._showToast('Uniform editing is only available for shader documents.', 'error');
             return;
@@ -1150,8 +1993,21 @@ export class Editor {
             : [];
         this._renderShaderUniformDialogList();
         this._resetShaderUniformDialogForm();
+        this._setShaderUniformDialogHint('This dialog writes `shader_uniforms` in frontmatter. Names must be unique and cannot reuse built-in uniforms.');
         this.shaderUniformDialog.showModal();
+
+        if (uniformName) {
+            const uniformIndex = this._getShaderUniformDialogState().findIndex((uniform) => uniform.name === uniformName);
+            if (uniformIndex >= 0) {
+                this._fillShaderUniformDialogForm(this._getShaderUniformDialogState()[uniformIndex], uniformIndex);
+            }
+        }
+
         this.shaderUniformName?.focus();
+    }
+
+    openShaderUniformDialog(uniformName = null) {
+        this._openShaderUniformDialog(uniformName);
     }
 
     _cloneShaderUniformsFromDocument() {
@@ -1960,7 +2816,9 @@ const title = ref('${componentName}');
         this._ensureActiveFile();
         this._renderWorkspace();
         this._updateStatus();
+        this._renderContextHints();
         this._updateButtonStates();
+        this._syncAllEditorDiagnostics();
         this._emitExerciseStateChange();
 
         if (notify) {
@@ -2046,12 +2904,27 @@ const title = ref('${componentName}');
                     : (isVirtual ? 'Create a new virtual file' : 'Add a new code block');
         }
 
+        if (this.btnQuickOpenFile) {
+            this.btnQuickOpenFile.disabled = files.length === 0;
+            this.btnQuickOpenFile.title = files.length > 0
+                ? 'Quick search visible files'
+                : 'No visible files to open';
+        }
+
         if (this.btnEditShaderUniforms) {
             this.btnEditShaderUniforms.classList.toggle('hidden', !isShader);
             this.btnEditShaderUniforms.disabled = !hasTopic || !isShader || isExerciseMode;
             this.btnEditShaderUniforms.title = isExerciseMode
                 ? 'Exercise mode keeps shader uniforms fixed'
                 : 'Create or remove custom shader uniforms';
+        }
+
+        if (this.btnEditShaderTextures) {
+            this.btnEditShaderTextures.classList.toggle('hidden', !isShader);
+            this.btnEditShaderTextures.disabled = !hasTopic || !isShader || isExerciseMode;
+            this.btnEditShaderTextures.title = isExerciseMode
+                ? 'Exercise mode keeps shader textures fixed'
+                : 'Map sampler uniforms to topic assets';
         }
 
         if (this.btnEditFileVisibility) {
@@ -2385,15 +3258,22 @@ const title = ref('${componentName}');
     _createEditor(container, file) {
         const isLocked = this._isExerciseFileLocked(file);
         const langExtensions = this._getLanguageExtensions(file.language);
+        const languageKeymap = file.language === 'vue'
+            ? [{ key: 'Enter', run: vueScriptEnterCommand }]
+            : [];
         const updateListener = EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
             this._setFileContent(file.id, update.state.doc.toString());
+            this._updateStatus();
+            this._updateButtonStates();
+            this._syncAllEditorDiagnostics();
             this._triggerChange();
         });
 
         const state = EditorState.create({
             doc: file.content || '',
             extensions: [
+                editorDiagnosticsField,
                 lineNumbers(),
                 highlightActiveLine(),
                 highlightActiveLineGutter(),
@@ -2403,6 +3283,7 @@ const title = ref('${componentName}');
                 closeBrackets(),
                 highlightSelectionMatches(),
                 keymap.of([
+                    ...languageKeymap,
                     ...defaultKeymap,
                     ...historyKeymap,
                     ...closeBracketsKeymap,
@@ -2423,14 +3304,16 @@ const title = ref('${componentName}');
             ],
         });
 
-        return new EditorView({ state, parent: container });
+        const view = new EditorView({ state, parent: container });
+        this._applyDiagnosticsToView(view, file);
+        return view;
     }
 
     _getLanguageExtensions(type) {
         switch (type) {
             case 'vertex':
             case 'fragment':
-                return [glslLanguage()];
+                return glslLanguage();
             case 'jsx':
                 return [javascript({ jsx: true })];
             case 'tsx':
@@ -2439,15 +3322,15 @@ const title = ref('${componentName}');
             case 'html-full':
             case 'vue':
             case 'svg':
-                return [html()];
+                return [html(), htmlLearningSupport()];
             case 'css':
             case 'scss':
             case 'sass':
-                return [css()];
+                return [css(), cssLearningSupport()];
             case 'javascript':
-                return [javascript()];
+                return [javascript(), javascriptLearningSupport()];
             case 'typescript':
-                return [javascript({ typescript: true })];
+                return [javascript({ typescript: true }), javascriptLearningSupport()];
             case 'json':
                 return [javascript({ json: true })];
             case 'pug':
@@ -2458,6 +3341,40 @@ const title = ref('${componentName}');
 
     _setFileContent(fileId, content) {
         this.currentDocument = updateDocumentFileContent(this.currentDocument, fileId, content);
+    }
+
+    _collectDiagnosticsForFile(fileId) {
+        if (!fileId) return [];
+
+        const diagnostics = [
+            ...(this.currentDocument.diagnostics || []),
+            ...(this.compileDiagnostics || []),
+        ];
+
+        return diagnostics
+            .map((diagnostic) => this._resolveDiagnosticTarget(diagnostic))
+            .filter((target) => target.file?.id === fileId && target.line)
+            .map((target) => ({
+                column: target.column,
+                level: target.diagnostic?.level || 'warning',
+                line: target.line,
+            }));
+    }
+
+    _applyDiagnosticsToView(view, file) {
+        if (!view || !file?.id) return;
+
+        view.dispatch({
+            effects: setEditorDiagnosticsEffect.of(this._collectDiagnosticsForFile(file.id)),
+        });
+    }
+
+    _syncAllEditorDiagnostics() {
+        this.editors.forEach((entry) => {
+            const file = (this.currentDocument.files || []).find((item) => item.id === entry.id);
+            if (!file) return;
+            this._applyDiagnosticsToView(entry.view, file);
+        });
     }
 
     _getPanels() {
@@ -2656,16 +3573,18 @@ const title = ref('${componentName}');
     }
 
     _updateFilenameDisplay() {
-        if (!this.filenameDisplay) return;
-
         if (this.currentFilename) {
-            this.filenameDisplay.textContent = this.currentFilename;
-            this.filenameDisplay.classList.add('visible');
+            if (this.previewFilenameDisplay) {
+                this.previewFilenameDisplay.textContent = this.currentFilename;
+                this.previewFilenameDisplay.title = this.currentFilename;
+            }
             return;
         }
 
-        this.filenameDisplay.textContent = '';
-        this.filenameDisplay.classList.remove('visible');
+        if (this.previewFilenameDisplay) {
+            this.previewFilenameDisplay.textContent = 'Preview';
+            this.previewFilenameDisplay.title = 'Preview';
+        }
     }
 
     _updateStatus() {
@@ -2704,6 +3623,7 @@ const title = ref('${componentName}');
     setCompileDiagnostics(diagnostics = []) {
         this.compileDiagnostics = diagnostics;
         this._updateStatus();
+        this._syncAllEditorDiagnostics();
     }
 
     _triggerChange() {

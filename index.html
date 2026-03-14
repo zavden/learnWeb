@@ -29,6 +29,59 @@
         </button>
       </div>
       <nav id="nav-tree"></nav>
+      <section class="sidebar-example-actions">
+        <div class="sidebar-example-actions-grid">
+          <button id="btn-save" class="btn btn-primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+              <polyline points="17 21 17 13 7 13 7 21" />
+              <polyline points="7 3 7 8 15 8" />
+            </svg>
+            Save
+          </button>
+          <button id="btn-load" class="btn btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Load
+          </button>
+          <button id="btn-modify" class="btn btn-secondary" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+            Modify
+          </button>
+          <button id="btn-remove" class="btn btn-secondary" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+            Remove
+          </button>
+          <button id="btn-rename" class="btn btn-secondary" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 3h5v5" />
+              <path d="M8 3H3v5" />
+              <path d="M12 22v-7" />
+              <path d="M3 16v5h5" />
+              <path d="M16 21h5v-5" />
+            </svg>
+            Rename
+          </button>
+        </div>
+        <div id="load-dropdown" class="dropdown hidden">
+          <div class="dropdown-header">Select Example</div>
+          <ul id="load-list"></ul>
+        </div>
+      </section>
       <div id="sidebar-tree-controls" class="sidebar-tree-controls">
         <button id="btn-toggle-hidden-chapters" class="btn btn-secondary sidebar-tree-button" type="button">
           Show Hidden
@@ -106,66 +159,12 @@
 
           <div class="editor-toolbar">
             <div class="editor-actions">
-              <span id="current-filename" class="filename-display"></span>
-              <button id="btn-save" class="btn btn-primary">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                  <polyline points="17 21 17 13 7 13 7 21" />
-                  <polyline points="7 3 7 8 15 8" />
-                </svg>
-                Save
-              </button>
-              <button id="btn-load" class="btn btn-secondary">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                Load
-              </button>
-              <button id="btn-modify" class="btn btn-secondary" disabled>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-                Modify
-              </button>
-              <button id="btn-remove" class="btn btn-secondary" disabled>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                </svg>
-                Remove
-              </button>
-              <button id="btn-rename" class="btn btn-secondary" disabled>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M16 3h5v5" />
-                  <path d="M8 3H3v5" />
-                  <path d="M12 22v-7" />
-                  <path d="M3 16v5h5" />
-                  <path d="M16 21h5v-5" />
-                </svg>
-                Rename
-              </button>
-              <button id="btn-gallery" class="btn btn-secondary" title="View Examples">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="3" width="7" height="7"></rect>
-                  <rect x="14" y="3" width="7" height="7"></rect>
-                  <rect x="14" y="14" width="7" height="7"></rect>
-                  <rect x="3" y="14" width="7" height="7"></rect>
-                </svg>
-                Gallery
-              </button>
             </div>
             <div class="editor-file-actions">
+              <button id="btn-quick-open-file" class="btn btn-secondary" disabled>Open File</button>
               <button id="btn-add-file" class="btn btn-secondary" disabled>+ Block</button>
               <button id="btn-edit-shader-uniforms" class="btn btn-secondary hidden" disabled>Uniforms</button>
+              <button id="btn-edit-shader-textures" class="btn btn-secondary hidden" disabled>Textures</button>
               <button id="btn-edit-file-visibility" class="btn btn-secondary" disabled>Visibility</button>
               <button id="btn-duplicate-file" class="btn btn-secondary" disabled>Duplicate</button>
               <button id="btn-edit-file" class="btn btn-secondary" disabled>Edit File</button>
@@ -176,6 +175,16 @@
               </label>
             </div>
             <div class="font-controls">
+              <button id="btn-gallery" class="btn btn-secondary" title="View Examples">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                Gallery
+              </button>
               <button id="btn-editor-layout" class="btn btn-secondary btn-layout-toggle" title="Switch editor layout">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   stroke-linecap="round" stroke-linejoin="round">
@@ -183,6 +192,17 @@
                   <rect x="3" y="14" width="18" height="6" rx="1"></rect>
                 </svg>
                 <span class="editor-layout-label">Tabs</span>
+              </button>
+              <button id="btn-editor-context-hints" class="btn btn-secondary btn-context-hints hidden" type="button" title="Show context tips">
+                Tips
+              </button>
+              <button id="btn-reset-layout" class="btn btn-secondary btn-reset-layout" type="button" title="Restore layout">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="3 3 3 9 9 9"></polyline>
+                  <path d="M20 21a9 9 0 0 0-11-17.3L3 9"></path>
+                </svg>
+                Reset
               </button>
               <button id="btn-auto-fit" class="btn-icon" title="Auto-fit panels to content">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -203,14 +223,12 @@
                 <line x1="3" y1="18" x2="21" y2="18" />
               </svg>
             </button>
-            <div id="load-dropdown" class="dropdown hidden">
-              <div class="dropdown-header">Select Example</div>
-              <ul id="load-list"></ul>
-            </div>
-            <div id="editor-status" class="editor-status hidden"></div>
           </div>
 
-          <div class="editor-panels"></div>
+          <div class="editor-panels-shell">
+            <div class="editor-panels"></div>
+            <div id="editor-status" class="editor-status hidden"></div>
+          </div>
 
           <section id="shader-editor-controls" class="shader-editor-controls hidden">
             <div class="shader-editor-controls-header">
@@ -277,7 +295,7 @@
         <!-- Preview Column -->
         <div id="preview-column">
           <div class="preview-header">
-            <span class="lang-badge preview">Preview</span>
+            <span id="preview-current-filename" class="lang-badge preview preview-filename-display">Preview</span>
             <div class="preview-header-controls">
               <select id="viewport-select" class="viewport-select">
                 <option value="100%">Full Width</option>
@@ -402,6 +420,25 @@
                   </div>
                   <div id="preview-shader-uniform-list" class="preview-shader-uniform-list"></div>
                 </section>
+                <section id="preview-shader-texture-panel" class="preview-shader-uniforms hidden">
+                  <div class="preview-shader-uniforms-header">
+                    <strong>Textures</strong>
+                    <div class="preview-shader-uniforms-header-meta">
+                      <span id="preview-shader-texture-summary" class="preview-shader-updated">No textures</span>
+                      <button id="btn-toggle-shader-textures" class="btn btn-secondary preview-shader-textures-toggle" type="button">
+                        Show Textures
+                      </button>
+                    </div>
+                  </div>
+                  <div id="preview-shader-texture-viewer" class="preview-shader-texture-viewer hidden">
+                    <div id="preview-shader-texture-tabs" class="preview-shader-texture-tabs" role="tablist" aria-label="Shader textures"></div>
+                    <div id="preview-shader-texture-stage-empty" class="preview-shader-custom-empty">No shader textures available.</div>
+                    <figure id="preview-shader-texture-stage" class="preview-shader-texture-stage hidden">
+                      <img id="preview-shader-texture-image" class="preview-shader-texture-image" alt="" />
+                      <figcaption id="preview-shader-texture-caption" class="preview-shader-texture-caption"></figcaption>
+                    </figure>
+                  </div>
+                </section>
               </div>
             </div>
           </section>
@@ -488,6 +525,7 @@
             <strong>Add Uniform</strong>
             <span id="shader-uniform-dialog-type-hint" class="shader-uniform-dialog-section-note">Float and int can use optional slider ranges.</span>
           </div>
+          <p id="shader-uniform-dialog-mode" class="shader-uniform-dialog-mode hidden">Editing uniform</p>
 
           <div class="form-group">
             <label for="shader-uniform-name">Name</label>
@@ -540,6 +578,7 @@
 
           <p id="shader-uniform-dialog-hint" class="dialog-hint">Names must be unique and cannot reuse built-in uniforms.</p>
           <div class="shader-uniform-dialog-add-row">
+            <button id="btn-shader-uniform-reset" type="button" class="btn btn-secondary hidden">Cancel Edit</button>
             <button id="btn-shader-uniform-add" type="button" class="btn btn-secondary">Add Uniform</button>
           </div>
         </section>
@@ -571,6 +610,105 @@
       <div class="form-actions">
         <button id="editor-file-visibility-cancel" type="button" class="btn btn-secondary">Cancel</button>
         <button id="editor-file-visibility-apply" type="button" class="btn btn-primary">Apply</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="shader-texture-dialog">
+    <form method="dialog" class="shader-uniform-dialog-form">
+      <h2>Shader Textures</h2>
+      <div class="shader-uniform-dialog-layout">
+        <section class="shader-uniform-dialog-section">
+          <div class="shader-uniform-dialog-section-header">
+            <strong>Current Textures</strong>
+            <span class="shader-uniform-dialog-section-note">Serialized as `shader_textures`</span>
+          </div>
+          <div id="shader-texture-list" class="shader-uniform-list">
+            <p id="shader-texture-empty" class="dialog-hint">No textures mapped yet.</p>
+          </div>
+        </section>
+
+        <section class="shader-uniform-dialog-section">
+          <div class="shader-uniform-dialog-section-header">
+            <strong>Select Asset</strong>
+            <span id="shader-texture-dialog-type-hint" class="shader-uniform-dialog-section-note">Choose a topic asset and assign a sampler name.</span>
+          </div>
+          <p id="shader-texture-dialog-mode" class="shader-uniform-dialog-mode hidden">Editing texture</p>
+
+          <div class="form-group">
+            <label for="shader-texture-name">Sampler Name</label>
+            <input id="shader-texture-name" type="text" placeholder="u_checker" autocomplete="off" spellcheck="false" />
+          </div>
+
+          <div class="form-group">
+            <label for="shader-texture-asset">Selected Asset</label>
+            <input id="shader-texture-asset" type="text" placeholder="checker.svg" readonly />
+          </div>
+
+          <div id="shader-texture-assets" class="shader-texture-assets">
+            <p id="shader-texture-assets-empty" class="dialog-hint">No topic assets available.</p>
+          </div>
+
+          <p id="shader-texture-dialog-hint" class="dialog-hint">Sampler names must be unique and must match the sampler uniforms in your shader.</p>
+          <div class="shader-uniform-dialog-add-row">
+            <button id="btn-shader-texture-reset" type="button" class="btn btn-secondary hidden">Cancel Edit</button>
+            <button id="btn-shader-texture-add" type="button" class="btn btn-secondary">Add Texture</button>
+          </div>
+        </section>
+      </div>
+      <div class="form-actions">
+        <button id="btn-shader-texture-cancel" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="btn-shader-texture-apply" type="button" class="btn btn-primary">Apply</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="editor-quick-open-dialog">
+    <form method="dialog" class="editor-quick-open-form">
+      <div class="editor-quick-open-header">
+        <div class="editor-quick-open-heading">
+          <h2>Open File</h2>
+          <p id="editor-quick-open-hint" class="dialog-hint">Search visible files by path, name, role or language.</p>
+        </div>
+        <button id="editor-quick-open-close-icon" type="button" class="btn-icon" title="Close quick open" aria-label="Close quick open">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div class="form-group">
+        <label for="editor-quick-open-input">Find File</label>
+        <input id="editor-quick-open-input" type="text" placeholder="src/App.tsx or button" autocomplete="off" spellcheck="false" />
+      </div>
+      <div id="editor-quick-open-list" class="editor-quick-open-list" role="listbox" aria-label="Visible files"></div>
+      <p id="editor-quick-open-empty" class="dialog-hint hidden">No visible files match the current search.</p>
+      <div class="form-actions">
+        <button id="editor-quick-open-cancel" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="editor-quick-open-open" type="button" class="btn btn-primary">Open</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="editor-context-hints-dialog">
+    <form method="dialog" class="editor-context-hints-dialog-form">
+      <div class="editor-context-hints-dialog-header">
+        <div class="editor-context-hints-dialog-heading">
+          <h2>Context Tips</h2>
+          <p id="editor-context-hints-dialog-note" class="dialog-hint">Metadata notes for the current example.</p>
+        </div>
+        <button id="editor-context-hints-dialog-close-icon" type="button" class="btn-icon" title="Close context tips" aria-label="Close context tips">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div id="editor-context-hints-dialog-content" class="editor-context-hints-dialog-content"></div>
+      <div class="dialog-actions">
+        <button id="editor-context-hints-dialog-close" type="button" class="btn btn-primary">Close</button>
       </div>
     </form>
   </dialog>

@@ -44,3 +44,5 @@ En `examples/` quedan cuatro casos base para validar el sistema:
 - uniforms vectoriales `vec3` y `vec4` editables en el panel shader
 - uniforms escalares con slider usando rangos declarados por metadata
 - texturas locales cargadas desde `assets/` del topic
+- ejemplo dedicado a probar color picker `vec3`
+- ejemplo dedicado a probar color picker `vec4` con alpha

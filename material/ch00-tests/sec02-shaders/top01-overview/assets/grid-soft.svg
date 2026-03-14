@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <rect width="256" height="256" fill="#020617"/>
+  <g stroke="#38bdf8" stroke-width="2" opacity="0.75">
+    <path d="M32 0V256"/>
+    <path d="M64 0V256"/>
+    <path d="M96 0V256"/>
+    <path d="M128 0V256"/>
+    <path d="M160 0V256"/>
+    <path d="M192 0V256"/>
+    <path d="M224 0V256"/>
+    <path d="M0 32H256"/>
+    <path d="M0 64H256"/>
+    <path d="M0 96H256"/>
+    <path d="M0 128H256"/>
+    <path d="M0 160H256"/>
+    <path d="M0 192H256"/>
+    <path d="M0 224H256"/>
+  </g>
+</svg>
