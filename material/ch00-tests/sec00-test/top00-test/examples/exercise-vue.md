@@ -8,6 +8,10 @@ exercise_locked_files: styles.css
 exercise_solution_example: exercise-vue-solution.md
 example_stage: exercise
 console: true
+example_description: "Vue exercise focused on rendering a computed summary and checking the update in the console."
+example_tags: "exercise|vue|computed|console|reactivity"
+example_rating: 5
+example_importance: critical
 ---
 
 # HTML

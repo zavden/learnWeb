@@ -1,6 +1,10 @@
 ---
 framework: react
 console: true
+example_description: "React console demo that logs effect mount, cleanup and state-driven updates."
+example_tags: "react|jsx|console|useeffect|state"
+example_rating: 4
+example_importance: important
 ---
 
 # JSX

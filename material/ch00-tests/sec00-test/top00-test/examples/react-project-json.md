@@ -2,6 +2,10 @@
 entry: src/main.jsx
 framework: react
 mode: multi-file
+example_description: "React multi-file project that imports local JSON and renders a lesson list with an SVG asset."
+example_tags: "react|jsx|project|json|assets"
+example_rating: 5
+example_importance: important
 ---
 
 ## @file src/main.jsx

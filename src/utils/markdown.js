@@ -38,6 +38,12 @@ const EXAMPLE_STAGE_VALUES = new Set([
     'final-solution',
     'exercise',
 ]);
+const EXAMPLE_IMPORTANCE_VALUES = new Set([
+    'trivial',
+    'useful',
+    'important',
+    'critical',
+]);
 const REACT_APP_BLOCK_TYPES = new Set(['jsx', 'tsx']);
 const REACT_MULTI_FILE_LANGUAGES = new Set(['jsx', 'tsx', 'javascript', 'typescript', 'css', 'scss', 'sass', 'json']);
 const REACT_MULTI_FILE_ENTRY_LANGUAGES = new Set(['jsx', 'tsx', 'javascript', 'typescript']);
@@ -74,6 +80,10 @@ const KNOWN_METADATA_KEYS = new Set([
     'resolution',
     'shader_uniforms',
     'shader_textures',
+    'example_description',
+    'example_tags',
+    'example_rating',
+    'example_importance',
     'example_stage',
     ...EXERCISE_METADATA_KEYS,
 ]);
@@ -260,6 +270,80 @@ function normalizeBooleanMetadataValue(value) {
     return value;
 }
 
+function normalizeExampleDescriptionMetadataValue(value = '') {
+    return String(value ?? '').trim();
+}
+
+function parseExampleTagsMetadataValue(value = '') {
+    const diagnostics = [];
+
+    const rawEntries = Array.isArray(value)
+        ? value
+        : String(value ?? '').trim()
+            ? String(value ?? '').split(String(value).includes('|') ? '|' : ',')
+            : [];
+
+    const tags = [];
+    const seen = new Set();
+
+    rawEntries.forEach((entry) => {
+        const normalizedTag = String(entry ?? '')
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, ' ');
+
+        if (!normalizedTag) return;
+
+        if (seen.has(normalizedTag)) {
+            diagnostics.push(createDiagnostic(
+                'warning',
+                'duplicate-example-tag',
+                `Example tag "${normalizedTag}" is declared more than once. Only the first value is used.`,
+                { tag: normalizedTag }
+            ));
+            return;
+        }
+
+        seen.add(normalizedTag);
+        tags.push(normalizedTag);
+    });
+
+    return {
+        diagnostics,
+        normalizedValue: tags.join('|'),
+        tags,
+    };
+}
+
+function parseExampleRatingValue(value) {
+    if (value === undefined || value === null || value === '') return null;
+
+    const numericValue = typeof value === 'number'
+        ? value
+        : Number.parseInt(String(value).trim(), 10);
+
+    if (!Number.isInteger(numericValue) || numericValue < 1 || numericValue > 5) {
+        return null;
+    }
+
+    return numericValue;
+}
+
+function normalizeExampleRatingMetadataValue(value) {
+    const parsed = parseExampleRatingValue(value);
+    return parsed ?? String(value ?? '').trim();
+}
+
+function parseExampleImportanceValue(value = '') {
+    const normalizedValue = String(value ?? '').trim().toLowerCase();
+    return EXAMPLE_IMPORTANCE_VALUES.has(normalizedValue) ? normalizedValue : '';
+}
+
+function normalizeExampleImportanceMetadataValue(value) {
+    const parsed = parseExampleImportanceValue(value);
+    return parsed || String(value ?? '').trim().toLowerCase();
+}
+
 function normalizeMetadata(metadata = {}) {
     const normalized = {};
 
@@ -310,6 +394,26 @@ function normalizeMetadata(metadata = {}) {
 
         if (normalizedKey === 'shader_textures') {
             normalized.shader_textures = String(value).trim();
+            return;
+        }
+
+        if (normalizedKey === 'example_description') {
+            normalized.example_description = normalizeExampleDescriptionMetadataValue(value);
+            return;
+        }
+
+        if (normalizedKey === 'example_tags') {
+            normalized.example_tags = parseExampleTagsMetadataValue(value).normalizedValue;
+            return;
+        }
+
+        if (normalizedKey === 'example_rating') {
+            normalized.example_rating = normalizeExampleRatingMetadataValue(value);
+            return;
+        }
+
+        if (normalizedKey === 'example_importance') {
+            normalized.example_importance = normalizeExampleImportanceMetadataValue(value);
             return;
         }
 
@@ -1112,6 +1216,19 @@ export function getExampleStage(documentModel) {
     return EXAMPLE_STAGE_VALUES.has(stage) ? stage : '';
 }
 
+export function getExampleEditorialMetadata(documentModel) {
+    const metadata = documentModel?.metadata || {};
+    const parsedTags = parseExampleTagsMetadataValue(metadata.example_tags);
+
+    return {
+        description: normalizeExampleDescriptionMetadataValue(metadata.example_description),
+        tags: parsedTags.tags,
+        tagsText: parsedTags.normalizedValue || String(metadata.example_tags || '').trim(),
+        rating: parseExampleRatingValue(metadata.example_rating),
+        importance: parseExampleImportanceValue(metadata.example_importance),
+    };
+}
+
 function hasShaderBlocks(blocks = []) {
     return (blocks || []).some((block) => SHADER_BLOCK_TYPES.has(block.type));
 }
@@ -1815,6 +1932,39 @@ function validateMetadata(metadata, diagnostics, sourceFormat) {
                 'invalid-example-stage',
                 `Metadata "example_stage" must be one of: ${Array.from(EXAMPLE_STAGE_VALUES).join(', ')}.`,
                 { value: metadata.example_stage }
+            )
+        );
+    }
+
+    if (Object.prototype.hasOwnProperty.call(metadata, 'example_tags')) {
+        const parsedTags = parseExampleTagsMetadataValue(metadata.example_tags);
+        diagnostics.push(...parsedTags.diagnostics);
+    }
+
+    if (
+        Object.prototype.hasOwnProperty.call(metadata, 'example_rating')
+        && parseExampleRatingValue(metadata.example_rating) == null
+    ) {
+        diagnostics.push(
+            createDiagnostic(
+                'warning',
+                'invalid-example-rating',
+                'Metadata "example_rating" must be an integer from 1 to 5.',
+                { value: metadata.example_rating }
+            )
+        );
+    }
+
+    if (
+        Object.prototype.hasOwnProperty.call(metadata, 'example_importance')
+        && !parseExampleImportanceValue(metadata.example_importance)
+    ) {
+        diagnostics.push(
+            createDiagnostic(
+                'warning',
+                'invalid-example-importance',
+                `Metadata "example_importance" must be one of: ${Array.from(EXAMPLE_IMPORTANCE_VALUES).join(', ')}.`,
+                { value: metadata.example_importance }
             )
         );
     }
@@ -2827,6 +2977,56 @@ export function updateShaderResolution(documentModel, resolution = null) {
         resolution: normalizeResolutionMetadataValue(`${Math.round(width)}x${Math.round(height)}`),
     };
 
+    return reparseDocument(nextDocument);
+}
+
+export function updateExampleEditorialMetadata(documentModel, updates = {}) {
+    const nextDocument = cloneExampleDocument(documentModel);
+    const metadata = {
+        ...(nextDocument.metadata || {}),
+    };
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'description')) {
+        const normalizedDescription = normalizeExampleDescriptionMetadataValue(updates.description);
+
+        if (normalizedDescription) {
+            metadata.example_description = normalizedDescription;
+        } else {
+            delete metadata.example_description;
+        }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'tags')) {
+        const normalizedTags = parseExampleTagsMetadataValue(updates.tags).normalizedValue;
+
+        if (normalizedTags) {
+            metadata.example_tags = normalizedTags;
+        } else {
+            delete metadata.example_tags;
+        }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'rating')) {
+        const normalizedRating = parseExampleRatingValue(updates.rating);
+
+        if (normalizedRating) {
+            metadata.example_rating = normalizedRating;
+        } else {
+            delete metadata.example_rating;
+        }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'importance')) {
+        const normalizedImportance = parseExampleImportanceValue(updates.importance);
+
+        if (normalizedImportance) {
+            metadata.example_importance = normalizedImportance;
+        } else {
+            delete metadata.example_importance;
+        }
+    }
+
+    nextDocument.metadata = metadata;
     return reparseDocument(nextDocument);
 }
 

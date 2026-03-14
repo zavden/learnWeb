@@ -16,6 +16,13 @@ import {
     writeClipboardDefaultState,
     writeVimDefaultState,
 } from './src/utils/editorDefaults.js';
+import {
+    addFavorite,
+    readFavoritesState,
+    removeFavorite,
+    resolveFavorites,
+} from './src/utils/favoritesStore.js';
+import { loadVimShortcutConfig } from './src/editor/vimShortcutConfig.js';
 import { buildMaterialTree, readHiddenState, setChapterHidden } from './src/utils/materialTree.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -24,6 +31,8 @@ const MATERIAL_DIR = path.join(__dirname, 'material');
 const HIDDEN_STATE_FILE = path.join(__dirname, '.hiddens');
 const VIM_DEFAULT_FILE = path.join(__dirname, '.vim_enable');
 const CLIPBOARD_DEFAULT_FILE = path.join(__dirname, '.clipboard_default');
+const FAVORITES_FILE = path.join(__dirname, '.favorites');
+const VIM_SHORTCUTS_FILE = path.join(__dirname, 'vim-shortcuts.yaml');
 
 const app = express();
 app.use(cors());
@@ -162,6 +171,66 @@ app.patch('/api/editor/clipboard-default', (req, res) => {
     try {
         const enabled = req.body?.enabled !== false;
         res.json(writeClipboardDefaultState(CLIPBOARD_DEFAULT_FILE, enabled));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/editor/vim-shortcuts', (req, res) => {
+    try {
+        const source = fs.existsSync(VIM_SHORTCUTS_FILE)
+            ? fs.readFileSync(VIM_SHORTCUTS_FILE, 'utf-8')
+            : '';
+        const result = loadVimShortcutConfig(source);
+        res.json({
+            config: result.config,
+            path: 'vim-shortcuts.yaml',
+            source: result.source,
+            warnings: result.warnings,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/favorites', (req, res) => {
+    try {
+        const state = readFavoritesState(FAVORITES_FILE);
+        const entries = resolveFavorites(FAVORITES_FILE, MATERIAL_DIR);
+        res.json({
+            entries,
+            items: state.items,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/favorites', (req, res) => {
+    try {
+        const favoritePath = String(req.body?.path || '').trim();
+        const state = addFavorite(FAVORITES_FILE, favoritePath);
+        const entries = resolveFavorites(FAVORITES_FILE, MATERIAL_DIR);
+        res.json({
+            entries,
+            items: state.items,
+            path: favoritePath,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/favorites', (req, res) => {
+    try {
+        const favoritePath = String(req.body?.path || '').trim();
+        const state = removeFavorite(FAVORITES_FILE, favoritePath);
+        const entries = resolveFavorites(FAVORITES_FILE, MATERIAL_DIR);
+        res.json({
+            entries,
+            items: state.items,
+            path: favoritePath,
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

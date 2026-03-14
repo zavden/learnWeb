@@ -62,6 +62,34 @@ export async function updateClipboardDefaultState(enabled = true) {
     return handleResponse(res);
 }
 
+export async function fetchVimShortcutConfig() {
+    const res = await fetch(`${BASE}/editor/vim-shortcuts`);
+    return handleResponse(res);
+}
+
+export async function fetchFavorites() {
+    const res = await fetch(`${BASE}/favorites`);
+    return handleResponse(res);
+}
+
+export async function addFavorite(path) {
+    const res = await fetch(`${BASE}/favorites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+    });
+    return handleResponse(res);
+}
+
+export async function removeFavorite(path) {
+    const res = await fetch(`${BASE}/favorites`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+    });
+    return handleResponse(res);
+}
+
 export async function fetchTopicMain(topicPath) {
     const res = await fetch(`${BASE}/topic/${topicPath}/main`);
     if (!res.ok) return { content: '' };

@@ -1,4 +1,17 @@
 import { Vim, getCM, vim } from '@replit/codemirror-vim';
+import {
+    getDefaultVimShortcutConfig,
+    getVimShortcutSections,
+    resolveVimLeaderAction,
+    resolveVimShiftAction,
+} from './vimShortcutConfig.js';
+
+export {
+    getDefaultVimShortcutConfig,
+    getVimShortcutSections,
+    resolveVimLeaderAction,
+    resolveVimShiftAction,
+} from './vimShortcutConfig.js';
 
 const vimWriteHandlers = new WeakMap();
 let exCommandsRegistered = false;
@@ -234,30 +247,10 @@ export function createVimExtension() {
     return vim();
 }
 
-export function resolveVimLeaderAction(stage = 0, key = '') {
-    const normalizedKey = String(key || '');
-
-    if (stage === 1) {
-        if (normalizedKey === 'e' || normalizedKey === 'E') return 'toggleSidebar';
-        if (normalizedKey === 'h' || normalizedKey === 'H') return 'clearSearchHighlight';
-        if (normalizedKey === 'm' || normalizedKey === 'M') return 'centerWorkspace';
-        return null;
-    }
-
-    if (stage === 2) {
-        if (normalizedKey === 'p' || normalizedKey === 'P') return 'toggleShaderPause';
-        if (normalizedKey === 'c' || normalizedKey === 'C') return 'openShaderControls';
-        if (normalizedKey === 'u' || normalizedKey === 'U') return 'openShaderUniforms';
-        if (normalizedKey === 't' || normalizedKey === 'T') return 'openShaderTextures';
-        if (normalizedKey === 's') return 'openShaderPanel';
-        if (normalizedKey === 'r') return 'resetShaderRuntime';
-        return null;
-    }
-
-    return null;
-}
-
 export function bindVimView(view, {
+    isPanelsLayout,
+    isShaderDocument,
+    getShortcutConfig,
     onModeChange,
     onQuickSave,
     onWrite,
@@ -267,12 +260,21 @@ export function bindVimView(view, {
     onOpenFilePicker,
     onToggleSidebar,
     onCenterWorkspace,
+    onToggleActivePanelCollapse,
+    onToggleActivePanelMaximize,
+    onAutoFitPanels,
+    onNormalizePanels,
+    onToggleConsole,
     onToggleShaderPause,
     onOpenShaderControls,
     onOpenShaderUniforms,
     onOpenShaderTextures,
     onOpenShaderPanel,
     onResetShaderRuntime,
+    onOpenShortcutHelp,
+    onToggleEditorLayout,
+    onTogglePreviewHeader,
+    onMovePanelFocus,
 } = {}) {
     ensureVimExCommandsRegistered();
 
@@ -320,43 +322,98 @@ export function bindVimView(view, {
 
     const handleKeydown = (event) => {
         if (leaderStage !== 0) return;
-        if (!event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
         if (cm.state?.vim?.insertMode) return;
         if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
 
-        if (event.key === 'H' && typeof onPreviousTab === 'function') {
-            event.preventDefault();
-            event.stopPropagation();
-            onPreviousTab();
-            return;
+        const panelsLayout = typeof isPanelsLayout === 'function' ? Boolean(isPanelsLayout()) : false;
+        const shortcutConfig = typeof getShortcutConfig === 'function'
+            ? (getShortcutConfig() || getDefaultVimShortcutConfig())
+            : getDefaultVimShortcutConfig();
+
+        if (
+            panelsLayout
+            && event.shiftKey
+            && !event.ctrlKey
+            && !event.metaKey
+            && !event.altKey
+            && typeof onMovePanelFocus === 'function'
+        ) {
+            let direction = '';
+            if (event.key === 'J') direction = 'down';
+            if (event.key === 'K') direction = 'up';
+
+            if (direction) {
+                const consumed = onMovePanelFocus(direction);
+                if (consumed) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+            }
         }
 
-        if (event.key === 'L' && typeof onNextTab === 'function') {
-            event.preventDefault();
-            event.stopPropagation();
-            onNextTab();
-            return;
-        }
+        if (!event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
+        const shiftAction = resolveVimShiftAction({
+            key: event.key,
+            panelsLayout,
+            config: shortcutConfig,
+        });
 
-        if (event.key === 'J' && typeof onOpenFilePicker === 'function') {
-            event.preventDefault();
-            event.stopPropagation();
-            onOpenFilePicker();
-            return;
-        }
-
-        if (event.key === 'K' && typeof onToggleAutoRender === 'function') {
-            event.preventDefault();
-            event.stopPropagation();
-            onToggleAutoRender();
-            return;
-        }
-
-        if (event.key === 'S' && typeof onQuickSave === 'function') {
-            const handled = onQuickSave();
-            if (handled === false) return;
-            event.preventDefault();
-            event.stopPropagation();
+        switch (shiftAction) {
+            case 'previousTab':
+                if (typeof onPreviousTab === 'function') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onPreviousTab();
+                }
+                return;
+            case 'nextTab':
+                if (typeof onNextTab === 'function') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onNextTab();
+                }
+                return;
+            case 'openFilePicker':
+                if (typeof onOpenFilePicker === 'function') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onOpenFilePicker();
+                }
+                return;
+            case 'toggleAutoRender':
+                if (typeof onToggleAutoRender === 'function') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onToggleAutoRender();
+                }
+                return;
+            case 'toggleConsole':
+                if (typeof onToggleConsole === 'function') {
+                    const consumed = onToggleConsole();
+                    if (consumed) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                    }
+                }
+                return;
+            case 'togglePreviewHeader':
+                if (typeof onTogglePreviewHeader === 'function') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onTogglePreviewHeader();
+                }
+                return;
+            case 'quickSave':
+                if (typeof onQuickSave === 'function') {
+                    const handled = onQuickSave();
+                    if (handled === false) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                return;
+            default:
+                return;
         }
     };
 
@@ -388,7 +445,16 @@ export function bindVimView(view, {
             return;
         }
 
-        const action = resolveVimLeaderAction(leaderStage, event.key);
+        const shortcutConfig = typeof getShortcutConfig === 'function'
+            ? (getShortcutConfig() || getDefaultVimShortcutConfig())
+            : getDefaultVimShortcutConfig();
+        const action = resolveVimLeaderAction({
+            stage: leaderStage,
+            key: event.key,
+            layoutMode: typeof isPanelsLayout === 'function' && isPanelsLayout() ? 'panels' : 'tabs',
+            shaderDocument: typeof isShaderDocument === 'function' ? Boolean(isShaderDocument()) : false,
+            config: shortcutConfig,
+        });
         clearLeaderPending();
 
         if (!action) {
@@ -408,6 +474,18 @@ export function bindVimView(view, {
             case 'centerWorkspace':
                 onCenterWorkspace?.();
                 return;
+            case 'normalizePanels':
+                onNormalizePanels?.();
+                return;
+            case 'toggleActivePanelCollapse':
+                onToggleActivePanelCollapse?.();
+                return;
+            case 'toggleActivePanelMaximize':
+                onToggleActivePanelMaximize?.();
+                return;
+            case 'autoFitPanels':
+                onAutoFitPanels?.();
+                return;
             case 'toggleShaderPause':
                 onToggleShaderPause?.();
                 return;
@@ -419,6 +497,12 @@ export function bindVimView(view, {
                 return;
             case 'openShaderTextures':
                 onOpenShaderTextures?.();
+                return;
+            case 'toggleEditorLayout':
+                onToggleEditorLayout?.();
+                return;
+            case 'openShortcutHelp':
+                onOpenShortcutHelp?.();
                 return;
             case 'openShaderPanel':
                 onOpenShaderPanel?.();

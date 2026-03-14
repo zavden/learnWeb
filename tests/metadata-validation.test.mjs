@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 
 import { buildFrameworkFileTemplate, getFrameworkFileTemplateOptions } from '../src/config/fileTemplates.js';
 import {
+    buildExampleDocument,
     createExampleDocumentFromPreset,
     createDocumentFile,
     duplicateDocumentFile,
     getDocumentFileVisibilityEntries,
     getExerciseConfig,
+    getExampleEditorialMetadata,
     getExampleStage,
     getDocumentLanguageOptions,
     getShaderConfig,
@@ -16,6 +18,7 @@ import {
     removeDocumentFile,
     setDocumentEntryPath,
     updateDocumentHiddenFiles,
+    updateExampleEditorialMetadata,
     updateShaderResolution,
     updateShaderUniformDefinitions,
     updateDocumentFileDetails,
@@ -126,6 +129,125 @@ example_stage: FINAL-SOLUTION
 \`\`\``);
 
     assert.equal(getExampleStage(documentModel), 'final-solution');
+});
+
+test('example editorial metadata is normalized and exposed for later UI use', () => {
+    const documentModel = parseExampleDocument(`---
+example_description: "Short animation walkthrough"
+example_tags: "CSS|animation| html "
+example_rating: 4
+example_importance: CRITICAL
+---
+
+# HTML
+
+\`\`\`html
+<main>Animated card</main>
+\`\`\``);
+
+    assert.equal(documentModel.metadata.example_description, 'Short animation walkthrough');
+    assert.equal(documentModel.metadata.example_tags, 'css|animation|html');
+    assert.equal(documentModel.metadata.example_rating, 4);
+    assert.equal(documentModel.metadata.example_importance, 'critical');
+    assert.deepEqual(getExampleEditorialMetadata(documentModel), {
+        description: 'Short animation walkthrough',
+        tags: ['css', 'animation', 'html'],
+        tagsText: 'css|animation|html',
+        rating: 4,
+        importance: 'critical',
+    });
+});
+
+test('invalid editorial metadata degrades with diagnostics instead of breaking the document', () => {
+    const documentModel = parseExampleDocument(`---
+example_tags: "css|CSS| animation "
+example_rating: 9
+example_importance: urgent
+---
+
+# HTML
+
+\`\`\`html
+<main>Invalid metadata still loads</main>
+\`\`\``);
+
+    assert.equal(documentModel.metadata.example_tags, 'css|animation');
+    assert.equal(documentModel.metadata.example_rating, '9');
+    assert.equal(documentModel.metadata.example_importance, 'urgent');
+    assert.ok(getDiagnosticCodes(documentModel).includes('invalid-example-rating'));
+    assert.ok(getDiagnosticCodes(documentModel).includes('invalid-example-importance'));
+    assert.deepEqual(getExampleEditorialMetadata(documentModel), {
+        description: '',
+        tags: ['css', 'animation'],
+        tagsText: 'css|animation',
+        rating: null,
+        importance: '',
+    });
+});
+
+test('example editorial metadata helper updates and serializes normalized values', () => {
+    const documentModel = parseExampleDocument(`# HTML
+
+\`\`\`html
+<main>Editorial metadata helper</main>
+\`\`\``);
+    const nextDocument = updateExampleEditorialMetadata(documentModel, {
+        description: '  Quick card demo  ',
+        tags: [' CSS ', 'layout', 'css', 'html'],
+        rating: '5',
+        importance: 'IMPORTANT',
+    });
+    const serialized = buildExampleDocument(nextDocument);
+
+    assert.deepEqual(getExampleEditorialMetadata(nextDocument), {
+        description: 'Quick card demo',
+        tags: ['css', 'layout', 'html'],
+        tagsText: 'css|layout|html',
+        rating: 5,
+        importance: 'important',
+    });
+    assert.match(serialized, /example_description: "Quick card demo"/);
+    assert.match(serialized, /example_tags: "css\|layout\|html"/);
+    assert.match(serialized, /example_rating: 5/);
+    assert.match(serialized, /example_importance: important/);
+});
+
+test('example editorial metadata helper clears empty or invalid requested values', () => {
+    const documentModel = parseExampleDocument(`---
+example_description: "Keep me only if not cleared"
+example_tags: "css|html"
+example_rating: 4
+example_importance: useful
+---
+
+# HTML
+
+\`\`\`html
+<main>Clear editorial metadata</main>
+\`\`\``);
+    const clearedDocument = updateExampleEditorialMetadata(documentModel, {
+        description: '   ',
+        tags: [],
+        rating: 8,
+        importance: 'urgent',
+    });
+    const serialized = buildExampleDocument(clearedDocument);
+
+    assert.deepEqual(getExampleEditorialMetadata(clearedDocument), {
+        description: '',
+        tags: [],
+        tagsText: '',
+        rating: null,
+        importance: '',
+    });
+    assert.equal(clearedDocument.metadata.example_description, undefined);
+    assert.equal(clearedDocument.metadata.example_tags, undefined);
+    assert.equal(clearedDocument.metadata.example_rating, undefined);
+    assert.equal(clearedDocument.metadata.example_importance, undefined);
+    assert.doesNotMatch(serialized, /example_description:/);
+    assert.doesNotMatch(serialized, /example_tags:/);
+    assert.doesNotMatch(serialized, /example_rating:/);
+    assert.doesNotMatch(serialized, /example_importance:/);
 });
 
 test('shader documents normalize renderer and resolution metadata', () => {

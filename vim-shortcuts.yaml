@@ -1,0 +1,51 @@
+# Vim shortcut overrides for LearnCode
+#
+# Rules:
+# - contexts: global, tabs, panels, shaders
+# - buckets:
+#   - shift   -> Shift+<key>
+#   - leader  -> Space, <key>
+#   - leader2 -> Space, Space, <key>
+# - values must be a single character
+# - if this file is missing or invalid, the app falls back to the built-in defaults
+
+global:
+  shift:
+    quickSave: S
+    toggleConsole: C
+    togglePreviewHeader: X
+  leader:
+    toggleSidebar: e
+    centerWorkspace: m
+    clearSearchHighlight: h
+  leader2:
+    openShortcutHelp: n
+    toggleEditorLayout: v
+
+tabs:
+  shift:
+    previousTab: H
+    nextTab: L
+    openFilePicker: J
+    toggleAutoRender: K
+
+panels:
+  shift:
+    openFilePicker: H
+    movePanelDown: J
+    movePanelUp: K
+    toggleAutoRender: L
+  leader:
+    toggleActivePanelCollapse: c
+    toggleActivePanelMaximize: x
+    autoFitPanels: a
+    normalizePanels: v
+
+shaders:
+  leader2:
+    toggleShaderPause: p
+    openShaderControls: c
+    openShaderUniforms: u
+    openShaderTextures: t
+    openShaderPanel: s
+    resetShaderRuntime: r

@@ -2,6 +2,10 @@
 framework: vue
 mode: multi-file
 entry: src/main.js
+example_description: "Vue SFC project with an app shell, child component and composable counter in JavaScript."
+example_tags: "vue|sfc|javascript|project|composable"
+example_rating: 5
+example_importance: critical
 ---
 
 ## @file src/main.js

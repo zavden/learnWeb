@@ -11,6 +11,10 @@ exercise_compare_pairs: src/App.jsx=>src/solution/AppSolution.jsx
 exercise_reference_files: src/data/profile.json
 exercise_solution_files: src/solution/AppSolution.jsx
 example_stage: exercise
+example_description: "React multi-file exercise that mixes JSX, JSON and comparison mode in a learner profile card."
+example_tags: "exercise|react|jsx|json|multi-file"
+example_rating: 5
+example_importance: critical
 ---
 
 ## @file src/main.jsx

@@ -10,6 +10,7 @@ import { getShaderConfig, isShaderDocument } from '../utils/markdown.js';
 import { shaderAlphaToUnit, shaderHexToVec, shaderVecToHex } from '../utils/shaderColor.js';
 import { validateShaderPreviewDocument } from '../utils/shaderPreviewDiagnostics.js';
 import { getTheoryDocumentContent, isTheoryDocument } from '../utils/theoryDocument.js';
+import { loadTheoryExerciseEmbeds } from '../utils/theoryExerciseEmbeds.js';
 import { renderTheoryPreviewDocument } from '../utils/theoryRenderer.js';
 
 const SHADER_BUILT_IN_UNIFORMS = [
@@ -67,7 +68,7 @@ function cloneShaderUniformControl(control = null) {
 }
 
 export class Preview {
-    constructor({ onCompileStateChange, onRequestShaderUniformEdit } = {}) {
+    constructor({ onCompileStateChange, onRequestShaderUniformEdit, onTheoryExerciseOpenRequest, onTheoryExercisePreviewRequest } = {}) {
         this.iframe = document.getElementById('preview-frame');
         this.btnAutoRenderToggle = document.getElementById('btn-auto-render-toggle');
         this.btnRefresh = document.getElementById('btn-refresh');
@@ -123,6 +124,8 @@ export class Preview {
         this._renderToken = 0;
         this._onCompileStateChange = onCompileStateChange;
         this._onRequestShaderUniformEdit = onRequestShaderUniformEdit;
+        this._onTheoryExerciseOpenRequest = onTheoryExerciseOpenRequest;
+        this._onTheoryExercisePreviewRequest = onTheoryExercisePreviewRequest;
         this._runtimeMode = 'none';
         this._consoleEnabled = false;
         this._consoleMetadataEnabled = false;
@@ -288,6 +291,37 @@ export class Preview {
         return true;
     }
 
+    toggleConsole() {
+        if (this._runtimeMode === 'shader' || !this._lastDocument) return false;
+
+        if (this._runtimeMode === 'none') {
+            this._consoleManualOverride = true;
+            this._consoleEnabled = true;
+            this._consoleCollapsed = false;
+            this._runtimeMode = 'console';
+            this._syncConsoleVisibility();
+
+            if (this._lastDocument) {
+                clearTimeout(this._debounceTimer);
+                this._render(this._lastDocument);
+            }
+            return true;
+        }
+
+        if (this._consoleMetadataEnabled) {
+            this._toggleConsoleCollapsed();
+            return true;
+        }
+
+        if (this._consoleCollapsed) {
+            this._toggleConsoleCollapsed();
+            return true;
+        }
+
+        this._toggleConsoleOverride();
+        return true;
+    }
+
     resetShaderRuntime() {
         if (this._runtimeMode !== 'shader') return false;
         this._resetShaderRuntime();
@@ -356,7 +390,11 @@ export class Preview {
         if (isTheoryDocument(documentModel)) {
             this._setFrameDisplayMode('default');
             const content = getTheoryDocumentContent(documentModel);
+            const exerciseEmbeds = await loadTheoryExerciseEmbeds(this._currentTopicPath, content);
+            if (renderToken !== this._renderToken) return;
             this.iframe.srcdoc = renderTheoryPreviewDocument(content, {
+                exerciseEmbeds,
+                renderId: renderToken,
                 topicPath: this._currentTopicPath,
             });
             this._emitCompileState([]);
@@ -647,6 +685,23 @@ export class Preview {
     }
 
     _handleRuntimeMessage(event) {
+        if (event?.data?.source === 'learncode-theory-preview') {
+            if (event.source !== this.iframe?.contentWindow) return;
+            if (event.data.renderId !== this._renderToken) return;
+            const filename = String(event.data.filename || '').trim();
+            if (!filename || !this._currentTopicPath) return;
+
+            if (event.data.kind === 'open-exercise') {
+                this._onTheoryExerciseOpenRequest?.(this._currentTopicPath, filename);
+                return;
+            }
+
+            if (event.data.kind === 'preview-exercise') {
+                this._onTheoryExercisePreviewRequest?.(this._currentTopicPath, filename);
+                return;
+            }
+        }
+
         if (!event?.data || event.data.source !== 'learncode-preview') return;
         if (event.source !== this.iframe?.contentWindow) return;
         if (event.data.renderId !== this._renderToken) return;

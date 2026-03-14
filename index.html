@@ -31,6 +31,12 @@
       <nav id="nav-tree"></nav>
       <section class="sidebar-example-actions">
         <div class="sidebar-example-actions-grid">
+          <button id="btn-favorites" class="btn btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="m12 17.27 5.18 3.05-1.64-5.73L20 10.24l-5.9-.5L12 4.3l-2.1 5.44-5.9.5 4.46 4.35-1.64 5.73z"></path>
+            </svg>
+            Favorites
+          </button>
           <button id="btn-save" class="btn btn-primary">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round">
@@ -40,16 +46,14 @@
             </svg>
             Save
           </button>
-          <button id="btn-rename" class="btn btn-secondary" disabled>
+          <button id="btn-sidebar-preview-info" class="btn btn-secondary btn-sidebar-preview-info" type="button" aria-pressed="true" title="Hide preview info">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round">
-              <path d="M16 3h5v5" />
-              <path d="M8 3H3v5" />
-              <path d="M12 22v-7" />
-              <path d="M3 16v5h5" />
-              <path d="M16 21h5v-5" />
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4" />
+              <path d="M12 8h.01" />
             </svg>
-            Rename
+            Hide Info
           </button>
           <button id="btn-modify" class="btn btn-secondary" disabled>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -116,10 +120,14 @@
         <div id="editor-column">
           <!-- Gallery View -->
           <div id="gallery-view" class="hidden">
-            <div class="gallery-header">
-              <h2>Examples</h2>
-              <!-- Optional: Button to create new example? -->
+          <div class="gallery-header">
+            <h2>Examples</h2>
+            <div class="gallery-header-actions">
+              <button id="btn-gallery-meta-toggle" class="btn btn-secondary gallery-meta-toggle" type="button" aria-pressed="true" title="Hide example info overlay">
+                Hide Info
+              </button>
             </div>
+          </div>
             <div id="gallery-grid"></div>
           </div>
 
@@ -255,12 +263,28 @@
                 </svg>
                 <span class="toolbar-btn-label">Delete File</span>
               </button>
+              <button id="btn-column-guide-toggle" class="btn btn-secondary toolbar-icon-btn btn-column-guide-toggle" title="Show 80-column guide" aria-pressed="false">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M6 4v16"></path>
+                  <path d="M18 4v16"></path>
+                  <path d="M12 4v16"></path>
+                  <path d="M4 7h4"></path>
+                  <path d="M16 7h4"></path>
+                  <path d="M4 12h4"></path>
+                  <path d="M16 12h4"></path>
+                  <path d="M4 17h4"></path>
+                  <path d="M16 17h4"></path>
+                </svg>
+                <span class="toolbar-btn-label">80 Col</span>
+              </button>
               <label id="entry-select-group" class="entry-select-group hidden">
                 <span class="entry-select-label">Entry</span>
                 <select id="entry-select" class="editor-file-select" aria-label="Select entry file"></select>
               </label>
             </div>
             <div class="font-controls">
+              <span id="preview-current-filename" class="lang-badge preview preview-filename-display editor-preview-filename-display">Preview</span>
               <button id="btn-editor-layout" class="btn btn-secondary btn-layout-toggle toolbar-icon-btn" title="Switch editor layout">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -286,10 +310,26 @@
                   <line x1="3" y1="15" x2="21" y2="15"></line>
                 </svg>
               </button>
-              <button id="btn-font-dec" class="btn-icon" title="Decrease font size">A-</button>
-              <button id="btn-font-inc" class="btn-icon" title="Increase font size">A+</button>
             </div>
             <div class="editor-toolbar-tail">
+              <button id="btn-toggle-favorite-example" class="btn btn-secondary toolbar-icon-btn" title="Toggle favorite" disabled>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="m12 17.27 5.18 3.05-1.64-5.73L20 10.24l-5.9-.5L12 4.3l-2.1 5.44-5.9.5 4.46 4.35-1.64 5.73z"></path>
+                </svg>
+                <span class="toolbar-btn-label">Favorite</span>
+              </button>
+              <button id="btn-edit-example-metadata" class="btn btn-secondary toolbar-icon-btn" title="Edit example details" disabled>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M8 6.5h11"></path>
+                  <path d="M8 12h11"></path>
+                  <path d="M8 17.5h8"></path>
+                  <path d="M4.5 7h.01"></path>
+                  <path d="M4.5 12h.01"></path>
+                  <path d="M4.5 17h.01"></path>
+                </svg>
+                <span class="toolbar-btn-label">Meta</span>
+              </button>
               <button id="btn-auto-render-toggle" class="btn-icon btn-auto-render-toggle" type="button" title="Disable automatic preview render" aria-label="Disable automatic preview render" aria-pressed="true">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path>
@@ -312,6 +352,28 @@
                 </svg>
               </button>
               <div id="editor-tab-file-select-host" class="editor-tab-file-select-host hidden"></div>
+              <div id="preview-viewport-rail" class="preview-viewport-rail hidden" aria-hidden="true">
+                <div class="preview-viewport-rail-inner">
+                  <button id="btn-viewport-width-inc" class="btn-icon preview-viewport-step-btn" type="button" title="Increase viewport width by 1px" aria-label="Increase viewport width by 1px">
+                    +
+                  </button>
+                  <div class="preview-viewport-slider-wrap">
+                    <input type="range" id="viewport-slider" class="viewport-slider viewport-slider-vertical" min="320" max="1440" step="10"
+                      value="1440">
+                  </div>
+                  <button id="btn-viewport-width-dec" class="btn-icon preview-viewport-step-btn" type="button" title="Decrease viewport width by 1px" aria-label="Decrease viewport width by 1px">
+                    -
+                  </button>
+                </div>
+              </div>
+              <div id="preview-zoom-controls" class="preview-zoom-rail hidden" aria-hidden="true">
+                <div class="preview-zoom-rail-inner">
+                  <div class="preview-zoom-slider-wrap">
+                    <input type="range" id="preview-zoom-slider" class="preview-zoom-slider preview-zoom-slider-vertical" min="50" max="200" step="5" value="100">
+                  </div>
+                  <span id="preview-zoom-display" class="preview-zoom-value">100%</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -319,6 +381,10 @@
             <div class="editor-panels"></div>
             <div id="editor-status" class="editor-status hidden"></div>
             <span id="vim-mode-indicator" class="vim-mode-indicator hidden">NORMAL</span>
+            <div class="editor-floating-font-controls" aria-label="Editor font controls">
+              <button id="btn-font-dec" class="btn-icon" title="Decrease font size">A-</button>
+              <button id="btn-font-inc" class="btn-icon" title="Increase font size">A+</button>
+            </div>
           </div>
 
           <section id="shader-editor-controls" class="shader-editor-controls hidden">
@@ -386,6 +452,20 @@
         <!-- Preview Column -->
         <div id="preview-column">
           <div class="preview-header">
+            <button id="btn-viewport-slider-toggle" class="btn-icon preview-viewport-toggle" title="Show viewport width slider" aria-label="Show viewport width slider" aria-expanded="false">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M8 4v16"></path>
+                <path d="M16 4v16"></path>
+                <path d="M12 8v8"></path>
+                <path d="M5 8h6"></path>
+                <path d="M13 16h6"></path>
+              </svg>
+            </button>
+            <button id="btn-preview-zoom-toggle" class="btn btn-secondary preview-zoom-toggle" type="button"
+              title="Show preview zoom controls" aria-expanded="false">
+              Zoom
+            </button>
             <button id="btn-theory" class="btn-icon hamburger-btn" title="Toggle theory">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round">
@@ -394,7 +474,10 @@
                 <line x1="3" y1="18" x2="21" y2="18" />
               </svg>
             </button>
-            <span id="preview-current-filename" class="lang-badge preview preview-filename-display">Preview</span>
+            <div id="preview-editorial-summary" class="preview-editorial-summary hidden">
+              <p id="preview-editorial-description" class="preview-editorial-description"></p>
+              <div id="preview-editorial-meta" class="preview-editorial-meta"></div>
+            </div>
             <div class="preview-header-controls">
               <select id="viewport-select" class="viewport-select">
                 <option value="100%">Full Width</option>
@@ -404,8 +487,6 @@
                 <option value="1024px">Desktop (1024px)</option>
                 <option value="custom" hidden>Custom</option>
               </select>
-              <input type="range" id="viewport-slider" class="viewport-slider" min="320" max="1440" step="10"
-                value="1440">
               <span id="viewport-width-display" class="viewport-value">Full</span>
               <button id="btn-console-override" class="btn btn-secondary preview-console-trigger" type="button"
                 title="Enable console for this example only" aria-pressed="false">
@@ -426,18 +507,10 @@
                   <line x1="8" y1="11" x2="14" y2="11"></line>
                 </svg>
               </button>
-              <button id="btn-preview-zoom-toggle" class="btn btn-secondary preview-zoom-toggle" type="button"
-                title="Show preview zoom controls" aria-expanded="false">
-                Zoom
-              </button>
               <button id="btn-preview-zoom-reset" class="btn btn-secondary preview-zoom-reset" type="button"
                 title="Reset preview zoom to 100%">
                 100%
               </button>
-              <div id="preview-zoom-controls" class="preview-zoom-controls hidden">
-                <input type="range" id="preview-zoom-slider" class="preview-zoom-slider" min="50" max="200" step="5" value="100">
-                <span id="preview-zoom-display" class="preview-zoom-value">100%</span>
-              </div>
               <button id="btn-refresh" class="btn-icon" title="Refresh preview">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   stroke-linecap="round" stroke-linejoin="round">
@@ -647,6 +720,59 @@
     </form>
   </dialog>
 
+  <dialog id="editor-example-metadata-dialog">
+    <form method="dialog" class="shader-uniform-dialog-form editor-example-metadata-form">
+      <h2>Example Details</h2>
+      <div class="editor-example-metadata-layout">
+        <section class="shader-uniform-dialog-section">
+          <div class="shader-uniform-dialog-section-header">
+            <strong>Editorial Metadata</strong>
+            <span class="shader-uniform-dialog-section-note">Stored in frontmatter</span>
+          </div>
+
+          <div class="form-group">
+            <label for="editor-example-description">Description</label>
+            <textarea id="editor-example-description" rows="3" placeholder="Short text that explains why this example matters."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="editor-example-tags">Tags</label>
+            <input id="editor-example-tags" type="text" placeholder="html|css|animation" autocomplete="off" spellcheck="false" />
+          </div>
+
+          <div class="form-group">
+            <label>Rating</label>
+            <div class="editor-example-rating-row">
+              <div id="editor-example-rating-stars" class="editor-example-rating-stars" role="group" aria-label="Example rating"></div>
+              <button id="btn-editor-example-rating-clear" type="button" class="btn btn-secondary btn-inline-subtle">Clear</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="editor-example-importance">Importance</label>
+            <div class="editor-example-importance-row">
+              <select id="editor-example-importance">
+                <option value="">Not set</option>
+                <option value="trivial">Trivial</option>
+                <option value="useful">Useful</option>
+                <option value="important">Important</option>
+                <option value="critical">Critical</option>
+              </select>
+              <span id="editor-example-importance-preview" class="editor-example-importance-preview is-neutral">Not set</span>
+            </div>
+          </div>
+
+          <p id="editor-example-metadata-hint" class="dialog-hint">Tags can use `|` or commas. Rating is optional. Importance maps to gallery colors later.</p>
+        </section>
+      </div>
+
+      <div class="form-actions">
+        <button id="editor-example-metadata-cancel" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="editor-example-metadata-apply" type="button" class="btn btn-primary">Apply</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="shader-uniform-dialog">
     <form method="dialog" class="shader-uniform-dialog-form">
       <h2>Shader Uniforms</h2>
@@ -850,6 +976,76 @@
       <div id="editor-context-hints-dialog-content" class="editor-context-hints-dialog-content"></div>
       <div class="dialog-actions">
         <button id="editor-context-hints-dialog-close" type="button" class="btn btn-primary">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="favorites-dialog">
+    <form method="dialog" class="editor-context-hints-dialog-form favorites-dialog-form">
+      <div class="editor-context-hints-dialog-header">
+        <div class="editor-context-hints-dialog-heading">
+          <h2>Favorites</h2>
+          <p id="favorites-dialog-note" class="dialog-hint">Loading favorites...</p>
+        </div>
+        <button id="favorites-dialog-close-icon" type="button" class="btn-icon" title="Close favorites" aria-label="Close favorites">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div id="favorites-grid" class="favorites-grid">
+        <p id="favorites-empty" class="dialog-hint hidden">No favorites yet.</p>
+      </div>
+      <div class="dialog-actions">
+        <button id="favorites-dialog-close" type="button" class="btn btn-primary">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="theory-exercise-dialog">
+    <form method="dialog" class="editor-context-hints-dialog-form theory-exercise-dialog-form">
+      <div class="editor-context-hints-dialog-header">
+        <div class="editor-context-hints-dialog-heading">
+          <h2 id="theory-exercise-dialog-title">Exercise Preview</h2>
+          <p id="theory-exercise-dialog-note" class="dialog-hint">Loading exercise preview...</p>
+        </div>
+        <button id="theory-exercise-dialog-close-icon" type="button" class="btn-icon" title="Close exercise preview" aria-label="Close exercise preview">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div id="theory-exercise-dialog-stage" class="theory-exercise-dialog-stage"></div>
+      <p id="theory-exercise-dialog-empty" class="dialog-hint theory-exercise-dialog-empty">Loading exercise preview...</p>
+      <div class="dialog-actions">
+        <button id="theory-exercise-dialog-open" type="button" class="btn btn-secondary">Open Exercise</button>
+        <button id="theory-exercise-dialog-close" type="button" class="btn btn-primary">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="editor-shortcuts-dialog">
+    <form method="dialog" class="editor-context-hints-dialog-form">
+      <div class="editor-context-hints-dialog-header">
+        <div class="editor-context-hints-dialog-heading">
+          <h2>Shortcuts</h2>
+          <p id="editor-shortcuts-dialog-note" class="dialog-hint">Context-aware Vim shortcuts for the current editor state.</p>
+        </div>
+        <button id="editor-shortcuts-dialog-close-icon" type="button" class="btn-icon" title="Close shortcuts" aria-label="Close shortcuts">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div id="editor-shortcuts-dialog-content" class="editor-shortcuts-dialog-content"></div>
+      <div class="dialog-actions">
+        <button id="editor-shortcuts-dialog-close" type="button" class="btn btn-primary">Close</button>
       </div>
     </form>
   </dialog>

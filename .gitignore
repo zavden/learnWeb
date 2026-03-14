@@ -4,3 +4,10 @@ dist
 dist-ssr
 *.local
 .env
+
+# Keep only test and template chapters in this repo.
+material/ch[0-9][0-9]-*/
+!material/ch00-tests/
+!material/ch00-tests/**
+!material/ch01-templates/
+!material/ch01-templates/**

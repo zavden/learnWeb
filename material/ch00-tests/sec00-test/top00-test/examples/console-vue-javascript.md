@@ -1,6 +1,10 @@
 ---
 framework: vue
 console: true
+example_description: "Vue console demo with refs, computed values and a watch that reports reactive changes."
+example_tags: "vue|javascript|console|watch|computed"
+example_rating: 4
+example_importance: important
 ---
 
 # HTML

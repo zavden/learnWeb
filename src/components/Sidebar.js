@@ -3,13 +3,17 @@
 import { fetchTree, setChapterHidden } from '../utils/api.js';
 
 export class Sidebar {
-    constructor({ onTopicSelect, onCreateClick, onClipboardDefaultToggle, onVimDefaultToggle }) {
+    constructor({ onTopicSelect, onCreateClick, onClipboardDefaultToggle, onFavoritesClick, onPreviewInfoToggle, onVimDefaultToggle }) {
         this.onTopicSelect = onTopicSelect;
         this.onCreateClick = onCreateClick;
         this.onClipboardDefaultToggle = onClipboardDefaultToggle;
+        this.onFavoritesClick = onFavoritesClick;
+        this.onPreviewInfoToggle = onPreviewInfoToggle;
         this.onVimDefaultToggle = onVimDefaultToggle;
         this.container = document.getElementById('nav-tree');
         this.btnCreate = document.getElementById('btn-create');
+        this.btnFavorites = document.getElementById('btn-favorites');
+        this.btnSidebarPreviewInfo = document.getElementById('btn-sidebar-preview-info');
         this.btnSidebarClipboardDefault = document.getElementById('btn-sidebar-clipboard-default');
         this.btnSidebarVimDefault = document.getElementById('btn-sidebar-vim-default');
         this.btnToggleHiddenChapters = document.getElementById('btn-toggle-hidden-chapters');
@@ -19,12 +23,15 @@ export class Sidebar {
         this.tree = [];
         this.activeTopicPath = null;
         this.clipboardDefaultEnabled = true;
+        this.previewInfoVisible = true;
         this.vimDefaultEnabled = true;
         this.showHiddenChapters = false;
         this.expandedChapterIds = new Set();
         this.expandedSectionIds = new Set();
 
         this.btnCreate.addEventListener('click', () => this.onCreateClick());
+        this.btnFavorites?.addEventListener('click', () => this.onFavoritesClick?.());
+        this.btnSidebarPreviewInfo?.addEventListener('click', () => this.onPreviewInfoToggle?.(!this.previewInfoVisible));
         this.btnSidebarClipboardDefault?.addEventListener('click', () => this.onClipboardDefaultToggle?.(!this.clipboardDefaultEnabled));
         this.btnSidebarVimDefault?.addEventListener('click', () => this.onVimDefaultToggle?.(!this.vimDefaultEnabled));
         this.btnToggleHiddenChapters?.addEventListener('click', () => this.toggleHiddenChapters());
@@ -278,6 +285,14 @@ export class Sidebar {
     }
 
     _syncControlState() {
+        if (this.btnSidebarPreviewInfo) {
+            this.btnSidebarPreviewInfo.classList.toggle('is-active', this.previewInfoVisible);
+            this.btnSidebarPreviewInfo.setAttribute('aria-pressed', String(this.previewInfoVisible));
+            this.btnSidebarPreviewInfo.title = this.previewInfoVisible ? 'Hide preview info' : 'Show preview info';
+            this.btnSidebarPreviewInfo.setAttribute('aria-label', this.btnSidebarPreviewInfo.title);
+            this.btnSidebarPreviewInfo.textContent = this.previewInfoVisible ? 'Hide Info' : 'Show Info';
+        }
+
         if (this.btnSidebarClipboardDefault) {
             this.btnSidebarClipboardDefault.classList.toggle('is-active', this.clipboardDefaultEnabled);
             this.btnSidebarClipboardDefault.setAttribute('aria-pressed', String(this.clipboardDefaultEnabled));
@@ -308,6 +323,11 @@ export class Sidebar {
 
     setClipboardDefaultEnabled(enabled) {
         this.clipboardDefaultEnabled = Boolean(enabled);
+        this._syncControlState();
+    }
+
+    setPreviewInfoVisible(visible) {
+        this.previewInfoVisible = visible !== false;
         this._syncControlState();
     }
 

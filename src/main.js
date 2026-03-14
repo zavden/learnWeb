@@ -7,11 +7,18 @@ import { Editor } from './components/Editor.js';
 import { ExercisePanel } from './components/ExercisePanel.js';
 import { Preview } from './components/Preview.js';
 import { CreateDialog } from './components/CreateDialog.js';
+import { FavoritesDialog } from './components/FavoritesDialog.js';
 import { Gallery } from './components/Gallery.js';
+import { TheoryExerciseDialog } from './components/TheoryExerciseDialog.js';
+import { formatExampleRatingStars, getExampleImportanceMeta } from './utils/exampleEditorial.js';
 import {
+    addFavorite,
+    fetchFavorites,
+    fetchVimShortcutConfig,
     fetchTopicMain,
     fetchClipboardDefaultState,
     fetchVimDefaultState,
+    removeFavorite,
     updateClipboardDefaultState,
     updateVimDefaultState,
 } from './utils/api.js';
@@ -29,13 +36,19 @@ class App {
         this.sessionStorageKey = 'learncode.session';
         this.sidebarWidthStorageKey = 'learncode.sidebar.width';
         this.sidebarCollapsedStorageKey = 'learncode.sidebar.collapsed';
+        this.previewEditorialSummaryVisibleStorageKey = 'learncode.preview.editorialSummaryVisible';
         this.previewWidthMode = 'full';
         this.customPreviewWidth = 375;
+        this.previewViewportSliderVisible = false;
         this.previewZoomPercent = 100;
         this.previewZoomSliderVisible = false;
+        this.previewHeaderHidden = false;
+        this.previewEditorialSummaryVisible = window.localStorage.getItem(this.previewEditorialSummaryVisibleStorageKey) !== '0';
         this.clipboardDefaultEnabled = true;
         this.vimDefaultEnabled = true;
         this.theoryReturnState = null;
+        this.favoritePaths = new Set();
+        this.favoriteEntries = [];
 
         // UI Elements for View Switching
         this.appShell = document.getElementById('app');
@@ -51,8 +64,15 @@ class App {
         this.btnResetLayout = document.getElementById('btn-reset-layout');
         this.previewColumn = document.getElementById('preview-column');
         this.previewHeader = document.querySelector('.preview-header');
+        this.previewEditorialSummary = document.getElementById('preview-editorial-summary');
+        this.previewEditorialDescription = document.getElementById('preview-editorial-description');
+        this.previewEditorialMeta = document.getElementById('preview-editorial-meta');
         this.previewFrame = document.getElementById('preview-frame');
         this.previewFrameContainer = document.getElementById('preview-frame-container');
+        this.btnViewportSliderToggle = document.getElementById('btn-viewport-slider-toggle');
+        this.btnViewportWidthInc = document.getElementById('btn-viewport-width-inc');
+        this.btnViewportWidthDec = document.getElementById('btn-viewport-width-dec');
+        this.previewViewportRail = document.getElementById('preview-viewport-rail');
         this.btnExitTheoryEditor = document.getElementById('btn-exit-theory-editor');
         this.previewConsole = document.getElementById('preview-console');
         this.previewConsoleResizer = document.getElementById('preview-console-resizer');
@@ -76,6 +96,12 @@ class App {
             onRequestShaderUniformEdit: (uniformName) => {
                 this.editor?.openShaderUniformDialog?.(uniformName);
             },
+            onTheoryExerciseOpenRequest: (topicPath, filename) => {
+                this._openTheoryExercise(topicPath, filename);
+            },
+            onTheoryExercisePreviewRequest: (topicPath, filename) => {
+                this._openTheoryExercisePreview(topicPath, filename);
+            },
         });
 
         this.exercisePanel = new ExercisePanel({
@@ -94,6 +120,7 @@ class App {
                 if (this.editor.isEditingTheoryDocument()) {
                     this.theoryViewer.renderContent(this.editor.getTheoryContent());
                 }
+                this._syncPreviewEditorialSummary();
                 this.preview.update(documentModel, {
                     sessionKey: this._getPreviewSessionKey(documentModel),
                 });
@@ -101,6 +128,7 @@ class App {
             onExerciseStateChange: (presentation) => this.exercisePanel.render(presentation),
             onSessionStateChange: () => {
                 this._syncTheoryEditorUi();
+                this._syncCurrentExampleFavoriteState();
                 this._persistSessionState();
             },
             onResetShaderRuntime: () => {
@@ -112,16 +140,21 @@ class App {
             onOpenShaderPanel: () => {
                 this._openShaderPreviewPanel();
             },
+            onTogglePreviewHeader: () => {
+                this._togglePreviewHeaderHidden();
+            },
             onToggleShaderPause: () => {
                 this.preview?.toggleShaderPause?.();
             },
             onTogglePreviewAutoRender: () => this.preview.toggleAutoRender(),
+            onToggleConsole: () => this.preview.toggleConsole(),
             onOpenShaderTextures: () => {
                 this.editor?.openShaderTextureDialog?.();
             },
             onOpenShaderUniforms: () => {
                 this.editor?.openShaderUniformDialog?.();
             },
+            onToggleFavoriteCurrentExample: () => this._toggleCurrentExampleFavorite(),
             onToggleSidebar: () => {
                 const nextState = !this.appShell.classList.contains('sidebar-collapsed');
                 this._setSidebarCollapsed(nextState);
@@ -138,16 +171,30 @@ class App {
             onExampleSelect: (filename) => this.loadExample(filename),
         });
 
+        this.favoritesDialog = new FavoritesDialog({
+            onExampleSelect: (topicPath, filename) => this._openFavoriteExample(topicPath, filename),
+            onRemoveFavorite: (favoritePath) => this._removeFavoritePath(favoritePath),
+        });
+
+        this.theoryExerciseDialog = new TheoryExerciseDialog({
+            onOpenExample: (topicPath, filename) => this._openTheoryExercise(topicPath, filename),
+        });
+
         this.theoryViewer = new TheoryViewer({
             onEditRequest: () => this.openTheoryEditor(),
+            onExerciseOpenRequest: (topicPath, filename) => this._openTheoryExercise(topicPath, filename),
+            onExercisePreviewRequest: (topicPath, filename) => this._openTheoryExercisePreview(topicPath, filename),
         });
 
         this.sidebar = new Sidebar({
             onClipboardDefaultToggle: (enabled) => this._handleClipboardDefaultToggle(enabled),
+            onFavoritesClick: () => this._openFavoritesDialog(),
+            onPreviewInfoToggle: (visible) => this._setPreviewEditorialSummaryVisible(visible),
             onTopicSelect: (path, label) => this.selectTopic(path, label),
             onCreateClick: (topicPath) => this.openCreateDialog(topicPath),
             onVimDefaultToggle: (enabled) => this._handleVimDefaultToggle(enabled),
         });
+        this.sidebar.setPreviewInfoVisible(this.previewEditorialSummaryVisible);
 
         // Gallery Button
         const btnGallery = document.getElementById('btn-gallery');
@@ -189,9 +236,60 @@ class App {
 
     async _bootstrap() {
         await this.sidebar.load();
-        await this._restoreSessionState();
         await this._loadClipboardDefaultState();
-        await this._loadVimDefaultState();
+        await this._loadVimDefaultState({ persist: false });
+        await this._loadVimShortcutConfig();
+        await this._loadFavorites();
+        await this._restoreSessionState();
+    }
+
+    async _loadVimShortcutConfig() {
+        try {
+            const state = await fetchVimShortcutConfig();
+            this.editor.setVimShortcutConfig(state?.config || null);
+
+            if (Array.isArray(state?.warnings) && state.warnings.length > 0) {
+                console.warn('Falling back to default Vim shortcuts.', state.warnings.join(' | '));
+            }
+        } catch (error) {
+            console.error('Failed to load vim-shortcuts.yaml.', error);
+        }
+    }
+
+    async _loadFavorites() {
+        try {
+            const state = await fetchFavorites();
+            this.favoriteEntries = Array.isArray(state?.entries) ? state.entries : [];
+            this.favoritePaths = new Set(Array.isArray(state?.items) ? state.items : []);
+            this._syncCurrentExampleFavoriteState();
+        } catch (error) {
+            console.error('Failed to load favorites.', error);
+        }
+    }
+
+    async _openTheoryExercise(topicPath, filename) {
+        const normalizedTopicPath = String(topicPath || '').trim();
+        const normalizedFilename = String(filename || '').trim();
+        if (!normalizedTopicPath || !normalizedFilename) return;
+
+        if (this.editor?.isEditingTheoryDocument?.()) {
+            const saved = await this.editor.saveTheoryDocument();
+            if (!saved) return;
+            this.theoryReturnState = null;
+            this._syncTheoryEditorUi();
+        }
+
+        this.theoryViewer?.hide?.();
+
+        if (normalizedTopicPath !== this.currentTopicPath) {
+            await this.selectTopic(normalizedTopicPath, normalizedTopicPath, { persist: false });
+        }
+
+        await this.loadExample(normalizedFilename);
+    }
+
+    async _openTheoryExercisePreview(topicPath, filename) {
+        await this.theoryExerciseDialog?.open?.({ topicPath, filename });
     }
 
     async _loadClipboardDefaultState() {
@@ -205,13 +303,15 @@ class App {
         }
     }
 
-    async _loadVimDefaultState() {
+    async _loadVimDefaultState({ persist = true } = {}) {
         try {
             const state = await fetchVimDefaultState();
             this.vimDefaultEnabled = state?.enabled !== false;
             this.sidebar.setVimDefaultEnabled(this.vimDefaultEnabled);
             this.editor.setGlobalVimDefaultEnabled(this.vimDefaultEnabled, { showToast: false });
-            this._persistSessionState();
+            if (persist) {
+                this._persistSessionState();
+            }
         } catch (error) {
             console.error('Failed to load default Vim state.', error);
         }
@@ -257,6 +357,7 @@ class App {
 
         await this.gallery.load(topicPath);
         this.showGallery();
+        this._syncCurrentExampleFavoriteState();
 
         if (persist) {
             this._persistSessionState();
@@ -267,6 +368,7 @@ class App {
         this.showEditor();
         await this.editor.loadExample(filename);
         this._syncTheoryEditorUi();
+        this._syncCurrentExampleFavoriteState();
 
         if (persist) {
             this._persistSessionState();
@@ -292,6 +394,7 @@ class App {
             this.editor.loadTheoryDocument(data?.content || '');
             this.preview.renderNow();
             this._syncTheoryEditorUi();
+            this.editor.focusActiveEditor();
 
             if (persist) {
                 this._persistSessionState();
@@ -314,6 +417,7 @@ class App {
         if (returnState?.mode === 'editor' && returnState.snapshot) {
             this.showEditor();
             await this.editor.restoreWorkspaceSnapshot(returnState.snapshot);
+            this.editor.focusActiveEditor();
         } else {
             this.showGallery();
         }
@@ -331,7 +435,9 @@ class App {
         this.editorPanels.classList.add('hidden');
         this.exercisePanel.clear();
         this.preview.clear();
+        this._clearPreviewEditorialSummary();
         this._syncTheoryEditorUi();
+        this._syncCurrentExampleFavoriteState();
     }
 
     showEditor() {
@@ -339,6 +445,80 @@ class App {
         this.editorToolbar.classList.remove('hidden');
         this.editorPanels.classList.remove('hidden');
         this._syncTheoryEditorUi();
+        this._syncCurrentExampleFavoriteState();
+        this._syncPreviewEditorialSummary();
+    }
+
+    _getCurrentExampleFavoritePath() {
+        const filename = String(this.editor?.currentFilename || '').trim();
+        if (!this.currentTopicPath || !filename || this.editor?.isEditingTheoryDocument?.()) {
+            return '';
+        }
+
+        return `material/${this.currentTopicPath}/examples/${filename}`;
+    }
+
+    _syncCurrentExampleFavoriteState() {
+        const favoritePath = this._getCurrentExampleFavoritePath();
+        this.editor?.setCurrentExampleFavorite?.(favoritePath ? this.favoritePaths.has(favoritePath) : false);
+    }
+
+    async _toggleCurrentExampleFavorite() {
+        const favoritePath = this._getCurrentExampleFavoritePath();
+        if (!favoritePath) return;
+
+        try {
+            const state = this.favoritePaths.has(favoritePath)
+                ? await removeFavorite(favoritePath)
+                : await addFavorite(favoritePath);
+
+            this.favoriteEntries = Array.isArray(state?.entries) ? state.entries : [];
+            this.favoritePaths = new Set(Array.isArray(state?.items) ? state.items : []);
+            this._syncCurrentExampleFavoriteState();
+
+            if (this.favoritesDialog?.dialog?.open) {
+                await this.favoritesDialog.render(this.favoriteEntries);
+            }
+
+            this.editor?._showToast?.(
+                this.favoritePaths.has(favoritePath)
+                    ? 'Added to favorites.'
+                    : 'Removed from favorites.',
+                'success',
+            );
+        } catch (error) {
+            console.error('Failed to toggle favorite.', error);
+            this.editor?._showToast?.(`Favorite update failed: ${error.message}`, 'error');
+        }
+    }
+
+    async _removeFavoritePath(favoritePath) {
+        try {
+            const state = await removeFavorite(favoritePath);
+            this.favoriteEntries = Array.isArray(state?.entries) ? state.entries : [];
+            this.favoritePaths = new Set(Array.isArray(state?.items) ? state.items : []);
+            this._syncCurrentExampleFavoriteState();
+            await this.favoritesDialog.render(this.favoriteEntries);
+        } catch (error) {
+            console.error('Failed to remove favorite.', error);
+            this.editor?._showToast?.(`Favorite remove failed: ${error.message}`, 'error');
+        }
+    }
+
+    async _openFavoritesDialog() {
+        await this._loadFavorites();
+        this.favoritesDialog.open(this.favoriteEntries);
+    }
+
+    async _openFavoriteExample(topicPath, filename) {
+        const topic = this._findTopicByPath(topicPath);
+        if (!topic) return;
+
+        if (this.currentTopicPath !== topicPath) {
+            await this.selectTopic(topicPath, topic.label, { persist: false });
+        }
+
+        await this.loadExample(filename);
     }
 
     _initTheoryEditorControls() {
@@ -350,6 +530,33 @@ class App {
     _syncTheoryEditorUi() {
         const isEditingTheory = this.editor?.isEditingTheoryDocument?.() === true;
         this.btnExitTheoryEditor?.classList.toggle('hidden', !isEditingTheory);
+    }
+
+    _getPreviewHeaderHeight() {
+        if (!this.previewHeader || this.previewHeader.classList.contains('hidden')) {
+            return 0;
+        }
+
+        return this.previewHeader.getBoundingClientRect().height || 40;
+    }
+
+    _setPreviewHeaderHidden(hidden, { persist = true } = {}) {
+        this.previewHeaderHidden = Boolean(hidden);
+        this.previewHeader?.classList.toggle('hidden', this.previewHeaderHidden);
+        this._setConsoleHeight(
+            Number.parseInt(this.previewColumn?.style.getPropertyValue('--preview-console-height') || '', 10)
+                || this.previewConsoleDefaultHeight,
+            { persist: false },
+        );
+
+        if (persist) {
+            this._persistSessionState();
+        }
+    }
+
+    _togglePreviewHeaderHidden() {
+        this._setPreviewHeaderHidden(!this.previewHeaderHidden);
+        return this.previewHeaderHidden;
     }
 
     _initViewportResizer() {
@@ -367,6 +574,20 @@ class App {
         this.viewportSlider.addEventListener('input', (event) => {
             this._applyCustomPreviewWidth(event.target.value);
         });
+
+        this.btnViewportSliderToggle?.addEventListener('click', () => {
+            this._setViewportSliderVisible(!this.previewViewportSliderVisible);
+        });
+
+        this.btnViewportWidthInc?.addEventListener('click', () => {
+            this._adjustPreviewViewportWidth(1);
+        });
+
+        this.btnViewportWidthDec?.addEventListener('click', () => {
+            this._adjustPreviewViewportWidth(-1);
+        });
+
+        this._setViewportSliderVisible(false);
     }
 
     _initPreviewZoomControls() {
@@ -593,7 +814,7 @@ class App {
 
     _getConsoleBounds() {
         const previewColumnHeight = this.previewColumn?.getBoundingClientRect().height || window.innerHeight;
-        const previewHeaderHeight = this.previewHeader?.getBoundingClientRect().height || 40;
+        const previewHeaderHeight = this._getPreviewHeaderHeight();
         const resizerHeight = this.previewConsoleResizer?.getBoundingClientRect().height || 10;
         const maxHeight = Math.max(
             this.previewConsoleMinHeight,
@@ -641,6 +862,22 @@ class App {
         this.viewportSelect.value = 'custom';
     }
 
+    _setViewportSliderVisible(visible) {
+        this.previewViewportSliderVisible = Boolean(visible);
+        this.previewViewportRail?.classList.toggle('hidden', !this.previewViewportSliderVisible);
+        this.previewViewportRail?.setAttribute('aria-hidden', String(!this.previewViewportSliderVisible));
+        this.btnViewportSliderToggle?.setAttribute('aria-expanded', String(this.previewViewportSliderVisible));
+        this.btnViewportSliderToggle?.classList.toggle('is-active', this.previewViewportSliderVisible);
+        this._syncPreviewRailOffsets();
+
+        if (this.btnViewportSliderToggle) {
+            this.btnViewportSliderToggle.title = this.previewViewportSliderVisible
+                ? 'Hide viewport width slider'
+                : 'Show viewport width slider';
+            this.btnViewportSliderToggle.setAttribute('aria-label', this.btnViewportSliderToggle.title);
+        }
+    }
+
     _applyFullPreviewWidth({ persist = true } = {}) {
         if (!this.previewFrame) return;
 
@@ -668,16 +905,40 @@ class App {
         }
     }
 
+    _adjustPreviewViewportWidth(delta = 0) {
+        if (!this.previewFrame) return;
+
+        const currentWidth = this.previewWidthMode === 'full'
+            ? Math.round(this.previewColumn?.getBoundingClientRect().width || this.previewMinWidth)
+            : this.customPreviewWidth;
+        const sliderMin = Number.parseInt(this.viewportSlider?.min || '', 10);
+        const sliderMax = Number.parseInt(this.viewportSlider?.max || '', 10);
+        const minWidth = Number.isFinite(sliderMin) ? sliderMin : this.previewMinWidth;
+        const maxWidth = Number.isFinite(sliderMax) ? sliderMax : 1440;
+        const nextWidth = Math.max(minWidth, Math.min(maxWidth, currentWidth + Math.trunc(delta)));
+
+        this._applyCustomPreviewWidth(nextWidth);
+    }
+
     _setPreviewZoomControlsVisible(visible) {
         this.previewZoomSliderVisible = Boolean(visible);
         this.previewZoomControls?.classList.toggle('hidden', !this.previewZoomSliderVisible);
+        this.previewZoomControls?.setAttribute('aria-hidden', String(!this.previewZoomSliderVisible));
         this.btnPreviewZoomToggle?.setAttribute('aria-expanded', String(this.previewZoomSliderVisible));
         this.btnPreviewZoomToggle?.classList.toggle('is-active', this.previewZoomSliderVisible);
+        this._syncPreviewRailOffsets();
         if (this.btnPreviewZoomToggle) {
             this.btnPreviewZoomToggle.title = this.previewZoomSliderVisible
                 ? 'Hide preview zoom controls'
                 : 'Show preview zoom controls';
         }
+    }
+
+    _syncPreviewRailOffsets() {
+        this.previewZoomControls?.classList.toggle(
+            'is-shifted-for-viewport',
+            this.previewZoomSliderVisible && this.previewViewportSliderVisible,
+        );
     }
 
     _adjustPreviewZoom(delta = 0) {
@@ -690,13 +951,19 @@ class App {
         const nextZoom = Math.max(50, Math.min(200, Math.round((Number(percent) || 100) / 5) * 5));
         this.previewZoomPercent = nextZoom;
         const scale = nextZoom / 100;
+        const isDefaultZoom = nextZoom === 100;
+        const widthValue = this.previewWidthMode === 'full'
+            ? '100%'
+            : `${this.customPreviewWidth}px`;
 
         this.previewFrame.style.setProperty('--preview-zoom-scale', String(scale));
-        this.previewFrame.style.width = this.previewWidthMode === 'full'
-            ? `${100 / scale}%`
-            : `${this.customPreviewWidth / scale}px`;
-        this.previewFrame.style.height = `${100 / scale}%`;
-        this.previewFrame.style.transform = `scale(${scale})`;
+        this.previewFrame.style.width = isDefaultZoom
+            ? widthValue
+            : this.previewWidthMode === 'full'
+                ? `${100 / scale}%`
+                : `${this.customPreviewWidth / scale}px`;
+        this.previewFrame.style.height = isDefaultZoom ? '100%' : `${100 / scale}%`;
+        this.previewFrame.style.transform = isDefaultZoom ? '' : `scale(${scale})`;
         this.previewZoomSlider.value = String(nextZoom);
         this.previewZoomDisplay.textContent = `${nextZoom}%`;
         this.btnPreviewZoomDec?.toggleAttribute('disabled', nextZoom <= 50);
@@ -834,6 +1101,7 @@ class App {
                     10,
                 ) || this.previewConsoleDefaultHeight,
                 customWidth: this.previewWidthMode === 'custom' ? this.customPreviewWidth : null,
+                headerHidden: this.previewHeaderHidden,
                 zoom: this.previewZoomPercent,
                 widthMode: this.previewWidthMode,
             },
@@ -869,6 +1137,8 @@ class App {
     }
 
     _restorePreviewState(previewState = {}) {
+        this._setPreviewHeaderHidden(previewState.headerHidden === true, { persist: false });
+
         const columnWidth = Number.isFinite(previewState.columnWidth)
             ? previewState.columnWidth
             : Number.parseInt(previewState.columnWidth, 10);
@@ -911,6 +1181,7 @@ class App {
         const topicPath = typeof sessionState.topicPath === 'string' ? sessionState.topicPath.trim() : '';
         if (!topicPath) {
             this.editor.restoreSessionState(sessionState.editor || {});
+            this.editor.focusActiveEditor();
             this._persistSessionState();
             return;
         }
@@ -918,6 +1189,7 @@ class App {
         const topic = this._findTopicByPath(topicPath);
         if (!topic) {
             this.editor.restoreSessionState(sessionState.editor || {});
+            this.editor.focusActiveEditor();
             this._persistSessionState();
             return;
         }
@@ -936,6 +1208,7 @@ class App {
             try {
                 await this.openTheoryEditor({ persist: false });
                 this.editor.restoreSessionState(sessionState.editor || {});
+                this.editor.focusActiveEditor();
             } catch (error) {
                 console.warn('Failed to restore previous theory session.', error);
                 this.showGallery();
@@ -954,6 +1227,7 @@ class App {
         try {
             await this.loadExample(filenameToRestore, { persist: false });
             this.editor.restoreSessionState(sessionState.editor || {});
+            this.editor.focusActiveEditor();
         } catch (error) {
             console.warn('Failed to restore previous example session.', error);
             this.showGallery();
@@ -965,6 +1239,70 @@ class App {
     openCreateDialog(preselectedTopicPath = null) {
         const tree = this.sidebar.getTree();
         this.createDialog.open(tree, preselectedTopicPath);
+    }
+
+    _clearPreviewEditorialSummary() {
+        if (!this.previewEditorialSummary || !this.previewEditorialDescription || !this.previewEditorialMeta) return;
+        this.previewEditorialSummary.classList.add('hidden');
+        this.previewEditorialDescription.textContent = '';
+        this.previewEditorialMeta.innerHTML = '';
+    }
+
+    _setPreviewEditorialSummaryVisible(visible) {
+        this.previewEditorialSummaryVisible = visible !== false;
+        window.localStorage.setItem(
+            this.previewEditorialSummaryVisibleStorageKey,
+            this.previewEditorialSummaryVisible ? '1' : '0'
+        );
+        this.sidebar?.setPreviewInfoVisible?.(this.previewEditorialSummaryVisible);
+        this._syncPreviewEditorialSummary();
+    }
+
+    _syncPreviewEditorialSummary() {
+        if (!this.previewEditorialSummary || !this.previewEditorialDescription || !this.previewEditorialMeta) return;
+
+        if (
+            !this.previewEditorialSummaryVisible
+            || !this.galleryView.classList.contains('hidden')
+            || this.editor?.isEditingTheoryDocument?.()
+        ) {
+            this._clearPreviewEditorialSummary();
+            return;
+        }
+
+        const metadata = this.editor?.getCurrentEditorialMetadata?.();
+        if (!metadata) {
+            this._clearPreviewEditorialSummary();
+            return;
+        }
+
+        this.previewEditorialDescription.textContent = metadata.description || 'Example metadata';
+        this.previewEditorialMeta.innerHTML = '';
+
+        const importanceMeta = getExampleImportanceMeta(metadata.importance);
+        if (importanceMeta) {
+            const importance = document.createElement('span');
+            importance.className = `preview-editorial-pill is-${importanceMeta.accent}`;
+            importance.textContent = importanceMeta.label;
+            this.previewEditorialMeta.appendChild(importance);
+        }
+
+        const ratingStars = formatExampleRatingStars(metadata.rating);
+        if (ratingStars) {
+            const rating = document.createElement('span');
+            rating.className = 'preview-editorial-stars';
+            rating.textContent = ratingStars;
+            this.previewEditorialMeta.appendChild(rating);
+        }
+
+        (metadata.tags || []).slice(0, 4).forEach((tag) => {
+            const tagPill = document.createElement('span');
+            tagPill.className = 'preview-editorial-tag';
+            tagPill.textContent = tag;
+            this.previewEditorialMeta.appendChild(tagPill);
+        });
+
+        this.previewEditorialSummary.classList.remove('hidden');
     }
 }
 

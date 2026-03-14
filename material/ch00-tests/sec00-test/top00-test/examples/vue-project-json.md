@@ -2,6 +2,10 @@
 framework: vue
 mode: multi-file
 entry: src/main.ts
+example_description: "Vue TypeScript project that reads local JSON data and combines it with SCSS styling."
+example_tags: "vue|typescript|json|project|scss"
+example_rating: 5
+example_importance: important
 ---
 
 ## @file src/main.ts

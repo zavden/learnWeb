@@ -1,6 +1,15 @@
 import { marked } from 'marked';
+import { injectTheoryExerciseEmbeds } from './theoryExerciseEmbeds.js';
 
 let markedConfigured = false;
+
+function serializeInlineScriptValue(value) {
+    return JSON.stringify(value)
+        .replace(/<\/script/gi, '<\\/script')
+        .replace(/<!--/g, '<\\!--')
+        .replace(/\u2028/g, '\\u2028')
+        .replace(/\u2029/g, '\\u2029');
+}
 
 function ensureMarkedConfigured() {
     if (markedConfigured) return;
@@ -13,15 +22,27 @@ function ensureMarkedConfigured() {
     markedConfigured = true;
 }
 
-export function renderTheoryHtml(content = '') {
+export function renderTheoryHtml(content = '', options = {}) {
     ensureMarkedConfigured();
-    return marked.parse(typeof content === 'string' ? content : String(content ?? ''));
+    const source = typeof content === 'string' ? content : String(content ?? '');
+    const prepared = injectTheoryExerciseEmbeds(source, options.exerciseEmbeds || {});
+    return marked.parse(prepared);
 }
 
 export function renderTheoryPreviewDocument(content = '', options = {}) {
     const assetBase = options.topicPath ? `/api/topic/${options.topicPath}/assets/` : '';
+    const renderId = Number.isFinite(options.renderId) ? options.renderId : 0;
+    const previewPayload = Object.fromEntries(
+        Object.entries(options.exerciseEmbeds || {}).map(([filename, embed]) => [
+            filename,
+            typeof embed?.previewSrcdoc === 'string' ? embed.previewSrcdoc : '',
+        ])
+    );
+    const serializedPreviewPayload = serializeInlineScriptValue(previewPayload);
     const renderedContent = String(content || '').trim()
-        ? renderTheoryHtml(content)
+        ? renderTheoryHtml(content, {
+            exerciseEmbeds: options.exerciseEmbeds || {},
+        })
         : `
         <div class="theory-empty-state">
           <div class="theory-empty-icon">📝</div>
@@ -145,6 +166,168 @@ export function renderTheoryPreviewDocument(content = '', options = {}) {
       margin: 24px 0;
     }
 
+    .theory-exercise-embed {
+      margin: 18px 0;
+      padding: 16px 18px;
+      border: 1px solid rgba(96, 165, 250, 0.18);
+      border-radius: 16px;
+      background:
+        linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(2, 6, 23, 0.96)),
+        rgba(15, 23, 42, 0.9);
+      box-shadow: 0 14px 34px rgba(2, 6, 23, 0.24);
+      cursor: pointer;
+    }
+
+    .theory-exercise-embed:hover,
+    .theory-exercise-embed:focus-within {
+      border-color: rgba(125, 211, 252, 0.34);
+      transform: translateY(-1px);
+    }
+
+    .theory-exercise-embed.is-missing {
+      border-style: dashed;
+      border-color: rgba(248, 113, 113, 0.28);
+      cursor: default;
+    }
+
+    .theory-exercise-embed-header,
+    .theory-exercise-embed-meta,
+    .theory-exercise-embed-actions,
+    .theory-exercise-embed-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .theory-exercise-embed-header {
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .theory-exercise-embed-kicker {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #7dd3fc;
+    }
+
+    .theory-exercise-embed-file {
+      font-size: 12px;
+    }
+
+    .theory-exercise-embed-title {
+      font-size: 17px;
+      font-weight: 600;
+      color: #f8fafc;
+      margin-bottom: 8px;
+    }
+
+    .theory-exercise-embed-description {
+      margin: 0 0 12px;
+      color: #cbd5e1;
+    }
+
+    .theory-exercise-embed-preview {
+      margin: 0 0 12px;
+      height: 170px;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #020617;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.48);
+    }
+
+    .theory-exercise-embed-preview iframe {
+      width: 100%;
+      height: 100%;
+      display: block;
+      border: none;
+      background: #fff;
+    }
+
+    .theory-exercise-embed-preview.is-empty {
+      display: grid;
+      place-items: center;
+      color: #94a3b8;
+      font-size: 12px;
+    }
+
+    .theory-exercise-embed-tags {
+      margin-bottom: 12px;
+    }
+
+    .theory-exercise-embed-tag,
+    .theory-exercise-embed-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      background: rgba(15, 23, 42, 0.76);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      color: #e2e8f0;
+    }
+
+    .theory-exercise-embed-badge.is-critical {
+      border-color: rgba(248, 113, 113, 0.28);
+      color: #fecaca;
+    }
+
+    .theory-exercise-embed-badge.is-important {
+      border-color: rgba(251, 191, 36, 0.28);
+      color: #fde68a;
+    }
+
+    .theory-exercise-embed-badge.is-useful {
+      border-color: rgba(34, 211, 238, 0.28);
+      color: #a5f3fc;
+    }
+
+    .theory-exercise-embed-badge.is-trivial {
+      border-color: rgba(74, 222, 128, 0.28);
+      color: #bbf7d0;
+    }
+
+    .theory-exercise-embed-rating {
+      color: #fbbf24;
+      letter-spacing: 0.08em;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .theory-exercise-embed-actions {
+      margin-top: 14px;
+    }
+
+    .theory-exercise-embed-btn {
+      appearance: none;
+      border: 1px solid rgba(125, 211, 252, 0.24);
+      background: rgba(37, 99, 235, 0.18);
+      color: #dbeafe;
+      border-radius: 999px;
+      padding: 6px 12px;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .theory-exercise-embed-btn.is-secondary {
+      background: rgba(15, 23, 42, 0.52);
+      color: #e5e7eb;
+      border-color: rgba(148, 163, 184, 0.18);
+    }
+
+    .theory-exercise-embed-btn[disabled] {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     .theory-empty-state {
       min-height: calc(100vh - 48px);
       display: grid;
@@ -161,6 +344,75 @@ export function renderTheoryPreviewDocument(content = '', options = {}) {
 </head>
 <body>
   <main>${renderedContent}</main>
+  <script>
+    (() => {
+      const MESSAGE_SOURCE = 'learncode-theory-preview';
+      const RENDER_ID = ${JSON.stringify(renderId)};
+
+      function post(kind, filename) {
+        if (!filename) return;
+        window.parent?.postMessage({
+          source: MESSAGE_SOURCE,
+          renderId: RENDER_ID,
+          kind,
+          filename,
+        }, '*');
+      }
+
+      const previewPayload = ${serializedPreviewPayload};
+
+      document.querySelectorAll('[data-theory-exercise-preview-slot]').forEach((slot) => {
+        const filename = String(slot.getAttribute('data-theory-exercise-preview-slot') || '').trim();
+        const previewSrcdoc = previewPayload[filename] || '';
+        const exists = slot.closest('.theory-exercise-embed')?.getAttribute('data-theory-exercise-exists') === '1';
+
+        if (!previewSrcdoc) {
+          slot.classList.add('is-empty');
+          slot.innerHTML = '<span>' + (exists ? 'Preview unavailable' : 'Exercise missing') + '</span>';
+          return;
+        }
+
+        const iframe = document.createElement('iframe');
+        iframe.sandbox = 'allow-scripts';
+        iframe.loading = 'lazy';
+        iframe.srcdoc = previewSrcdoc;
+        slot.classList.remove('is-empty');
+        slot.innerHTML = '';
+        slot.appendChild(iframe);
+      });
+
+      document.addEventListener('click', (event) => {
+        const openButton = event.target.closest('[data-theory-exercise-open]');
+        if (openButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          post('open-exercise', openButton.getAttribute('data-theory-exercise-open'));
+          return;
+        }
+
+        const previewButton = event.target.closest('[data-theory-exercise-preview]');
+        if (previewButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          post('preview-exercise', previewButton.getAttribute('data-theory-exercise-preview'));
+          return;
+        }
+
+        const card = event.target.closest('.theory-exercise-embed[data-theory-exercise-exists="1"]');
+        if (card) {
+          post('preview-exercise', card.getAttribute('data-theory-exercise-file'));
+        }
+      });
+
+      document.addEventListener('keydown', (event) => {
+        const card = event.target.closest('.theory-exercise-embed[data-theory-exercise-exists="1"]');
+        if (!card) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        post('preview-exercise', card.getAttribute('data-theory-exercise-file'));
+      });
+    })();
+  </script>
 </body>
 </html>`;
 }

@@ -7,6 +7,10 @@ exercise_locked_files: styles.css
 exercise_solution_example: exercise-html-solution.md
 example_stage: exercise
 console: true
+example_description: "Guided HTML exercise with locked CSS and a tiny JavaScript tracker for progress clicks."
+example_tags: "exercise|html|css|javascript|console"
+example_rating: 5
+example_importance: critical
 ---
 
 # HTML

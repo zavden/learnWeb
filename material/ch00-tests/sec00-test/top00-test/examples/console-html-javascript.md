@@ -1,5 +1,9 @@
 ---
 console: true
+example_description: "Trace synchronous logs, a promise microtask and a timeout from one HTML button."
+example_tags: "html|javascript|console|events|async"
+example_rating: 4
+example_importance: useful
 ---
 
 # HTML

@@ -1,0 +1,4 @@
+interface:
+  display_name: "LearnWeb Examples"
+  short_description: "Create and edit LearnWeb examples"
+  default_prompt: "Use $learnweb-example-authoring to create or refine an example Markdown file for this repo."

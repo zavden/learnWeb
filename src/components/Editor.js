@@ -30,6 +30,8 @@ import {
 import {
     bindVimView,
     createVimExtension,
+    getDefaultVimShortcutConfig,
+    getVimShortcutSections,
     installSystemClipboardBridge,
     isSystemClipboardApiAvailable,
     setSystemClipboardEnabled,
@@ -39,6 +41,7 @@ import { vueScriptEnterCommand } from '../editor/vueSmartEnter.js';
 import { fetchExample, fetchTopicAssets, modifyExample, modifyTopicMain, removeExample, renameExample, saveExample } from '../utils/api.js';
 import { resolveExerciseComparison } from '../utils/exerciseComparison.js';
 import { buildQuickOpenMatches } from '../utils/fileQuickOpen.js';
+import { findDirectionalPanelTargetIndex, getWrappedPanelIndex } from '../utils/panelNavigation.js';
 import {
     buildExampleDocument,
     cloneExampleDocument,
@@ -46,6 +49,7 @@ import {
     createEmptyExampleDocument,
     duplicateDocumentFile,
     getDocumentEntryCandidates,
+    getExampleEditorialMetadata,
     getDocumentFileVisibilityEntries,
     getExerciseConfig,
     getDocumentLanguageOptions,
@@ -57,6 +61,7 @@ import {
     setDocumentEntryPath,
     synchronizeDocument,
     updateDocumentHiddenFiles,
+    updateExampleEditorialMetadata,
     updateShaderResolution,
     updateShaderTextureDefinitions,
     updateShaderUniformDefinitions,
@@ -68,6 +73,14 @@ import { createTheoryDocument, getTheoryDocumentContent, isTheoryDocument } from
 
 const SHADER_UNIFORM_TYPE_OPTIONS = ['float', 'int', 'bool', 'vec2', 'vec3', 'vec4'];
 const SHADER_BUILT_IN_UNIFORM_NAMES = ['u_time', 'u_delta', 'u_resolution', 'u_mouse', 'u_mouse_pressed', 'u_frame'];
+const COLUMN_GUIDE_COLUMN = 80;
+const EXAMPLE_IMPORTANCE_OPTIONS = [
+    { value: '', label: 'Not set', accent: 'neutral' },
+    { value: 'trivial', label: 'Trivial', accent: 'trivial' },
+    { value: 'useful', label: 'Useful', accent: 'useful' },
+    { value: 'important', label: 'Important', accent: 'important' },
+    { value: 'critical', label: 'Critical', accent: 'critical' },
+];
 const setEditorDiagnosticsEffect = StateEffect.define();
 const EMPTY_EDITOR_DIAGNOSTICS = Object.freeze({
     decorations: Decoration.none,
@@ -164,6 +177,25 @@ const editorDiagnosticsField = StateField.define({
     ],
 });
 
+function createColumnGuideExtension(column = COLUMN_GUIDE_COLUMN) {
+    return EditorView.theme({
+        '.cm-content': {
+            position: 'relative',
+        },
+        '.cm-content::before': {
+            content: '""',
+            position: 'absolute',
+            top: '0',
+            bottom: '0',
+            left: `${column}ch`,
+            width: '1px',
+            background: 'rgba(240, 136, 62, 0.26)',
+            boxShadow: '0 0 0 1px rgba(240, 136, 62, 0.1)',
+            pointerEvents: 'none',
+        },
+    });
+}
+
 export class Editor {
     constructor({
         getShaderPersistedState,
@@ -174,10 +206,13 @@ export class Editor {
         onSessionStateChange,
         onOpenShaderControls,
         onOpenShaderPanel,
+        onTogglePreviewHeader,
         onToggleShaderPause,
         onTogglePreviewAutoRender,
+        onToggleConsole,
         onOpenShaderTextures,
         onOpenShaderUniforms,
+        onToggleFavoriteCurrentExample,
         onToggleSidebar,
         onCenterWorkspace,
     }) {
@@ -189,10 +224,13 @@ export class Editor {
         this.onSessionStateChange = onSessionStateChange;
         this.onOpenShaderControls = onOpenShaderControls;
         this.onOpenShaderPanel = onOpenShaderPanel;
+        this.onTogglePreviewHeader = onTogglePreviewHeader;
         this.onToggleShaderPause = onToggleShaderPause;
         this.onTogglePreviewAutoRender = onTogglePreviewAutoRender;
+        this.onToggleConsole = onToggleConsole;
         this.onOpenShaderTextures = onOpenShaderTextures;
         this.onOpenShaderUniforms = onOpenShaderUniforms;
+        this.onToggleFavoriteCurrentExample = onToggleFavoriteCurrentExample;
         this.onToggleSidebar = onToggleSidebar;
         this.onCenterWorkspace = onCenterWorkspace;
 
@@ -205,10 +243,13 @@ export class Editor {
         this.layoutModeStorageKey = 'learncode.editor.layout';
         this.vimEnabledStorageKey = 'learncode.editor.vim';
         this.systemClipboardStorageKey = 'learncode.editor.systemClipboard';
+        this.columnGuideStorageKey = 'learncode.editor.columnGuide';
         this.vimEnabled = this._readVimEnabled();
         this.systemClipboardEnabled = this._readSystemClipboardEnabled();
+        this.columnGuideEnabled = this._readColumnGuideEnabled();
+        this.vimShortcutConfig = getDefaultVimShortcutConfig();
         this.vimModeLabel = this.vimEnabled ? 'NORMAL' : '';
-        this.layoutMode = this.vimEnabled ? 'tabs' : this._readLayoutMode();
+        this.layoutMode = this._readLayoutMode(this.vimEnabled ? 'tabs' : 'panels');
         this.systemClipboardAvailable = isSystemClipboardApiAvailable();
         installSystemClipboardBridge();
         setSystemClipboardEnabled(this.systemClipboardEnabled);
@@ -225,14 +266,16 @@ export class Editor {
         this.btnSave = document.getElementById('btn-save');
         this.btnModify = document.getElementById('btn-modify');
         this.btnRemove = document.getElementById('btn-remove');
-        this.btnRename = document.getElementById('btn-rename');
         this.btnAddFile = document.getElementById('btn-add-file');
+        this.btnToggleFavoriteExample = document.getElementById('btn-toggle-favorite-example');
+        this.btnEditExampleMetadata = document.getElementById('btn-edit-example-metadata');
         this.btnEditShaderUniforms = document.getElementById('btn-edit-shader-uniforms');
         this.btnEditShaderTextures = document.getElementById('btn-edit-shader-textures');
         this.btnEditFileVisibility = document.getElementById('btn-edit-file-visibility');
         this.btnDuplicateFile = document.getElementById('btn-duplicate-file');
         this.btnEditFile = document.getElementById('btn-edit-file');
         this.btnDeleteFile = document.getElementById('btn-delete-file');
+        this.btnColumnGuideToggle = document.getElementById('btn-column-guide-toggle');
         this.btnQuickOpenFile = document.getElementById('btn-quick-open-file');
         this.btnLayout = document.getElementById('btn-editor-layout');
         this.btnContextHints = document.getElementById('btn-editor-context-hints');
@@ -258,6 +301,16 @@ export class Editor {
         this.fileDialogCancel = document.getElementById('editor-file-dialog-cancel');
         this.fileDialogConfirm = document.getElementById('editor-file-dialog-confirm');
         this.fileDialogForm = document.getElementById('editor-file-form');
+        this.exampleMetadataDialog = document.getElementById('editor-example-metadata-dialog');
+        this.exampleDescriptionInput = document.getElementById('editor-example-description');
+        this.exampleTagsInput = document.getElementById('editor-example-tags');
+        this.exampleRatingStars = document.getElementById('editor-example-rating-stars');
+        this.btnExampleRatingClear = document.getElementById('btn-editor-example-rating-clear');
+        this.exampleImportanceSelect = document.getElementById('editor-example-importance');
+        this.exampleImportancePreview = document.getElementById('editor-example-importance-preview');
+        this.exampleMetadataHint = document.getElementById('editor-example-metadata-hint');
+        this.btnExampleMetadataCancel = document.getElementById('editor-example-metadata-cancel');
+        this.btnExampleMetadataApply = document.getElementById('editor-example-metadata-apply');
         this.shaderUniformDialog = document.getElementById('shader-uniform-dialog');
         this.shaderUniformList = document.getElementById('shader-uniform-list');
         this.shaderUniformEmpty = document.getElementById('shader-uniform-empty');
@@ -317,6 +370,11 @@ export class Editor {
         this.contextHintsDialogNote = document.getElementById('editor-context-hints-dialog-note');
         this.btnContextHintsDialogClose = document.getElementById('editor-context-hints-dialog-close');
         this.btnContextHintsDialogCloseIcon = document.getElementById('editor-context-hints-dialog-close-icon');
+        this.shortcutsDialog = document.getElementById('editor-shortcuts-dialog');
+        this.shortcutsDialogContent = document.getElementById('editor-shortcuts-dialog-content');
+        this.shortcutsDialogNote = document.getElementById('editor-shortcuts-dialog-note');
+        this.btnShortcutsDialogClose = document.getElementById('editor-shortcuts-dialog-close');
+        this.btnShortcutsDialogCloseIcon = document.getElementById('editor-shortcuts-dialog-close-icon');
         this.fileContextMenu = document.getElementById('editor-file-context-menu');
         this.btnContextHideFile = document.getElementById('btn-context-hide-file');
         this.fileDialogState = {
@@ -325,6 +383,9 @@ export class Editor {
             suggestedPath: '',
             suggestedRole: '',
             templateId: 'custom',
+        };
+        this.exampleMetadataDialogState = {
+            rating: 0,
         };
         this.shaderUniformDialogState = {
             editingIndex: null,
@@ -346,24 +407,33 @@ export class Editor {
         this.fileContextMenuState = {
             fileId: null,
         };
+        this._dialogFocusTargetFileId = null;
+        this._restoreFocusFrameId = 0;
+        this.currentExampleFavorite = false;
 
         this._initButtons();
         this._initShortcuts();
         this._initPanelControls();
         this._initLayoutControls();
         this._initFileControls();
+        this._initExampleMetadataDialog();
         this._initQuickOpenDialog();
         this._initShaderUniformDialog();
         this._initShaderTextureDialog();
         this._initFileVisibilityDialog();
         this._initContextHintsDialog();
+        this._initShortcutsDialog();
         this._updateFontSize(0);
         this._applyDocument(createEmptyExampleDocument(), { notify: false });
     }
 
-    _readLayoutMode() {
+    _readLayoutMode(fallback = 'panels') {
         const stored = window.localStorage.getItem(this.layoutModeStorageKey);
-        return stored === 'tabs' ? 'tabs' : 'panels';
+        if (stored === 'tabs' || stored === 'panels') {
+            return stored;
+        }
+
+        return fallback === 'tabs' ? 'tabs' : 'panels';
     }
 
     _readVimEnabled() {
@@ -374,6 +444,11 @@ export class Editor {
     _readSystemClipboardEnabled() {
         const stored = window.localStorage.getItem(this.systemClipboardStorageKey);
         return stored == null ? true : stored !== '0';
+    }
+
+    _readColumnGuideEnabled() {
+        const stored = window.localStorage.getItem(this.columnGuideStorageKey);
+        return stored == null ? false : stored !== '0';
     }
 
     _sanitizePanelState(panelState = {}) {
@@ -836,6 +911,10 @@ export class Editor {
         if (this.btnAutoFit) {
             this.btnAutoFit.addEventListener('click', () => this._handleAutoFit());
         }
+
+        this.btnColumnGuideToggle?.addEventListener('click', () => {
+            this._setColumnGuideEnabled(!this.columnGuideEnabled);
+        });
     }
 
     _initLayoutControls() {
@@ -849,19 +928,25 @@ export class Editor {
         });
 
         this.btnLayout?.addEventListener('click', () => {
-            if (this.vimEnabled) return;
-            const nextMode = this.layoutMode === 'panels' ? 'tabs' : 'panels';
-            this._setLayoutMode(nextMode);
+            this._toggleLayoutMode();
         });
 
         this._updateLayoutButton();
         this._updateVimUi();
+        this._updateColumnGuideUi();
     }
 
     _initContextHintsDialog() {
         this.btnContextHints?.addEventListener('click', () => this._openContextHintsDialog());
         this.btnContextHintsDialogClose?.addEventListener('click', () => this.contextHintsDialog?.close());
         this.btnContextHintsDialogCloseIcon?.addEventListener('click', () => this.contextHintsDialog?.close());
+        this.contextHintsDialog?.addEventListener('close', () => this._scheduleEditorFocusRestore());
+    }
+
+    _initShortcutsDialog() {
+        this.btnShortcutsDialogClose?.addEventListener('click', () => this.shortcutsDialog?.close());
+        this.btnShortcutsDialogCloseIcon?.addEventListener('click', () => this.shortcutsDialog?.close());
+        this.shortcutsDialog?.addEventListener('close', () => this._scheduleEditorFocusRestore());
     }
 
     _initFileControls() {
@@ -901,6 +986,7 @@ export class Editor {
             event.preventDefault();
             this._handleFileDialogSubmit();
         });
+        this.fileDialog?.addEventListener('close', () => this._scheduleEditorFocusRestore());
     }
 
     _initQuickOpenDialog() {
@@ -918,7 +1004,112 @@ export class Editor {
             if (this.quickOpenInput) {
                 this.quickOpenInput.value = '';
             }
+
+            this._scheduleEditorFocusRestore();
         });
+    }
+
+    _initExampleMetadataDialog() {
+        this.btnEditExampleMetadata?.addEventListener('click', () => this._openExampleMetadataDialog());
+        this.btnExampleRatingClear?.addEventListener('click', () => this._setExampleMetadataDialogRating(0));
+        this.exampleImportanceSelect?.addEventListener('change', () => this._syncExampleMetadataImportancePreview());
+        this.btnExampleMetadataCancel?.addEventListener('click', () => this.exampleMetadataDialog?.close());
+        this.btnExampleMetadataApply?.addEventListener('click', async () => this._applyExampleMetadataDialog());
+        this.exampleMetadataDialog?.addEventListener('close', () => this._scheduleEditorFocusRestore());
+        this._renderExampleMetadataRatingStars();
+    }
+
+    _getExampleImportanceOption(value = '') {
+        return EXAMPLE_IMPORTANCE_OPTIONS.find((option) => option.value === value) || EXAMPLE_IMPORTANCE_OPTIONS[0];
+    }
+
+    _setExampleMetadataHint(message, type = 'info') {
+        if (!this.exampleMetadataHint) return;
+        this.exampleMetadataHint.textContent = message;
+        this.exampleMetadataHint.classList.toggle('is-error', type === 'error');
+    }
+
+    _setExampleMetadataDialogRating(value = 0) {
+        const numericValue = Number.isInteger(value) ? value : Number.parseInt(value, 10);
+        this.exampleMetadataDialogState.rating = Number.isInteger(numericValue)
+            ? Math.max(0, Math.min(5, numericValue))
+            : 0;
+        this._renderExampleMetadataRatingStars();
+    }
+
+    _renderExampleMetadataRatingStars() {
+        if (!this.exampleRatingStars) return;
+
+        const currentRating = this.exampleMetadataDialogState.rating || 0;
+        this.exampleRatingStars.innerHTML = '';
+
+        for (let value = 1; value <= 5; value += 1) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = `editor-example-rating-star ${value <= currentRating ? 'is-active' : ''}`;
+            button.setAttribute('aria-label', `Set rating to ${value} star${value === 1 ? '' : 's'}`);
+            button.setAttribute('aria-pressed', String(value === currentRating));
+            button.textContent = '★';
+            button.addEventListener('click', () => {
+                this._setExampleMetadataDialogRating(value === currentRating ? 0 : value);
+            });
+            this.exampleRatingStars.appendChild(button);
+        }
+    }
+
+    _syncExampleMetadataImportancePreview() {
+        if (!this.exampleImportancePreview || !this.exampleImportanceSelect) return;
+
+        const option = this._getExampleImportanceOption(this.exampleImportanceSelect.value);
+        this.exampleImportancePreview.textContent = option.label;
+        this.exampleImportancePreview.className = `editor-example-importance-preview is-${option.accent}`;
+    }
+
+    _openExampleMetadataDialog() {
+        if (!this.exampleMetadataDialog || this._isTheoryDocumentTarget()) return;
+
+        const editorialMetadata = getExampleEditorialMetadata(this.currentDocument);
+        this._rememberEditorFocusTarget();
+
+        if (this.exampleDescriptionInput) {
+            this.exampleDescriptionInput.value = editorialMetadata.description || '';
+        }
+
+        if (this.exampleTagsInput) {
+            this.exampleTagsInput.value = editorialMetadata.tagsText || '';
+        }
+
+        if (this.exampleImportanceSelect) {
+            this.exampleImportanceSelect.value = editorialMetadata.importance || '';
+        }
+
+        this._setExampleMetadataDialogRating(editorialMetadata.rating || 0);
+        this._syncExampleMetadataImportancePreview();
+        this._setExampleMetadataHint('Tags can use `|` or commas. Rating is optional. Importance maps to gallery colors later.');
+        this.exampleMetadataDialog.showModal();
+        window.requestAnimationFrame(() => this.exampleDescriptionInput?.focus());
+    }
+
+    async _applyExampleMetadataDialog() {
+        if (!this.exampleMetadataDialog || this._isTheoryDocumentTarget()) return;
+
+        const nextDocument = updateExampleEditorialMetadata(this.currentDocument, {
+            description: this.exampleDescriptionInput?.value || '',
+            tags: this.exampleTagsInput?.value || '',
+            rating: this.exampleMetadataDialogState.rating || '',
+            importance: this.exampleImportanceSelect?.value || '',
+        });
+
+        this._applyDocument(nextDocument);
+        this._emitSessionStateChange();
+        this.exampleMetadataDialog.close();
+
+        if (this.currentTopicPath && this.currentFilename && !hasBlockingDiagnostics(this.currentDocument)) {
+            await this._handleModify();
+            return;
+        }
+
+        this._showToast('Example metadata updated.', 'success');
     }
 
     _initShaderUniformDialog() {
@@ -928,6 +1119,7 @@ export class Editor {
         this.btnShaderUniformReset?.addEventListener('click', () => this._resetShaderUniformDialogForm());
         this.btnShaderUniformCancel?.addEventListener('click', () => this.shaderUniformDialog?.close());
         this.btnShaderUniformApply?.addEventListener('click', () => this._applyShaderUniformDialog());
+        this.shaderUniformDialog?.addEventListener('close', () => this._scheduleEditorFocusRestore());
     }
 
     _initShaderTextureDialog() {
@@ -936,6 +1128,7 @@ export class Editor {
         this.btnShaderTextureReset?.addEventListener('click', () => this._resetShaderTextureDialogForm());
         this.btnShaderTextureCancel?.addEventListener('click', () => this.shaderTextureDialog?.close());
         this.btnShaderTextureApply?.addEventListener('click', () => this._applyShaderTextureDialog());
+        this.shaderTextureDialog?.addEventListener('close', () => this._scheduleEditorFocusRestore());
     }
 
     _initFileVisibilityDialog() {
@@ -946,6 +1139,7 @@ export class Editor {
 
         this.fileVisibilityDialog?.addEventListener('close', () => {
             this.fileVisibilityDialogState.hiddenKeys = [];
+            this._scheduleEditorFocusRestore();
         });
 
         document.addEventListener('click', (event) => {
@@ -1092,6 +1286,7 @@ export class Editor {
     _openFileVisibilityDialog() {
         if (!this.fileVisibilityDialog) return;
 
+        this._rememberEditorFocusTarget();
         this.fileVisibilityDialogState.hiddenKeys = this._getFileVisibilityEntries()
             .filter((entry) => entry.hidden)
             .map((entry) => entry.key);
@@ -1345,16 +1540,91 @@ export class Editor {
         const hints = this._getContextHints();
         if (!this.contextHintsDialog || hints.length === 0) return;
 
+        this._rememberEditorFocusTarget();
         this.contextHintsDialogContent.innerHTML = '';
         this.contextHintsDialogContent.appendChild(this._buildContextHintsContent(hints));
         this.contextHintsDialogNote.textContent = `${hints.length} hint${hints.length === 1 ? '' : 's'} for the current example`;
         this.contextHintsDialog.showModal();
     }
 
+    _getShortcutSections() {
+        return getVimShortcutSections({
+            layoutMode: this.layoutMode,
+            shaderDocument: isShaderDocument(this.currentDocument),
+            config: this.vimShortcutConfig,
+        });
+    }
+
+    _buildShortcutSections() {
+        const fragment = document.createDocumentFragment();
+
+        this._getShortcutSections().forEach((section) => {
+            const wrapper = document.createElement('section');
+            wrapper.className = 'editor-shortcuts-section';
+
+            const title = document.createElement('h3');
+            title.textContent = section.title;
+            wrapper.appendChild(title);
+
+            if (section.note) {
+                const note = document.createElement('p');
+                note.className = 'editor-shortcuts-section-note';
+                note.textContent = section.note;
+                wrapper.appendChild(note);
+            }
+
+            const list = document.createElement('div');
+            list.className = 'editor-shortcuts-list';
+
+            section.items.forEach((item) => {
+                const row = document.createElement('div');
+                row.className = 'editor-shortcuts-item';
+
+                const key = document.createElement('span');
+                key.className = 'editor-shortcuts-key';
+                key.textContent = item.key;
+
+                const description = document.createElement('div');
+                description.className = 'editor-shortcuts-description';
+                description.textContent = item.description;
+
+                row.appendChild(key);
+                row.appendChild(description);
+                list.appendChild(row);
+            });
+
+            wrapper.appendChild(list);
+            fragment.appendChild(wrapper);
+        });
+
+        return fragment;
+    }
+
+    openShortcutHelpDialog() {
+        if (!this.shortcutsDialog || !this.shortcutsDialogContent) return false;
+
+        this._rememberEditorFocusTarget();
+        this.shortcutsDialogContent.replaceChildren(this._buildShortcutSections());
+        if (this.shortcutsDialogNote) {
+            this.shortcutsDialogNote.textContent = `Current context: ${this.layoutMode === 'panels' ? 'Panels' : 'Tabs'}${isShaderDocument(this.currentDocument) ? ' + Shader' : ''}`;
+        }
+        this.shortcutsDialog.showModal();
+        return true;
+    }
+
+    setVimShortcutConfig(config) {
+        this.vimShortcutConfig = config || getDefaultVimShortcutConfig();
+
+        if (this.shortcutsDialog?.open && this.shortcutsDialogContent) {
+            this.shortcutsDialogContent.replaceChildren(this._buildShortcutSections());
+        }
+    }
+
     _openQuickOpenDialog() {
         if (!this.quickOpenDialog || !this.quickOpenInput) return;
         if (this._getVisibleFiles().length === 0) return;
 
+        this._rememberEditorFocusTarget();
         this.quickOpenInput.value = '';
         this._renderQuickOpenMatches();
         this.quickOpenDialog.showModal();
@@ -1942,6 +2212,7 @@ export class Editor {
 
         if (!this.shaderTextureDialog) return;
 
+        this._rememberEditorFocusTarget();
         this.shaderTextureDialogState.textures = this._cloneShaderTexturesFromDocument();
         this.shaderTextureDialogState.assets = [];
         this._renderShaderTextureDialogList();
@@ -2122,6 +2393,7 @@ export class Editor {
 
         if (!this.shaderUniformDialog) return;
 
+        this._rememberEditorFocusTarget();
         this.shaderUniformDialogState.uniforms = this.currentDocument
             ? this._cloneShaderUniformsFromDocument()
             : [];
@@ -2605,6 +2877,7 @@ const title = ref('${componentName}');
             this.fileDialogState.suggestedRole = this.fileDialogRole.value || '';
         }
 
+        this._rememberEditorFocusTarget();
         this.fileDialog.showModal();
         if (!this.fileDialogPathGroup.classList.contains('hidden')) {
             this.fileDialogPath.focus();
@@ -2882,26 +3155,39 @@ const title = ref('${componentName}');
             }
         });
 
-        this.btnRename.addEventListener('click', async () => {
-            if (!this.currentTopicPath || !this.currentFilename) return;
-            const newName = prompt('Enter new filename:', this.currentFilename);
-            if (!newName || newName === this.currentFilename) return;
-
-            const newFilename = newName.endsWith('.md') ? newName : `${newName}.md`;
-
-            try {
-                await renameExample(this.currentTopicPath, this.currentFilename, newFilename);
-                const oldFilename = this.currentFilename;
-                this.currentFilename = newFilename;
-                this._updateFilenameDisplay();
-                this._emitSessionStateChange();
-                this._showToast(`Renamed to: ${newFilename}`, 'success');
-                if (this.onRename) this.onRename(newFilename, oldFilename);
-            } catch (error) {
-                console.error(error);
-                this._showToast(`Rename failed: ${error.message}`, 'error');
-            }
+        this.previewFilenameDisplay?.addEventListener('click', async () => {
+            await this._handleRenameCurrentFile();
         });
+        this.previewFilenameDisplay?.addEventListener('keydown', async (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            await this._handleRenameCurrentFile();
+        });
+
+        this.btnToggleFavoriteExample?.addEventListener('click', async () => {
+            await this.onToggleFavoriteCurrentExample?.();
+        });
+    }
+
+    async _handleRenameCurrentFile() {
+        if (!this.currentTopicPath || !this.currentFilename || this._isTheoryDocumentTarget()) return;
+        const newName = prompt('Enter new filename:', this.currentFilename);
+        if (!newName || newName === this.currentFilename) return;
+
+        const newFilename = newName.endsWith('.md') ? newName : `${newName}.md`;
+
+        try {
+            await renameExample(this.currentTopicPath, this.currentFilename, newFilename);
+            const oldFilename = this.currentFilename;
+            this.currentFilename = newFilename;
+            this._updateFilenameDisplay();
+            this._emitSessionStateChange();
+            this._showToast(`Renamed to: ${newFilename}`, 'success');
+            if (this.onRename) this.onRename(newFilename, oldFilename);
+        } catch (error) {
+            console.error(error);
+            this._showToast(`Rename failed: ${error.message}`, 'error');
+        }
     }
 
     async loadExample(filename) {
@@ -2977,7 +3263,7 @@ const title = ref('${componentName}');
     }
 
     _setLayoutMode(mode, { persist = true, rerender = true, emit = true } = {}) {
-        this.layoutMode = this.vimEnabled ? 'tabs' : (mode === 'tabs' ? 'tabs' : 'panels');
+        this.layoutMode = mode === 'tabs' ? 'tabs' : 'panels';
 
         if (persist) {
             window.localStorage.setItem(this.layoutModeStorageKey, this.layoutMode);
@@ -2998,14 +3284,10 @@ const title = ref('${componentName}');
     _updateLayoutButton() {
         if (!this.btnLayout) return;
 
-        const label = this.vimEnabled
-            ? 'Tabs'
-            : (this.layoutMode === 'panels' ? 'Tabs' : 'Panels');
-        const description = this.vimEnabled
-            ? 'Disable Vim mode to use vertical panels'
-            : (this.layoutMode === 'panels'
-                ? 'Switch to tabs view'
-                : 'Switch to vertical panels');
+        const label = this.layoutMode === 'panels' ? 'Tabs' : 'Panels';
+        const description = this.layoutMode === 'panels'
+            ? 'Switch to tabs view'
+            : 'Switch to vertical panels';
         const labelNode = this.btnLayout.querySelector('.editor-layout-label');
 
         if (labelNode) {
@@ -3014,7 +3296,6 @@ const title = ref('${componentName}');
             this.btnLayout.textContent = label;
         }
 
-        this.btnLayout.disabled = this.vimEnabled;
         this.btnLayout.title = description;
         this.btnLayout.setAttribute('aria-label', description);
         this.btnLayout.dataset.mode = this.layoutMode;
@@ -3022,7 +3303,7 @@ const title = ref('${componentName}');
 
     _updatePanelControlStates() {
         if (!this.btnAutoFit) return;
-        this.btnAutoFit.disabled = this.vimEnabled || this.layoutMode !== 'panels' || this._getVisibleFiles().length === 0;
+        this.btnAutoFit.disabled = this.layoutMode !== 'panels' || this._getVisibleFiles().length === 0;
     }
 
     _updateVimUi() {
@@ -3054,6 +3335,52 @@ const title = ref('${componentName}');
         }
     }
 
+    _updateColumnGuideUi() {
+        if (!this.btnColumnGuideToggle) return;
+
+        this.btnColumnGuideToggle.classList.toggle('is-active', this.columnGuideEnabled);
+        this.btnColumnGuideToggle.setAttribute('aria-pressed', String(this.columnGuideEnabled));
+        this.btnColumnGuideToggle.title = this.columnGuideEnabled
+            ? 'Hide 80-column guide'
+            : 'Show 80-column guide';
+        this.btnColumnGuideToggle.setAttribute(
+            'aria-label',
+            this.columnGuideEnabled
+                ? 'Hide 80-column guide'
+                : 'Show 80-column guide',
+        );
+    }
+
+    _setColumnGuideEnabled(enabled, { persist = true, rerender = true, showToast = true } = {}) {
+        const nextEnabled = Boolean(enabled);
+        const changed = this.columnGuideEnabled !== nextEnabled;
+        const activeFile = this._getActiveFile();
+
+        this.columnGuideEnabled = nextEnabled;
+
+        if (persist) {
+            window.localStorage.setItem(this.columnGuideStorageKey, this.columnGuideEnabled ? '1' : '0');
+        }
+
+        this._updateColumnGuideUi();
+
+        if (rerender) {
+            if (activeFile) {
+                this.pendingNavigationTarget = { file: activeFile };
+            }
+            this._renderWorkspace();
+        }
+
+        if (changed && showToast) {
+            this._showToast(
+                this.columnGuideEnabled
+                    ? '80-column guide enabled.'
+                    : '80-column guide disabled.',
+                'success',
+            );
+        }
+    }
+
     _setVimEnabled(enabled, { persist = true, rerender = true, emit = true, showToast = true } = {}) {
         const nextEnabled = Boolean(enabled);
         const changed = this.vimEnabled !== nextEnabled;
@@ -3061,16 +3388,8 @@ const title = ref('${componentName}');
         this.vimEnabled = nextEnabled;
         this.vimModeLabel = this.vimEnabled ? (this.vimModeLabel || 'NORMAL') : '';
 
-        if (this.vimEnabled) {
-            this.layoutMode = 'tabs';
-        }
-
         if (persist) {
             window.localStorage.setItem(this.vimEnabledStorageKey, this.vimEnabled ? '1' : '0');
-        }
-
-        if (this.vimEnabled && persist) {
-            window.localStorage.setItem(this.layoutModeStorageKey, 'tabs');
         }
 
         this._updateLayoutButton();
@@ -3088,11 +3407,20 @@ const title = ref('${componentName}');
         if (changed && showToast) {
             this._showToast(
                 this.vimEnabled
-                    ? 'Vim mode enabled. Tabs layout is now required.'
-                    : 'Vim mode disabled. Panels layout is available again.',
+                    ? 'Vim mode enabled.'
+                    : 'Vim mode disabled.',
                 'success',
             );
         }
+    }
+
+    _toggleLayoutMode({ preserveFocus = false } = {}) {
+        const nextMode = this.layoutMode === 'panels' ? 'tabs' : 'panels';
+        const activeFile = preserveFocus ? this._getActiveFile() : null;
+        if (activeFile) {
+            this.pendingNavigationTarget = { file: activeFile };
+        }
+        this._setLayoutMode(nextMode);
     }
 
     _setSystemClipboardEnabled(enabled, { persist = true, showToast = true } = {}) {
@@ -3172,6 +3500,13 @@ const title = ref('${componentName}');
             this.btnQuickOpenFile.title = files.length > 0
                 ? (isTheory ? 'Theory editing keeps a single active file' : 'Quick search visible files')
                 : 'No visible files to open';
+        }
+
+        if (this.btnEditExampleMetadata) {
+            this.btnEditExampleMetadata.disabled = !hasTopic || !files.length || isTheory;
+            this.btnEditExampleMetadata.title = isTheory
+                ? 'Theory metadata uses main.md directly'
+                : 'Edit description, tags, rating and importance';
         }
 
         if (this.btnEditShaderUniforms) {
@@ -3294,6 +3629,7 @@ const title = ref('${componentName}');
             panel.dataset.fileId = file.id;
             panel.dataset.language = file.language;
             panel.style.flex = '1 1 0px';
+            panel.classList.toggle('is-active', file.id === this.activeFileId);
 
             const header = document.createElement('div');
             header.className = 'panel-header';
@@ -3356,6 +3692,7 @@ const title = ref('${componentName}');
                 event.stopPropagation();
                 panel.classList.toggle('collapsed');
                 this._syncPanelStateFromDom();
+                this._syncActivePanelState();
                 this._emitSessionStateChange();
             });
 
@@ -3363,6 +3700,7 @@ const title = ref('${componentName}');
                 event.stopPropagation();
                 this._toggleMaximize(panel);
                 this._syncPanelStateFromDom();
+                this._syncActivePanelState();
                 this._emitSessionStateChange();
             });
 
@@ -3376,6 +3714,15 @@ const title = ref('${componentName}');
                 this._openFileContextMenu(file, event.clientX, event.clientY);
             });
 
+            header.addEventListener('click', (event) => {
+                if (event.target.closest('button')) return;
+                this._setActivePanel(file.id, { focusEditor: true, syncModeLabel: true });
+            });
+
+            view.dom.addEventListener('focusin', () => {
+                this._setActivePanel(file.id, { syncModeLabel: true });
+            });
+
             this.editors.push({
                 id: file.id,
                 panel,
@@ -3386,6 +3733,7 @@ const title = ref('${componentName}');
 
         this.workspace.appendChild(stack);
         this._applyPanelSessionState();
+        this._syncActivePanelState();
     }
 
     _renderTabsLayout() {
@@ -3540,6 +3888,10 @@ const title = ref('${componentName}');
     }
 
     _destroyEditors() {
+        if (this._restoreFocusFrameId) {
+            window.cancelAnimationFrame(this._restoreFocusFrameId);
+            this._restoreFocusFrameId = 0;
+        }
         this.editors.forEach((entry) => {
             entry.vimCleanup?.();
             entry.view?.destroy();
@@ -3590,6 +3942,7 @@ const title = ref('${componentName}');
                 ...langExtensions,
                 oneDark,
                 autocompletion(),
+                ...(this.columnGuideEnabled ? [createColumnGuideExtension()] : []),
                 EditorState.readOnly.of(isLocked),
                 updateListener,
                 EditorView.theme({
@@ -3605,10 +3958,16 @@ const title = ref('${componentName}');
 
         const vimCleanup = this.vimEnabled
             ? bindVimView(view, {
+                isPanelsLayout: () => this.layoutMode === 'panels',
+                isShaderDocument: () => this._isShaderDocument(),
+                getShortcutConfig: () => this.vimShortcutConfig,
                 onModeChange: (modeLabel) => {
+                    view.dom.dataset.vimMode = modeLabel;
+                    if (this.layoutMode === 'panels' && file.id !== this.activeFileId) {
+                        return;
+                    }
                     this.vimModeLabel = modeLabel;
                     this._updateVimUi();
-                    view.dom.dataset.vimMode = modeLabel;
                 },
                 onPreviousTab: () => {
                     this._selectAdjacentTab(-1);
@@ -3619,14 +3978,32 @@ const title = ref('${componentName}');
                 onOpenFilePicker: () => {
                     this._openQuickOpenDialog();
                 },
+                onMovePanelFocus: (direction) => {
+                    return this._handleShiftPanelNavigation(direction);
+                },
                 onToggleSidebar: () => {
                     this.onToggleSidebar?.();
                 },
                 onCenterWorkspace: () => {
                     this.onCenterWorkspace?.();
                 },
+                onToggleActivePanelCollapse: () => {
+                    return this._toggleActivePanelCollapsed();
+                },
+                onToggleActivePanelMaximize: () => {
+                    return this._toggleActivePanelMaximize();
+                },
+                onAutoFitPanels: () => {
+                    return this._autoFitPanelsFromVim();
+                },
+                onNormalizePanels: () => {
+                    return this._normalizePanelsFromVim();
+                },
                 onToggleAutoRender: () => {
                     this.onTogglePreviewAutoRender?.();
+                },
+                onToggleConsole: () => {
+                    return this.onToggleConsole?.();
                 },
                 onToggleShaderPause: () => {
                     if (!this._isShaderDocument()) return;
@@ -3644,13 +4021,22 @@ const title = ref('${componentName}');
                     if (!this._isShaderDocument()) return;
                     (this.onOpenShaderTextures || this.openShaderTextureDialog).call(this);
                 },
+                onToggleEditorLayout: () => {
+                    this._toggleLayoutMode({ preserveFocus: true });
+                },
                 onOpenShaderPanel: () => {
                     if (!this._isShaderDocument()) return;
                     this.onOpenShaderPanel?.();
                 },
+                onOpenShortcutHelp: () => {
+                    this.openShortcutHelpDialog();
+                },
                 onResetShaderRuntime: () => {
                     if (!this._isShaderDocument()) return;
                     this.onResetShaderRuntime?.();
+                },
+                onTogglePreviewHeader: () => {
+                    this.onTogglePreviewHeader?.();
                 },
                 onQuickSave: () => {
                     if (!this._isTheoryDocumentTarget()) return false;
@@ -3665,6 +4051,9 @@ const title = ref('${componentName}');
 
         view.dom.dataset.vim = this.vimEnabled ? 'on' : 'off';
         view.dom.dataset.vimMode = this.vimModeLabel || '';
+        view.dom.addEventListener('focusin', () => {
+            this._syncVimModeFromView(view);
+        });
 
         return {
             view,
@@ -3748,6 +4137,263 @@ const title = ref('${componentName}');
         return this.editors.find((entry) => entry.id === fileId) || null;
     }
 
+    _rememberEditorFocusTarget() {
+        this._dialogFocusTargetFileId = this.pendingNavigationTarget?.file?.id
+            || this.activeFileId
+            || (this.layoutMode === 'panels' ? this._getPreferredActivePanelId() : null)
+            || this._getVisibleFiles()[0]?.id
+            || null;
+    }
+
+    _scheduleEditorFocusRestore() {
+        if (this._restoreFocusFrameId) {
+            window.cancelAnimationFrame(this._restoreFocusFrameId);
+        }
+
+        const fallbackFileId = this._dialogFocusTargetFileId;
+        this._restoreFocusFrameId = window.requestAnimationFrame(() => {
+            this._restoreFocusFrameId = 0;
+            this._restoreEditorFocus(fallbackFileId);
+        });
+    }
+
+    _restoreEditorFocus(fallbackFileId = null) {
+        if (this.pendingNavigationTarget) {
+            this._flushPendingNavigation();
+            this._dialogFocusTargetFileId = null;
+            return true;
+        }
+
+        const targetFileId = this.activeFileId || fallbackFileId || this._getVisibleFiles()[0]?.id || null;
+        this._dialogFocusTargetFileId = null;
+        if (!targetFileId) return false;
+
+        const entry = this._getEditorEntry(targetFileId) || this.editors[0] || null;
+        if (!entry?.view) return false;
+
+        if (this.layoutMode === 'panels') {
+            this._setActivePanel(entry.id, { focusEditor: true, syncModeLabel: true });
+            return true;
+        }
+
+        entry.view.focus();
+        if (this.vimEnabled) {
+            this._syncVimModeFromView(entry.view);
+        }
+        return true;
+    }
+
+    focusActiveEditor() {
+        this._scheduleEditorFocusRestore();
+    }
+
+    _getPreferredActivePanelId() {
+        const panels = this._getPanels();
+        if (panels.length === 0) return null;
+
+        const activePanel = panels.find((panel) => panel.dataset.fileId === this.activeFileId);
+        if (activePanel && !activePanel.classList.contains('collapsed')) {
+            return activePanel.dataset.fileId || null;
+        }
+
+        const firstVisiblePanel = panels.find((panel) => !panel.classList.contains('collapsed'));
+        if (firstVisiblePanel) {
+            return firstVisiblePanel.dataset.fileId || null;
+        }
+
+        return panels[0]?.dataset.fileId || null;
+    }
+
+    _getPanelByFileId(fileId) {
+        if (!fileId) return null;
+        return this._getPanels().find((panel) => panel.dataset.fileId === fileId) || null;
+    }
+
+    _syncActivePanelState() {
+        if (this.layoutMode !== 'panels') return;
+
+        const nextActiveFileId = this._getPreferredActivePanelId();
+        if (!nextActiveFileId) return;
+
+        this.activeFileId = nextActiveFileId;
+        this._getPanels().forEach((panel) => {
+            const isActive = panel.dataset.fileId === this.activeFileId;
+            panel.classList.toggle('is-active', isActive);
+            panel.setAttribute('aria-selected', String(isActive));
+        });
+    }
+
+    _setActivePanel(fileId, { focusEditor = false, syncModeLabel = false } = {}) {
+        if (this.layoutMode !== 'panels' || !fileId) return;
+
+        const changed = this.activeFileId !== fileId;
+        this.activeFileId = fileId;
+        this._syncActivePanelState();
+
+        const entry = this._getEditorEntry(fileId);
+        if (!entry) {
+            if (changed) {
+                this._emitSessionStateChange();
+            }
+            return;
+        }
+
+        if (syncModeLabel && this.vimEnabled) {
+            this._syncVimModeFromView(entry.view);
+        }
+
+        if (focusEditor) {
+            entry.view?.focus();
+        }
+
+        if (changed) {
+            this._emitSessionStateChange();
+        }
+    }
+
+    _movePanelFocus(direction = '') {
+        if (this.layoutMode !== 'panels') return false;
+
+        const panels = this._getPanels().filter((panel) => !panel.classList.contains('collapsed'));
+        if (panels.length <= 1) return false;
+
+        const currentPanel = panels.find((panel) => panel.dataset.fileId === this.activeFileId) || panels[0];
+        if (!currentPanel) return false;
+
+        const currentIndex = Math.max(0, panels.indexOf(currentPanel));
+        const panelRects = panels.map((panel) => {
+            const rect = panel.getBoundingClientRect();
+            return {
+                left: rect.left,
+                top: rect.top,
+                width: rect.width,
+                height: rect.height,
+            };
+        });
+        const targetIndex = findDirectionalPanelTargetIndex(panelRects, currentIndex, direction);
+        const bestPanel = targetIndex >= 0 ? panels[targetIndex] || null : null;
+
+        const nextFileId = bestPanel?.dataset?.fileId || '';
+        if (!nextFileId) return false;
+
+        this._setActivePanel(nextFileId, { focusEditor: true, syncModeLabel: true });
+        bestPanel.scrollIntoView({ block: 'nearest' });
+        return true;
+    }
+
+    _moveMaximizedPanelFocus(direction = '') {
+        if (this.layoutMode !== 'panels') return false;
+
+        const panels = this._getPanels();
+        if (panels.length <= 1) return false;
+
+        const currentIndex = Math.max(0, panels.findIndex((panel) => panel.dataset.fileId === this.activeFileId));
+        const isPreviousDirection = direction === 'up' || direction === 'left';
+        const isNextDirection = direction === 'down' || direction === 'right';
+
+        if (!isPreviousDirection && !isNextDirection) {
+            return false;
+        }
+
+        const nextIndex = getWrappedPanelIndex(panels.length, currentIndex, direction);
+        const nextPanel = panels[nextIndex] || null;
+        const nextFileId = nextPanel?.dataset?.fileId || '';
+
+        if (!nextFileId || nextFileId === this.activeFileId) {
+            return false;
+        }
+
+        this._setExclusiveMaximizedPanel(nextPanel);
+        this._syncPanelStateFromDom();
+        this._setActivePanel(nextFileId, { focusEditor: true, syncModeLabel: true });
+        nextPanel.scrollIntoView({ block: 'nearest' });
+        this._emitSessionStateChange();
+        return true;
+    }
+
+    _handleShiftPanelNavigation(direction = '') {
+        if (this.layoutMode !== 'panels') return false;
+
+        if (this.panelState.maximizedFileId) {
+            return this._moveMaximizedPanelFocus(direction);
+        }
+
+        return this._movePanelFocus(direction);
+    }
+
+    _toggleActivePanelCollapsed() {
+        if (this.layoutMode !== 'panels') return false;
+
+        const activePanel = this._getPanelByFileId(this.activeFileId) || this._getPanels()[0] || null;
+        if (!activePanel) return false;
+
+        const isCollapsed = activePanel.classList.contains('collapsed');
+        const visiblePanels = this._getPanels().filter((panel) => !panel.classList.contains('collapsed'));
+
+        if (!isCollapsed && visiblePanels.length <= 1) {
+            return false;
+        }
+
+        activePanel.classList.toggle('collapsed', !isCollapsed);
+        this._syncPanelStateFromDom();
+
+        if (isCollapsed) {
+            this._setActivePanel(activePanel.dataset.fileId, { focusEditor: true, syncModeLabel: true });
+        } else {
+            const nextActiveId = this._getPreferredActivePanelId();
+            if (nextActiveId) {
+                this._setActivePanel(nextActiveId, { focusEditor: true, syncModeLabel: true });
+            }
+        }
+
+        this._emitSessionStateChange();
+        return true;
+    }
+
+    _toggleActivePanelMaximize() {
+        if (this.layoutMode !== 'panels') return false;
+
+        const activePanel = this._getPanelByFileId(this.activeFileId) || this._getPanels()[0] || null;
+        if (!activePanel) return false;
+
+        this._toggleMaximize(activePanel);
+        this._syncPanelStateFromDom();
+        this._setActivePanel(activePanel.dataset.fileId, { focusEditor: true, syncModeLabel: true });
+        this._emitSessionStateChange();
+        return true;
+    }
+
+    _autoFitPanelsFromVim() {
+        if (this.layoutMode !== 'panels') return false;
+        this._handleAutoFit();
+        this._restoreEditorFocus(this.activeFileId);
+        return true;
+    }
+
+    _normalizePanelsFromVim() {
+        if (this.layoutMode !== 'panels') return false;
+
+        const panels = this._getPanels();
+        if (panels.length === 0) return false;
+
+        panels.forEach((panel) => {
+            panel.classList.remove('collapsed');
+            panel.style.flex = '1 1 0px';
+            panel.style.height = '';
+        });
+
+        this._syncPanelStateFromDom();
+        this._restoreEditorFocus(this.activeFileId);
+        this._emitSessionStateChange();
+        return true;
+    }
+
+    _syncVimModeFromView(view) {
+        if (!this.vimEnabled || !view) return;
+        this.vimModeLabel = view.dom?.dataset?.vimMode || this.vimModeLabel || 'NORMAL';
+        this._updateVimUi();
+    }
+
     _applyPanelSessionState() {
         const panels = this._getPanels();
         if (panels.length === 0) return;
@@ -3773,6 +4419,8 @@ const title = ref('${componentName}');
             panel.classList.add('collapsed');
             panel.style.flex = '';
         });
+
+        this._syncActivePanelState();
     }
 
     _syncPanelStateFromDom() {
@@ -3792,6 +4440,7 @@ const title = ref('${componentName}');
             : null;
 
         this.panelState = this._sanitizePanelState({ collapsedFileIds, maximizedFileId });
+        this._syncActivePanelState();
     }
 
     _toggleMaximize(activePanel) {
@@ -3808,14 +4457,19 @@ const title = ref('${componentName}');
             return;
         }
 
-        others.forEach((panel) => {
-            panel.classList.add('collapsed');
-            panel.style.flex = '';
-        });
+        this._setExclusiveMaximizedPanel(activePanel);
+    }
 
-        activePanel.classList.remove('collapsed');
-        activePanel.style.flex = '1 1 0px';
-        activePanel.style.height = '';
+    _setExclusiveMaximizedPanel(activePanel) {
+        if (!activePanel) return;
+
+        const panels = this._getPanels();
+        panels.forEach((panel) => {
+            const isActive = panel === activePanel;
+            panel.classList.toggle('collapsed', !isActive);
+            panel.style.flex = isActive ? '1 1 0px' : '';
+            panel.style.height = '';
+        });
     }
 
     _startResize(prevPanel, currentPanel, event) {
@@ -3926,13 +4580,27 @@ const title = ref('${componentName}');
         const hasContent = (this.currentDocument.files || []).length > 0;
         const isSafeToWrite = !hasBlockingDiagnostics(this.currentDocument);
         const isTheory = this._isTheoryDocumentTarget();
+        const canRenameCurrentFile = hasFile && !isTheory;
 
         this.btnSave.disabled = !hasTopic || !hasContent || !isSafeToWrite;
         this.btnModify.disabled = isTheory
             ? (!hasTopic || !hasContent || !isSafeToWrite)
             : (!hasFile || !isSafeToWrite);
         this.btnRemove.disabled = !hasFile || isTheory;
-        this.btnRename.disabled = !hasFile || isTheory;
+        if (this.btnToggleFavoriteExample) {
+            this.btnToggleFavoriteExample.disabled = !hasFile || isTheory;
+            this.btnToggleFavoriteExample.classList.toggle('is-active', this.currentExampleFavorite);
+            this.btnToggleFavoriteExample.setAttribute('aria-pressed', String(this.currentExampleFavorite));
+            this.btnToggleFavoriteExample.title = this.currentExampleFavorite
+                ? 'Remove from favorites'
+                : 'Add to favorites';
+        }
+        if (this.previewFilenameDisplay) {
+            this.previewFilenameDisplay.classList.toggle('is-actionable', canRenameCurrentFile);
+            this.previewFilenameDisplay.setAttribute('role', canRenameCurrentFile ? 'button' : 'status');
+            this.previewFilenameDisplay.setAttribute('tabindex', canRenameCurrentFile ? '0' : '-1');
+            this.previewFilenameDisplay.setAttribute('aria-disabled', String(!canRenameCurrentFile));
+        }
         this._updatePanelControlStates();
         this._updateFileControls();
     }
@@ -3941,7 +4609,9 @@ const title = ref('${componentName}');
         if (this.currentFilename) {
             if (this.previewFilenameDisplay) {
                 this.previewFilenameDisplay.textContent = this.currentFilename;
-                this.previewFilenameDisplay.title = this.currentFilename;
+                this.previewFilenameDisplay.title = this._isTheoryDocumentTarget()
+                    ? this.currentFilename
+                    : `Rename ${this.currentFilename}`;
             }
             return;
         }
@@ -4003,6 +4673,27 @@ const title = ref('${componentName}');
         toast.textContent = message;
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 3000);
+    }
+
+    setCurrentExampleFavorite(enabled) {
+        this.currentExampleFavorite = enabled === true;
+        this._updateButtonStates();
+    }
+
+    getCurrentEditorialMetadata() {
+        if (this._isTheoryDocumentTarget()) return null;
+
+        const metadata = getExampleEditorialMetadata(this.currentDocument);
+        if (
+            !String(metadata.description || '').trim()
+            && (!Array.isArray(metadata.tags) || metadata.tags.length === 0)
+            && !Number.isInteger(metadata.rating)
+            && !String(metadata.importance || '').trim()
+        ) {
+            return null;
+        }
+
+        return metadata;
     }
 
     _getPersistableDocument() {
@@ -4272,6 +4963,8 @@ const title = ref('${componentName}');
         entry.view.focus();
 
         if (this.layoutMode === 'panels' && entry.panel) {
+            this.activeFileId = target.file.id;
+            this._syncActivePanelState();
             entry.panel.classList.remove('collapsed');
             entry.panel.scrollIntoView({ block: 'nearest' });
             this._flashDiagnosticTarget(entry.panel);
