@@ -511,7 +511,8 @@ Si el documento usa `renderer: shader`:
 - se renderiza un fullscreen quad con `Vertex + Fragment`
 - la consola se reemplaza por un panel shader
 - el panel muestra `FPS`, resolucion efectiva, uniforms built-in, uniforms personalizados y estado de texturas
-- el panel permite cambiar resolucion, pausar tiempo y resetear runtime
+- los controles editables viven en un drawer plegable del lado del editor
+- el shader arranca pausado por defecto
 
 #### Uniforms personalizados en shaders
 
@@ -545,6 +546,7 @@ Reglas:
 - el panel shader crea controles automaticamente para esos uniforms
 - el runtime los aplica solo si el shader realmente declara esos uniforms
 - `float` e `int` pueden declarar un rango opcional y el panel mostrara un slider
+- `vec3` y `vec4` se editan como grupos de valores numericos
 
 #### Texturas locales en shaders
 
@@ -878,7 +880,7 @@ Pide `main.md` y lo renderiza como HTML a partir de Markdown.
 
 #### `src/components/Editor.js`
 
-Configura paneles dinamicos de CodeMirror, soporta layout `Panels/Tabs`, ejercicio, archivos virtuales y maneja guardar, cargar, modificar, renombrar y eliminar.
+Configura paneles dinamicos de CodeMirror, soporta layout `Panels/Tabs`, ejercicio, archivos virtuales, resaltado GLSL para `vertex` y `fragment`, y maneja guardar, cargar, modificar, renombrar y eliminar.
 
 #### `src/components/ExercisePanel.js`
 
@@ -886,7 +888,7 @@ Panel superior del modo ejercicio: instrucciones, pistas, comparacion y controle
 
 #### `src/components/Preview.js`
 
-Coordina la compilacion, la consola runtime y construye el documento final que se inyecta en el `iframe` de preview.
+Coordina la compilacion, la consola runtime, el panel shader y construye el documento final que se inyecta en el `iframe` de preview.
 
 #### `src/components/Gallery.js`
 
@@ -974,6 +976,7 @@ Ademas incluye:
 - maximizar un panel
 - aumentar y disminuir tamano de fuente
 - auto-fit de paneles segun contenido
+- resaltado GLSL para bloques `Vertex` y `Fragment`
 
 ### Modo ejercicio
 
@@ -1015,6 +1018,7 @@ Cuando el documento es shader:
 - el preview usa WebGL en vez del pipeline HTML habitual
 - el panel inferior cambia de `Console` a `Shader`
 - los controles editables viven en un drawer plegable al fondo del editor
+- el shader arranca pausado por defecto
 - el runtime expone estos uniforms built-in:
   - `u_time`
   - `u_delta`
@@ -1022,12 +1026,16 @@ Cuando el documento es shader:
   - `u_mouse`
   - `u_mouse_pressed`
   - `u_frame`
-- el panel inferior permite:
-  - cambiar resolucion con presets
-  - pausar y reanudar el tiempo
-  - resetear `time`, `frame` y mouse
-  - inspeccionar uniforms personalizados
+- el drawer del editor permite:
+  - cambiar `width` y `height` con slider o input numerico
+  - editar uniforms personalizados
   - inspeccionar estado de texturas locales
+- el panel inferior permite:
+  - ver `FPS`, resolucion efectiva y `frame`
+  - elegir presets de resolucion
+  - pausar, reanudar y resetear runtime
+  - inspeccionar uniforms built-in
+- si guardas o usas `Ctrl+S`, la resolucion actual del shader se persiste en `resolution: WIDTHxHEIGHT`
 
 Ejemplos listos para probar:
 
@@ -1047,7 +1055,7 @@ El panel de preview tiene dos niveles de ancho:
 - ancho general del panel preview, moviendo el separador entre editor y preview
 - ancho interno del `iframe`, usando presets o slider manual
 
-Si el viewport interno es mas pequeno que el panel general, se ve fondo gris detras.
+Si el viewport interno es mas pequeno que el panel general, se ve fondo negro detras.
 
 ### React y Vue
 
@@ -1112,7 +1120,7 @@ Limitaciones tecnicas actuales:
 - los shaders solo soportan uniforms personalizados simples por metadata (`float`, `int`, `bool`, `vec2`, `vec3`, `vec4`)
 - los sliders por metadata solo aplican a uniforms `float` e `int`
 - las texturas shader por metadata solo soportan archivos del topic actual y no admiten subcarpetas dentro de `assets/`
-- los shaders no soportan todavia `vec3`, `vec4`, arrays ni structs como uniforms definidos por metadata
+- los shaders no soportan todavia arrays ni structs como uniforms definidos por metadata
 - Vue SFC es controlado: no soporta `template src`, `script src`, `style src`, CSS modules ni custom blocks
 - para imagenes y recursos locales debes usar la carpeta `assets/` del topic
 - el bundle de preview para React es grande porque empaqueta runtime en cada ejemplo
