@@ -176,6 +176,17 @@ app.get('/api/topic/:ch/:sec/:top/main', (req, res) => {
     res.json({ content: fs.readFileSync(filePath, 'utf-8') });
 });
 
+app.patch('/api/topic/:ch/:sec/:top/main', (req, res) => {
+    const { ch, sec, top } = req.params;
+    const { content } = req.body || {};
+    const dirPath = path.join(MATERIAL_DIR, ch, sec, top);
+    const filePath = path.join(dirPath, 'main.md');
+
+    ensureDir(dirPath);
+    fs.writeFileSync(filePath, typeof content === 'string' ? content : String(content ?? ''), 'utf-8');
+    res.json({ filename: 'main.md' });
+});
+
 // ─── GET /api/topic/:ch/:sec/:top/examples ──────────────
 
 app.get('/api/topic/:ch/:sec/:top/examples', (req, res) => {

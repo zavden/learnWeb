@@ -1000,6 +1000,15 @@ Atajos adicionales del proyecto sobre Vim:
 - `Space` luego `m`: colapsar el tree y dejar editor/preview en `50/50`
 - `Space` luego `h`: ejecutar `:noh`
 
+Atajos adicionales para documentos shader:
+
+- `Space` luego `Space` luego `p`: pausar o reanudar el shader
+- `Space` luego `Space` luego `c`: mostrar u ocultar `Shader Controls`
+- `Space` luego `Space` luego `u`: abrir el dialogo de `Shader Uniforms`
+- `Space` luego `Space` luego `t`: abrir el dialogo de `Shader Textures`
+- `Space` luego `Space` luego `s`: abrir el panel shader del preview y ajustar su altura
+- `Space` luego `Space` luego `r`: resetear el runtime shader
+
 El clipboard del sistema se puede activar o desactivar desde el toggle azul del toolbar. Cuando esta activo, los yanks y pastes de Vim se sincronizan con el clipboard del sistema; cuando esta apagado, Vim usa un clipboard sombra local.
 
 ### Modo ejercicio

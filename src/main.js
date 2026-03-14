@@ -9,6 +9,7 @@ import { Preview } from './components/Preview.js';
 import { CreateDialog } from './components/CreateDialog.js';
 import { Gallery } from './components/Gallery.js';
 import {
+    fetchTopicMain,
     fetchClipboardDefaultState,
     fetchVimDefaultState,
     updateClipboardDefaultState,
@@ -30,8 +31,11 @@ class App {
         this.sidebarCollapsedStorageKey = 'learncode.sidebar.collapsed';
         this.previewWidthMode = 'full';
         this.customPreviewWidth = 375;
+        this.previewZoomPercent = 100;
+        this.previewZoomSliderVisible = false;
         this.clipboardDefaultEnabled = true;
         this.vimDefaultEnabled = true;
+        this.theoryReturnState = null;
 
         // UI Elements for View Switching
         this.appShell = document.getElementById('app');
@@ -49,9 +53,17 @@ class App {
         this.previewHeader = document.querySelector('.preview-header');
         this.previewFrame = document.getElementById('preview-frame');
         this.previewFrameContainer = document.getElementById('preview-frame-container');
+        this.btnExitTheoryEditor = document.getElementById('btn-exit-theory-editor');
         this.previewConsole = document.getElementById('preview-console');
         this.previewConsoleResizer = document.getElementById('preview-console-resizer');
         this.dragShield = document.getElementById('drag-shield');
+        this.btnPreviewZoomDec = document.getElementById('btn-preview-zoom-dec');
+        this.btnPreviewZoomInc = document.getElementById('btn-preview-zoom-inc');
+        this.btnPreviewZoomToggle = document.getElementById('btn-preview-zoom-toggle');
+        this.btnPreviewZoomReset = document.getElementById('btn-preview-zoom-reset');
+        this.previewZoomControls = document.getElementById('preview-zoom-controls');
+        this.previewZoomSlider = document.getElementById('preview-zoom-slider');
+        this.previewZoomDisplay = document.getElementById('preview-zoom-display');
         this.viewportSelect = document.getElementById('viewport-select');
         this.viewportSlider = document.getElementById('viewport-slider');
         this.viewportWidthDisplay = document.getElementById('viewport-width-display');
@@ -79,13 +91,37 @@ class App {
             getShaderPersistedState: () => this.preview.getShaderPersistedState(),
             onCodeChange: (documentModel) => {
                 this.exercisePanel.render(this.editor.getExercisePresentation());
+                if (this.editor.isEditingTheoryDocument()) {
+                    this.theoryViewer.renderContent(this.editor.getTheoryContent());
+                }
                 this.preview.update(documentModel, {
                     sessionKey: this._getPreviewSessionKey(documentModel),
                 });
             },
             onExerciseStateChange: (presentation) => this.exercisePanel.render(presentation),
-            onSessionStateChange: () => this._persistSessionState(),
+            onSessionStateChange: () => {
+                this._syncTheoryEditorUi();
+                this._persistSessionState();
+            },
+            onResetShaderRuntime: () => {
+                this.preview?.resetShaderRuntime?.();
+            },
+            onOpenShaderControls: () => {
+                this.preview?.openShaderControls?.();
+            },
+            onOpenShaderPanel: () => {
+                this._openShaderPreviewPanel();
+            },
+            onToggleShaderPause: () => {
+                this.preview?.toggleShaderPause?.();
+            },
             onTogglePreviewAutoRender: () => this.preview.toggleAutoRender(),
+            onOpenShaderTextures: () => {
+                this.editor?.openShaderTextureDialog?.();
+            },
+            onOpenShaderUniforms: () => {
+                this.editor?.openShaderUniformDialog?.();
+            },
             onToggleSidebar: () => {
                 const nextState = !this.appShell.classList.contains('sidebar-collapsed');
                 this._setSidebarCollapsed(nextState);
@@ -102,7 +138,9 @@ class App {
             onExampleSelect: (filename) => this.loadExample(filename),
         });
 
-        this.theoryViewer = new TheoryViewer();
+        this.theoryViewer = new TheoryViewer({
+            onEditRequest: () => this.openTheoryEditor(),
+        });
 
         this.sidebar = new Sidebar({
             onClipboardDefaultToggle: (enabled) => this._handleClipboardDefaultToggle(enabled),
@@ -131,8 +169,21 @@ class App {
         this._initWorkspaceResizer();
         this._initConsoleResizer();
         this._initLayoutResetControl();
+        this._initTheoryEditorControls();
+        this._initPreviewZoomControls();
         this._bootstrap().catch((error) => {
             console.error('Failed to bootstrap application state.', error);
+        });
+    }
+
+    _openShaderPreviewPanel() {
+        const state = this.preview?.openShaderPanel?.();
+        if (state !== 'expanded') return;
+
+        window.requestAnimationFrame(() => {
+            const preferredHeight = this.preview?.getPreferredShaderPanelHeight?.();
+            if (!Number.isFinite(preferredHeight) || preferredHeight <= 0) return;
+            this._setConsoleHeight(preferredHeight);
         });
     }
 
@@ -215,6 +266,59 @@ class App {
     async loadExample(filename, { persist = true } = {}) {
         this.showEditor();
         await this.editor.loadExample(filename);
+        this._syncTheoryEditorUi();
+
+        if (persist) {
+            this._persistSessionState();
+        }
+    }
+
+    async openTheoryEditor({ persist = true } = {}) {
+        if (!this.currentTopicPath) return;
+
+        try {
+            if (!this.editor.isEditingTheoryDocument()) {
+                this.theoryReturnState = this.galleryView.classList.contains('hidden')
+                    ? {
+                        mode: 'editor',
+                        snapshot: this.editor.captureWorkspaceSnapshot(),
+                    }
+                    : { mode: 'gallery' };
+            }
+
+            const data = await fetchTopicMain(this.currentTopicPath);
+            this.showEditor();
+            this.theoryViewer.hide();
+            this.editor.loadTheoryDocument(data?.content || '');
+            this.preview.renderNow();
+            this._syncTheoryEditorUi();
+
+            if (persist) {
+                this._persistSessionState();
+            }
+        } catch (error) {
+            console.error('Failed to open theory editor.', error);
+            window.alert(`Could not open theory editor: ${error.message}`);
+        }
+    }
+
+    async closeTheoryEditor({ persist = true } = {}) {
+        if (!this.editor.isEditingTheoryDocument()) return;
+
+        const saved = await this.editor.saveTheoryDocument();
+        if (!saved) return;
+
+        const returnState = this.theoryReturnState;
+        this.theoryReturnState = null;
+
+        if (returnState?.mode === 'editor' && returnState.snapshot) {
+            this.showEditor();
+            await this.editor.restoreWorkspaceSnapshot(returnState.snapshot);
+        } else {
+            this.showGallery();
+        }
+
+        this._syncTheoryEditorUi();
 
         if (persist) {
             this._persistSessionState();
@@ -227,12 +331,25 @@ class App {
         this.editorPanels.classList.add('hidden');
         this.exercisePanel.clear();
         this.preview.clear();
+        this._syncTheoryEditorUi();
     }
 
     showEditor() {
         this.galleryView.classList.add('hidden');
         this.editorToolbar.classList.remove('hidden');
         this.editorPanels.classList.remove('hidden');
+        this._syncTheoryEditorUi();
+    }
+
+    _initTheoryEditorControls() {
+        this.btnExitTheoryEditor?.addEventListener('click', () => {
+            this.closeTheoryEditor();
+        });
+    }
+
+    _syncTheoryEditorUi() {
+        const isEditingTheory = this.editor?.isEditingTheoryDocument?.() === true;
+        this.btnExitTheoryEditor?.classList.toggle('hidden', !isEditingTheory);
     }
 
     _initViewportResizer() {
@@ -249,6 +366,35 @@ class App {
 
         this.viewportSlider.addEventListener('input', (event) => {
             this._applyCustomPreviewWidth(event.target.value);
+        });
+    }
+
+    _initPreviewZoomControls() {
+        if (!this.previewFrame || !this.previewZoomSlider || !this.previewZoomDisplay || !this.btnPreviewZoomToggle) {
+            return;
+        }
+
+        this._applyPreviewZoom(this.previewZoomPercent, { persist: false });
+        this._setPreviewZoomControlsVisible(false);
+
+        this.previewZoomSlider.addEventListener('input', (event) => {
+            this._applyPreviewZoom(event.target.value);
+        });
+
+        this.btnPreviewZoomToggle.addEventListener('click', () => {
+            this._setPreviewZoomControlsVisible(!this.previewZoomSliderVisible);
+        });
+
+        this.btnPreviewZoomDec?.addEventListener('click', () => {
+            this._adjustPreviewZoom(-5);
+        });
+
+        this.btnPreviewZoomInc?.addEventListener('click', () => {
+            this._adjustPreviewZoom(5);
+        });
+
+        this.btnPreviewZoomReset?.addEventListener('click', () => {
+            this._applyPreviewZoom(100);
         });
     }
 
@@ -499,9 +645,9 @@ class App {
         if (!this.previewFrame) return;
 
         const columnWidth = Math.round(this.previewColumn?.getBoundingClientRect().width || this.previewMinWidth);
-        this.previewFrame.style.width = '100%';
         this.previewWidthMode = 'full';
         this._syncPreviewControls(columnWidth, 'full');
+        this._applyPreviewZoom(this.previewZoomPercent, { persist: false });
 
         if (persist) {
             this._persistSessionState();
@@ -512,10 +658,57 @@ class App {
         if (!this.previewFrame) return;
 
         const nextWidth = Math.max(this.previewMinWidth, Math.round(Number.parseInt(width, 10) || this.previewMinWidth));
-        this.previewFrame.style.width = `${nextWidth}px`;
         this.previewWidthMode = 'custom';
         this.customPreviewWidth = nextWidth;
         this._syncPreviewControls(nextWidth, 'custom');
+        this._applyPreviewZoom(this.previewZoomPercent, { persist: false });
+
+        if (persist) {
+            this._persistSessionState();
+        }
+    }
+
+    _setPreviewZoomControlsVisible(visible) {
+        this.previewZoomSliderVisible = Boolean(visible);
+        this.previewZoomControls?.classList.toggle('hidden', !this.previewZoomSliderVisible);
+        this.btnPreviewZoomToggle?.setAttribute('aria-expanded', String(this.previewZoomSliderVisible));
+        this.btnPreviewZoomToggle?.classList.toggle('is-active', this.previewZoomSliderVisible);
+        if (this.btnPreviewZoomToggle) {
+            this.btnPreviewZoomToggle.title = this.previewZoomSliderVisible
+                ? 'Hide preview zoom controls'
+                : 'Show preview zoom controls';
+        }
+    }
+
+    _adjustPreviewZoom(delta = 0) {
+        this._applyPreviewZoom(this.previewZoomPercent + delta);
+    }
+
+    _applyPreviewZoom(percent, { persist = true } = {}) {
+        if (!this.previewFrame || !this.previewZoomSlider || !this.previewZoomDisplay) return;
+
+        const nextZoom = Math.max(50, Math.min(200, Math.round((Number(percent) || 100) / 5) * 5));
+        this.previewZoomPercent = nextZoom;
+        const scale = nextZoom / 100;
+
+        this.previewFrame.style.setProperty('--preview-zoom-scale', String(scale));
+        this.previewFrame.style.width = this.previewWidthMode === 'full'
+            ? `${100 / scale}%`
+            : `${this.customPreviewWidth / scale}px`;
+        this.previewFrame.style.height = `${100 / scale}%`;
+        this.previewFrame.style.transform = `scale(${scale})`;
+        this.previewZoomSlider.value = String(nextZoom);
+        this.previewZoomDisplay.textContent = `${nextZoom}%`;
+        this.btnPreviewZoomDec?.toggleAttribute('disabled', nextZoom <= 50);
+        this.btnPreviewZoomInc?.toggleAttribute('disabled', nextZoom >= 200);
+        if (this.btnPreviewZoomReset) {
+            this.btnPreviewZoomReset.textContent = `${nextZoom}%`;
+            this.btnPreviewZoomReset.title = nextZoom === 100
+                ? 'Preview zoom is already at 100%'
+                : 'Reset preview zoom to 100%';
+            this.btnPreviewZoomReset.classList.toggle('is-active', nextZoom !== 100);
+            this.btnPreviewZoomReset.toggleAttribute('disabled', nextZoom === 100);
+        }
 
         if (persist) {
             this._persistSessionState();
@@ -528,6 +721,8 @@ class App {
         this._setPreviewColumnWidth(this._getDefaultPreviewColumnWidth(), { persist: false });
         this._setConsoleHeight(this.previewConsoleDefaultHeight, { persist: false });
         this._applyFullPreviewWidth({ persist: false });
+        this._applyPreviewZoom(100, { persist: false });
+        this._setPreviewZoomControlsVisible(false);
         this._persistSessionState();
     }
 
@@ -622,6 +817,8 @@ class App {
 
         return {
             version: 1,
+            documentFilename: this.editor?.currentFilename || '',
+            documentTarget: this.editor?.getDocumentTarget?.() || 'example',
             topicPath: this.currentTopicPath || '',
             exampleFilename: this.editor?.currentFilename || '',
             editor: {
@@ -637,6 +834,7 @@ class App {
                     10,
                 ) || this.previewConsoleDefaultHeight,
                 customWidth: this.previewWidthMode === 'custom' ? this.customPreviewWidth : null,
+                zoom: this.previewZoomPercent,
                 widthMode: this.previewWidthMode,
             },
         };
@@ -694,10 +892,14 @@ class App {
 
         if (previewState.widthMode === 'custom' && Number.isFinite(customWidth) && customWidth > 0) {
             this._applyCustomPreviewWidth(customWidth, { persist: false });
-            return;
+        } else {
+            this._applyFullPreviewWidth({ persist: false });
         }
 
-        this._applyFullPreviewWidth({ persist: false });
+        const zoom = Number.isFinite(previewState.zoom)
+            ? previewState.zoom
+            : Number.parseInt(previewState.zoom, 10);
+        this._applyPreviewZoom(Number.isFinite(zoom) && zoom > 0 ? zoom : 100, { persist: false });
     }
 
     async _restoreSessionState() {
@@ -723,16 +925,34 @@ class App {
         await this.selectTopic(topic.path, topic.label, { persist: false });
         this.editor.restoreSessionState(sessionState.editor || {});
 
+        const documentTarget = sessionState.documentTarget === 'theory' ? 'theory' : 'example';
+        const documentFilename = typeof sessionState.documentFilename === 'string'
+            ? sessionState.documentFilename.trim()
+            : '';
         const exampleFilename = typeof sessionState.exampleFilename === 'string'
             ? sessionState.exampleFilename.trim()
             : '';
-        if (!exampleFilename) {
+        if (documentTarget === 'theory') {
+            try {
+                await this.openTheoryEditor({ persist: false });
+                this.editor.restoreSessionState(sessionState.editor || {});
+            } catch (error) {
+                console.warn('Failed to restore previous theory session.', error);
+                this.showGallery();
+            }
+
+            this._persistSessionState();
+            return;
+        }
+
+        const filenameToRestore = documentFilename || exampleFilename;
+        if (!filenameToRestore) {
             this._persistSessionState();
             return;
         }
 
         try {
-            await this.loadExample(exampleFilename, { persist: false });
+            await this.loadExample(filenameToRestore, { persist: false });
             this.editor.restoreSessionState(sessionState.editor || {});
         } catch (error) {
             console.warn('Failed to restore previous example session.', error);

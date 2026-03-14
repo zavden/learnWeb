@@ -36,7 +36,7 @@ import {
     syncSystemClipboardRegister,
 } from '../editor/vimSupport.js';
 import { vueScriptEnterCommand } from '../editor/vueSmartEnter.js';
-import { fetchExample, fetchTopicAssets, saveExample, modifyExample, removeExample, renameExample } from '../utils/api.js';
+import { fetchExample, fetchTopicAssets, modifyExample, modifyTopicMain, removeExample, renameExample, saveExample } from '../utils/api.js';
 import { resolveExerciseComparison } from '../utils/exerciseComparison.js';
 import { buildQuickOpenMatches } from '../utils/fileQuickOpen.js';
 import {
@@ -64,6 +64,7 @@ import {
     updateDocumentFileContent,
     VIRTUAL_FILE_ROLE_OPTIONS,
 } from '../utils/markdown.js';
+import { createTheoryDocument, getTheoryDocumentContent, isTheoryDocument } from '../utils/theoryDocument.js';
 
 const SHADER_UNIFORM_TYPE_OPTIONS = ['float', 'int', 'bool', 'vec2', 'vec3', 'vec4'];
 const SHADER_BUILT_IN_UNIFORM_NAMES = ['u_time', 'u_delta', 'u_resolution', 'u_mouse', 'u_mouse_pressed', 'u_frame'];
@@ -169,8 +170,14 @@ export class Editor {
         onCodeChange,
         onExerciseStateChange,
         onRename,
+        onResetShaderRuntime,
         onSessionStateChange,
+        onOpenShaderControls,
+        onOpenShaderPanel,
+        onToggleShaderPause,
         onTogglePreviewAutoRender,
+        onOpenShaderTextures,
+        onOpenShaderUniforms,
         onToggleSidebar,
         onCenterWorkspace,
     }) {
@@ -178,8 +185,14 @@ export class Editor {
         this.onCodeChange = onCodeChange;
         this.onExerciseStateChange = onExerciseStateChange;
         this.onRename = onRename;
+        this.onResetShaderRuntime = onResetShaderRuntime;
         this.onSessionStateChange = onSessionStateChange;
+        this.onOpenShaderControls = onOpenShaderControls;
+        this.onOpenShaderPanel = onOpenShaderPanel;
+        this.onToggleShaderPause = onToggleShaderPause;
         this.onTogglePreviewAutoRender = onTogglePreviewAutoRender;
+        this.onOpenShaderTextures = onOpenShaderTextures;
+        this.onOpenShaderUniforms = onOpenShaderUniforms;
         this.onToggleSidebar = onToggleSidebar;
         this.onCenterWorkspace = onCenterWorkspace;
 
@@ -381,6 +394,7 @@ export class Editor {
             activeFileId: this.activeFileId,
             collapsedFileIds: [...this.panelState.collapsedFileIds],
             currentFilename: this.currentFilename,
+            documentTarget: this.getDocumentTarget(),
             exercise: { ...this.exerciseState },
             layoutMode: this.layoutMode,
             maximizedFileId: this.panelState.maximizedFileId,
@@ -433,6 +447,54 @@ export class Editor {
             solutionFiles: [],
             title: 'Exercise',
         };
+    }
+
+    getDocumentTarget() {
+        return this._isTheoryDocumentTarget() ? 'theory' : 'example';
+    }
+
+    isEditingTheoryDocument() {
+        return this._isTheoryDocumentTarget();
+    }
+
+    getTheoryContent() {
+        return getTheoryDocumentContent(this.currentDocument);
+    }
+
+    captureWorkspaceSnapshot() {
+        return {
+            currentFilename: this.currentFilename,
+            document: cloneExampleDocument(this.currentDocument),
+            sessionState: this.getSessionState(),
+        };
+    }
+
+    async restoreWorkspaceSnapshot(snapshot = null) {
+        if (!snapshot?.document) {
+            this.currentFilename = null;
+            this.compileDiagnostics = [];
+            this._resetExerciseComparisonSource();
+            this._applyDocument(createEmptyExampleDocument(), { notify: false });
+            this._updateButtonStates();
+            this._updateFilenameDisplay();
+            this._emitSessionStateChange();
+            this._triggerChange();
+            return;
+        }
+
+        this.currentFilename = snapshot.currentFilename || null;
+        this.compileDiagnostics = [];
+        this._resetExerciseComparisonSource();
+        this._applyDocument(snapshot.document, { notify: false });
+        this.restoreSessionState(snapshot.sessionState || {});
+
+        if (!isTheoryDocument(snapshot.document)) {
+            await this._loadExerciseComparisonSource();
+        }
+
+        this._updateButtonStates();
+        this._updateFilenameDisplay();
+        this._triggerChange();
     }
 
     _sanitizeExerciseState(exerciseState = {}) {
@@ -2082,6 +2144,10 @@ export class Editor {
         this._openShaderUniformDialog(uniformName);
     }
 
+    openShaderTextureDialog() {
+        void this._openShaderTextureDialog();
+    }
+
     _cloneShaderUniformsFromDocument() {
         if (!this._isShaderDocument()) return [];
 
@@ -2115,6 +2181,10 @@ export class Editor {
 
     _isFrameworkMultiFileDocument() {
         return this._isVirtualFileDocument() && ['react', 'vue'].includes(this._getDocumentFramework());
+    }
+
+    _isTheoryDocumentTarget() {
+        return isTheoryDocument(this.currentDocument);
     }
 
     _isShaderDocument() {
@@ -2746,6 +2816,10 @@ const title = ref('${componentName}');
     async _handleSave() {
         if (!this.currentTopicPath || hasBlockingDiagnostics(this.currentDocument)) return;
         if ((this.currentDocument.files || []).length === 0) return;
+        if (this._isTheoryDocumentTarget()) {
+            await this._handleModifyTheory();
+            return;
+        }
 
         const documentToPersist = this._getPersistableDocument();
         const content = buildExampleDocument(documentToPersist);
@@ -2847,6 +2921,18 @@ const title = ref('${componentName}');
         } else {
             this._showToast(`Loaded: ${filename}`, 'success');
         }
+    }
+
+    loadTheoryDocument(content = '') {
+        this.currentFilename = 'main.md';
+        this.compileDiagnostics = [];
+        this._resetExerciseComparisonSource();
+        this._setLayoutMode('tabs', { persist: true, rerender: false, emit: false });
+        this._applyDocument(createTheoryDocument(content));
+        this._updateButtonStates();
+        this._updateFilenameDisplay();
+        this._emitSessionStateChange();
+        this._showToast('Editing theory: main.md', 'success');
     }
 
     setTopicPath(path) {
@@ -3058,20 +3144,23 @@ const title = ref('${componentName}');
         const activeFile = this._getActiveFile();
         const isVirtual = this._isVirtualFileDocument();
         const isFrameworkMultiFile = this._isFrameworkMultiFileDocument();
+        const isTheory = this._isTheoryDocumentTarget();
         const isShader = this._isShaderDocument();
         const isExerciseMode = this._isExerciseMode();
         const entryCandidates = getDocumentEntryCandidates(this.currentDocument);
         const languageOptions = getDocumentLanguageOptions(this.currentDocument);
 
         if (this.btnAddFile) {
-            this.btnAddFile.disabled = !hasTopic || isExerciseMode || languageOptions.length === 0;
+            this.btnAddFile.disabled = !hasTopic || isExerciseMode || isTheory || languageOptions.length === 0;
             const addFileLabel = this.btnAddFile.querySelector('.toolbar-btn-label');
             if (addFileLabel) {
                 addFileLabel.textContent = isVirtual ? 'File' : 'Block';
             } else {
                 this.btnAddFile.textContent = isVirtual ? 'File' : 'Block';
             }
-            this.btnAddFile.title = isExerciseMode
+            this.btnAddFile.title = isTheory
+                ? 'Theory editing keeps a fixed single file'
+                : isExerciseMode
                 ? 'Exercise mode keeps the file structure fixed'
                 : languageOptions.length === 0
                     ? (isShader ? 'Shader documents already contain all supported blocks' : 'No additional blocks are available for this document')
@@ -3079,9 +3168,9 @@ const title = ref('${componentName}');
         }
 
         if (this.btnQuickOpenFile) {
-            this.btnQuickOpenFile.disabled = files.length === 0;
+            this.btnQuickOpenFile.disabled = files.length === 0 || isTheory;
             this.btnQuickOpenFile.title = files.length > 0
-                ? 'Quick search visible files'
+                ? (isTheory ? 'Theory editing keeps a single active file' : 'Quick search visible files')
                 : 'No visible files to open';
         }
 
@@ -3103,22 +3192,24 @@ const title = ref('${componentName}');
 
         if (this.btnEditFileVisibility) {
             const allFiles = this.currentDocument.files || [];
-            this.btnEditFileVisibility.disabled = !hasTopic || allFiles.length === 0 || isExerciseMode;
-            this.btnEditFileVisibility.title = isExerciseMode
+            this.btnEditFileVisibility.disabled = !hasTopic || allFiles.length === 0 || isExerciseMode || isTheory;
+            this.btnEditFileVisibility.title = isTheory
+                ? 'Theory editing keeps a single visible file'
+                : isExerciseMode
                 ? 'Exercise mode keeps file visibility fixed'
                 : 'Show, hide and inspect tabs or vertical panels';
         }
 
         if (this.btnDuplicateFile) {
-            this.btnDuplicateFile.disabled = !activeFile || isExerciseMode || isShader;
+            this.btnDuplicateFile.disabled = !activeFile || isExerciseMode || isShader || isTheory;
         }
 
         if (this.btnEditFile) {
-            this.btnEditFile.disabled = !activeFile || !isVirtual || isExerciseMode;
+            this.btnEditFile.disabled = !activeFile || !isVirtual || isExerciseMode || isTheory;
         }
 
         if (this.btnDeleteFile) {
-            this.btnDeleteFile.disabled = !activeFile || isExerciseMode || (isVirtual && files.length <= 1);
+            this.btnDeleteFile.disabled = !activeFile || isExerciseMode || isTheory || (isVirtual && files.length <= 1);
         }
 
         if (!this.entrySelectGroup || !this.entrySelect) return;
@@ -3537,6 +3628,35 @@ const title = ref('${componentName}');
                 onToggleAutoRender: () => {
                     this.onTogglePreviewAutoRender?.();
                 },
+                onToggleShaderPause: () => {
+                    if (!this._isShaderDocument()) return;
+                    this.onToggleShaderPause?.();
+                },
+                onOpenShaderControls: () => {
+                    if (!this._isShaderDocument()) return;
+                    this.onOpenShaderControls?.();
+                },
+                onOpenShaderUniforms: () => {
+                    if (!this._isShaderDocument()) return;
+                    (this.onOpenShaderUniforms || this.openShaderUniformDialog).call(this, null);
+                },
+                onOpenShaderTextures: () => {
+                    if (!this._isShaderDocument()) return;
+                    (this.onOpenShaderTextures || this.openShaderTextureDialog).call(this);
+                },
+                onOpenShaderPanel: () => {
+                    if (!this._isShaderDocument()) return;
+                    this.onOpenShaderPanel?.();
+                },
+                onResetShaderRuntime: () => {
+                    if (!this._isShaderDocument()) return;
+                    this.onResetShaderRuntime?.();
+                },
+                onQuickSave: () => {
+                    if (!this._isTheoryDocumentTarget()) return false;
+                    this._handleModify();
+                    return true;
+                },
                 onWrite: () => {
                     this._handleVimWrite();
                 },
@@ -3805,11 +3925,14 @@ const title = ref('${componentName}');
         const hasTopic = Boolean(this.currentTopicPath);
         const hasContent = (this.currentDocument.files || []).length > 0;
         const isSafeToWrite = !hasBlockingDiagnostics(this.currentDocument);
+        const isTheory = this._isTheoryDocumentTarget();
 
         this.btnSave.disabled = !hasTopic || !hasContent || !isSafeToWrite;
-        this.btnModify.disabled = !hasFile || !isSafeToWrite;
-        this.btnRemove.disabled = !hasFile;
-        this.btnRename.disabled = !hasFile;
+        this.btnModify.disabled = isTheory
+            ? (!hasTopic || !hasContent || !isSafeToWrite)
+            : (!hasFile || !isSafeToWrite);
+        this.btnRemove.disabled = !hasFile || isTheory;
+        this.btnRename.disabled = !hasFile || isTheory;
         this._updatePanelControlStates();
         this._updateFileControls();
     }
@@ -3895,8 +4018,34 @@ const title = ref('${componentName}');
         return updateShaderResolution(this.currentDocument, persistedState.resolution);
     }
 
+    async _handleModifyTheory() {
+        if (!this.currentTopicPath || hasBlockingDiagnostics(this.currentDocument)) return false;
+
+        const content = getTheoryDocumentContent(this.currentDocument);
+
+        try {
+            await modifyTopicMain(this.currentTopicPath, content);
+            this._triggerChange();
+            this._emitSessionStateChange();
+            this._showToast('Theory saved: main.md', 'success');
+            return true;
+        } catch (error) {
+            console.error(error);
+            this._showToast(`Theory save failed: ${error.message}`, 'error');
+            return false;
+        }
+    }
+
+    async saveTheoryDocument() {
+        return this._handleModifyTheory();
+    }
+
     async _handleModify() {
         if (!this.currentTopicPath || !this.currentFilename || hasBlockingDiagnostics(this.currentDocument)) return;
+        if (this._isTheoryDocumentTarget()) {
+            await this._handleModifyTheory();
+            return;
+        }
 
         const documentToPersist = this._getPersistableDocument();
         const content = buildExampleDocument(documentToPersist);

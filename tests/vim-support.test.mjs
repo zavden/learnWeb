@@ -7,6 +7,7 @@ import {
     getVimModeLabelFromState,
     installSystemClipboardBridge,
     normalizeClipboardText,
+    resolveVimLeaderAction,
     setSystemClipboardEnabled,
 } from '../src/editor/vimSupport.js';
 
@@ -33,6 +34,20 @@ test('normalizes clipboard values defensively', () => {
     assert.equal(normalizeClipboardText('hello'), 'hello');
     assert.equal(normalizeClipboardText(42), '42');
     assert.equal(normalizeClipboardText(null), '');
+});
+
+test('resolves single and double leader actions for vim helpers', () => {
+    assert.equal(resolveVimLeaderAction(1, 'e'), 'toggleSidebar');
+    assert.equal(resolveVimLeaderAction(1, 'H'), 'clearSearchHighlight');
+    assert.equal(resolveVimLeaderAction(1, 'm'), 'centerWorkspace');
+    assert.equal(resolveVimLeaderAction(2, 'p'), 'toggleShaderPause');
+    assert.equal(resolveVimLeaderAction(2, 'c'), 'openShaderControls');
+    assert.equal(resolveVimLeaderAction(2, 'u'), 'openShaderUniforms');
+    assert.equal(resolveVimLeaderAction(2, 't'), 'openShaderTextures');
+    assert.equal(resolveVimLeaderAction(2, 's'), 'openShaderPanel');
+    assert.equal(resolveVimLeaderAction(2, 'r'), 'resetShaderRuntime');
+    assert.equal(resolveVimLeaderAction(2, 'S'), null);
+    assert.equal(resolveVimLeaderAction(0, 'e'), null);
 });
 
 test('clipboard bridge can fall back to local shadow clipboard when disabled', async () => {

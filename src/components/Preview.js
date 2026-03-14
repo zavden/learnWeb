@@ -9,6 +9,8 @@ import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../u
 import { getShaderConfig, isShaderDocument } from '../utils/markdown.js';
 import { shaderAlphaToUnit, shaderHexToVec, shaderVecToHex } from '../utils/shaderColor.js';
 import { validateShaderPreviewDocument } from '../utils/shaderPreviewDiagnostics.js';
+import { getTheoryDocumentContent, isTheoryDocument } from '../utils/theoryDocument.js';
+import { renderTheoryPreviewDocument } from '../utils/theoryRenderer.js';
 
 const SHADER_BUILT_IN_UNIFORMS = [
     'u_time',
@@ -280,10 +282,58 @@ export class Preview {
         };
     }
 
+    toggleShaderPause() {
+        if (this._runtimeMode !== 'shader') return false;
+        this._toggleShaderPause();
+        return true;
+    }
+
+    resetShaderRuntime() {
+        if (this._runtimeMode !== 'shader') return false;
+        this._resetShaderRuntime();
+        return true;
+    }
+
+    openShaderControls() {
+        if (this._runtimeMode !== 'shader') return false;
+
+        this._shaderEditorControlsCollapsed = !this._shaderEditorControlsCollapsed;
+        this._syncShaderEditorControlsState();
+        if (!this._shaderEditorControlsCollapsed) {
+            this.shaderEditorControls?.scrollIntoView({
+                block: 'nearest',
+            });
+        }
+        return true;
+    }
+
+    openShaderPanel() {
+        if (this._runtimeMode !== 'shader') return null;
+
+        this._consoleCollapsed = !this._consoleCollapsed;
+        this._syncConsoleVisibility();
+        return this._consoleCollapsed ? 'collapsed' : 'expanded';
+    }
+
+    getPreferredShaderPanelHeight() {
+        if (this._runtimeMode !== 'shader' || !this.consolePanel || !this.shaderPanel) return null;
+
+        const headerHeight = this.consolePanel.querySelector('.preview-console-header')?.getBoundingClientRect().height || 48;
+        const bodyHeight = this.shaderPanel.scrollHeight || 0;
+        if (!bodyHeight) return null;
+
+        return Math.ceil(headerHeight + bodyHeight);
+    }
+
     update(documentModel, { sessionKey = '' } = {}) {
         this._lastDocument = documentModel;
         this._lastSessionKey = sessionKey || '';
         this._scheduleRender(documentModel);
+    }
+
+    _setFrameDisplayMode(mode = 'default') {
+        if (!this.iframe) return;
+        this.iframe.classList.toggle('is-svg-document', mode === 'svg');
     }
 
     clear() {
@@ -292,6 +342,7 @@ export class Preview {
         this._renderToken += 1;
         clearTimeout(this._debounceTimer);
         this._resetConsoleSession();
+        this._setFrameDisplayMode('default');
         this.iframe.srcdoc = renderCompiledExampleDocument({}, this._currentTopicPath, [], {
             consoleEnabled: false,
             renderId: this._renderToken,
@@ -302,7 +353,18 @@ export class Preview {
     async _render(documentModel) {
         const renderToken = ++this._renderToken;
 
+        if (isTheoryDocument(documentModel)) {
+            this._setFrameDisplayMode('default');
+            const content = getTheoryDocumentContent(documentModel);
+            this.iframe.srcdoc = renderTheoryPreviewDocument(content, {
+                topicPath: this._currentTopicPath,
+            });
+            this._emitCompileState([]);
+            return;
+        }
+
         if (isShaderDocument(documentModel)) {
+            this._setFrameDisplayMode('default');
             const shaderConfig = getShaderConfig(documentModel);
             this._resetShaderStats(this._shaderControls?.currentResolution || shaderConfig?.resolution || null);
             this._renderShaderPanel();
@@ -326,6 +388,7 @@ export class Preview {
             if (renderToken !== this._renderToken) return;
 
             const diagnostics = result.compileDiagnostics || [];
+            this._setFrameDisplayMode(result.compiledDocument?.markupType === 'svg' && !result.compiledDocument?.framework ? 'svg' : 'default');
             this.iframe.srcdoc = renderCompiledExampleDocument(
                 result.compiledDocument,
                 this._currentTopicPath,
@@ -347,6 +410,7 @@ export class Preview {
                 },
             ];
 
+            this._setFrameDisplayMode('default');
             this.iframe.srcdoc = renderCompiledExampleDocument({}, this._currentTopicPath, diagnostics, {
                 consoleEnabled: this._consoleEnabled,
                 renderId: renderToken,

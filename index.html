@@ -411,6 +411,33 @@
                 title="Enable console for this example only" aria-pressed="false">
                 Open Console
               </button>
+              <button id="btn-preview-zoom-dec" class="btn-icon preview-zoom-step-btn" type="button" title="Decrease preview zoom" aria-label="Decrease preview zoom">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  <line x1="8" y1="11" x2="14" y2="11"></line>
+                </svg>
+              </button>
+              <button id="btn-preview-zoom-inc" class="btn-icon preview-zoom-step-btn" type="button" title="Increase preview zoom" aria-label="Increase preview zoom">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  <line x1="11" y1="8" x2="11" y2="14"></line>
+                  <line x1="8" y1="11" x2="14" y2="11"></line>
+                </svg>
+              </button>
+              <button id="btn-preview-zoom-toggle" class="btn btn-secondary preview-zoom-toggle" type="button"
+                title="Show preview zoom controls" aria-expanded="false">
+                Zoom
+              </button>
+              <button id="btn-preview-zoom-reset" class="btn btn-secondary preview-zoom-reset" type="button"
+                title="Reset preview zoom to 100%">
+                100%
+              </button>
+              <div id="preview-zoom-controls" class="preview-zoom-controls hidden">
+                <input type="range" id="preview-zoom-slider" class="preview-zoom-slider" min="50" max="200" step="5" value="100">
+                <span id="preview-zoom-display" class="preview-zoom-value">100%</span>
+              </div>
               <button id="btn-refresh" class="btn-icon" title="Refresh preview">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   stroke-linecap="round" stroke-linejoin="round">
@@ -422,17 +449,32 @@
           </div>
           <div id="preview-frame-container">
             <iframe id="preview-frame" sandbox="allow-scripts allow-modals"></iframe>
+            <button id="btn-exit-theory-editor" class="btn-icon preview-theory-exit hidden" title="Done editing theory" aria-label="Done editing theory">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+                stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </button>
             <!-- Theory Side Panel (Overlay) -->
             <aside id="theory-panel" class="theory-sidebar hidden">
               <div class="theory-sidebar-header">
                 <h2>📖 Theory</h2>
-                <button id="btn-close-theory" class="btn-icon" title="Close">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
+                <div class="theory-sidebar-actions">
+                  <button id="btn-edit-theory" class="btn-icon" title="Edit theory" disabled>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z" />
+                    </svg>
+                  </button>
+                  <button id="btn-close-theory" class="btn-icon" title="Close">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
               </div>
               <div id="theory-content">
                 <div class="empty-state">

@@ -1634,6 +1634,7 @@ export async function compileExampleDocument(sourceDocument) {
             html: markupResult.html,
             css: styleResult.css,
             js: scriptResult.js,
+            markupType: markupBlock?.type || '',
             runtimeScriptPath: scriptFile?.path || '',
         },
         compileDiagnostics: [

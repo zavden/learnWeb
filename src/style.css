@@ -1720,6 +1720,8 @@ body.is-resizing-console {
   gap: 8px;
   margin-left: auto;
   min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 #preview-frame {
@@ -1727,6 +1729,11 @@ body.is-resizing-console {
   border: none;
   background: #fff;
   width: 100%;
+  transform-origin: top center;
+}
+
+#preview-frame.is-svg-document {
+  background: #000;
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -2400,6 +2407,12 @@ dialog h2 {
   margin: 0;
 }
 
+.theory-sidebar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .theory-sidebar #theory-content {
   flex: 1;
   overflow-y: auto;
@@ -2592,6 +2605,27 @@ dialog h2 {
   /* For absolute positioning of overlay */
 }
 
+.preview-theory-exit {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 11;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  color: #86efac;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(8px);
+}
+
+.preview-theory-exit:hover {
+  background: rgba(21, 33, 56, 0.96);
+  border-color: rgba(134, 239, 172, 0.45);
+  color: #dcfce7;
+}
+
 #preview-frame {
   flex: 0 0 auto;
   /* Don't expand */
@@ -2601,6 +2635,10 @@ dialog h2 {
   background: #fff;
   /* transition: width var(--transition-normal); Removed per user request */
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+#preview-frame.is-svg-document {
+  background: #000;
 }
 
 .preview-console-resizer {
@@ -3340,6 +3378,38 @@ dialog h2 {
   min-width: 50px;
   text-align: right;
   margin-right: 8px;
+}
+
+.preview-zoom-step-btn {
+  width: 30px;
+  height: 30px;
+}
+
+.preview-zoom-toggle.is-active {
+  border-color: rgba(88, 166, 255, 0.32);
+  color: var(--text-primary);
+  background: rgba(88, 166, 255, 0.12);
+}
+
+.preview-zoom-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 2px 0 4px;
+}
+
+.preview-zoom-slider {
+  width: 150px;
+  height: 4px;
+  cursor: pointer;
+  accent-color: var(--accent-cyan);
+}
+
+.preview-zoom-value {
+  min-width: 42px;
+  text-align: right;
+  color: var(--text-muted);
+  font: 11px/1.2 var(--font-mono);
 }
 
 /* ── Example Gallery ── */

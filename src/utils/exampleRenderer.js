@@ -400,6 +400,7 @@ export function renderCompiledExampleDocument(compiledDocument = {}, topicPath =
     const html = compiledDocument.html || '';
     const css = compiledDocument.css || '';
     const js = compiledDocument.js || '';
+    const markupType = compiledDocument.markupType || '';
     const runtimeScriptPath = compiledDocument.runtimeScriptPath || '';
     const consoleEnabled = Boolean(options.consoleEnabled);
     const renderId = Number.isFinite(options.renderId) ? options.renderId : 0;
@@ -414,11 +415,78 @@ export function renderCompiledExampleDocument(compiledDocument = {}, topicPath =
         });
     }
 
-    const baseStyles = framework === 'react'
-        ? 'body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; } #root { min-height: calc(100vh - 32px); }'
-        : framework === 'vue'
-            ? 'body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; } #app { min-height: calc(100vh - 32px); }'
-            : 'body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }';
+    const isPureSvgDocument = markupType === 'svg' && !framework;
+    const baseStyles = isPureSvgDocument
+        ? `
+html {
+  margin: 0;
+  width: 100%;
+  min-height: 100%;
+  background: #000;
+}
+body {
+  margin: 0;
+  width: 100%;
+  min-height: 100vh;
+  background: #000;
+  color: #e5e7eb;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow: auto;
+}
+.learncode-svg-preview {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  background: #000;
+  overflow: auto;
+}
+.learncode-svg-preview > svg {
+  display: block;
+  flex: 0 0 auto;
+  max-width: none;
+  height: auto;
+  background: transparent;
+}
+        `
+        : framework === 'react'
+            ? 'body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; } #root { min-height: calc(100vh - 32px); }'
+            : framework === 'vue'
+                ? 'body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; } #app { min-height: calc(100vh - 32px); }'
+                : 'body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }';
+    const trailingStyles = isPureSvgDocument
+        ? `
+html,
+body {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+  min-height: 100% !important;
+  background: #000 !important;
+  display: block !important;
+  overflow: auto !important;
+}
+.learncode-svg-preview {
+  width: 100% !important;
+  min-height: 100vh !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  background: #000 !important;
+  overflow: auto !important;
+}
+.learncode-svg-preview > svg {
+  display: block !important;
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+  background: transparent !important;
+}
+        `
+        : '';
+    const bodyMarkup = isPureSvgDocument
+        ? `<div class="learncode-svg-preview">${html}</div>`
+        : html;
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -429,10 +497,11 @@ export function renderCompiledExampleDocument(compiledDocument = {}, topicPath =
   <style>
     ${baseStyles}
     ${css}
+    ${trailingStyles}
   </style>
 </head>
 <body>
-  ${html}
+  ${bodyMarkup}
   ${diagnosticsMarkup}
   ${consoleEnabled ? buildRuntimeBridgeMarkup(renderId) : ''}
   ${buildUserScriptMarkup(js, { consoleEnabled, runtimeScriptPath })}

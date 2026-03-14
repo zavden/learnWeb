@@ -68,6 +68,15 @@ export async function fetchTopicMain(topicPath) {
     return res.json();
 }
 
+export async function modifyTopicMain(topicPath, content) {
+    const res = await fetch(`${BASE}/topic/${topicPath}/main`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+    });
+    return handleResponse(res);
+}
+
 export async function fetchExamples(topicPath) {
     const res = await fetch(`${BASE}/topic/${topicPath}/examples`);
     return handleResponse(res);

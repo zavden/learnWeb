@@ -234,8 +234,32 @@ export function createVimExtension() {
     return vim();
 }
 
+export function resolveVimLeaderAction(stage = 0, key = '') {
+    const normalizedKey = String(key || '');
+
+    if (stage === 1) {
+        if (normalizedKey === 'e' || normalizedKey === 'E') return 'toggleSidebar';
+        if (normalizedKey === 'h' || normalizedKey === 'H') return 'clearSearchHighlight';
+        if (normalizedKey === 'm' || normalizedKey === 'M') return 'centerWorkspace';
+        return null;
+    }
+
+    if (stage === 2) {
+        if (normalizedKey === 'p' || normalizedKey === 'P') return 'toggleShaderPause';
+        if (normalizedKey === 'c' || normalizedKey === 'C') return 'openShaderControls';
+        if (normalizedKey === 'u' || normalizedKey === 'U') return 'openShaderUniforms';
+        if (normalizedKey === 't' || normalizedKey === 'T') return 'openShaderTextures';
+        if (normalizedKey === 's') return 'openShaderPanel';
+        if (normalizedKey === 'r') return 'resetShaderRuntime';
+        return null;
+    }
+
+    return null;
+}
+
 export function bindVimView(view, {
     onModeChange,
+    onQuickSave,
     onWrite,
     onToggleAutoRender,
     onPreviousTab,
@@ -243,6 +267,12 @@ export function bindVimView(view, {
     onOpenFilePicker,
     onToggleSidebar,
     onCenterWorkspace,
+    onToggleShaderPause,
+    onOpenShaderControls,
+    onOpenShaderUniforms,
+    onOpenShaderTextures,
+    onOpenShaderPanel,
+    onResetShaderRuntime,
 } = {}) {
     ensureVimExCommandsRegistered();
 
@@ -251,20 +281,20 @@ export function bindVimView(view, {
         return () => {};
     }
 
-    let leaderPending = false;
+    let leaderStage = 0;
     let leaderTimeoutId = null;
 
     const clearLeaderPending = () => {
-        leaderPending = false;
+        leaderStage = 0;
         if (leaderTimeoutId) {
             window.clearTimeout(leaderTimeoutId);
             leaderTimeoutId = null;
         }
     };
 
-    const armLeaderPending = () => {
+    const armLeaderPending = (stage = 1) => {
         clearLeaderPending();
-        leaderPending = true;
+        leaderStage = stage;
         leaderTimeoutId = window.setTimeout(() => {
             clearLeaderPending();
         }, 900);
@@ -289,6 +319,7 @@ export function bindVimView(view, {
     }
 
     const handleKeydown = (event) => {
+        if (leaderStage !== 0) return;
         if (!event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
         if (cm.state?.vim?.insertMode) return;
         if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
@@ -318,6 +349,14 @@ export function bindVimView(view, {
             event.preventDefault();
             event.stopPropagation();
             onToggleAutoRender();
+            return;
+        }
+
+        if (event.key === 'S' && typeof onQuickSave === 'function') {
+            const handled = onQuickSave();
+            if (handled === false) return;
+            event.preventDefault();
+            event.stopPropagation();
         }
     };
 
@@ -341,34 +380,54 @@ export function bindVimView(view, {
         if (isSpaceKey && !event.shiftKey) {
             event.preventDefault();
             event.stopPropagation();
-            armLeaderPending();
+            armLeaderPending(leaderStage === 1 ? 2 : 1);
             return;
         }
 
-        if (!leaderPending) {
+        if (leaderStage === 0) {
             return;
         }
 
+        const action = resolveVimLeaderAction(leaderStage, event.key);
         clearLeaderPending();
 
-        if ((event.key === 'e' || event.key === 'E') && typeof onToggleSidebar === 'function') {
-            event.preventDefault();
-            event.stopPropagation();
-            onToggleSidebar();
+        if (!action) {
             return;
         }
 
-        if (event.key === 'h' || event.key === 'H') {
-            event.preventDefault();
-            event.stopPropagation();
-            Vim.handleEx(cm, 'noh');
-            return;
-        }
+        event.preventDefault();
+        event.stopPropagation();
 
-        if ((event.key === 'm' || event.key === 'M') && typeof onCenterWorkspace === 'function') {
-            event.preventDefault();
-            event.stopPropagation();
-            onCenterWorkspace();
+        switch (action) {
+            case 'toggleSidebar':
+                onToggleSidebar?.();
+                return;
+            case 'clearSearchHighlight':
+                Vim.handleEx(cm, 'noh');
+                return;
+            case 'centerWorkspace':
+                onCenterWorkspace?.();
+                return;
+            case 'toggleShaderPause':
+                onToggleShaderPause?.();
+                return;
+            case 'openShaderControls':
+                onOpenShaderControls?.();
+                return;
+            case 'openShaderUniforms':
+                onOpenShaderUniforms?.();
+                return;
+            case 'openShaderTextures':
+                onOpenShaderTextures?.();
+                return;
+            case 'openShaderPanel':
+                onOpenShaderPanel?.();
+                return;
+            case 'resetShaderRuntime':
+                onResetShaderRuntime?.();
+                return;
+            default:
+                return;
         }
     };
 
