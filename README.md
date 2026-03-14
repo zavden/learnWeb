@@ -1175,6 +1175,34 @@ It also includes:
 - panel auto-fit based on content
 - GLSL highlighting for `Vertex` and `Fragment`
 
+### File Badges Are Editable
+
+The language badge of each real file or legacy block is not decorative anymore.
+
+You can click badges such as `HTML`, `CSS`, `JSX`, `TSX`, `Vue`, `Vertex`, or `Fragment` to open a popup that evaluates the change before applying it.
+
+Current behavior:
+
+- the popup shows the current badge and the target badge
+- it lists only compatible badge changes for the selected file
+- if the transition is blocked, the popup explains why and keeps `Apply` disabled
+- for virtual files, it previews the path rename when the extension must change
+- if the file is the current `entry`, the editor also keeps `metadata.entry` in sync
+- if the file was hidden through `editor_hidden_files`, that hidden state survives extension renames
+- if the file is locked by exercise metadata, the badge change is blocked
+
+Examples:
+
+- `HTML -> Pug`
+- `CSS -> SCSS`
+- `src/main.jsx -> src/main.tsx`
+- `src/styles.css -> src/styles.scss`
+
+Important note:
+
+- this feature changes the file type or language safely, but it does not rewrite the code content for you
+- if the content is not valid for the new badge, the normal diagnostics pipeline will report it after the change
+
 ### Vim Mode
 
 The editor can work in Vim mode and starts enabled by default if `.vim_enable` is `true`.
@@ -1370,6 +1398,7 @@ Current technical limitations:
 - metadata-driven shader textures only support files from the current topic and do not support subfolders inside `assets/`
 - shaders do not yet support arrays or structs as metadata-defined uniforms
 - Vue SFC support is controlled: no `template src`, `script src`, `style src`, CSS modules, or custom blocks
+- changing a file badge does not migrate the code semantically; it only changes the declared type safely
 - for images and local resources, you must use the topic `assets/` folder
 - the React preview bundle is large because it packages runtime code into each example
 - some API routes encode filenames and some do not, so exotic names can still cause issues

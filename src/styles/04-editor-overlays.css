@@ -1,0 +1,405 @@
+.editor-status {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 24;
+  width: min(760px, calc(100% - 24px));
+  max-height: min(38vh, 320px);
+  display: grid;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(13, 17, 23, 0.92);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(10px);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.btn-context-hints {
+  border-color: rgba(88, 166, 255, 0.34);
+  background: rgba(88, 166, 255, 0.14);
+  color: #dbeafe;
+}
+
+.btn-context-hints:hover {
+  border-color: rgba(88, 166, 255, 0.52);
+  background: rgba(88, 166, 255, 0.2);
+  color: #eff6ff;
+}
+
+.btn-reset-layout {
+  padding-inline: 8px;
+}
+
+.editor-quick-open-form {
+  display: grid;
+  gap: 16px;
+  width: min(720px, 88vw);
+}
+
+.editor-quick-open-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.editor-quick-open-heading {
+  display: grid;
+  gap: 6px;
+}
+
+.editor-quick-open-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(52vh, 420px);
+  overflow: auto;
+}
+
+.editor-quick-open-item {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.editor-quick-open-item:hover,
+.editor-quick-open-item.is-active {
+  border-color: rgba(88, 166, 255, 0.3);
+  background: rgba(88, 166, 255, 0.1);
+}
+
+.editor-quick-open-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.editor-quick-open-item-path {
+  font: 600 12px/1.35 var(--font-mono);
+  color: var(--text-primary);
+}
+
+.editor-quick-open-item-detail {
+  color: var(--text-secondary);
+  font: 12px/1.45 var(--font-mono);
+}
+
+.editor-context-hints-dialog-form {
+  display: grid;
+  gap: 16px;
+  width: min(760px, 92vw);
+}
+
+.editor-context-hints-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.editor-context-hints-dialog-heading {
+  display: grid;
+  gap: 6px;
+}
+
+.editor-context-hints-dialog-content {
+  display: grid;
+  gap: 10px;
+}
+
+.editor-shortcuts-dialog-content {
+  display: grid;
+  gap: 14px;
+  max-height: min(70vh, 640px);
+  overflow: auto;
+}
+
+.favorites-dialog-form {
+  width: min(1100px, 94vw);
+}
+
+.favorites-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 18px;
+  max-height: min(72vh, 760px);
+  overflow: auto;
+}
+
+.editor-shortcuts-section {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.editor-shortcuts-section h3 {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.editor-shortcuts-section-note {
+  margin: -4px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.editor-shortcuts-list {
+  display: grid;
+  gap: 8px;
+}
+
+.editor-shortcuts-item {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.editor-shortcuts-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.editor-shortcuts-description {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.editor-context-hints-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.editor-context-hints-grid.is-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.editor-context-hints-grid.is-cascade {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.editor-context-hint {
+  display: block;
+  border-radius: var(--radius-sm);
+  background: rgba(13, 17, 23, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.editor-context-hint-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 11px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.editor-context-hint-summary::-webkit-details-marker {
+  display: none;
+}
+
+.editor-context-hint-summary-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.editor-context-hint-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-secondary);
+}
+
+.editor-context-hint-title {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.editor-context-hint-summary-action {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.editor-context-hint[open] .editor-context-hint-summary-action {
+  color: var(--text-accent);
+}
+
+.editor-context-hint-body {
+  padding: 0 11px 11px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.editor-context-hint-console {
+  border-color: rgba(63, 185, 80, 0.22);
+}
+
+.editor-context-hint-console .editor-context-hint-label {
+  background: rgba(63, 185, 80, 0.14);
+  color: #7ee787;
+}
+
+.editor-context-hint-exercise {
+  border-color: rgba(240, 136, 62, 0.22);
+}
+
+.editor-context-hint-exercise .editor-context-hint-label {
+  background: rgba(240, 136, 62, 0.14);
+  color: #f2b26f;
+}
+
+.editor-context-hint-shader,
+.editor-context-hint-uniforms,
+.editor-context-hint-textures {
+  border-color: rgba(57, 210, 192, 0.22);
+}
+
+.editor-context-hint-shader .editor-context-hint-label,
+.editor-context-hint-uniforms .editor-context-hint-label,
+.editor-context-hint-textures .editor-context-hint-label {
+  background: rgba(57, 210, 192, 0.14);
+  color: var(--accent-cyan);
+}
+
+.editor-status-summary {
+  font-weight: 600;
+}
+
+.editor-status.warning {
+  background: rgba(240, 136, 62, 0.15);
+  color: var(--accent-orange);
+  border: 1px solid rgba(240, 136, 62, 0.25);
+}
+
+.editor-status.error {
+  background: rgba(248, 81, 73, 0.12);
+  color: var(--accent-red);
+  border: 1px solid rgba(248, 81, 73, 0.28);
+}
+
+.diagnostic-section {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(13, 17, 23, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.diagnostic-section.compile {
+  border-color: rgba(88, 166, 255, 0.22);
+}
+
+.diagnostic-section.structural {
+  border-color: rgba(240, 136, 62, 0.22);
+}
+
+.diagnostic-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.diagnostic-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.diagnostic-section-count {
+  min-width: 20px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  text-align: center;
+}
+
+.diagnostic-list {
+  display: grid;
+  gap: 6px;
+}
+
+.diagnostic-item {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 9px 10px;
+  text-align: left;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.14);
+  color: inherit;
+}
+
+.diagnostic-item.is-actionable {
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
+}
+
+.diagnostic-item.is-actionable:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(88, 166, 255, 0.32);
+  transform: translateY(-1px);
+}
+
+.diagnostic-item.error {
+  border-left: 3px solid rgba(248, 81, 73, 0.72);
+}
+
+.diagnostic-item.warning {
+  border-left: 3px solid rgba(240, 136, 62, 0.72);
+}
+
+.diagnostic-item-message {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.diagnostic-item-meta {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.editor-panel.diagnostic-target {
+  outline: 2px solid rgba(88, 166, 255, 0.62);
+  outline-offset: -2px;
+}

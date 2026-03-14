@@ -1,0 +1,375 @@
+/* ── Preview Column ── */
+#preview-column {
+  --preview-console-height: 220px;
+  flex: 0 0 var(--preview-column-width);
+  width: var(--preview-column-width);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: var(--preview-column-width);
+  position: relative;
+}
+
+.preview-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 12px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-default);
+  min-height: var(--panel-header);
+}
+
+.preview-filename-display {
+  max-width: min(38vw, 320px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.preview-editorial-summary {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: grid;
+  gap: 4px;
+}
+
+.preview-editorial-description {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-editorial-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.preview-editorial-pill,
+.preview-editorial-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font: 600 10px/1.2 var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.preview-editorial-tag {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+}
+
+.preview-editorial-pill.is-trivial {
+  background: rgba(63, 185, 80, 0.16);
+  border: 1px solid rgba(63, 185, 80, 0.3);
+  color: #7ee787;
+}
+
+.preview-editorial-pill.is-useful {
+  background: rgba(57, 210, 192, 0.14);
+  border: 1px solid rgba(57, 210, 192, 0.28);
+  color: var(--accent-cyan);
+}
+
+.preview-editorial-pill.is-important {
+  background: rgba(240, 136, 62, 0.14);
+  border: 1px solid rgba(240, 136, 62, 0.28);
+  color: #f2b26f;
+}
+
+.preview-editorial-pill.is-critical {
+  background: rgba(248, 81, 73, 0.16);
+  border: 1px solid rgba(248, 81, 73, 0.28);
+  color: #ff7b72;
+}
+
+.preview-editorial-stars {
+  color: #f2b26f;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.preview-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.preview-viewport-toggle.is-active {
+  color: var(--accent-blue);
+  background: rgba(88, 166, 255, 0.12);
+  border: 1px solid rgba(88, 166, 255, 0.24);
+}
+
+#preview-frame {
+  flex: 1;
+  border: none;
+  background: #fff;
+  width: 100%;
+  transform-origin: top center;
+}
+
+#preview-frame.is-svg-document {
+  background: #000;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Buttons
+   ═══════════════════════════════════════════════════════ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: #fff;
+  border-color: transparent;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+}
+
+.btn-secondary {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border-color: var(--border-default);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-accent);
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-icon:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.btn-vim-toggle {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-system-clipboard-toggle {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-auto-render-toggle {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-column-guide-toggle {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-auto-render-toggle.is-active {
+  color: #7ee787;
+  background: rgba(126, 231, 135, 0.12);
+  border-color: rgba(126, 231, 135, 0.26);
+}
+
+.btn-column-guide-toggle.is-active {
+  color: #f0b16b;
+  background: rgba(240, 136, 62, 0.12);
+  border-color: rgba(240, 136, 62, 0.28);
+}
+
+.btn-system-clipboard-toggle.is-active {
+  color: #8dd9ff;
+  background: rgba(141, 217, 255, 0.12);
+  border-color: rgba(141, 217, 255, 0.28);
+}
+
+.btn-system-clipboard-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-system-clipboard-toggle:disabled:hover {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-vim-toggle.is-active {
+  color: #f4f27c;
+  background: rgba(244, 242, 124, 0.12);
+  border-color: rgba(244, 242, 124, 0.28);
+}
+
+.vim-mode-indicator {
+  position: absolute;
+  right: 14px;
+  bottom: 54px;
+  z-index: 25;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(244, 242, 124, 0.24);
+  background: rgba(244, 242, 124, 0.08);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+  color: #f4f27c;
+  font: 600 11px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.cm-editor[data-vim='on'] .cm-panels-bottom {
+  border-top: 1px solid rgba(240, 136, 62, 0.18);
+  background: rgba(13, 17, 23, 0.92);
+}
+
+.cm-editor[data-vim='on'] .cm-vim-panel {
+  align-items: center;
+  gap: 8px;
+  color: #f3f4f6;
+  background: rgba(13, 17, 23, 0.92);
+  border-top: 1px solid rgba(240, 136, 62, 0.16);
+  font: 12px/1.4 var(--font-mono);
+}
+
+.cm-editor[data-vim='on'] .cm-vim-panel input {
+  color: #f3f4f6;
+  caret-color: #fb923c;
+}
+
+.cm-editor[data-vim='on'] .cm-vim-panel input::selection {
+  background: rgba(251, 146, 60, 0.28);
+  color: #fff7ed;
+}
+
+.cm-editor[data-vim='on'] .cm-selectionLayer .cm-selectionBackground {
+  background: rgba(240, 136, 62, 0.3);
+  border-left: 1px solid rgba(251, 146, 60, 0.55);
+}
+
+.cm-editor[data-vim='on'].cm-focused .cm-selectionLayer .cm-selectionBackground {
+  background: rgba(240, 136, 62, 0.36);
+}
+
+.btn-icon:disabled,
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Dropdown
+   ═══════════════════════════════════════════════════════ */
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 12px;
+  min-width: 260px;
+  max-height: 320px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  z-index: 100;
+  animation: dropdown-in 150ms ease;
+}
+
+.sidebar-example-actions .dropdown {
+  top: calc(100% + 4px);
+  left: 12px;
+  right: 12px;
+  min-width: 0;
+  max-height: min(320px, calc(100vh - 220px));
+}
+
+@keyframes dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdown.hidden {
+  display: none;
+}
+
+.dropdown-header {
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-muted);
+}
+
+.dropdown ul {
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.dropdown li {
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  transition: all var(--transition-fast);
+}
+
+.dropdown li:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}

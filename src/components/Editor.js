@@ -48,9 +48,11 @@ import {
     createDocumentFile,
     createEmptyExampleDocument,
     duplicateDocumentFile,
+    evaluateDocumentFileTypeChange,
     getDocumentEntryCandidates,
     getExampleEditorialMetadata,
     getDocumentFileVisibilityEntries,
+    getDocumentFileTypeChangeOptions,
     getExerciseConfig,
     getDocumentLanguageOptions,
     getShaderConfig,
@@ -67,6 +69,7 @@ import {
     updateShaderUniformDefinitions,
     updateDocumentFileDetails,
     updateDocumentFileContent,
+    updateDocumentFileType,
     VIRTUAL_FILE_ROLE_OPTIONS,
 } from '../utils/markdown.js';
 import { createTheoryDocument, getTheoryDocumentContent, isTheoryDocument } from '../utils/theoryDocument.js';
@@ -238,6 +241,7 @@ export class Editor {
         this.currentFilename = null;
         this.currentDocument = createEmptyExampleDocument();
         this.compileDiagnostics = [];
+        this.runtimeDiagnostics = [];
         this.editors = [];
         this.fontSize = 13;
         this.layoutModeStorageKey = 'learncode.editor.layout';
@@ -311,6 +315,19 @@ export class Editor {
         this.exampleMetadataHint = document.getElementById('editor-example-metadata-hint');
         this.btnExampleMetadataCancel = document.getElementById('editor-example-metadata-cancel');
         this.btnExampleMetadataApply = document.getElementById('editor-example-metadata-apply');
+        this.fileTypeDialog = document.getElementById('editor-file-type-dialog');
+        this.fileTypeDialogTitle = document.getElementById('editor-file-type-dialog-title');
+        this.fileTypeDialogNote = document.getElementById('editor-file-type-dialog-note');
+        this.fileTypeCurrentBadge = document.getElementById('editor-file-type-current-badge');
+        this.fileTypeCurrentLabel = document.getElementById('editor-file-type-current-label');
+        this.fileTypeNextBadge = document.getElementById('editor-file-type-next-badge');
+        this.fileTypeNextLabel = document.getElementById('editor-file-type-next-label');
+        this.fileTypePathPreview = document.getElementById('editor-file-type-path-preview');
+        this.fileTypeOptions = document.getElementById('editor-file-type-options');
+        this.fileTypeEmpty = document.getElementById('editor-file-type-empty');
+        this.fileTypeDialogHint = document.getElementById('editor-file-type-dialog-hint');
+        this.btnFileTypeCancel = document.getElementById('editor-file-type-cancel');
+        this.btnFileTypeApply = document.getElementById('editor-file-type-apply');
         this.shaderUniformDialog = document.getElementById('shader-uniform-dialog');
         this.shaderUniformList = document.getElementById('shader-uniform-list');
         this.shaderUniformEmpty = document.getElementById('shader-uniform-empty');
@@ -387,6 +404,11 @@ export class Editor {
         this.exampleMetadataDialogState = {
             rating: 0,
         };
+        this.fileTypeDialogState = {
+            fileId: null,
+            options: [],
+            selectedType: '',
+        };
         this.shaderUniformDialogState = {
             editingIndex: null,
             uniforms: [],
@@ -417,6 +439,7 @@ export class Editor {
         this._initLayoutControls();
         this._initFileControls();
         this._initExampleMetadataDialog();
+        this._initFileTypeDialog();
         this._initQuickOpenDialog();
         this._initShaderUniformDialog();
         this._initShaderTextureDialog();
@@ -548,6 +571,7 @@ export class Editor {
         if (!snapshot?.document) {
             this.currentFilename = null;
             this.compileDiagnostics = [];
+            this.runtimeDiagnostics = [];
             this._resetExerciseComparisonSource();
             this._applyDocument(createEmptyExampleDocument(), { notify: false });
             this._updateButtonStates();
@@ -559,6 +583,7 @@ export class Editor {
 
         this.currentFilename = snapshot.currentFilename || null;
         this.compileDiagnostics = [];
+        this.runtimeDiagnostics = [];
         this._resetExerciseComparisonSource();
         this._applyDocument(snapshot.document, { notify: false });
         this.restoreSessionState(snapshot.sessionState || {});
@@ -1019,6 +1044,19 @@ export class Editor {
         this._renderExampleMetadataRatingStars();
     }
 
+    _initFileTypeDialog() {
+        this.btnFileTypeCancel?.addEventListener('click', () => this.fileTypeDialog?.close());
+        this.btnFileTypeApply?.addEventListener('click', () => this._applyFileTypeDialog());
+        this.fileTypeDialog?.addEventListener('close', () => {
+            this.fileTypeDialogState = {
+                fileId: null,
+                options: [],
+                selectedType: '',
+            };
+            this._scheduleEditorFocusRestore();
+        });
+    }
+
     _getExampleImportanceOption(value = '') {
         return EXAMPLE_IMPORTANCE_OPTIONS.find((option) => option.value === value) || EXAMPLE_IMPORTANCE_OPTIONS[0];
     }
@@ -1088,6 +1126,218 @@ export class Editor {
         this._setExampleMetadataHint('Tags can use `|` or commas. Rating is optional. Importance maps to gallery colors later.');
         this.exampleMetadataDialog.showModal();
         window.requestAnimationFrame(() => this.exampleDescriptionInput?.focus());
+    }
+
+    _canEditFileType(file) {
+        return Boolean(
+            file
+            && !this._isTheoryDocumentTarget()
+            && !this._isExerciseFileLocked(file)
+        );
+    }
+
+    _buildFileTypeDialogOption(evaluation) {
+        return {
+            allowed: Boolean(evaluation?.allowed),
+            code: evaluation?.code || '',
+            expectedPath: evaluation?.expectedPath || '',
+            label: this._getFileDefinition({ language: evaluation?.nextType || '' }).heading || String(evaluation?.nextType || '').toUpperCase(),
+            reason: evaluation?.reason || '',
+            value: evaluation?.nextType || '',
+            wouldChangePath: Boolean(evaluation?.wouldChangePath),
+        };
+    }
+
+    _getFileTypeDialogFile() {
+        if (!this.fileTypeDialogState.fileId) return null;
+        return (this.currentDocument.files || []).find((file) => file.id === this.fileTypeDialogState.fileId) || null;
+    }
+
+    _getFileTypeDialogEvaluation() {
+        const file = this._getFileTypeDialogFile();
+        if (!file || !this.fileTypeDialogState.selectedType) return null;
+        return evaluateDocumentFileTypeChange(this.currentDocument, file.id, this.fileTypeDialogState.selectedType);
+    }
+
+    _setFileTypeDialogHint(message, type = 'info') {
+        if (!this.fileTypeDialogHint) return;
+        this.fileTypeDialogHint.textContent = message;
+        this.fileTypeDialogHint.classList.toggle('is-error', type === 'error');
+    }
+
+    _syncFileTypeDialogPreview() {
+        const file = this._getFileTypeDialogFile();
+        const evaluation = this._getFileTypeDialogEvaluation();
+        if (!file || !evaluation) return;
+
+        const currentDefinition = this._getFileDefinition({ language: evaluation.currentType });
+        const nextDefinition = this._getFileDefinition({ language: evaluation.nextType });
+
+        if (this.fileTypeCurrentBadge) {
+            this.fileTypeCurrentBadge.className = `lang-badge ${currentDefinition.badgeClass}`;
+            this.fileTypeCurrentBadge.textContent = currentDefinition.badgeLabel;
+        }
+
+        if (this.fileTypeCurrentLabel) {
+            this.fileTypeCurrentLabel.textContent = currentDefinition.heading || file.language;
+        }
+
+        if (this.fileTypeNextBadge) {
+            this.fileTypeNextBadge.className = `lang-badge ${nextDefinition.badgeClass}`;
+            this.fileTypeNextBadge.textContent = nextDefinition.badgeLabel;
+        }
+
+        if (this.fileTypeNextLabel) {
+            this.fileTypeNextLabel.textContent = nextDefinition.heading || evaluation.nextType;
+        }
+
+        if (this.fileTypePathPreview) {
+            if (file.sourceKind === 'virtual') {
+                this.fileTypePathPreview.textContent = evaluation.wouldChangePath
+                    ? `${file.path} -> ${evaluation.expectedPath}`
+                    : file.path;
+            } else {
+                this.fileTypePathPreview.textContent = evaluation.currentType === evaluation.nextType
+                    ? 'No block-type changes selected.'
+                    : `${currentDefinition.heading || evaluation.currentType} -> ${nextDefinition.heading || evaluation.nextType}`;
+            }
+        }
+
+        if (this.btnFileTypeApply) {
+            this.btnFileTypeApply.disabled = !evaluation.allowed || evaluation.currentType === evaluation.nextType;
+        }
+
+        if (evaluation.currentType === evaluation.nextType) {
+            this._setFileTypeDialogHint('Choose a different badge to apply a change.');
+            return;
+        }
+
+        if (!evaluation.allowed) {
+            this._setFileTypeDialogHint(evaluation.reason || 'This badge change is not allowed here.', 'error');
+            return;
+        }
+
+        if (file.sourceKind === 'virtual' && evaluation.wouldChangePath) {
+            this._setFileTypeDialogHint(`This will also rename the virtual file to "${evaluation.expectedPath}".`);
+            return;
+        }
+
+        this._setFileTypeDialogHint('This badge change is valid and can be applied.');
+    }
+
+    _renderFileTypeDialogOptions() {
+        if (!this.fileTypeOptions || !this.fileTypeEmpty) return;
+
+        const options = Array.isArray(this.fileTypeDialogState.options) ? this.fileTypeDialogState.options : [];
+        this.fileTypeOptions.innerHTML = '';
+        this.fileTypeEmpty.classList.toggle('hidden', options.length > 0);
+
+        options.forEach((option) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = `editor-file-type-option${option.value === this.fileTypeDialogState.selectedType ? ' is-active' : ''}${option.allowed ? '' : ' is-blocked'}`;
+            button.setAttribute('aria-pressed', String(option.value === this.fileTypeDialogState.selectedType));
+
+            button.addEventListener('click', () => {
+                this.fileTypeDialogState.selectedType = option.value;
+                this._renderFileTypeDialogOptions();
+                this._syncFileTypeDialogPreview();
+            });
+
+            const meta = document.createElement('div');
+            meta.className = 'editor-file-type-option-meta';
+            meta.appendChild(this._createBadge(this._getFileDefinition({ language: option.value })));
+
+            const label = document.createElement('strong');
+            label.className = 'editor-file-type-option-label';
+            label.textContent = option.label;
+            meta.appendChild(label);
+
+            const detail = document.createElement('div');
+            detail.className = 'editor-file-type-option-detail';
+
+            if (option.allowed && option.wouldChangePath && option.expectedPath) {
+                detail.textContent = `Renames path to ${option.expectedPath}`;
+            } else if (!option.allowed && option.reason) {
+                detail.textContent = option.reason;
+            } else if (option.value === this._getFileTypeDialogFile()?.language) {
+                detail.textContent = 'Current badge';
+            } else {
+                detail.textContent = 'Compatible badge change';
+            }
+
+            button.appendChild(meta);
+            button.appendChild(detail);
+            this.fileTypeOptions.appendChild(button);
+        });
+    }
+
+    _openFileTypeDialog(file) {
+        if (!this.fileTypeDialog || !this._canEditFileType(file)) return;
+
+        this._rememberEditorFocusTarget();
+
+        const currentDefinition = this._getFileDefinition(file);
+        const options = getDocumentFileTypeChangeOptions(this.currentDocument, file.id, { includeCurrent: true });
+        const currentEvaluation = evaluateDocumentFileTypeChange(this.currentDocument, file.id, file.language);
+        const normalizedOptions = options.length > 0
+            ? options
+            : [this._buildFileTypeDialogOption(currentEvaluation)];
+        const preferredOption = normalizedOptions.find((option) => option.allowed && option.value !== file.language)
+            || normalizedOptions.find((option) => option.value === file.language)
+            || normalizedOptions[0];
+
+        this.fileTypeDialogState = {
+            fileId: file.id,
+            options: normalizedOptions,
+            selectedType: preferredOption?.value || file.language,
+        };
+
+        if (this.fileTypeDialogTitle) {
+            this.fileTypeDialogTitle.textContent = file.sourceKind === 'virtual'
+                ? 'Change File Badge'
+                : 'Change Block Badge';
+        }
+
+        if (this.fileTypeDialogNote) {
+            this.fileTypeDialogNote.textContent = file.sourceKind === 'virtual'
+                ? `Selected file: ${file.path}`
+                : `Selected block: ${currentDefinition.heading || file.language}`;
+        }
+
+        this._renderFileTypeDialogOptions();
+        this._syncFileTypeDialogPreview();
+        this.fileTypeDialog.showModal();
+        window.requestAnimationFrame(() => {
+            this.fileTypeOptions?.querySelector('.editor-file-type-option.is-active')?.focus();
+        });
+    }
+
+    _applyFileTypeDialog() {
+        const file = this._getFileTypeDialogFile();
+        const evaluation = this._getFileTypeDialogEvaluation();
+        if (!file || !evaluation) return;
+
+        if (!evaluation.allowed || evaluation.currentType === evaluation.nextType) {
+            this._syncFileTypeDialogPreview();
+            return;
+        }
+
+        const nextDocument = updateDocumentFileType(this.currentDocument, file.id, evaluation.nextType);
+        const nextTarget = nextDocument.files.find((entry) => (
+            file.sourceKind === 'virtual'
+                ? entry.path === (evaluation.expectedPath || file.path)
+                : entry.blockId === file.blockId
+        )) || nextDocument.files[0] || null;
+
+        if (nextTarget) {
+            this.pendingNavigationTarget = { file: nextTarget };
+        }
+
+        this._applyDocument(nextDocument);
+        this._emitSessionStateChange();
+        this.fileTypeDialog?.close();
+        this._showToast(`Changed badge to ${this._getFileDefinition({ language: evaluation.nextType }).heading || evaluation.nextType}.`, 'success');
     }
 
     async _applyExampleMetadataDialog() {
@@ -3212,6 +3462,7 @@ const title = ref('${componentName}');
     loadTheoryDocument(content = '') {
         this.currentFilename = 'main.md';
         this.compileDiagnostics = [];
+        this.runtimeDiagnostics = [];
         this._resetExerciseComparisonSource();
         this._setLayoutMode('tabs', { persist: true, rerender: false, emit: false });
         this._applyDocument(createTheoryDocument(content));
@@ -3225,6 +3476,7 @@ const title = ref('${componentName}');
         this.currentTopicPath = path;
         this.currentFilename = null;
         this.compileDiagnostics = [];
+        this.runtimeDiagnostics = [];
         this._resetExerciseComparisonSource();
         this._applyDocument(createEmptyExampleDocument(), { notify: false });
         this._updateButtonStates();
@@ -3235,6 +3487,7 @@ const title = ref('${componentName}');
     _applyDocument(documentModel, { notify = true } = {}) {
         this.currentDocument = synchronizeDocument(cloneExampleDocument(documentModel));
         this.compileDiagnostics = [];
+        this.runtimeDiagnostics = [];
         this._syncExerciseConfig();
         this._ensureActiveFile();
         this._renderWorkspace();
@@ -3647,7 +3900,7 @@ const title = ref('${componentName}');
                 </svg>
             `;
 
-            const badge = this._createBadge(definition);
+            const badge = this._createBadge(definition, { file, interactive: true });
             const pathLabel = document.createElement('span');
             pathLabel.className = 'panel-path';
             pathLabel.textContent = file.path;
@@ -3753,7 +4006,7 @@ const title = ref('${componentName}');
             tab.className = `editor-tab ${file.id === this.activeFileId ? 'active' : ''}`;
             tab.title = file.path;
 
-            tab.appendChild(this._createBadge(definition));
+            tab.appendChild(this._createBadge(definition, { file, interactive: true }));
 
             const label = document.createElement('span');
             label.className = 'editor-tab-label';
@@ -3781,7 +4034,7 @@ const title = ref('${componentName}');
         const activeFile = this._getActiveFile();
         const meta = document.createElement('div');
         meta.className = 'editor-tab-meta';
-        meta.appendChild(this._createBadge(this._getFileDefinition(activeFile)));
+        meta.appendChild(this._createBadge(this._getFileDefinition(activeFile), { file: activeFile, interactive: true }));
 
         const pathLabel = document.createElement('span');
         pathLabel.className = 'file-path-label';
@@ -3863,10 +4116,30 @@ const title = ref('${componentName}');
         return files.find((file) => file.id === this.activeFileId) || files[0];
     }
 
-    _createBadge(definition) {
+    _createBadge(definition, { file = null, interactive = false } = {}) {
         const badge = document.createElement('span');
         badge.className = `lang-badge ${definition.badgeClass}`;
         badge.textContent = definition.badgeLabel;
+
+        if (interactive && this._canEditFileType(file)) {
+            badge.classList.add('is-clickable');
+            badge.setAttribute('role', 'button');
+            badge.setAttribute('tabindex', '0');
+            badge.title = `Change ${definition.heading || definition.badgeLabel} badge`;
+
+            const activate = (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this._openFileTypeDialog(file);
+            };
+
+            badge.addEventListener('click', activate);
+            badge.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                activate(event);
+            });
+        }
+
         return badge;
     }
 
@@ -4101,6 +4374,7 @@ const title = ref('${componentName}');
         const diagnostics = [
             ...(this.currentDocument.diagnostics || []),
             ...(this.compileDiagnostics || []),
+            ...(this.runtimeDiagnostics || []),
         ];
 
         return diagnostics
@@ -4627,7 +4901,8 @@ const title = ref('${componentName}');
 
         const structuralDiagnostics = this.currentDocument.diagnostics || [];
         const compileDiagnostics = this.compileDiagnostics || [];
-        const diagnosticsCount = structuralDiagnostics.length + compileDiagnostics.length;
+        const runtimeDiagnostics = this.runtimeDiagnostics || [];
+        const diagnosticsCount = structuralDiagnostics.length + compileDiagnostics.length + runtimeDiagnostics.length;
 
         if (diagnosticsCount === 0) {
             this.statusDisplay.innerHTML = '';
@@ -4635,7 +4910,7 @@ const title = ref('${componentName}');
             return;
         }
 
-        const hasErrors = [...structuralDiagnostics, ...compileDiagnostics]
+        const hasErrors = [...structuralDiagnostics, ...compileDiagnostics, ...runtimeDiagnostics]
             .some((diagnostic) => diagnostic.level === 'error');
 
         this.statusDisplay.innerHTML = '';
@@ -4653,10 +4928,20 @@ const title = ref('${componentName}');
         if (compileDiagnostics.length > 0) {
             this.statusDisplay.appendChild(this._buildDiagnosticSection('Compile', compileDiagnostics, 'compile'));
         }
+
+        if (runtimeDiagnostics.length > 0) {
+            this.statusDisplay.appendChild(this._buildDiagnosticSection('Runtime', runtimeDiagnostics, 'runtime'));
+        }
     }
 
     setCompileDiagnostics(diagnostics = []) {
         this.compileDiagnostics = diagnostics;
+        this._updateStatus();
+        this._syncAllEditorDiagnostics();
+    }
+
+    setRuntimeDiagnostics(diagnostics = []) {
+        this.runtimeDiagnostics = diagnostics;
         this._updateStatus();
         this._syncAllEditorDiagnostics();
     }
@@ -4808,7 +5093,7 @@ const title = ref('${componentName}');
     }
 
     _formatDiagnosticMeta(diagnostic, target, category) {
-        const parts = [category === 'structural' ? 'Structure' : 'Compile'];
+        const parts = [category === 'structural' ? 'Structure' : category === 'runtime' ? 'Runtime' : 'Compile'];
 
         if (target?.file?.path) {
             let location = target.file.path;

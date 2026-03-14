@@ -1,0 +1,322 @@
+/* ── Example Gallery ── */
+#gallery-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-primary);
+}
+
+.gallery-header {
+  padding: 20px;
+  border-bottom: 1px solid var(--border-default);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.gallery-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gallery-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+#gallery-grid {
+  flex: 1;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  overflow-y: auto;
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.example-card {
+  background: #fff;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  display: flex;
+  flex-direction: column;
+  height: 320px;
+  /* Increased height for better preview */
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.example-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+  border-color: var(--accent-blue);
+}
+
+.card-preview {
+  flex: 1;
+  background: #f5f5f5;
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-muted);
+}
+
+.card-meta-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  align-content: space-between;
+  gap: 10px;
+  padding: 12px;
+  background: linear-gradient(180deg, rgba(14, 20, 31, 0.16), rgba(8, 11, 18, 0.78));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+
+.example-card:hover .card-meta-overlay:not(.is-hidden):not(.is-empty),
+.example-card:focus-within .card-meta-overlay:not(.is-hidden):not(.is-empty) {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.card-meta-overlay.is-hidden,
+.card-meta-overlay.is-empty {
+  display: none;
+}
+
+.meta-overlay-hidden .card-meta-overlay {
+  display: none;
+}
+
+.card-meta-overlay-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.card-meta-hide {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(8, 11, 18, 0.5);
+  color: rgba(255, 255, 255, 0.92);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.card-meta-overlay-body {
+  display: grid;
+  gap: 10px;
+}
+
+.card-meta-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card-meta-description {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 13px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.card-meta-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.card-meta-tag,
+.card-meta-importance {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font: 600 10px/1.2 var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.card-meta-tag {
+  background: rgba(15, 23, 42, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.card-meta-importance.is-trivial {
+  background: rgba(63, 185, 80, 0.16);
+  border: 1px solid rgba(63, 185, 80, 0.32);
+  color: #7ee787;
+}
+
+.card-meta-importance.is-useful {
+  background: rgba(57, 210, 192, 0.14);
+  border: 1px solid rgba(57, 210, 192, 0.28);
+  color: var(--accent-cyan);
+}
+
+.card-meta-importance.is-important {
+  background: rgba(240, 136, 62, 0.15);
+  border: 1px solid rgba(240, 136, 62, 0.28);
+  color: #f2b26f;
+}
+
+.card-meta-importance.is-critical {
+  background: rgba(248, 81, 73, 0.16);
+  border: 1px solid rgba(248, 81, 73, 0.28);
+  color: #ff7b72;
+}
+
+.card-meta-summary .card-meta-importance {
+  margin-left: auto;
+}
+
+.card-meta-rating {
+  color: #f2b26f;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+}
+
+.card-preview iframe {
+  width: 200%;
+  height: 200%;
+  border: none;
+  transform: scale(0.5);
+  transform-origin: 0 0;
+  pointer-events: none;
+  background: #fff;
+}
+
+.card-footer {
+  padding: 16px;
+  background: #fff;
+  border-top: 1px solid var(--border-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent-blue);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-stage-badge {
+  flex-shrink: 0;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.card-stage-badge.stage-minimal {
+  background: rgba(34, 197, 94, 0.14);
+  color: #15803d;
+}
+
+.card-stage-badge.stage-intermediate {
+  background: rgba(59, 130, 246, 0.14);
+  color: #1d4ed8;
+}
+
+.card-stage-badge.stage-common-error {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+}
+
+.card-stage-badge.stage-exercise {
+  background: rgba(168, 85, 247, 0.16);
+  color: #7c3aed;
+}
+
+.card-stage-badge.stage-final-solution {
+  background: rgba(16, 185, 129, 0.16);
+  color: #047857;
+}
+
+.favorite-card {
+  height: 300px;
+}
+
+.favorite-card.is-missing {
+  background: rgba(20, 24, 35, 0.92);
+  border-color: rgba(248, 81, 73, 0.22);
+}
+
+.favorite-card.is-missing:hover {
+  border-color: rgba(248, 81, 73, 0.32);
+}
+
+.favorite-card-missing-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font: 700 24px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 123, 114, 0.88);
+  background:
+    linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(12, 18, 32, 0.94));
+}
+
+.favorite-card-footer {
+  align-items: stretch;
+  gap: 12px;
+}
+
+.favorite-card-meta {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.favorite-card-path {
+  font: 11px/1.45 var(--font-mono);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.favorite-card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-favorite-open,
+.btn-favorite-remove {
+  padding-inline: 10px;
+  min-height: 32px;
+  font-size: 11px;
+}

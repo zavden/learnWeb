@@ -1175,6 +1175,34 @@ Ademas incluye:
 - auto-fit de paneles segun contenido
 - resaltado GLSL para bloques `Vertex` y `Fragment`
 
+### Las etiquetas de archivo ya se pueden editar
+
+La etiqueta de lenguaje de cada archivo real o bloque legacy ya no es solo decorativa.
+
+Puedes hacer click en etiquetas como `HTML`, `CSS`, `JSX`, `TSX`, `Vue`, `Vertex` o `Fragment` para abrir un popup que evalua el cambio antes de aplicarlo.
+
+Comportamiento actual:
+
+- el popup muestra la etiqueta actual y la etiqueta destino
+- solo lista cambios compatibles para el archivo seleccionado
+- si la transicion esta bloqueada, la UI explica la razon y mantiene `Apply` deshabilitado
+- en virtual files, hace preview del rename del `path` cuando la extension debe cambiar
+- si el archivo es el `entry`, el editor tambien mantiene sincronizado `metadata.entry`
+- si el archivo estaba oculto por `editor_hidden_files`, ese estado oculto se conserva aunque cambie la extension
+- si el archivo esta bloqueado por metadata de ejercicio, el cambio de etiqueta queda bloqueado
+
+Ejemplos:
+
+- `HTML -> Pug`
+- `CSS -> SCSS`
+- `src/main.jsx -> src/main.tsx`
+- `src/styles.css -> src/styles.scss`
+
+Nota importante:
+
+- esta funcionalidad cambia el tipo o lenguaje declarado de forma segura, pero no reescribe el contenido por ti
+- si el contenido deja de ser valido para la nueva etiqueta, el sistema lo reporta despues con los diagnosticos normales
+
 ### Modo Vim
 
 El editor puede trabajar en modo Vim y arranca activado por defecto si `.vim_enable` esta en `true`.
@@ -1349,7 +1377,6 @@ Ejemplos listos para probar:
 
 - no hay autenticacion ni control de permisos
 - no hay base de datos
-- no hay edicion de `main.md` desde la interfaz
 - `npm run preview` no representa un despliegue completo del proyecto
 
 Limitaciones tecnicas actuales:
@@ -1371,6 +1398,7 @@ Limitaciones tecnicas actuales:
 - las texturas shader por metadata solo soportan archivos del topic actual y no admiten subcarpetas dentro de `assets/`
 - los shaders no soportan todavia arrays ni structs como uniforms definidos por metadata
 - Vue SFC es controlado: no soporta `template src`, `script src`, `style src`, CSS modules ni custom blocks
+- cambiar la etiqueta de un archivo no migra semanticamente el codigo; solo cambia el tipo declarado de forma segura
 - para imagenes y recursos locales debes usar la carpeta `assets/` del topic
 - el bundle de preview para React es grande porque empaqueta runtime en cada ejemplo
 - algunas rutas de API codifican nombres de archivo y otras no, asi que nombres exoticos pueden generar problemas

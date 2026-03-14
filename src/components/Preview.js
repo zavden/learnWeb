@@ -68,11 +68,18 @@ function cloneShaderUniformControl(control = null) {
 }
 
 export class Preview {
-    constructor({ onCompileStateChange, onRequestShaderUniformEdit, onTheoryExerciseOpenRequest, onTheoryExercisePreviewRequest } = {}) {
+    constructor({
+        onCompileStateChange,
+        onRequestShaderUniformEdit,
+        onRuntimeDiagnosticsChange,
+        onTheoryExerciseOpenRequest,
+        onTheoryExercisePreviewRequest,
+    } = {}) {
         this.iframe = document.getElementById('preview-frame');
         this.btnAutoRenderToggle = document.getElementById('btn-auto-render-toggle');
         this.btnRefresh = document.getElementById('btn-refresh');
         this.btnConsoleOverride = document.getElementById('btn-console-override');
+        this.runtimeStatus = document.getElementById('preview-runtime-status');
         this.consoleResizer = document.getElementById('preview-console-resizer');
         this.consolePanel = document.getElementById('preview-console');
         this.runtimeTitle = document.getElementById('preview-runtime-title');
@@ -124,6 +131,7 @@ export class Preview {
         this._renderToken = 0;
         this._onCompileStateChange = onCompileStateChange;
         this._onRequestShaderUniformEdit = onRequestShaderUniformEdit;
+        this._onRuntimeDiagnosticsChange = onRuntimeDiagnosticsChange;
         this._onTheoryExerciseOpenRequest = onTheoryExerciseOpenRequest;
         this._onTheoryExercisePreviewRequest = onTheoryExercisePreviewRequest;
         this._runtimeMode = 'none';
@@ -152,6 +160,7 @@ export class Preview {
         this._shaderTextureViewerExpanded = false;
         this._activeShaderTextureName = '';
         this._shaderStats = this._createEmptyShaderStats();
+        this._runtimeDiagnostics = [];
 
         this.btnAutoRenderToggle?.addEventListener('click', () => this.toggleAutoRender());
         this.btnRefresh.addEventListener('click', () => this.renderNow());
@@ -375,6 +384,7 @@ export class Preview {
         this._lastSessionKey = '';
         this._renderToken += 1;
         clearTimeout(this._debounceTimer);
+        this._clearRuntimeDiagnostics();
         this._resetConsoleSession();
         this._setFrameDisplayMode('default');
         this.iframe.srcdoc = renderCompiledExampleDocument({}, this._currentTopicPath, [], {
@@ -386,6 +396,7 @@ export class Preview {
 
     async _render(documentModel) {
         const renderToken = ++this._renderToken;
+        this._clearRuntimeDiagnostics();
 
         if (isTheoryDocument(documentModel)) {
             this._setFrameDisplayMode('default');
@@ -716,7 +727,6 @@ export class Preview {
             this._applyShaderResolution(event.data.resolution);
             return;
         }
-        if (!this._consoleEnabled) return;
 
         const values = Array.isArray(event.data.values)
             ? event.data.values.map((value) => String(value))
@@ -724,6 +734,21 @@ export class Preview {
         const message = values.join(' ').trim();
         const stackFrames = this._normalizeStackFrames(event.data.stackFrames);
         const location = this._formatRuntimeLocation(event.data, stackFrames);
+        const isRuntimeDiagnostic = event.data.kind === 'runtime-error' || event.data.kind === 'unhandled-rejection';
+
+        if (isRuntimeDiagnostic) {
+            this._registerRuntimeDiagnostic({
+                code: event.data.kind,
+                column: stackFrames[0]?.column || null,
+                file: stackFrames[0]?.path || event.data.path || '',
+                level: 'error',
+                line: stackFrames[0]?.line || null,
+                location,
+                message: message || '(empty)',
+            });
+        }
+
+        if (!this._consoleEnabled) return;
 
         this._appendConsoleEntry({
             kind: event.data.kind || 'console',
@@ -734,6 +759,112 @@ export class Preview {
             stackText: typeof event.data.stackText === 'string' ? event.data.stackText : '',
         });
         this._renderConsoleEntries();
+    }
+
+    _clearRuntimeDiagnostics() {
+        this._runtimeDiagnostics = [];
+        this._renderRuntimeDiagnostics();
+        this._emitRuntimeDiagnostics();
+    }
+
+    _emitRuntimeDiagnostics() {
+        if (typeof this._onRuntimeDiagnosticsChange === 'function') {
+            this._onRuntimeDiagnosticsChange(this._runtimeDiagnostics.slice());
+        }
+    }
+
+    _registerRuntimeDiagnostic(diagnostic = {}) {
+        const nextDiagnostic = {
+            code: diagnostic.code || 'runtime-error',
+            column: Number.isFinite(diagnostic.column) ? diagnostic.column : null,
+            file: diagnostic.file || '',
+            level: diagnostic.level || 'error',
+            line: Number.isFinite(diagnostic.line) ? diagnostic.line : null,
+            location: diagnostic.location || '',
+            message: diagnostic.message || 'Runtime error',
+        };
+        const signature = JSON.stringify({
+            code: nextDiagnostic.code,
+            file: nextDiagnostic.file,
+            line: nextDiagnostic.line,
+            column: nextDiagnostic.column,
+            message: nextDiagnostic.message,
+        });
+        const alreadyExists = this._runtimeDiagnostics.some((entry) => JSON.stringify({
+            code: entry.code,
+            file: entry.file,
+            line: entry.line,
+            column: entry.column,
+            message: entry.message,
+        }) === signature);
+        if (alreadyExists) return;
+
+        this._runtimeDiagnostics.push(nextDiagnostic);
+        this._renderRuntimeDiagnostics();
+        this._emitRuntimeDiagnostics();
+    }
+
+    _renderRuntimeDiagnostics() {
+        if (!this.runtimeStatus) return;
+
+        if (!Array.isArray(this._runtimeDiagnostics) || this._runtimeDiagnostics.length === 0) {
+            this.runtimeStatus.innerHTML = '';
+            this.runtimeStatus.classList.add('hidden');
+            return;
+        }
+
+        this.runtimeStatus.classList.remove('hidden');
+        this.runtimeStatus.innerHTML = '';
+
+        const title = document.createElement('div');
+        title.className = 'preview-runtime-status-title';
+        title.innerHTML = '<span>Runtime diagnostics</span>';
+
+        const count = document.createElement('span');
+        count.className = 'preview-runtime-status-count';
+        count.textContent = `${this._runtimeDiagnostics.length} issue${this._runtimeDiagnostics.length === 1 ? '' : 's'}`;
+        title.appendChild(count);
+        this.runtimeStatus.appendChild(title);
+
+        const list = document.createElement('ul');
+        list.className = 'preview-runtime-status-list';
+
+        this._runtimeDiagnostics.forEach((diagnostic) => {
+            const item = document.createElement('li');
+
+            const message = document.createElement('div');
+            message.className = 'preview-runtime-status-message';
+            message.textContent = diagnostic.message;
+            item.appendChild(message);
+
+            const metaParts = [];
+            if (diagnostic.location) {
+                metaParts.push(diagnostic.location);
+            } else if (diagnostic.file) {
+                let text = diagnostic.file;
+                if (diagnostic.line) {
+                    text += `:${diagnostic.line}`;
+                    if (diagnostic.column) {
+                        text += `:${diagnostic.column}`;
+                    }
+                }
+                metaParts.push(text);
+            }
+            if (diagnostic.code) {
+                metaParts.push(diagnostic.code);
+            }
+
+            if (metaParts.length > 0) {
+                const meta = document.createElement('div');
+                meta.className = 'preview-runtime-status-meta';
+                meta.textContent = metaParts.join(' • ');
+                item.appendChild(meta);
+            }
+
+            list.appendChild(item);
+        });
+
+        this.runtimeStatus.appendChild(list);
     }
 
     _normalizeStackFrames(frames = []) {

@@ -1,0 +1,243 @@
+/* ═══════════════════════════════════════════════════════
+   New UI Enhancements
+   ═══════════════════════════════════════════════════════ */
+
+.filename-display {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-accent);
+  margin-right: 8px;
+  background: var(--bg-primary);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-muted);
+  min-width: 120px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: none;
+  /* Hidden by default until file loaded */
+}
+
+.filename-display.visible {
+  display: inline-block;
+}
+
+.viewport-select {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  font-size: 11px;
+  margin-left: 8px;
+  height: 24px;
+  outline: none;
+  cursor: pointer;
+}
+
+.viewport-select:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+.preview-console-trigger {
+  min-width: 116px;
+  justify-content: center;
+  padding-inline: 12px;
+}
+
+.preview-console-trigger.is-active {
+  border-color: rgba(63, 185, 80, 0.32);
+  background: rgba(63, 185, 80, 0.14);
+  color: #c6f6d5;
+}
+
+.preview-console-trigger.is-auto {
+  border-color: rgba(88, 166, 255, 0.32);
+  background: rgba(88, 166, 255, 0.12);
+  color: #bfdbfe;
+}
+
+.preview-console-trigger.is-auto:disabled {
+  opacity: 1;
+}
+
+.resizer-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 6px;
+  cursor: ew-resize;
+  background: transparent;
+  z-index: 1001;
+  transition: background var(--transition-fast);
+}
+
+.resizer-handle:hover,
+.resizer-handle.resizing {
+  background: var(--accent-blue);
+  opacity: 0.5;
+}
+
+#preview-frame-container {
+  flex: 1;
+  display: flex;
+  min-height: 180px;
+  min-width: 0;
+  align-items: stretch;
+  justify-content: center;
+  /* Center the iframe */
+  background: #000;
+  overflow: hidden;
+  position: relative;
+  /* For absolute positioning of overlay */
+}
+
+.preview-theory-exit {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 11;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  color: #86efac;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(8px);
+}
+
+.preview-theory-exit:hover {
+  background: rgba(21, 33, 56, 0.96);
+  border-color: rgba(134, 239, 172, 0.45);
+  color: #dcfce7;
+}
+
+.theory-exercise-dialog-form {
+  width: min(1040px, 92vw);
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.theory-exercise-dialog-stage {
+  flex: 1;
+  min-height: 0;
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(2, 6, 23, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.theory-exercise-dialog-stage iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: none;
+  background: #fff;
+}
+
+.theory-exercise-dialog-empty {
+  margin-top: 14px;
+  text-align: center;
+}
+
+#preview-frame {
+  flex: 0 0 auto;
+  /* Don't expand */
+  display: block;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  /* Default */
+  border: none;
+  background: #fff;
+  /* transition: width var(--transition-normal); Removed per user request */
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+#preview-frame.is-svg-document {
+  background: #000;
+}
+
+.preview-runtime-status {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(248, 81, 73, 0.35);
+  border-radius: 12px;
+  background: rgba(248, 81, 73, 0.08);
+  color: #fecaca;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
+}
+
+.preview-runtime-status.hidden {
+  display: none;
+}
+
+.preview-runtime-status-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fee2e2;
+}
+
+.preview-runtime-status-count {
+  color: #fca5a5;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.preview-runtime-status-list {
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+.preview-runtime-status-list li + li {
+  margin-top: 8px;
+}
+
+.preview-runtime-status-message {
+  color: #fecaca;
+  font: 12px/1.5 var(--font-sans);
+}
+
+.preview-runtime-status-meta {
+  margin-top: 4px;
+  color: #fda4af;
+  font: 11px/1.4 var(--font-mono);
+}
+
+.preview-console-resizer {
+  position: relative;
+  height: 10px;
+  min-height: 10px;
+  background: var(--bg-tertiary);
+  cursor: ns-resize;
+}
+
+.preview-console-resizer::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  background: transparent;
+}
+
+.preview-console-resizer:hover::after,
+.preview-console-resizer.resizing::after {
+  background: var(--accent-blue);
+  opacity: 0.7;
+}

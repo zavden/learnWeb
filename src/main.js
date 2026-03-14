@@ -93,6 +93,9 @@ class App {
             onCompileStateChange: (diagnostics) => {
                 this.editor?.setCompileDiagnostics(diagnostics);
             },
+            onRuntimeDiagnosticsChange: (diagnostics) => {
+                this.editor?.setRuntimeDiagnostics(diagnostics);
+            },
             onRequestShaderUniformEdit: (uniformName) => {
                 this.editor?.openShaderUniformDialog?.(uniformName);
             },

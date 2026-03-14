@@ -1,0 +1,353 @@
+/* ═══════════════════════════════════════════════════════
+   Notifications / Toast
+   ═══════════════════════════════════════════════════════ */
+
+.toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  z-index: 9999;
+  animation: toast-in 300ms ease, toast-out 300ms ease 2.5s forwards;
+  pointer-events: none;
+}
+
+.toast.success {
+  background: linear-gradient(135deg, #059669, #10b981);
+}
+
+.toast.error {
+  background: linear-gradient(135deg, #dc2626, #f87171);
+}
+
+.toast.warning {
+  background: linear-gradient(135deg, #b45309, #f59e0b);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   Theory Sidebar (Hamburger Menu)
+   ═══════════════════════════════════════════════════════ */
+
+.theory-sidebar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-secondary);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(0);
+  transition: transform var(--transition-normal);
+}
+
+.theory-sidebar.hidden {
+  transform: translateX(100%);
+}
+
+.theory-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-tertiary);
+}
+
+.theory-sidebar-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.theory-sidebar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.theory-sidebar #theory-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+#theory-content {
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+#theory-content h1 {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: var(--accent-blue);
+}
+
+#theory-content h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 16px 0 8px;
+  color: var(--text-primary);
+}
+
+#theory-content h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 12px 0 6px;
+  color: var(--text-secondary);
+}
+
+#theory-content p {
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+}
+
+#theory-content code {
+  background: var(--bg-elevated);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--accent-orange);
+}
+
+#theory-content pre {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin: 10px 0;
+  overflow-x: auto;
+}
+
+#theory-content pre code {
+  background: transparent;
+  padding: 0;
+  color: var(--text-primary);
+}
+
+#theory-content ul,
+#theory-content ol {
+  margin: 8px 0 8px 20px;
+  color: var(--text-secondary);
+}
+
+#theory-content a {
+  color: var(--accent-blue);
+  text-decoration: none;
+}
+
+#theory-content a:hover {
+  text-decoration: underline;
+}
+
+#theory-content .theory-exercise-embed {
+  margin: 16px 0;
+  padding: 15px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(96, 165, 250, 0.18);
+  background:
+    linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(8, 15, 29, 0.98)),
+    rgba(15, 23, 42, 0.96);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.24);
+  cursor: pointer;
+}
+
+#theory-content .theory-exercise-embed:hover,
+#theory-content .theory-exercise-embed:focus-within {
+  border-color: rgba(125, 211, 252, 0.34);
+  transform: translateY(-1px);
+}
+
+#theory-content .theory-exercise-embed.is-missing {
+  border-style: dashed;
+  border-color: rgba(248, 113, 113, 0.3);
+  cursor: default;
+}
+
+#theory-content .theory-exercise-embed-header,
+#theory-content .theory-exercise-embed-tags,
+#theory-content .theory-exercise-embed-meta,
+#theory-content .theory-exercise-embed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+#theory-content .theory-exercise-embed-header {
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+#theory-content .theory-exercise-embed-kicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #7dd3fc;
+}
+
+#theory-content .theory-exercise-embed-file {
+  font-size: 12px;
+  color: #dbeafe;
+}
+
+#theory-content .theory-exercise-embed-title {
+  margin-bottom: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+#theory-content .theory-exercise-embed-description {
+  margin: 0 0 12px;
+  color: var(--text-secondary);
+}
+
+#theory-content .theory-exercise-embed-preview {
+  margin: 0 0 12px;
+  height: 170px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #020617;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.48);
+}
+
+#theory-content .theory-exercise-embed-preview iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+  background: #fff;
+}
+
+#theory-content .theory-exercise-embed-preview.is-empty {
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+#theory-content .theory-exercise-embed-tags {
+  margin-bottom: 12px;
+}
+
+#theory-content .theory-exercise-embed-tag,
+#theory-content .theory-exercise-embed-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.76);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+#theory-content .theory-exercise-embed-badge.is-trivial {
+  color: #bbf7d0;
+  border-color: rgba(74, 222, 128, 0.32);
+}
+
+#theory-content .theory-exercise-embed-badge.is-useful {
+  color: #a5f3fc;
+  border-color: rgba(34, 211, 238, 0.32);
+}
+
+#theory-content .theory-exercise-embed-badge.is-important {
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.32);
+}
+
+#theory-content .theory-exercise-embed-badge.is-critical {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.32);
+}
+
+#theory-content .theory-exercise-embed-rating {
+  color: #fbbf24;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+#theory-content .theory-exercise-embed-actions {
+  margin-top: 14px;
+}
+
+#theory-content .theory-exercise-embed-btn {
+  appearance: none;
+  border: 1px solid rgba(125, 211, 252, 0.24);
+  background: rgba(30, 64, 175, 0.22);
+  color: #dbeafe;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#theory-content .theory-exercise-embed-btn.is-secondary {
+  background: rgba(15, 23, 42, 0.64);
+  color: var(--text-primary);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+#theory-content .theory-exercise-embed-btn[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: var(--text-muted);
+  gap: 12px;
+}
+
+.empty-icon {
+  font-size: 36px;
+  opacity: 0.6;
+}
+
+.empty-state p {
+  color: var(--text-muted) !important;
+  font-size: 13px;
+}

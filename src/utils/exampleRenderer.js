@@ -404,7 +404,10 @@ export function renderCompiledExampleDocument(compiledDocument = {}, topicPath =
     const runtimeScriptPath = compiledDocument.runtimeScriptPath || '';
     const consoleEnabled = Boolean(options.consoleEnabled);
     const renderId = Number.isFinite(options.renderId) ? options.renderId : 0;
-    const diagnosticsMarkup = consoleEnabled ? '' : buildDiagnosticsMarkup(diagnostics);
+    const hasBlockingDiagnostics = Array.isArray(diagnostics) && diagnostics.some((diagnostic) => diagnostic?.level === 'error');
+    const diagnosticsMarkup = consoleEnabled && !hasBlockingDiagnostics
+        ? ''
+        : buildDiagnosticsMarkup(diagnostics);
 
     if (fullDocumentHtml) {
         return injectFullDocumentMarkup(fullDocumentHtml, {
@@ -451,9 +454,9 @@ body {
 }
         `
         : framework === 'react'
-            ? 'body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; } #root { min-height: calc(100vh - 32px); }'
+            ? `body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }${hasBlockingDiagnostics ? '' : ' #root { min-height: calc(100vh - 32px); }'}`
             : framework === 'vue'
-                ? 'body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; } #app { min-height: calc(100vh - 32px); }'
+                ? `body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }${hasBlockingDiagnostics ? '' : ' #app { min-height: calc(100vh - 32px); }'}`
                 : 'body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }';
     const trailingStyles = isPureSvgDocument
         ? `

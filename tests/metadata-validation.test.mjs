@@ -1826,15 +1826,62 @@ test('preview renderer injects runtime console bridge only when console is enabl
     assert.match(withoutConsole, /try \{/);
 });
 
-test('preview renderer suppresses duplicate compile diagnostics markup when console is enabled', () => {
+test('preview renderer suppresses non-blocking diagnostics markup when console is enabled', () => {
     const rendered = renderCompiledExampleDocument(
         { html: '<main>Hello</main>', js: 'console.log("hi");' },
         '',
-        [{ level: 'error', message: 'Broken build', file: 'src/App.tsx', line: 4, column: 2 }],
+        [{ level: 'warning', message: 'Non blocking note', file: 'src/App.tsx', line: 4, column: 2 }],
         { consoleEnabled: true, renderId: 9 }
     );
 
     assert.doesNotMatch(rendered, /Compile diagnostics/);
+    assert.match(rendered, /learncode-preview/);
+});
+
+test('framework previews do not reserve full-height app roots when blocking diagnostics exist', () => {
+    const reactRendered = renderCompiledExampleDocument(
+        {
+            framework: 'react',
+            html: '<div id="root"></div>',
+            css: '',
+            js: '',
+        },
+        '',
+        [{ level: 'error', message: 'Unexpected token' }],
+        { consoleEnabled: false, renderId: 10 }
+    );
+    const vueRendered = renderCompiledExampleDocument(
+        {
+            framework: 'vue',
+            html: '<div id="app"></div>',
+            css: '',
+            js: '',
+        },
+        '',
+        [{ level: 'error', message: 'Unexpected token' }],
+        { consoleEnabled: false, renderId: 11 }
+    );
+
+    assert.match(reactRendered, /Compile diagnostics/);
+    assert.match(vueRendered, /Compile diagnostics/);
+    assert.doesNotMatch(reactRendered, /#root \{ min-height: calc\(100vh - 32px\); \}/);
+    assert.doesNotMatch(vueRendered, /#app \{ min-height: calc\(100vh - 32px\); \}/);
+});
+
+test('blocking compile diagnostics remain visible even when the console bridge is enabled', () => {
+    const rendered = renderCompiledExampleDocument(
+        {
+            framework: 'react',
+            html: '<div id="root"></div>',
+            css: '',
+            js: '',
+        },
+        '',
+        [{ level: 'error', message: 'Broken build', file: 'src/App.tsx', line: 4, column: 2 }],
+        { consoleEnabled: true, renderId: 12 }
+    );
+
+    assert.match(rendered, /Compile diagnostics/);
     assert.match(rendered, /learncode-preview/);
 });
 

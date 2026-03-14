@@ -1,4 +1,4 @@
-# React Project TSX + SCSS
+# React Project TSX + SCSS.
 
 Use this template when the lesson needs a small typed React project with preprocessed styles.
 

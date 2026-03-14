@@ -557,6 +557,7 @@
               </div>
             </aside>
           </div>
+          <div id="preview-runtime-status" class="preview-runtime-status hidden" aria-live="polite"></div>
           <div id="preview-console-resizer" class="preview-console-resizer hidden" title="Resize console"></div>
           <section id="preview-console" class="preview-console hidden" aria-live="polite">
             <div class="preview-console-header">
@@ -769,6 +770,56 @@
       <div class="form-actions">
         <button id="editor-example-metadata-cancel" type="button" class="btn btn-secondary">Cancel</button>
         <button id="editor-example-metadata-apply" type="button" class="btn btn-primary">Apply</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="editor-file-type-dialog">
+    <form method="dialog" class="editor-file-type-dialog-form">
+      <div class="editor-context-hints-dialog-header">
+        <div class="editor-context-hints-dialog-heading">
+          <h2 id="editor-file-type-dialog-title">Change Badge</h2>
+          <p id="editor-file-type-dialog-note" class="dialog-hint">Choose a compatible badge for this file or block.</p>
+        </div>
+      </div>
+      <div class="editor-file-type-dialog-layout">
+        <section class="editor-file-type-dialog-section">
+          <div class="editor-file-type-dialog-summary">
+            <div class="editor-file-type-dialog-summary-row">
+              <span class="editor-file-type-dialog-summary-label">Current</span>
+              <div class="editor-file-type-dialog-summary-value">
+                <span id="editor-file-type-current-badge" class="lang-badge preview">FILE</span>
+                <strong id="editor-file-type-current-label">Current badge</strong>
+              </div>
+            </div>
+            <div class="editor-file-type-dialog-summary-row">
+              <span class="editor-file-type-dialog-summary-label">Target</span>
+              <div class="editor-file-type-dialog-summary-value">
+                <span id="editor-file-type-next-badge" class="lang-badge preview">FILE</span>
+                <strong id="editor-file-type-next-label">Target badge</strong>
+              </div>
+            </div>
+            <div class="editor-file-type-dialog-summary-row">
+              <span class="editor-file-type-dialog-summary-label">Path</span>
+              <code id="editor-file-type-path-preview" class="editor-file-type-path-preview">No path changes.</code>
+            </div>
+          </div>
+          <p id="editor-file-type-dialog-hint" class="dialog-hint">The editor validates the change before applying it.</p>
+        </section>
+
+        <section class="editor-file-type-dialog-section">
+          <div class="shader-uniform-dialog-section-header">
+            <strong>Available Badges</strong>
+            <span class="shader-uniform-dialog-section-note">Context aware</span>
+          </div>
+          <div id="editor-file-type-options" class="editor-file-type-options"></div>
+          <p id="editor-file-type-empty" class="dialog-hint hidden">No badge changes are available for this file.</p>
+        </section>
+      </div>
+
+      <div class="form-actions">
+        <button id="editor-file-type-cancel" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="editor-file-type-apply" type="button" class="btn btn-primary">Apply</button>
       </div>
     </form>
   </dialog>

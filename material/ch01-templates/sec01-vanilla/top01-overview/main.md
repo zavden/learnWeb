@@ -33,3 +33,7 @@ testB
 testC
 
 [[exercise:ex02.md]]
+
+Hola
+
+[[exercise:ex03.md]]
