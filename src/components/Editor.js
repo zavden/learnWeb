@@ -2,6 +2,7 @@ import {
     Decoration,
     EditorView,
     GutterMarker,
+    drawSelection,
     gutterLineClass,
     keymap,
     lineNumbers,
@@ -26,8 +27,16 @@ import {
     htmlLearningSupport,
     javascriptLearningSupport,
 } from '../editor/learningCompletions.js';
+import {
+    bindVimView,
+    createVimExtension,
+    installSystemClipboardBridge,
+    isSystemClipboardApiAvailable,
+    setSystemClipboardEnabled,
+    syncSystemClipboardRegister,
+} from '../editor/vimSupport.js';
 import { vueScriptEnterCommand } from '../editor/vueSmartEnter.js';
-import { fetchExamples, fetchExample, fetchTopicAssets, saveExample, modifyExample, removeExample, renameExample } from '../utils/api.js';
+import { fetchExample, fetchTopicAssets, saveExample, modifyExample, removeExample, renameExample } from '../utils/api.js';
 import { resolveExerciseComparison } from '../utils/exerciseComparison.js';
 import { buildQuickOpenMatches } from '../utils/fileQuickOpen.js';
 import {
@@ -155,12 +164,24 @@ const editorDiagnosticsField = StateField.define({
 });
 
 export class Editor {
-    constructor({ getShaderPersistedState, onCodeChange, onExerciseStateChange, onRename, onSessionStateChange }) {
+    constructor({
+        getShaderPersistedState,
+        onCodeChange,
+        onExerciseStateChange,
+        onRename,
+        onSessionStateChange,
+        onTogglePreviewAutoRender,
+        onToggleSidebar,
+        onCenterWorkspace,
+    }) {
         this.getShaderPersistedState = getShaderPersistedState;
         this.onCodeChange = onCodeChange;
         this.onExerciseStateChange = onExerciseStateChange;
         this.onRename = onRename;
         this.onSessionStateChange = onSessionStateChange;
+        this.onTogglePreviewAutoRender = onTogglePreviewAutoRender;
+        this.onToggleSidebar = onToggleSidebar;
+        this.onCenterWorkspace = onCenterWorkspace;
 
         this.currentTopicPath = null;
         this.currentFilename = null;
@@ -169,7 +190,15 @@ export class Editor {
         this.editors = [];
         this.fontSize = 13;
         this.layoutModeStorageKey = 'learncode.editor.layout';
-        this.layoutMode = this._readLayoutMode();
+        this.vimEnabledStorageKey = 'learncode.editor.vim';
+        this.systemClipboardStorageKey = 'learncode.editor.systemClipboard';
+        this.vimEnabled = this._readVimEnabled();
+        this.systemClipboardEnabled = this._readSystemClipboardEnabled();
+        this.vimModeLabel = this.vimEnabled ? 'NORMAL' : '';
+        this.layoutMode = this.vimEnabled ? 'tabs' : this._readLayoutMode();
+        this.systemClipboardAvailable = isSystemClipboardApiAvailable();
+        installSystemClipboardBridge();
+        setSystemClipboardEnabled(this.systemClipboardEnabled);
         this.activeFileId = null;
         this.panelState = this._sanitizePanelState();
         this.exerciseConfig = this._createEmptyExerciseConfig();
@@ -181,7 +210,6 @@ export class Editor {
         this.pendingNavigationTarget = null;
         this.workspace = document.querySelector('.editor-panels');
         this.btnSave = document.getElementById('btn-save');
-        this.btnLoad = document.getElementById('btn-load');
         this.btnModify = document.getElementById('btn-modify');
         this.btnRemove = document.getElementById('btn-remove');
         this.btnRename = document.getElementById('btn-rename');
@@ -196,12 +224,14 @@ export class Editor {
         this.btnLayout = document.getElementById('btn-editor-layout');
         this.btnContextHints = document.getElementById('btn-editor-context-hints');
         this.btnAutoFit = document.getElementById('btn-auto-fit');
+        this.btnSystemClipboardToggle = document.getElementById('btn-system-clipboard-toggle');
+        this.btnVimToggle = document.getElementById('btn-vim-toggle');
+        this.vimModeIndicator = document.getElementById('vim-mode-indicator');
         this.entrySelectGroup = document.getElementById('entry-select-group');
         this.entrySelect = document.getElementById('entry-select');
+        this.tabFileSelectHost = document.getElementById('editor-tab-file-select-host');
         this.previewFilenameDisplay = document.getElementById('preview-current-filename');
         this.statusDisplay = document.getElementById('editor-status');
-        this.loadDropdown = document.getElementById('load-dropdown');
-        this.loadList = document.getElementById('load-list');
         this.fileDialog = document.getElementById('editor-file-dialog');
         this.fileDialogTitle = document.getElementById('editor-file-dialog-title');
         this.fileDialogPathGroup = document.getElementById('editor-file-path-group');
@@ -323,6 +353,16 @@ export class Editor {
         return stored === 'tabs' ? 'tabs' : 'panels';
     }
 
+    _readVimEnabled() {
+        const stored = window.localStorage.getItem(this.vimEnabledStorageKey);
+        return stored == null ? true : stored !== '0';
+    }
+
+    _readSystemClipboardEnabled() {
+        const stored = window.localStorage.getItem(this.systemClipboardStorageKey);
+        return stored == null ? true : stored !== '0';
+    }
+
     _sanitizePanelState(panelState = {}) {
         const collapsedFileIds = Array.isArray(panelState.collapsedFileIds)
             ? Array.from(new Set(panelState.collapsedFileIds.filter((value) => typeof value === 'string' && value.trim())))
@@ -344,10 +384,15 @@ export class Editor {
             exercise: { ...this.exerciseState },
             layoutMode: this.layoutMode,
             maximizedFileId: this.panelState.maximizedFileId,
+            vimEnabled: this.vimEnabled,
         };
     }
 
     restoreSessionState(sessionState = {}) {
+        if (typeof sessionState.vimEnabled === 'boolean') {
+            this._setVimEnabled(sessionState.vimEnabled, { persist: false, rerender: false, emit: false, showToast: false });
+        }
+
         if (sessionState.layoutMode) {
             this._setLayoutMode(sessionState.layoutMode, { persist: false, rerender: false, emit: false });
         }
@@ -364,7 +409,7 @@ export class Editor {
 
     resetLayoutState() {
         this.panelState = this._sanitizePanelState();
-        this._setLayoutMode('panels', { persist: true, rerender: false, emit: false });
+        this._setLayoutMode(this.vimEnabled ? 'tabs' : 'panels', { persist: true, rerender: false, emit: false });
         this._renderWorkspace();
         this._emitExerciseStateChange();
         this._emitSessionStateChange();
@@ -732,14 +777,23 @@ export class Editor {
     }
 
     _initLayoutControls() {
-        if (!this.btnLayout) return;
+        this.btnSystemClipboardToggle?.addEventListener('click', () => {
+            if (!this.systemClipboardAvailable) return;
+            this._setSystemClipboardEnabled(!this.systemClipboardEnabled);
+        });
 
-        this.btnLayout.addEventListener('click', () => {
+        this.btnVimToggle?.addEventListener('click', () => {
+            this._setVimEnabled(!this.vimEnabled);
+        });
+
+        this.btnLayout?.addEventListener('click', () => {
+            if (this.vimEnabled) return;
             const nextMode = this.layoutMode === 'panels' ? 'tabs' : 'panels';
             this._setLayoutMode(nextMode);
         });
 
         this._updateLayoutButton();
+        this._updateVimUi();
     }
 
     _initContextHintsDialog() {
@@ -1244,6 +1298,24 @@ export class Editor {
         this.quickOpenDialog.showModal();
         this.quickOpenInput.focus();
         this.quickOpenInput.select();
+    }
+
+    _selectAdjacentTab(direction = 1) {
+        if (this.layoutMode !== 'tabs') return;
+
+        const files = this._getVisibleFiles();
+        if (files.length <= 1) return;
+
+        const currentIndex = Math.max(0, files.findIndex((file) => file.id === this.activeFileId));
+        const normalizedDirection = direction < 0 ? -1 : 1;
+        const nextIndex = (currentIndex + normalizedDirection + files.length) % files.length;
+        const nextFile = files[nextIndex];
+        if (!nextFile || nextFile.id === this.activeFileId) return;
+
+        this.pendingNavigationTarget = { file: nextFile };
+        this.activeFileId = nextFile.id;
+        this._renderWorkspace();
+        this._emitSessionStateChange();
     }
 
     _renderQuickOpenMatches() {
@@ -2671,27 +2743,49 @@ const title = ref('${componentName}');
         document.documentElement.style.setProperty('--editor-font-size', `${this.fontSize}px`);
     }
 
+    async _handleSave() {
+        if (!this.currentTopicPath || hasBlockingDiagnostics(this.currentDocument)) return;
+        if ((this.currentDocument.files || []).length === 0) return;
+
+        const documentToPersist = this._getPersistableDocument();
+        const content = buildExampleDocument(documentToPersist);
+
+        try {
+            const result = await saveExample(this.currentTopicPath, content);
+            this.currentFilename = result.filename;
+            this.currentDocument = documentToPersist;
+            this._updateButtonStates();
+            this._updateFilenameDisplay();
+            this._triggerChange();
+            this._emitSessionStateChange();
+            this._showToast(`Saved: ${result.filename}`, 'success');
+        } catch (error) {
+            console.error(error);
+            this._showToast(`Failed to save: ${error.message}`, 'error');
+        }
+    }
+
+    _handleVimWrite() {
+        if (!this.currentTopicPath) {
+            this._showToast('Select a topic before saving.', 'error');
+            return;
+        }
+
+        if (hasBlockingDiagnostics(this.currentDocument)) {
+            this._showToast('Fix blocking errors before saving.', 'error');
+            return;
+        }
+
+        if (this.currentFilename) {
+            this._handleModify();
+            return;
+        }
+
+        this._handleSave();
+    }
+
     _initButtons() {
-        this.btnSave.addEventListener('click', async () => {
-            if (!this.currentTopicPath || hasBlockingDiagnostics(this.currentDocument)) return;
-
-            const documentToPersist = this._getPersistableDocument();
-            const content = buildExampleDocument(documentToPersist);
-
-            try {
-                const result = await saveExample(this.currentTopicPath, content);
-                this.currentFilename = result.filename;
-                this.currentDocument = documentToPersist;
-                this._updateButtonStates();
-                this._updateFilenameDisplay();
-                this._triggerChange();
-                this._emitSessionStateChange();
-                this._showToast(`Saved: ${result.filename}`, 'success');
-            } catch (error) {
-                console.error(error);
-                this._showToast(`Failed to save: ${error.message}`, 'error');
-            }
-        });
+        this.btnSave.addEventListener('click', async () => this._handleSave());
 
         this.btnModify.addEventListener('click', () => this._handleModify());
 
@@ -2733,49 +2827,6 @@ const title = ref('${componentName}');
                 console.error(error);
                 this._showToast(`Rename failed: ${error.message}`, 'error');
             }
-        });
-
-        this.btnLoad.addEventListener('click', async () => {
-            if (!this.currentTopicPath) return;
-
-            if (!this.loadDropdown.classList.contains('hidden')) {
-                this.loadDropdown.classList.add('hidden');
-                return;
-            }
-
-            await this._populateLoadList();
-            this.loadDropdown.classList.remove('hidden');
-        });
-
-        document.addEventListener('click', (event) => {
-            if (!this.btnLoad.contains(event.target) && !this.loadDropdown.contains(event.target)) {
-                this.loadDropdown.classList.add('hidden');
-            }
-        });
-    }
-
-    async _populateLoadList() {
-        const examples = await fetchExamples(this.currentTopicPath);
-        this.loadList.innerHTML = '';
-
-        if (examples.length === 0) {
-            const li = document.createElement('li');
-            li.textContent = 'No examples yet';
-            li.style.color = 'var(--text-muted)';
-            li.style.fontStyle = 'italic';
-            li.style.cursor = 'default';
-            this.loadList.appendChild(li);
-            return;
-        }
-
-        examples.forEach((filename) => {
-            const li = document.createElement('li');
-            li.textContent = filename;
-            li.addEventListener('click', async () => {
-                await this.loadExample(filename);
-                this.loadDropdown.classList.add('hidden');
-            });
-            this.loadList.appendChild(li);
         });
     }
 
@@ -2840,7 +2891,7 @@ const title = ref('${componentName}');
     }
 
     _setLayoutMode(mode, { persist = true, rerender = true, emit = true } = {}) {
-        this.layoutMode = mode === 'tabs' ? 'tabs' : 'panels';
+        this.layoutMode = this.vimEnabled ? 'tabs' : (mode === 'tabs' ? 'tabs' : 'panels');
 
         if (persist) {
             window.localStorage.setItem(this.layoutModeStorageKey, this.layoutMode);
@@ -2861,10 +2912,14 @@ const title = ref('${componentName}');
     _updateLayoutButton() {
         if (!this.btnLayout) return;
 
-        const label = this.layoutMode === 'panels' ? 'Tabs' : 'Panels';
-        const description = this.layoutMode === 'panels'
-            ? 'Switch to tabs view'
-            : 'Switch to vertical panels';
+        const label = this.vimEnabled
+            ? 'Tabs'
+            : (this.layoutMode === 'panels' ? 'Tabs' : 'Panels');
+        const description = this.vimEnabled
+            ? 'Disable Vim mode to use vertical panels'
+            : (this.layoutMode === 'panels'
+                ? 'Switch to tabs view'
+                : 'Switch to vertical panels');
         const labelNode = this.btnLayout.querySelector('.editor-layout-label');
 
         if (labelNode) {
@@ -2873,6 +2928,7 @@ const title = ref('${componentName}');
             this.btnLayout.textContent = label;
         }
 
+        this.btnLayout.disabled = this.vimEnabled;
         this.btnLayout.title = description;
         this.btnLayout.setAttribute('aria-label', description);
         this.btnLayout.dataset.mode = this.layoutMode;
@@ -2880,7 +2936,120 @@ const title = ref('${componentName}');
 
     _updatePanelControlStates() {
         if (!this.btnAutoFit) return;
-        this.btnAutoFit.disabled = this.layoutMode !== 'panels' || this._getVisibleFiles().length === 0;
+        this.btnAutoFit.disabled = this.vimEnabled || this.layoutMode !== 'panels' || this._getVisibleFiles().length === 0;
+    }
+
+    _updateVimUi() {
+        if (this.btnSystemClipboardToggle) {
+            this.btnSystemClipboardToggle.classList.toggle('is-active', this.systemClipboardEnabled && this.systemClipboardAvailable);
+            this.btnSystemClipboardToggle.toggleAttribute('disabled', !this.systemClipboardAvailable);
+            this.btnSystemClipboardToggle.setAttribute('aria-pressed', String(this.systemClipboardEnabled && this.systemClipboardAvailable));
+            this.btnSystemClipboardToggle.title = this.systemClipboardAvailable
+                ? (this.systemClipboardEnabled ? 'Disable system clipboard' : 'Enable system clipboard')
+                : 'System clipboard unavailable in this browser context';
+            this.btnSystemClipboardToggle.setAttribute(
+                'aria-label',
+                this.systemClipboardAvailable
+                    ? (this.systemClipboardEnabled ? 'Disable system clipboard' : 'Enable system clipboard')
+                    : 'System clipboard unavailable in this browser context',
+            );
+        }
+
+        if (this.btnVimToggle) {
+            this.btnVimToggle.classList.toggle('is-active', this.vimEnabled);
+            this.btnVimToggle.setAttribute('aria-pressed', String(this.vimEnabled));
+            this.btnVimToggle.title = this.vimEnabled ? 'Disable Vim mode' : 'Enable Vim mode';
+            this.btnVimToggle.setAttribute('aria-label', this.vimEnabled ? 'Disable Vim mode' : 'Enable Vim mode');
+        }
+
+        if (this.vimModeIndicator) {
+            this.vimModeIndicator.classList.toggle('hidden', !this.vimEnabled);
+            this.vimModeIndicator.textContent = this.vimEnabled ? (this.vimModeLabel || 'NORMAL') : '';
+        }
+    }
+
+    _setVimEnabled(enabled, { persist = true, rerender = true, emit = true, showToast = true } = {}) {
+        const nextEnabled = Boolean(enabled);
+        const changed = this.vimEnabled !== nextEnabled;
+
+        this.vimEnabled = nextEnabled;
+        this.vimModeLabel = this.vimEnabled ? (this.vimModeLabel || 'NORMAL') : '';
+
+        if (this.vimEnabled) {
+            this.layoutMode = 'tabs';
+        }
+
+        if (persist) {
+            window.localStorage.setItem(this.vimEnabledStorageKey, this.vimEnabled ? '1' : '0');
+        }
+
+        if (this.vimEnabled && persist) {
+            window.localStorage.setItem(this.layoutModeStorageKey, 'tabs');
+        }
+
+        this._updateLayoutButton();
+        this._updatePanelControlStates();
+        this._updateVimUi();
+
+        if (rerender) {
+            this._renderWorkspace();
+        }
+
+        if (emit) {
+            this._emitSessionStateChange();
+        }
+
+        if (changed && showToast) {
+            this._showToast(
+                this.vimEnabled
+                    ? 'Vim mode enabled. Tabs layout is now required.'
+                    : 'Vim mode disabled. Panels layout is available again.',
+                'success',
+            );
+        }
+    }
+
+    _setSystemClipboardEnabled(enabled, { persist = true, showToast = true } = {}) {
+        const nextEnabled = Boolean(enabled);
+        const changed = this.systemClipboardEnabled !== nextEnabled;
+
+        this.systemClipboardEnabled = nextEnabled;
+        setSystemClipboardEnabled(this.systemClipboardEnabled);
+
+        if (persist) {
+            window.localStorage.setItem(this.systemClipboardStorageKey, this.systemClipboardEnabled ? '1' : '0');
+        }
+
+        this._updateVimUi();
+
+        if (this.systemClipboardEnabled) {
+            void syncSystemClipboardRegister();
+        }
+
+        if (changed && showToast) {
+            this._showToast(
+                this.systemClipboardEnabled
+                    ? 'System clipboard integration enabled for Vim.'
+                    : 'System clipboard integration disabled for Vim.',
+                'success',
+            );
+        }
+    }
+
+    setGlobalVimDefaultEnabled(enabled, { showToast = false } = {}) {
+        this._setVimEnabled(enabled, {
+            persist: true,
+            rerender: true,
+            emit: true,
+            showToast,
+        });
+    }
+
+    setGlobalSystemClipboardDefaultEnabled(enabled, { showToast = false } = {}) {
+        this._setSystemClipboardEnabled(enabled, {
+            persist: true,
+            showToast,
+        });
     }
 
     _updateFileControls() {
@@ -2896,7 +3065,12 @@ const title = ref('${componentName}');
 
         if (this.btnAddFile) {
             this.btnAddFile.disabled = !hasTopic || isExerciseMode || languageOptions.length === 0;
-            this.btnAddFile.textContent = isVirtual ? '+ File' : '+ Block';
+            const addFileLabel = this.btnAddFile.querySelector('.toolbar-btn-label');
+            if (addFileLabel) {
+                addFileLabel.textContent = isVirtual ? 'File' : 'Block';
+            } else {
+                this.btnAddFile.textContent = isVirtual ? 'File' : 'Block';
+            }
             this.btnAddFile.title = isExerciseMode
                 ? 'Exercise mode keeps the file structure fixed'
                 : languageOptions.length === 0
@@ -2988,6 +3162,7 @@ const title = ref('${componentName}');
         this._closeFileContextMenu();
         this._destroyEditors();
         this.workspace.innerHTML = '';
+        this._clearTabFileSelectHost();
         this.workspace.dataset.layoutMode = this.layoutMode;
         this._ensureActiveFile();
 
@@ -3084,7 +3259,7 @@ const title = ref('${componentName}');
             panel.appendChild(editorHost);
             stack.appendChild(panel);
 
-            const view = this._createEditor(editorHost, file);
+            const { view, vimCleanup } = this._createEditor(editorHost, file);
 
             btnCollapse.addEventListener('click', (event) => {
                 event.stopPropagation();
@@ -3114,6 +3289,7 @@ const title = ref('${componentName}');
                 id: file.id,
                 panel,
                 view,
+                vimCleanup,
             });
         });
 
@@ -3159,31 +3335,9 @@ const title = ref('${componentName}');
             nav.appendChild(tab);
         });
 
-        const menu = document.createElement('div');
-        menu.className = 'editor-file-menu';
-
-        const select = document.createElement('select');
-        select.className = 'editor-file-select';
-        select.setAttribute('aria-label', 'Select file');
-
-        this._getVisibleFiles().forEach((file) => {
-            const option = document.createElement('option');
-            option.value = file.id;
-            option.textContent = file.path;
-            option.selected = file.id === this.activeFileId;
-            select.appendChild(option);
-        });
-
-        select.addEventListener('change', (event) => {
-            this.activeFileId = event.target.value;
-            this._renderWorkspace();
-            this._emitSessionStateChange();
-        });
-
-        menu.appendChild(select);
         header.appendChild(nav);
-        header.appendChild(menu);
         layout.appendChild(header);
+        this._renderTabFileSelectHost();
 
         const activeFile = this._getActiveFile();
         const meta = document.createElement('div');
@@ -3210,14 +3364,58 @@ const title = ref('${componentName}');
         editorHost.className = 'editor-tab-surface';
         layout.appendChild(editorHost);
 
-        const view = this._createEditor(editorHost, activeFile);
+        const { view, vimCleanup } = this._createEditor(editorHost, activeFile);
         this.editors.push({
             id: activeFile.id,
             panel: editorHost,
             view,
+            vimCleanup,
         });
 
         this.workspace.appendChild(layout);
+    }
+
+    _clearTabFileSelectHost() {
+        if (!this.tabFileSelectHost) return;
+        this.tabFileSelectHost.innerHTML = '';
+        this.tabFileSelectHost.classList.add('hidden');
+    }
+
+    _renderTabFileSelectHost() {
+        if (!this.tabFileSelectHost) return;
+
+        this.tabFileSelectHost.innerHTML = '';
+
+        const files = this._getVisibleFiles();
+        if (this.layoutMode !== 'tabs' || files.length === 0) {
+            this.tabFileSelectHost.classList.add('hidden');
+            return;
+        }
+
+        const menu = document.createElement('div');
+        menu.className = 'editor-file-menu';
+
+        const select = document.createElement('select');
+        select.className = 'editor-file-select';
+        select.setAttribute('aria-label', 'Select file');
+
+        files.forEach((file) => {
+            const option = document.createElement('option');
+            option.value = file.id;
+            option.textContent = file.path;
+            option.selected = file.id === this.activeFileId;
+            select.appendChild(option);
+        });
+
+        select.addEventListener('change', (event) => {
+            this.activeFileId = event.target.value;
+            this._renderWorkspace();
+            this._emitSessionStateChange();
+        });
+
+        menu.appendChild(select);
+        this.tabFileSelectHost.appendChild(menu);
+        this.tabFileSelectHost.classList.remove('hidden');
     }
 
     _getActiveFile() {
@@ -3251,7 +3449,10 @@ const title = ref('${componentName}');
     }
 
     _destroyEditors() {
-        this.editors.forEach((entry) => entry.view?.destroy());
+        this.editors.forEach((entry) => {
+            entry.vimCleanup?.();
+            entry.view?.destroy();
+        });
         this.editors = [];
     }
 
@@ -3261,6 +3462,7 @@ const title = ref('${componentName}');
         const languageKeymap = file.language === 'vue'
             ? [{ key: 'Enter', run: vueScriptEnterCommand }]
             : [];
+        const vimExtensions = this.vimEnabled ? createVimExtension() : [];
         const updateListener = EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
             this._setFileContent(file.id, update.state.doc.toString());
@@ -3273,8 +3475,10 @@ const title = ref('${componentName}');
         const state = EditorState.create({
             doc: file.content || '',
             extensions: [
+                EditorState.allowMultipleSelections.of(true),
                 editorDiagnosticsField,
                 lineNumbers(),
+                drawSelection(),
                 highlightActiveLine(),
                 highlightActiveLineGutter(),
                 history(),
@@ -3282,6 +3486,7 @@ const title = ref('${componentName}');
                 bracketMatching(),
                 closeBrackets(),
                 highlightSelectionMatches(),
+                ...vimExtensions,
                 keymap.of([
                     ...languageKeymap,
                     ...defaultKeymap,
@@ -3306,7 +3511,45 @@ const title = ref('${componentName}');
 
         const view = new EditorView({ state, parent: container });
         this._applyDiagnosticsToView(view, file);
-        return view;
+
+        const vimCleanup = this.vimEnabled
+            ? bindVimView(view, {
+                onModeChange: (modeLabel) => {
+                    this.vimModeLabel = modeLabel;
+                    this._updateVimUi();
+                    view.dom.dataset.vimMode = modeLabel;
+                },
+                onPreviousTab: () => {
+                    this._selectAdjacentTab(-1);
+                },
+                onNextTab: () => {
+                    this._selectAdjacentTab(1);
+                },
+                onOpenFilePicker: () => {
+                    this._openQuickOpenDialog();
+                },
+                onToggleSidebar: () => {
+                    this.onToggleSidebar?.();
+                },
+                onCenterWorkspace: () => {
+                    this.onCenterWorkspace?.();
+                },
+                onToggleAutoRender: () => {
+                    this.onTogglePreviewAutoRender?.();
+                },
+                onWrite: () => {
+                    this._handleVimWrite();
+                },
+            })
+            : null;
+
+        view.dom.dataset.vim = this.vimEnabled ? 'on' : 'off';
+        view.dom.dataset.vimMode = this.vimModeLabel || '';
+
+        return {
+            view,
+            vimCleanup,
+        };
     }
 
     _getLanguageExtensions(type) {
@@ -3564,7 +3807,6 @@ const title = ref('${componentName}');
         const isSafeToWrite = !hasBlockingDiagnostics(this.currentDocument);
 
         this.btnSave.disabled = !hasTopic || !hasContent || !isSafeToWrite;
-        this.btnLoad.disabled = !hasTopic;
         this.btnModify.disabled = !hasFile || !isSafeToWrite;
         this.btnRemove.disabled = !hasFile;
         this.btnRename.disabled = !hasFile;
@@ -3663,6 +3905,7 @@ const title = ref('${componentName}');
             await modifyExample(this.currentTopicPath, this.currentFilename, content);
             this.currentDocument = documentToPersist;
             this._triggerChange();
+            this._emitSessionStateChange();
             this._showToast(`Modified: ${this.currentFilename}`, 'success');
         } catch (error) {
             console.error(error);

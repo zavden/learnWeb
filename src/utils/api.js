@@ -34,6 +34,34 @@ export async function setChapterHidden(chapterId, hidden = true) {
     return handleResponse(res);
 }
 
+export async function fetchVimDefaultState() {
+    const res = await fetch(`${BASE}/editor/vim-default`);
+    return handleResponse(res);
+}
+
+export async function updateVimDefaultState(enabled = true) {
+    const res = await fetch(`${BASE}/editor/vim-default`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+    });
+    return handleResponse(res);
+}
+
+export async function fetchClipboardDefaultState() {
+    const res = await fetch(`${BASE}/editor/clipboard-default`);
+    return handleResponse(res);
+}
+
+export async function updateClipboardDefaultState(enabled = true) {
+    const res = await fetch(`${BASE}/editor/clipboard-default`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+    });
+    return handleResponse(res);
+}
+
 export async function fetchTopicMain(topicPath) {
     const res = await fetch(`${BASE}/topic/${topicPath}/main`);
     if (!res.ok) return { content: '' };

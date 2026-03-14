@@ -21,6 +21,7 @@
     "@codemirror/state": "^6.4.1",
     "@codemirror/theme-one-dark": "^6.1.2",
     "@codemirror/view": "^6.26.0",
+    "@replit/codemirror-vim": "^6.3.0",
     "@vue/compiler-dom": "^3.5.30",
     "codemirror": "^6.0.1",
     "cors": "^2.8.5",

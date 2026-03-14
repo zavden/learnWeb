@@ -978,6 +978,30 @@ Ademas incluye:
 - auto-fit de paneles segun contenido
 - resaltado GLSL para bloques `Vertex` y `Fragment`
 
+### Modo Vim
+
+El editor puede trabajar en modo Vim y arranca activado por defecto si `.vim_enable` esta en `true`.
+
+Comportamiento actual:
+
+- cuando Vim esta activo, el layout del editor queda en `Tabs`
+- el toggle superior de Vim permite desactivarlo temporalmente en la sesion actual
+- el sidebar tiene un switch global `Vim Default` que persiste el valor en `.vim_enable`
+- el clipboard del sistema tambien tiene modo global en `.clipboard_default`
+- existe un indicador flotante de modo (`NORMAL`, `INSERT`, `VISUAL`, `VISUAL BLOCK`, etc.)
+
+Atajos adicionales del proyecto sobre Vim:
+
+- `Shift+H`: tab anterior
+- `Shift+L`: tab siguiente
+- `Shift+J`: abrir `Open File`
+- `Shift+K`: alternar auto-render del preview
+- `Space` luego `e`: mostrar u ocultar el tree
+- `Space` luego `m`: colapsar el tree y dejar editor/preview en `50/50`
+- `Space` luego `h`: ejecutar `:noh`
+
+El clipboard del sistema se puede activar o desactivar desde el toggle azul del toolbar. Cuando esta activo, los yanks y pastes de Vim se sincronizan con el clipboard del sistema; cuando esta apagado, Vim usa un clipboard sombra local.
+
 ### Modo ejercicio
 
 Cuando `exercise: true` esta presente:

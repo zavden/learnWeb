@@ -10,12 +10,20 @@ import {
 } from './src/utils/markdown.js';
 import { cloneSerializable, createCompileCacheKey } from './src/utils/compileCache.js';
 import { compileExampleDocument } from './src/utils/exampleCompiler.js';
+import {
+    readClipboardDefaultState,
+    readVimDefaultState,
+    writeClipboardDefaultState,
+    writeVimDefaultState,
+} from './src/utils/editorDefaults.js';
 import { buildMaterialTree, readHiddenState, setChapterHidden } from './src/utils/materialTree.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const MATERIAL_DIR = path.join(__dirname, 'material');
 const HIDDEN_STATE_FILE = path.join(__dirname, '.hiddens');
+const VIM_DEFAULT_FILE = path.join(__dirname, '.vim_enable');
+const CLIPBOARD_DEFAULT_FILE = path.join(__dirname, '.clipboard_default');
 
 const app = express();
 app.use(cors());
@@ -120,6 +128,40 @@ app.patch('/api/tree/chapters/:chapterId/hidden', (req, res) => {
             hiddenState,
             tree,
         });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/editor/vim-default', (req, res) => {
+    try {
+        res.json(readVimDefaultState(VIM_DEFAULT_FILE));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.patch('/api/editor/vim-default', (req, res) => {
+    try {
+        const enabled = req.body?.enabled !== false;
+        res.json(writeVimDefaultState(VIM_DEFAULT_FILE, enabled));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/editor/clipboard-default', (req, res) => {
+    try {
+        res.json(readClipboardDefaultState(CLIPBOARD_DEFAULT_FILE));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.patch('/api/editor/clipboard-default', (req, res) => {
+    try {
+        const enabled = req.body?.enabled !== false;
+        res.json(writeClipboardDefaultState(CLIPBOARD_DEFAULT_FILE, enabled));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

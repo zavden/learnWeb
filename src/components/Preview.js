@@ -67,6 +67,7 @@ function cloneShaderUniformControl(control = null) {
 export class Preview {
     constructor({ onCompileStateChange, onRequestShaderUniformEdit } = {}) {
         this.iframe = document.getElementById('preview-frame');
+        this.btnAutoRenderToggle = document.getElementById('btn-auto-render-toggle');
         this.btnRefresh = document.getElementById('btn-refresh');
         this.btnConsoleOverride = document.getElementById('btn-console-override');
         this.consoleResizer = document.getElementById('preview-console-resizer');
@@ -133,6 +134,8 @@ export class Preview {
         this._consoleFontSize = 12;
         this._consoleCollapsed = false;
         this._consoleCommandId = 0;
+        this._autoRenderStorageKey = 'learncode.preview.autoRender';
+        this._autoRenderEnabled = this._readAutoRenderEnabled();
         this._shaderControlSessionKey = '';
         this._shaderControls = this._createDefaultShaderControls();
         this._shaderEditorControlsCollapsed = false;
@@ -145,9 +148,8 @@ export class Preview {
         this._activeShaderTextureName = '';
         this._shaderStats = this._createEmptyShaderStats();
 
-        this.btnRefresh.addEventListener('click', () => {
-            if (this._lastDocument) this.update(this._lastDocument, { sessionKey: this._lastSessionKey });
-        });
+        this.btnAutoRenderToggle?.addEventListener('click', () => this.toggleAutoRender());
+        this.btnRefresh.addEventListener('click', () => this.renderNow());
         this.btnConsoleOverride?.addEventListener('click', () => this._toggleConsoleOverride());
         this.btnClearConsole?.addEventListener('click', () => this._clearConsoleEntries());
         this.btnToggleConsole?.addEventListener('click', () => this._toggleConsoleCollapsed());
@@ -174,6 +176,84 @@ export class Preview {
         window.addEventListener('message', (event) => this._handleRuntimeMessage(event));
         this._applyConsoleFontSize();
         this._syncConsoleVisibility();
+        this._updateAutoRenderUi();
+    }
+
+    _readAutoRenderEnabled() {
+        const stored = window.localStorage.getItem(this._autoRenderStorageKey);
+        return stored == null ? true : stored !== '0';
+    }
+
+    _updateAutoRenderUi() {
+        if (!this.btnAutoRenderToggle) return;
+
+        this.btnAutoRenderToggle.classList.toggle('is-active', this._autoRenderEnabled);
+        this.btnAutoRenderToggle.setAttribute('aria-pressed', String(this._autoRenderEnabled));
+        this.btnAutoRenderToggle.title = this._autoRenderEnabled
+            ? 'Disable automatic preview render'
+            : 'Enable automatic preview render';
+        this.btnAutoRenderToggle.setAttribute('aria-label', this.btnAutoRenderToggle.title);
+    }
+
+    isAutoRenderEnabled() {
+        return this._autoRenderEnabled;
+    }
+
+    setAutoRenderEnabled(enabled, { persist = true, renderIfEnabled = true } = {}) {
+        this._autoRenderEnabled = Boolean(enabled);
+
+        if (persist) {
+            window.localStorage.setItem(this._autoRenderStorageKey, this._autoRenderEnabled ? '1' : '0');
+        }
+
+        if (!this._autoRenderEnabled) {
+            clearTimeout(this._debounceTimer);
+        } else if (renderIfEnabled) {
+            this.renderNow();
+        }
+
+        this._updateAutoRenderUi();
+    }
+
+    toggleAutoRender() {
+        this.setAutoRenderEnabled(!this._autoRenderEnabled);
+        return this._autoRenderEnabled;
+    }
+
+    renderNow() {
+        if (!this._lastDocument) return;
+        this._scheduleRender(this._lastDocument, { forceRender: true });
+    }
+
+    _scheduleRender(documentModel, { forceRender = false } = {}) {
+        if (!documentModel) return;
+
+        const shaderEnabled = isShaderDocument(documentModel);
+        const shaderConfig = shaderEnabled ? getShaderConfig(documentModel) : null;
+        const shaderResolution = shaderConfig?.resolution || null;
+
+        this._prepareConsoleSession({
+            consoleEnabled: Boolean(documentModel?.metadata?.console) && !shaderEnabled,
+            sessionKey: this._lastSessionKey,
+            shaderConfig,
+            shaderEnabled,
+            shaderResolution,
+        });
+
+        clearTimeout(this._debounceTimer);
+
+        if (!this._autoRenderEnabled && !forceRender) {
+            return;
+        }
+
+        if (forceRender) {
+            this._render(documentModel);
+            return;
+        }
+
+        this._debounceTimer = setTimeout(() => {
+            this._render(documentModel);
+        }, 300);
     }
 
     setTopicPath(topicPath) {
@@ -201,23 +281,9 @@ export class Preview {
     }
 
     update(documentModel, { sessionKey = '' } = {}) {
-        const shaderEnabled = isShaderDocument(documentModel);
-        const shaderConfig = shaderEnabled ? getShaderConfig(documentModel) : null;
-        const shaderResolution = shaderConfig?.resolution || null;
         this._lastDocument = documentModel;
         this._lastSessionKey = sessionKey || '';
-        this._prepareConsoleSession({
-            consoleEnabled: Boolean(documentModel?.metadata?.console) && !shaderEnabled,
-            sessionKey: this._lastSessionKey,
-            shaderConfig,
-            shaderEnabled,
-            shaderResolution,
-        });
-
-        clearTimeout(this._debounceTimer);
-        this._debounceTimer = setTimeout(() => {
-            this._render(documentModel);
-        }, 300);
+        this._scheduleRender(documentModel);
     }
 
     clear() {

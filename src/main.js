@@ -8,6 +8,12 @@ import { ExercisePanel } from './components/ExercisePanel.js';
 import { Preview } from './components/Preview.js';
 import { CreateDialog } from './components/CreateDialog.js';
 import { Gallery } from './components/Gallery.js';
+import {
+    fetchClipboardDefaultState,
+    fetchVimDefaultState,
+    updateClipboardDefaultState,
+    updateVimDefaultState,
+} from './utils/api.js';
 
 class App {
     constructor() {
@@ -24,6 +30,8 @@ class App {
         this.sidebarCollapsedStorageKey = 'learncode.sidebar.collapsed';
         this.previewWidthMode = 'full';
         this.customPreviewWidth = 375;
+        this.clipboardDefaultEnabled = true;
+        this.vimDefaultEnabled = true;
 
         // UI Elements for View Switching
         this.appShell = document.getElementById('app');
@@ -77,6 +85,12 @@ class App {
             },
             onExerciseStateChange: (presentation) => this.exercisePanel.render(presentation),
             onSessionStateChange: () => this._persistSessionState(),
+            onTogglePreviewAutoRender: () => this.preview.toggleAutoRender(),
+            onToggleSidebar: () => {
+                const nextState = !this.appShell.classList.contains('sidebar-collapsed');
+                this._setSidebarCollapsed(nextState);
+            },
+            onCenterWorkspace: () => this._centerWorkspaceSplit(),
             onRename: () => {
                 if (this.currentTopicPath) {
                     this.gallery.load(this.currentTopicPath);
@@ -91,8 +105,10 @@ class App {
         this.theoryViewer = new TheoryViewer();
 
         this.sidebar = new Sidebar({
+            onClipboardDefaultToggle: (enabled) => this._handleClipboardDefaultToggle(enabled),
             onTopicSelect: (path, label) => this.selectTopic(path, label),
             onCreateClick: (topicPath) => this.openCreateDialog(topicPath),
+            onVimDefaultToggle: (enabled) => this._handleVimDefaultToggle(enabled),
         });
 
         // Gallery Button
@@ -123,6 +139,56 @@ class App {
     async _bootstrap() {
         await this.sidebar.load();
         await this._restoreSessionState();
+        await this._loadClipboardDefaultState();
+        await this._loadVimDefaultState();
+    }
+
+    async _loadClipboardDefaultState() {
+        try {
+            const state = await fetchClipboardDefaultState();
+            this.clipboardDefaultEnabled = state?.enabled !== false;
+            this.sidebar.setClipboardDefaultEnabled(this.clipboardDefaultEnabled);
+            this.editor.setGlobalSystemClipboardDefaultEnabled(this.clipboardDefaultEnabled, { showToast: false });
+        } catch (error) {
+            console.error('Failed to load default clipboard state.', error);
+        }
+    }
+
+    async _loadVimDefaultState() {
+        try {
+            const state = await fetchVimDefaultState();
+            this.vimDefaultEnabled = state?.enabled !== false;
+            this.sidebar.setVimDefaultEnabled(this.vimDefaultEnabled);
+            this.editor.setGlobalVimDefaultEnabled(this.vimDefaultEnabled, { showToast: false });
+            this._persistSessionState();
+        } catch (error) {
+            console.error('Failed to load default Vim state.', error);
+        }
+    }
+
+    async _handleVimDefaultToggle(enabled) {
+        try {
+            const state = await updateVimDefaultState(enabled);
+            this.vimDefaultEnabled = state?.enabled !== false;
+            this.sidebar.setVimDefaultEnabled(this.vimDefaultEnabled);
+            this.editor.setGlobalVimDefaultEnabled(this.vimDefaultEnabled, { showToast: true });
+            this._persistSessionState();
+        } catch (error) {
+            console.error('Failed to update default Vim state.', error);
+            window.alert(`Could not update Vim default: ${error.message}`);
+        }
+    }
+
+    async _handleClipboardDefaultToggle(enabled) {
+        try {
+            const state = await updateClipboardDefaultState(enabled);
+            this.clipboardDefaultEnabled = state?.enabled !== false;
+            this.sidebar.setClipboardDefaultEnabled(this.clipboardDefaultEnabled);
+            this.editor.setGlobalSystemClipboardDefaultEnabled(this.clipboardDefaultEnabled, { showToast: true });
+        } catch (error) {
+            console.error('Failed to update clipboard default state.', error);
+            window.alert(`Could not update clipboard default: ${error.message}`);
+        }
     }
 
     async selectTopic(topicPath, label, { persist = true } = {}) {
@@ -245,6 +311,26 @@ class App {
 
         if (!persist) return;
         window.localStorage.setItem(this.sidebarCollapsedStorageKey, collapsed ? '1' : '0');
+    }
+
+    _centerWorkspaceSplit() {
+        const applyHalfSplit = () => {
+            const workspaceWidth = this.workspaceElement?.getBoundingClientRect().width || window.innerWidth;
+            const dividerWidth = this.workspaceResizer?.getBoundingClientRect().width || 10;
+            const nextPreviewWidth = Math.round((workspaceWidth - dividerWidth) / 2);
+            this._setPreviewColumnWidth(nextPreviewWidth, { persist: false });
+            this._persistSessionState();
+        };
+
+        if (!this.appShell.classList.contains('sidebar-collapsed')) {
+            this._setSidebarCollapsed(true);
+            window.requestAnimationFrame(() => {
+                applyHalfSplit();
+            });
+            return;
+        }
+
+        applyHalfSplit();
     }
 
     _showDragShield(direction = 'ew') {

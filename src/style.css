@@ -262,6 +262,18 @@ body.is-resizing-console {
   min-width: 0;
 }
 
+.btn-sidebar-vim-default.is-active {
+  border-color: rgba(244, 242, 124, 0.28);
+  background: rgba(244, 242, 124, 0.12);
+  color: #f4f27c;
+}
+
+.btn-sidebar-clipboard-default.is-active {
+  border-color: rgba(141, 217, 255, 0.28);
+  background: rgba(141, 217, 255, 0.12);
+  color: #8dd9ff;
+}
+
 .sidebar-tree-controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -713,7 +725,7 @@ body.is-resizing-console {
 .editor-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   padding: 6px 12px;
   gap: 8px;
   background: var(--bg-tertiary);
@@ -724,10 +736,7 @@ body.is-resizing-console {
 }
 
 .editor-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  display: none;
 }
 
 .editor-file-actions {
@@ -735,6 +744,71 @@ body.is-resizing-console {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  flex: 1 1 100%;
+}
+
+.toolbar-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  min-height: 34px;
+  padding: 0;
+  min-width: 34px;
+  max-width: 34px;
+  white-space: nowrap;
+  color: var(--text-primary);
+  transition:
+    max-width var(--transition-fast),
+    gap var(--transition-fast),
+    padding-inline var(--transition-fast),
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.toolbar-icon-btn svg {
+  display: block;
+  flex: 0 0 auto;
+  color: inherit;
+  opacity: 0.96;
+  transform: translateX(0.5px);
+}
+
+.toolbar-icon-btn .toolbar-btn-label {
+  display: none;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.toolbar-icon-btn:hover,
+.toolbar-icon-btn:focus-visible {
+  justify-content: flex-start;
+  gap: 8px;
+  max-width: 168px;
+  padding-inline: 10px 12px;
+}
+
+.toolbar-icon-btn:hover .toolbar-btn-label,
+.toolbar-icon-btn:focus-visible .toolbar-btn-label {
+  display: inline;
+  opacity: 1;
+}
+
+.toolbar-icon-btn:disabled:hover,
+.toolbar-icon-btn:disabled:focus-visible {
+  justify-content: center;
+  gap: 0;
+  max-width: 34px;
+  padding-inline: 0;
+}
+
+.toolbar-icon-btn:disabled:hover .toolbar-btn-label,
+.toolbar-icon-btn:disabled:focus-visible .toolbar-btn-label {
+  display: none;
+  opacity: 0;
 }
 
 .entry-select-group {
@@ -742,6 +816,7 @@ body.is-resizing-console {
   align-items: center;
   gap: 8px;
   min-width: 220px;
+  margin-left: auto;
 }
 
 .entry-select-label {
@@ -753,8 +828,28 @@ body.is-resizing-console {
 }
 
 .hamburger-btn {
-  margin-left: 8px;
-  /* Was auto */
+  margin-left: 0;
+}
+
+.editor-toolbar-tail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 0;
+  order: 3;
+}
+
+.editor-tab-file-select-host {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.editor-toolbar-tail .editor-file-menu {
+  flex: 0 0 240px;
+  min-width: 220px;
 }
 
 .editor-panels {
@@ -1164,12 +1259,13 @@ body.is-resizing-console {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-left: auto;
-  /* Push to right */
+  margin-left: 0;
+  order: 2;
+  flex: 0 0 auto;
 }
 
 .font-controls .btn-layout-toggle {
-  padding-inline: 10px;
+  padding-inline: 8px;
 }
 
 .font-controls .btn-icon {
@@ -1291,7 +1387,7 @@ body.is-resizing-console {
 }
 
 .btn-reset-layout {
-  padding-inline: 10px;
+  padding-inline: 8px;
 }
 
 .editor-quick-open-form {
@@ -1692,6 +1788,99 @@ body.is-resizing-console {
 .btn-icon:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+
+.btn-vim-toggle {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-system-clipboard-toggle {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-auto-render-toggle {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-auto-render-toggle.is-active {
+  color: #7ee787;
+  background: rgba(126, 231, 135, 0.12);
+  border-color: rgba(126, 231, 135, 0.26);
+}
+
+.btn-system-clipboard-toggle.is-active {
+  color: #8dd9ff;
+  background: rgba(141, 217, 255, 0.12);
+  border-color: rgba(141, 217, 255, 0.28);
+}
+
+.btn-system-clipboard-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-system-clipboard-toggle:disabled:hover {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-vim-toggle.is-active {
+  color: #f4f27c;
+  background: rgba(244, 242, 124, 0.12);
+  border-color: rgba(244, 242, 124, 0.28);
+}
+
+.vim-mode-indicator {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 25;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(244, 242, 124, 0.24);
+  background: rgba(244, 242, 124, 0.08);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+  color: #f4f27c;
+  font: 600 11px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.cm-editor[data-vim='on'] .cm-panels-bottom {
+  border-top: 1px solid rgba(240, 136, 62, 0.18);
+  background: rgba(13, 17, 23, 0.92);
+}
+
+.cm-editor[data-vim='on'] .cm-vim-panel {
+  align-items: center;
+  gap: 8px;
+  color: #f3f4f6;
+  background: rgba(13, 17, 23, 0.92);
+  border-top: 1px solid rgba(240, 136, 62, 0.16);
+  font: 12px/1.4 var(--font-mono);
+}
+
+.cm-editor[data-vim='on'] .cm-vim-panel input {
+  color: #f3f4f6;
+  caret-color: #fb923c;
+}
+
+.cm-editor[data-vim='on'] .cm-vim-panel input::selection {
+  background: rgba(251, 146, 60, 0.28);
+  color: #fff7ed;
+}
+
+.cm-editor[data-vim='on'] .cm-selectionLayer .cm-selectionBackground {
+  background: rgba(240, 136, 62, 0.3);
+  border-left: 1px solid rgba(251, 146, 60, 0.55);
+}
+
+.cm-editor[data-vim='on'].cm-focused .cm-selectionLayer .cm-selectionBackground {
+  background: rgba(240, 136, 62, 0.36);
 }
 
 .btn-icon:disabled,
