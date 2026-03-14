@@ -1,5 +1,15 @@
 import { fetchExamples, fetchExample } from '../utils/api.js';
-import { parseExampleMd } from '../utils/markdown.js';
+import { compileExample } from '../utils/compileClient.js';
+import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../utils/exampleRenderer.js';
+import { getExampleStage, isShaderDocument, parseExampleDocument } from '../utils/markdown.js';
+
+const EXAMPLE_STAGE_META = {
+    minimal: { label: 'Minimal', rank: 0, className: 'stage-minimal' },
+    intermediate: { label: 'Intermediate', rank: 1, className: 'stage-intermediate' },
+    'common-error': { label: 'Common Error', rank: 2, className: 'stage-common-error' },
+    exercise: { label: 'Exercise', rank: 3, className: 'stage-exercise' },
+    'final-solution': { label: 'Final Solution', rank: 4, className: 'stage-final-solution' },
+};
 
 export class Gallery {
     constructor({ onExampleSelect }) {
@@ -23,7 +33,7 @@ export class Gallery {
 
         try {
             const examples = await fetchExamples(topicPath);
-            this.render(examples);
+            await this.render(examples);
         } catch (err) {
             console.error(err);
             this.grid.innerHTML = '<div class="error">Failed to load examples</div>';
@@ -38,11 +48,16 @@ export class Gallery {
             return;
         }
 
-        // Render cards
-        for (const filename of examples) {
-            const card = await this.createCard(filename);
-            this.grid.appendChild(card);
-        }
+        const cards = await Promise.all(examples.map((filename) => this.createCard(filename)));
+        cards
+            .sort((left, right) => {
+                if (left.stageRank !== right.stageRank) {
+                    return left.stageRank - right.stageRank;
+                }
+
+                return left.filename.localeCompare(right.filename);
+            })
+            .forEach((card) => this.grid.appendChild(card.element));
     }
 
     async createCard(filename) {
@@ -50,38 +65,41 @@ export class Gallery {
         div.className = 'example-card';
         div.title = filename;
 
-        // Preview Container
         const preview = document.createElement('div');
         preview.className = 'card-preview';
 
-        // Fetch content for preview
         try {
             const data = await fetchExample(this.currentTopicPath, filename);
-            if (data && data.content) {
-                const { html, css, js } = parseExampleMd(data.content);
+            if (data?.content) {
+                const documentModel = parseExampleDocument(data.content);
+                const stage = getExampleStage(documentModel);
+                const stageMeta = EXAMPLE_STAGE_META[stage] || null;
+                if (stageMeta) {
+                    div.dataset.stage = stage;
+                    div.dataset.stageRank = String(stageMeta.rank);
+                }
                 const iframe = document.createElement('iframe');
-                iframe.sandbox = 'allow-scripts'; // No modals, no top-nav
-                // Build full HTML for preview
-                const srcDoc = `
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <style>
-                            body { margin: 0; padding: 10px; font-family: sans-serif; overflow: hidden; }
-                            ${css}
-                        </style>
-                    </head>
-                    <body>
-                        ${html}
-                        <script>
-                            try {
-                                ${js}
-                            } catch(e) { console.error(e); }
-                        </script>
-                    </body>
-                    </html>
-                `;
-                iframe.srcdoc = srcDoc;
+                iframe.sandbox = 'allow-scripts';
+
+                if (isShaderDocument(documentModel)) {
+                    iframe.srcdoc = renderShaderExampleDocument(documentModel, {
+                        diagnostics: documentModel.diagnostics || [],
+                        renderId: 0,
+                        shaderControls: {
+                            paused: true,
+                            stillFrame: true,
+                        },
+                        topicPath: this.currentTopicPath,
+                    });
+                } else {
+                    const result = await compileExample({ document: documentModel });
+                    iframe.srcdoc = renderCompiledExampleDocument(
+                        result.compiledDocument,
+                        this.currentTopicPath,
+                        result.compileDiagnostics || []
+                    );
+                }
+
                 preview.appendChild(iframe);
             }
         } catch (err) {
@@ -94,13 +112,21 @@ export class Gallery {
             preview.style.fontSize = '12px';
         }
 
-        // Footer
         const footer = document.createElement('div');
         footer.className = 'card-footer';
         const title = document.createElement('div');
         title.className = 'card-title';
         title.textContent = filename;
         footer.appendChild(title);
+
+        const stage = div.dataset.stage || '';
+        const stageMeta = EXAMPLE_STAGE_META[stage] || null;
+        if (stageMeta) {
+            const badge = document.createElement('span');
+            badge.className = `card-stage-badge ${stageMeta.className}`;
+            badge.textContent = stageMeta.label;
+            footer.appendChild(badge);
+        }
 
         div.appendChild(preview);
         div.appendChild(footer);
@@ -111,6 +137,10 @@ export class Gallery {
             }
         });
 
-        return div;
+        return {
+            element: div,
+            filename,
+            stageRank: stageMeta?.rank ?? Number.MAX_SAFE_INTEGER,
+        };
     }
 }

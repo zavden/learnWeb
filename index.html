@@ -29,7 +29,28 @@
         </button>
       </div>
       <nav id="nav-tree"></nav>
+      <div id="sidebar-tree-controls" class="sidebar-tree-controls">
+        <button id="btn-toggle-hidden-chapters" class="btn btn-secondary sidebar-tree-button" type="button">
+          Show Hidden
+        </button>
+        <button id="btn-collapse-tree" class="btn btn-secondary sidebar-tree-button" type="button">
+          Collapse All
+        </button>
+        <button id="btn-expand-tree" class="btn btn-secondary sidebar-tree-button" type="button">
+          Expand Visible
+        </button>
+      </div>
     </aside>
+    <div id="sidebar-dock">
+      <button id="btn-toggle-sidebar" class="btn-icon" title="Hide navigation" aria-label="Hide navigation"
+        aria-expanded="true">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+          stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+      </button>
+      <div id="sidebar-resizer" title="Resize navigation"></div>
+    </div>
 
     <!-- Main Content -->
     <main id="main-content">
@@ -45,6 +66,43 @@
             </div>
             <div id="gallery-grid"></div>
           </div>
+
+          <section id="exercise-panel" class="exercise-panel hidden">
+            <div class="exercise-panel-header">
+              <div class="exercise-panel-heading">
+                <p class="exercise-panel-kicker">Exercise Mode</p>
+                <h2 id="exercise-title">Exercise</h2>
+                <p id="exercise-summary" class="exercise-panel-summary"></p>
+              </div>
+              <div class="exercise-panel-header-actions">
+                <button id="btn-exercise-toggle" type="button" class="btn btn-secondary">Hide Notes</button>
+              </div>
+            </div>
+            <div id="exercise-panel-body" class="exercise-panel-body">
+              <div class="exercise-panel-actions">
+                <button id="btn-exercise-hint" type="button" class="btn btn-secondary hidden">Show Hint</button>
+                <button id="btn-exercise-references" type="button" class="btn btn-secondary hidden">Reveal Reference Files</button>
+                <button id="btn-exercise-solution" type="button" class="btn btn-secondary hidden">Reveal Solution Files</button>
+                <button id="btn-exercise-compare" type="button" class="btn btn-secondary hidden">Show Comparison</button>
+              </div>
+              <ol id="exercise-instructions" class="exercise-panel-list"></ol>
+              <div id="exercise-hints-section" class="exercise-hints hidden">
+                <h3>Hints</h3>
+                <ul id="exercise-hints-list" class="exercise-panel-list"></ul>
+              </div>
+              <section id="exercise-comparison-section" class="exercise-comparison hidden">
+                <div class="exercise-comparison-toolbar">
+                  <label id="exercise-comparison-select-label" class="exercise-comparison-select hidden">
+                    <span>Compare File</span>
+                    <select id="exercise-comparison-select"></select>
+                  </label>
+                  <p id="exercise-comparison-meta" class="exercise-comparison-meta"></p>
+                </div>
+                <p id="exercise-comparison-status" class="exercise-comparison-status hidden"></p>
+                <div id="exercise-comparison-grid" class="exercise-comparison-grid"></div>
+              </section>
+            </div>
+          </section>
 
           <div class="editor-toolbar">
             <div class="editor-actions">
@@ -105,7 +163,27 @@
                 Gallery
               </button>
             </div>
+            <div class="editor-file-actions">
+              <button id="btn-add-file" class="btn btn-secondary" disabled>+ Block</button>
+              <button id="btn-edit-shader-uniforms" class="btn btn-secondary hidden" disabled>Uniforms</button>
+              <button id="btn-edit-file-visibility" class="btn btn-secondary" disabled>Visibility</button>
+              <button id="btn-duplicate-file" class="btn btn-secondary" disabled>Duplicate</button>
+              <button id="btn-edit-file" class="btn btn-secondary" disabled>Edit File</button>
+              <button id="btn-delete-file" class="btn btn-secondary" disabled>Delete File</button>
+              <label id="entry-select-group" class="entry-select-group hidden">
+                <span class="entry-select-label">Entry</span>
+                <select id="entry-select" class="editor-file-select" aria-label="Select entry file"></select>
+              </label>
+            </div>
             <div class="font-controls">
+              <button id="btn-editor-layout" class="btn btn-secondary btn-layout-toggle" title="Switch editor layout">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="6" rx="1"></rect>
+                  <rect x="3" y="14" width="18" height="6" rx="1"></rect>
+                </svg>
+                <span class="editor-layout-label">Tabs</span>
+              </button>
               <button id="btn-auto-fit" class="btn-icon" title="Auto-fit panels to content">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   stroke-linecap="round" stroke-linejoin="round">
@@ -129,97 +207,101 @@
               <div class="dropdown-header">Select Example</div>
               <ul id="load-list"></ul>
             </div>
+            <div id="editor-status" class="editor-status hidden"></div>
           </div>
 
-          <div class="editor-panels">
-            <div class="editor-panel" id="panel-html">
-              <div class="panel-header">
-                <button class="btn-icon btn-collapse" title="Toggle Panel">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          <div class="editor-panels"></div>
+
+          <section id="shader-editor-controls" class="shader-editor-controls hidden">
+            <div class="shader-editor-controls-header">
+              <div>
+                <p class="shader-editor-controls-kicker">Shader Controls</p>
+                <h3 class="shader-editor-controls-title">Runtime Controls</h3>
+              </div>
+              <div class="shader-editor-controls-header-actions">
+                <p class="shader-editor-controls-note">Edit uniforms and runtime values without covering the preview.</p>
+                <button id="btn-toggle-shader-controls" class="btn-icon shader-editor-controls-toggle" type="button" title="Collapse shader controls" aria-label="Collapse shader controls" aria-expanded="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
                     stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </button>
-                <span class="lang-badge html">HTML</span>
-                <button class="btn-icon btn-maximize" title="Maximize Panel">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="15 3 21 3 21 9"></polyline>
-                    <polyline points="9 21 3 21 3 15"></polyline>
-                    <line x1="21" y1="3" x2="14" y2="10"></line>
-                    <line x1="3" y1="21" x2="10" y2="14"></line>
+                    <polyline points="6 9 12 15 18 9" />
                   </svg>
                 </button>
               </div>
-              <div class="panel-editor" id="editor-html"></div>
             </div>
-            <div class="editor-panel" id="panel-css">
-              <div class="panel-header">
-                <button class="btn-icon btn-collapse" title="Toggle Panel">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </button>
-                <span class="lang-badge css">CSS</span>
-                <button class="btn-icon btn-maximize" title="Maximize Panel">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="15 3 21 3 21 9"></polyline>
-                    <polyline points="9 21 3 21 3 15"></polyline>
-                    <line x1="21" y1="3" x2="14" y2="10"></line>
-                    <line x1="3" y1="21" x2="10" y2="14"></line>
-                  </svg>
-                </button>
+            <div id="shader-editor-controls-body" class="shader-editor-controls-body">
+              <div class="preview-shader-controls shader-editor-controls-toolbar">
+                <div class="preview-shader-control preview-shader-resolution-editor">
+                  <div class="preview-shader-resolution-grid">
+                    <label class="preview-shader-dimension-control">
+                      <span class="preview-shader-dimension-label">Width</span>
+                      <div class="preview-shader-custom-range">
+                        <input id="preview-shader-width-range" class="preview-shader-custom-range-input" type="range" min="64" max="1500" step="1" value="800">
+                        <input id="preview-shader-width-input" class="preview-shader-custom-range-value" type="number" min="64" max="1500" step="1" value="800">
+                      </div>
+                    </label>
+                    <label class="preview-shader-dimension-control">
+                      <span class="preview-shader-dimension-label">Height</span>
+                      <div class="preview-shader-custom-range">
+                        <input id="preview-shader-height-range" class="preview-shader-custom-range-input" type="range" min="64" max="1500" step="1" value="600">
+                        <input id="preview-shader-height-input" class="preview-shader-custom-range-value" type="number" min="64" max="1500" step="1" value="600">
+                      </div>
+                    </label>
+                  </div>
+                </div>
               </div>
-              <div class="panel-editor" id="editor-css"></div>
-            </div>
-            <div class="editor-panel" id="panel-js">
-              <div class="panel-header">
-                <button class="btn-icon btn-collapse" title="Toggle Panel">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </button>
-                <span class="lang-badge js">JS</span>
-                <button class="btn-icon btn-maximize" title="Maximize Panel">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="15 3 21 3 21 9"></polyline>
-                    <polyline points="9 21 3 21 3 15"></polyline>
-                    <line x1="21" y1="3" x2="14" y2="10"></line>
-                    <line x1="3" y1="21" x2="10" y2="14"></line>
-                  </svg>
-                </button>
+              <div class="shader-editor-controls-grid">
+                <section class="preview-shader-custom">
+                  <div class="preview-shader-uniforms-header">
+                    <strong>Custom Uniforms</strong>
+                    <span class="preview-shader-updated">Metadata driven</span>
+                  </div>
+                  <div id="preview-shader-custom-list" class="preview-shader-custom-list">
+                    <div id="preview-shader-custom-empty" class="preview-shader-custom-empty">No custom uniforms defined.</div>
+                  </div>
+                </section>
+                <section class="preview-shader-custom">
+                  <div class="preview-shader-uniforms-header">
+                    <strong>Textures</strong>
+                    <span class="preview-shader-updated">Topic assets</span>
+                  </div>
+                  <div id="preview-shader-texture-list" class="preview-shader-custom-list">
+                    <div id="preview-shader-texture-empty" class="preview-shader-custom-empty">No shader textures defined.</div>
+                  </div>
+                </section>
               </div>
-              <div class="panel-editor" id="editor-js"></div>
             </div>
-          </div>
+          </section>
         </div>
+        <div id="workspace-resizer" title="Resize editor and preview"></div>
 
         <!-- Preview Column -->
         <div id="preview-column">
           <div class="preview-header">
             <span class="lang-badge preview">Preview</span>
-            <select id="viewport-select" class="viewport-select">
-              <option value="100%">Full Width</option>
-              <option value="375px">Mobile S (375px)</option>
-              <option value="425px">Mobile L (425px)</option>
-              <option value="768px">Tablet (768px)</option>
-              <option value="1024px">Desktop (1024px)</option>
-              <option value="custom" hidden>Custom</option>
-            </select>
-            <input type="range" id="viewport-slider" class="viewport-slider" min="320" max="1440" step="10"
-              value="1440">
-            <span id="viewport-width-display" class="viewport-value">Full</span>
-            <button id="btn-refresh" class="btn-icon" title="Refresh preview">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="23 4 23 10 17 10" />
-                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-              </svg>
-            </button>
+            <div class="preview-header-controls">
+              <select id="viewport-select" class="viewport-select">
+                <option value="100%">Full Width</option>
+                <option value="375px">Mobile S (375px)</option>
+                <option value="425px">Mobile L (425px)</option>
+                <option value="768px">Tablet (768px)</option>
+                <option value="1024px">Desktop (1024px)</option>
+                <option value="custom" hidden>Custom</option>
+              </select>
+              <input type="range" id="viewport-slider" class="viewport-slider" min="320" max="1440" step="10"
+                value="1440">
+              <span id="viewport-width-display" class="viewport-value">Full</span>
+              <button id="btn-console-override" class="btn btn-secondary preview-console-trigger" type="button"
+                title="Enable console for this example only" aria-pressed="false">
+                Open Console
+              </button>
+              <button id="btn-refresh" class="btn-icon" title="Refresh preview">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="23 4 23 10 17 10" />
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                </svg>
+              </button>
+            </div>
           </div>
           <div id="preview-frame-container">
             <iframe id="preview-frame" sandbox="allow-scripts allow-modals"></iframe>
@@ -243,6 +325,86 @@
               </div>
             </aside>
           </div>
+          <div id="preview-console-resizer" class="preview-console-resizer hidden" title="Resize console"></div>
+          <section id="preview-console" class="preview-console hidden" aria-live="polite">
+            <div class="preview-console-header">
+              <span id="preview-runtime-title" class="lang-badge preview">Console</span>
+              <div id="preview-console-controls" class="preview-console-controls">
+                <div class="preview-console-filters" role="group" aria-label="Console filters">
+                  <button class="preview-console-filter active" data-level="all" type="button">All</button>
+                  <button class="preview-console-filter active" data-level="log" type="button">Log</button>
+                  <button class="preview-console-filter active" data-level="info" type="button">Info</button>
+                  <button class="preview-console-filter active" data-level="warn" type="button">Warn</button>
+                  <button class="preview-console-filter active" data-level="error" type="button">Error</button>
+                </div>
+                <div class="preview-console-zoom">
+                  <button id="btn-console-font-dec" class="btn btn-secondary preview-console-zoom-btn" type="button" title="Decrease console font">A-</button>
+                  <button id="btn-console-font-inc" class="btn btn-secondary preview-console-zoom-btn" type="button" title="Increase console font">A+</button>
+                </div>
+                <span id="preview-console-count" class="preview-console-count">0 entries</span>
+                <button id="btn-clear-console" class="btn btn-secondary preview-console-clear" type="button">Clear</button>
+              </div>
+              <button id="btn-toggle-console" class="btn-icon preview-console-toggle" type="button" title="Collapse console" aria-label="Collapse console" aria-expanded="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="18 15 12 9 6 15" />
+                </svg>
+              </button>
+            </div>
+            <div id="preview-console-body" class="preview-console-body">
+              <div id="preview-console-content" class="preview-console-content">
+                <div id="preview-console-output" class="preview-console-output">
+                  <div id="preview-console-empty" class="preview-console-empty">Console disabled for this example.</div>
+                </div>
+                <form id="preview-console-form" class="preview-console-form">
+                  <span class="preview-console-prompt">&gt;</span>
+                  <input id="preview-console-input" class="preview-console-input" type="text" placeholder="Run code inside the preview context" autocomplete="off" spellcheck="false" />
+                  <button id="btn-run-console" class="btn btn-secondary preview-console-run" type="submit">Run</button>
+                </form>
+              </div>
+              <div id="preview-shader-panel" class="preview-shader-panel hidden">
+                <div class="preview-shader-summary">
+                  <article class="preview-shader-metric">
+                    <span class="preview-shader-metric-label">FPS</span>
+                    <strong id="preview-shader-fps" class="preview-shader-metric-value">--</strong>
+                  </article>
+                  <label class="preview-shader-summary-preset">
+                    <span class="preview-shader-metric-label">Resolution</span>
+                    <select id="preview-shader-resolution-select" class="preview-shader-select"></select>
+                  </label>
+                  <article class="preview-shader-metric preview-shader-metric-frame">
+                    <div class="preview-shader-metric-header">
+                      <span class="preview-shader-metric-label">Frame</span>
+                      <div class="preview-shader-runtime-actions">
+                        <button id="btn-shader-toggle-pause" class="btn-icon preview-shader-action" type="button" title="Pause time" aria-label="Pause time">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <line x1="10" y1="5" x2="10" y2="19"></line>
+                            <line x1="14" y1="5" x2="14" y2="19"></line>
+                          </svg>
+                        </button>
+                        <button id="btn-shader-reset" class="btn-icon preview-shader-action" type="button" title="Reset runtime" aria-label="Reset runtime">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <polyline points="3 3 3 9 9 9"></polyline>
+                            <path d="M20 21a9 9 0 0 0-11-17.3L3 9"></path>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <strong id="preview-shader-frame" class="preview-shader-metric-value">--</strong>
+                  </article>
+                </div>
+                <section class="preview-shader-uniforms">
+                  <div class="preview-shader-uniforms-header">
+                    <strong>Built-in Uniforms</strong>
+                    <div class="preview-shader-uniforms-header-meta">
+                      <span id="preview-shader-updated" class="preview-shader-updated">Waiting for first frame</span>
+                    </div>
+                  </div>
+                  <div id="preview-shader-uniform-list" class="preview-shader-uniform-list"></div>
+                </section>
+              </div>
+            </div>
+          </section>
         </div>
       </section>
     </main>
@@ -257,7 +419,6 @@
         <select id="create-type">
           <option value="chapter">Chapter</option>
           <option value="section">Section</option>
-          <option value="section">Section</option>
           <option value="topic">Topic</option>
           <option value="example">Example</option>
         </select>
@@ -265,6 +426,10 @@
       <div class="form-group" id="parent-group">
         <label for="create-parent">Parent</label>
         <select id="create-parent"></select>
+      </div>
+      <div class="form-group" id="preset-group" style="display: none;">
+        <label for="create-preset">Example Preset</label>
+        <select id="create-preset"></select>
       </div>
       <div class="form-group">
         <label for="create-name">Name</label>
@@ -276,6 +441,145 @@
       </div>
     </form>
   </dialog>
+
+  <dialog id="editor-file-dialog">
+    <form id="editor-file-form" method="dialog">
+      <h2 id="editor-file-dialog-title">Create File</h2>
+      <div id="editor-file-path-group" class="form-group">
+        <label for="editor-file-path">Path</label>
+        <input id="editor-file-path" type="text" placeholder="src/NewFile.tsx" />
+      </div>
+      <div id="editor-file-template-group" class="form-group hidden">
+        <label for="editor-file-template">Template</label>
+        <select id="editor-file-template"></select>
+      </div>
+      <div class="form-group">
+        <label for="editor-file-language">Language</label>
+        <select id="editor-file-language"></select>
+      </div>
+      <div id="editor-file-role-group" class="form-group">
+        <label for="editor-file-role">Role</label>
+        <select id="editor-file-role"></select>
+      </div>
+      <p id="editor-file-dialog-hint" class="dialog-hint"></p>
+      <div class="form-actions">
+        <button id="editor-file-dialog-cancel" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="editor-file-dialog-confirm" type="submit" class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="shader-uniform-dialog">
+    <form method="dialog" class="shader-uniform-dialog-form">
+      <h2>Shader Uniforms</h2>
+      <div class="shader-uniform-dialog-layout">
+        <section class="shader-uniform-dialog-section">
+          <div class="shader-uniform-dialog-section-header">
+            <strong>Current Uniforms</strong>
+            <span class="shader-uniform-dialog-section-note">Metadata order</span>
+          </div>
+          <div id="shader-uniform-list" class="shader-uniform-list">
+            <p id="shader-uniform-empty" class="dialog-hint">No custom uniforms defined.</p>
+          </div>
+        </section>
+
+        <section class="shader-uniform-dialog-section">
+          <div class="shader-uniform-dialog-section-header">
+            <strong>Add Uniform</strong>
+            <span id="shader-uniform-dialog-type-hint" class="shader-uniform-dialog-section-note">Float and int can use optional slider ranges.</span>
+          </div>
+
+          <div class="form-group">
+            <label for="shader-uniform-name">Name</label>
+            <input id="shader-uniform-name" type="text" placeholder="intensity" autocomplete="off" spellcheck="false" />
+          </div>
+
+          <div class="form-group">
+            <label for="shader-uniform-type">Type</label>
+            <select id="shader-uniform-type">
+              <option value="float">float</option>
+              <option value="int">int</option>
+              <option value="bool">bool</option>
+              <option value="vec2">vec2</option>
+              <option value="vec3">vec3</option>
+              <option value="vec4">vec4</option>
+            </select>
+          </div>
+
+          <div id="shader-uniform-scalar-group" class="form-group">
+            <label for="shader-uniform-default-scalar">Default Value</label>
+            <input id="shader-uniform-default-scalar" type="number" step="0.01" placeholder="0.8" />
+          </div>
+
+          <div id="shader-uniform-bool-group" class="form-group hidden">
+            <label for="shader-uniform-default-bool">Default Value</label>
+            <select id="shader-uniform-default-bool">
+              <option value="false">false</option>
+              <option value="true">true</option>
+            </select>
+          </div>
+
+          <div id="shader-uniform-vector-group" class="form-group hidden">
+            <label>Default Value</label>
+            <div class="shader-uniform-vector-inputs">
+              <input id="shader-uniform-vector-0" type="number" step="0.01" placeholder="x" />
+              <input id="shader-uniform-vector-1" type="number" step="0.01" placeholder="y" />
+              <input id="shader-uniform-vector-2" type="number" step="0.01" placeholder="z" />
+              <input id="shader-uniform-vector-3" type="number" step="0.01" placeholder="w" />
+            </div>
+          </div>
+
+          <div id="shader-uniform-range-group" class="form-group">
+            <label>Optional Range</label>
+            <div class="shader-uniform-range-inputs">
+              <input id="shader-uniform-range-min" type="number" step="0.01" placeholder="min" />
+              <input id="shader-uniform-range-max" type="number" step="0.01" placeholder="max" />
+              <input id="shader-uniform-range-step" type="number" step="0.01" placeholder="step" />
+            </div>
+          </div>
+
+          <p id="shader-uniform-dialog-hint" class="dialog-hint">Names must be unique and cannot reuse built-in uniforms.</p>
+          <div class="shader-uniform-dialog-add-row">
+            <button id="btn-shader-uniform-add" type="button" class="btn btn-secondary">Add Uniform</button>
+          </div>
+        </section>
+      </div>
+
+      <div class="form-actions">
+        <button id="btn-shader-uniform-cancel" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="btn-shader-uniform-apply" type="button" class="btn btn-primary">Apply</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="editor-file-visibility-dialog">
+    <form method="dialog" class="shader-uniform-dialog-form">
+      <h2>File Visibility</h2>
+      <div class="shader-uniform-dialog-layout">
+        <section class="shader-uniform-dialog-section">
+          <div class="shader-uniform-dialog-section-header">
+            <strong>Files and Blocks</strong>
+            <span class="shader-uniform-dialog-section-note">Persisted in frontmatter</span>
+          </div>
+          <div id="editor-file-visibility-list" class="file-visibility-list">
+            <p id="editor-file-visibility-empty" class="dialog-hint">No files available in this document.</p>
+          </div>
+        </section>
+      </div>
+
+      <p id="editor-file-visibility-hint" class="dialog-hint">Hidden files stay in the Markdown document and keep compiling normally.</p>
+      <div class="form-actions">
+        <button id="editor-file-visibility-cancel" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="editor-file-visibility-apply" type="button" class="btn btn-primary">Apply</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="editor-file-context-menu" class="editor-file-context-menu hidden" role="menu" aria-hidden="true">
+    <button id="btn-context-hide-file" type="button" class="editor-file-context-action" role="menuitem">Hide</button>
+  </div>
+
+  <div id="drag-shield" class="drag-shield hidden" aria-hidden="true"></div>
 
   <script type="module" src="/src/main.js"></script>
 </body>

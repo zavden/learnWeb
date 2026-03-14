@@ -3,14 +3,26 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+    buildExampleDocument,
+    createExampleDocumentFromPreset,
+    parseExampleDocument,
+} from './src/utils/markdown.js';
+import { cloneSerializable, createCompileCacheKey } from './src/utils/compileCache.js';
+import { compileExampleDocument } from './src/utils/exampleCompiler.js';
+import { buildMaterialTree, readHiddenState, setChapterHidden } from './src/utils/materialTree.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const MATERIAL_DIR = path.join(__dirname, 'material');
+const HIDDEN_STATE_FILE = path.join(__dirname, '.hiddens');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const COMPILE_CACHE_MAX_ENTRIES = 120;
+const compileCache = new Map();
 
 // ─── Helpers ────────────────────────────────────────────
 
@@ -19,12 +31,6 @@ function slugify(name) {
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)/g, '');
-}
-
-function parseDirName(name) {
-    const match = name.match(/^(ch|sec|top)(\d+)-(.+)$/);
-    if (!match) return null;
-    return { type: match[1], number: parseInt(match[2], 10), label: match[3] };
 }
 
 function getNextNumber(entries, prefix) {
@@ -42,54 +48,78 @@ function ensureDir(dirPath) {
     }
 }
 
+function getCachedCompileResponse(cacheKey) {
+    if (!compileCache.has(cacheKey)) return null;
+
+    const cached = compileCache.get(cacheKey);
+    compileCache.delete(cacheKey);
+    compileCache.set(cacheKey, cached);
+    return cloneSerializable(cached);
+}
+
+function setCachedCompileResponse(cacheKey, responsePayload) {
+    if (compileCache.has(cacheKey)) {
+        compileCache.delete(cacheKey);
+    }
+
+    compileCache.set(cacheKey, cloneSerializable(responsePayload));
+
+    while (compileCache.size > COMPILE_CACHE_MAX_ENTRIES) {
+        const oldestKey = compileCache.keys().next().value;
+        compileCache.delete(oldestKey);
+    }
+}
+
 // ─── GET /api/tree ──────────────────────────────────────
 
 app.get('/api/tree', (req, res) => {
     try {
-        const chapters = fs
-            .readdirSync(MATERIAL_DIR)
-            .filter((d) => d.startsWith('ch') && fs.statSync(path.join(MATERIAL_DIR, d)).isDirectory())
-            .sort();
-
-        const tree = chapters.map((ch) => {
-            const chPath = path.join(MATERIAL_DIR, ch);
-            const parsed = parseDirName(ch);
-            const sections = fs
-                .readdirSync(chPath)
-                .filter((d) => d.startsWith('sec') && fs.statSync(path.join(chPath, d)).isDirectory())
-                .sort();
-
-            return {
-                id: ch,
-                label: parsed ? parsed.label.replace(/-/g, ' ') : ch,
-                number: parsed?.number ?? 0,
-                sections: sections.map((sec) => {
-                    const secPath = path.join(chPath, sec);
-                    const parsedSec = parseDirName(sec);
-                    const topics = fs
-                        .readdirSync(secPath)
-                        .filter((d) => d.startsWith('top') && fs.statSync(path.join(secPath, d)).isDirectory())
-                        .sort();
-
-                    return {
-                        id: sec,
-                        label: parsedSec ? parsedSec.label.replace(/-/g, ' ') : sec,
-                        number: parsedSec?.number ?? 0,
-                        topics: topics.map((top) => {
-                            const parsedTop = parseDirName(top);
-                            return {
-                                id: top,
-                                label: parsedTop ? parsedTop.label.replace(/-/g, ' ') : top,
-                                number: parsedTop?.number ?? 0,
-                                path: `${ch}/${sec}/${top}`,
-                            };
-                        }),
-                    };
-                }),
-            };
+        const includeHidden = req.query.includeHidden === '1';
+        const tree = buildMaterialTree(MATERIAL_DIR, {
+            hiddenStateFile: HIDDEN_STATE_FILE,
+            includeHidden,
         });
 
         res.json(tree);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/tree/hidden-state', (req, res) => {
+    try {
+        res.json(readHiddenState(HIDDEN_STATE_FILE));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.patch('/api/tree/chapters/:chapterId/hidden', (req, res) => {
+    try {
+        const chapterId = String(req.params.chapterId || '').trim();
+        const hidden = req.body?.hidden !== false;
+        const chapterPath = path.join(MATERIAL_DIR, chapterId);
+
+        if (!chapterId || !/^ch\d+-.+/.test(chapterId)) {
+            return res.status(400).json({ error: 'Invalid chapter id' });
+        }
+
+        if (!fs.existsSync(chapterPath) || !fs.statSync(chapterPath).isDirectory()) {
+            return res.status(404).json({ error: 'Chapter not found' });
+        }
+
+        const hiddenState = setChapterHidden(HIDDEN_STATE_FILE, chapterId, hidden);
+        const tree = buildMaterialTree(MATERIAL_DIR, {
+            hiddenStateFile: HIDDEN_STATE_FILE,
+            includeHidden: false,
+        });
+
+        res.json({
+            chapterId,
+            hidden,
+            hiddenState,
+            tree,
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -187,13 +217,70 @@ app.put('/api/topic/:ch/:sec/:top/examples/*', (req, res) => {
     res.json({ oldFilename: file, newFilename });
 });
 
+// ─── POST /api/compile ───────────────────────────────────
+
+app.post('/api/compile', async (req, res) => {
+    try {
+        const sourceDocument = req.body?.document
+            || parseExampleDocument(req.body?.content || '');
+        const cacheKey = createCompileCacheKey({ document: sourceDocument });
+        const cached = getCachedCompileResponse(cacheKey);
+
+        if (cached) {
+            res.json({
+                ...cached,
+                compileMeta: {
+                    ...(cached.compileMeta || {}),
+                    cacheKey,
+                    cacheStatus: 'hit',
+                },
+            });
+            return;
+        }
+
+        const result = await compileExampleDocument(sourceDocument);
+        const responsePayload = {
+            document: sourceDocument,
+            compiledDocument: result.compiledDocument,
+            compileDiagnostics: result.compileDiagnostics,
+            compileMeta: {
+                cacheKey,
+                cacheStatus: 'miss',
+            },
+        };
+
+        setCachedCompileResponse(cacheKey, responsePayload);
+
+        res.json(responsePayload);
+    } catch (err) {
+        res.status(500).json({
+            error: err.message,
+            compiledDocument: { html: '', css: '', js: '' },
+            compileDiagnostics: [
+                {
+                    level: 'error',
+                    code: 'compile-request-failed',
+                    message: err.message,
+                },
+            ],
+        });
+    }
+});
+
 // ─── POST /api/create ───────────────────────────────────
 
 app.post('/api/create', (req, res) => {
     try {
-        const { type, name, parentPath } = req.body; // type: 'chapter' | 'section' | 'topic'
+        const { type, name, parentPath, sessionPreset } = req.body; // type: 'chapter' | 'section' | 'topic'
         let targetDir;
         let prefix;
+        const replaceTemplateTokens = (content = '') => String(content)
+            .replaceAll('__EXAMPLE_NAME__', name)
+            .replace(/Hello World/g, name)
+            .replace(/Hello from Pug/g, name)
+            .replace(/SCSS preset/g, name)
+            .replace(/Hello React/g, name)
+            .replace(/React TSX Todo/g, name);
 
         if (type === 'chapter') {
             targetDir = MATERIAL_DIR;
@@ -216,29 +303,18 @@ app.post('/api/create', (req, res) => {
 
             if (fs.existsSync(filePath)) return res.status(409).json({ error: 'Example already exists' });
 
-            // Create basic template
-            const template = `# HTML
-
-\`\`\`html
-<h1>${name}</h1>
-\`\`\`
-
-# CSS
-
-\`\`\`css
-h1 {
-  color: #58a6ff;
-}
-\`\`\`
-
-# JavaScript
-
-\`\`\`javascript
-console.log('Hello from ${name}');
-\`\`\`
-`;
+            const sourceDocument = createExampleDocumentFromPreset(sessionPreset || 'html-css-javascript');
+            sourceDocument.blocks = sourceDocument.blocks.map((block) => ({
+                ...block,
+                content: replaceTemplateTokens(block.content),
+            }));
+            sourceDocument.files = sourceDocument.files.map((file) => ({
+                ...file,
+                content: replaceTemplateTokens(file.content),
+            }));
+            const template = buildExampleDocument(sourceDocument);
             fs.writeFileSync(filePath, template, 'utf-8');
-            return res.json({ filename, path: filePath });
+            return res.json({ filename, path: filePath, sessionPreset: sessionPreset || 'html-css-javascript' });
         } else {
             return res.status(400).json({ error: 'Invalid type' });
         }
