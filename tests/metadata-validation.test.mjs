@@ -1802,7 +1802,7 @@ export function App() {
     assert.ok(getDiagnosticCodes(documentModel).includes('exercise-file-not-found'));
 });
 
-test('preview renderer injects runtime console bridge only when console is enabled', () => {
+test('preview renderer always injects runtime bridge regardless of console state', () => {
     const withConsole = renderCompiledExampleDocument(
         { html: '<main>Hello</main>', js: 'console.log("hi");' },
         '',
@@ -1821,8 +1821,8 @@ test('preview renderer injects runtime console bridge only when console is enabl
     assert.match(withConsole, /stackFrames/);
     assert.match(withConsole, /unhandledrejection/);
     assert.match(withConsole, /const RENDER_ID = 7/);
-    assert.doesNotMatch(withoutConsole, /learncode-preview/);
-    assert.doesNotMatch(withoutConsole, /learncode-console-command/);
+    assert.match(withoutConsole, /learncode-preview/);
+    assert.match(withoutConsole, /const RENDER_ID = 8/);
     assert.match(withoutConsole, /try \{/);
 });
 
