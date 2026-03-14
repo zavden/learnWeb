@@ -70,3 +70,18 @@ test('HTML-FULL documents round-trip without losing standalone document semantic
     assert.match(reparsedDocument.blocks[0].content, /<title>Standalone<\/title>/);
     assert.equal(buildExampleDocument(reparsedDocument), markdown);
 });
+
+test('shader documents round-trip preserving renderer, resolution and block order', () => {
+    const originalDocument = createExampleDocumentFromPreset('shader-time');
+    const markdown = buildExampleDocument(originalDocument);
+    const reparsedDocument = parseExampleDocument(markdown);
+
+    assert.equal(reparsedDocument.rendererMode, 'shader');
+    assert.equal(reparsedDocument.metadata.renderer, 'shader');
+    assert.equal(reparsedDocument.metadata.resolution, '960x540');
+    assert.deepEqual(
+        reparsedDocument.blocks.map((block) => block.type),
+        ['vertex', 'fragment']
+    );
+    assert.equal(buildExampleDocument(reparsedDocument), markdown);
+});

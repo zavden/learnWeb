@@ -1,4 +1,4 @@
-export const SLOT_ORDER = ['app', 'markup', 'style', 'script'];
+export const SLOT_ORDER = ['app', 'markup', 'style', 'script', 'vertex', 'fragment'];
 
 export const BLOCK_REGISTRY = {
     jsx: {
@@ -78,17 +78,183 @@ export const BLOCK_REGISTRY = {
         badgeClass: 'ts',
         enabled: true,
     },
+    vertex: {
+        slot: 'vertex',
+        heading: 'Vertex',
+        badgeLabel: 'VERT',
+        badgeClass: 'shader',
+        enabled: true,
+    },
+    fragment: {
+        slot: 'fragment',
+        heading: 'Fragment',
+        badgeLabel: 'FRAG',
+        badgeClass: 'shader',
+        enabled: true,
+    },
 };
 
 export const BLOCK_ALIASES = {
+    frag: 'fragment',
+    fs: 'fragment',
     'html-b': 'html',
     htmlfull: 'html-full',
     'html_full': 'html-full',
     js: 'javascript',
     ts: 'typescript',
+    vert: 'vertex',
+    vs: 'vertex',
 };
 
 export const SESSION_PRESETS = [
+    {
+        id: 'shader-basic',
+        label: 'Shader Basic',
+        metadata: {
+            renderer: 'shader',
+            resolution: '800x600',
+        },
+        blocks: [
+            {
+                type: 'vertex',
+                content: "attribute vec2 a_position;\nvarying vec2 v_uv;\n\nvoid main() {\n  v_uv = a_position * 0.5 + 0.5;\n  gl_Position = vec4(a_position, 0.0, 1.0);\n}",
+            },
+            {
+                type: 'fragment',
+                content: "precision mediump float;\n\nuniform float u_time;\nuniform vec2 u_resolution;\nvarying vec2 v_uv;\n\nvoid main() {\n  vec2 uv = gl_FragCoord.xy / u_resolution;\n  gl_FragColor = vec4(uv, 0.5 + 0.5 * sin(u_time), 1.0);\n}",
+            },
+        ],
+    },
+    {
+        id: 'shader-time',
+        label: 'Shader Time Animation',
+        metadata: {
+            renderer: 'shader',
+            resolution: '960x540',
+        },
+        blocks: [
+            {
+                type: 'vertex',
+                content: "attribute vec2 a_position;\nvarying vec2 v_uv;\n\nvoid main() {\n  v_uv = a_position * 0.5 + 0.5;\n  gl_Position = vec4(a_position, 0.0, 1.0);\n}",
+            },
+            {
+                type: 'fragment',
+                content: "precision mediump float;\n\nuniform float u_time;\nuniform vec2 u_resolution;\n\nvoid main() {\n  vec2 uv = gl_FragCoord.xy / u_resolution;\n  float wave = 0.5 + 0.5 * sin(u_time * 2.0 + uv.x * 10.0);\n  float glow = 0.5 + 0.5 * cos(u_time * 1.3 + uv.y * 8.0);\n  gl_FragColor = vec4(uv.x, wave, glow, 1.0);\n}",
+            },
+        ],
+    },
+    {
+        id: 'shader-mouse',
+        label: 'Shader Mouse Interaction',
+        metadata: {
+            renderer: 'shader',
+            resolution: '800x800',
+        },
+        blocks: [
+            {
+                type: 'vertex',
+                content: "attribute vec2 a_position;\nvarying vec2 v_uv;\n\nvoid main() {\n  v_uv = a_position * 0.5 + 0.5;\n  gl_Position = vec4(a_position, 0.0, 1.0);\n}",
+            },
+            {
+                type: 'fragment',
+                content: "precision mediump float;\n\nuniform vec2 u_mouse;\nuniform float u_mouse_pressed;\nuniform vec2 u_resolution;\n\nvoid main() {\n  vec2 uv = gl_FragCoord.xy / u_resolution;\n  vec2 mouse = u_mouse / u_resolution;\n  float d = distance(uv, mouse);\n  float ring = smoothstep(0.22, 0.18, d);\n  float core = smoothstep(0.08, 0.02, d);\n  vec3 base = vec3(0.05, 0.08, 0.14) + vec3(uv.x * 0.18, uv.y * 0.12, 0.20);\n  vec3 glow = mix(vec3(0.22, 0.72, 1.0), vec3(1.0, 0.42, 0.28), u_mouse_pressed);\n  vec3 color = base + glow * ring + vec3(1.0) * core;\n  gl_FragColor = vec4(color, 1.0);\n}",
+            },
+        ],
+    },
+    {
+        id: 'shader-frame',
+        label: 'Shader Frame Counter',
+        metadata: {
+            renderer: 'shader',
+            resolution: '1024x576',
+        },
+        blocks: [
+            {
+                type: 'vertex',
+                content: "attribute vec2 a_position;\nvarying vec2 v_uv;\n\nvoid main() {\n  v_uv = a_position * 0.5 + 0.5;\n  gl_Position = vec4(a_position, 0.0, 1.0);\n}",
+            },
+            {
+                type: 'fragment',
+                content: "precision mediump float;\n\nuniform float u_frame;\nuniform vec2 u_resolution;\n\nvoid main() {\n  vec2 uv = gl_FragCoord.xy / u_resolution;\n  float stepped = mod(floor(u_frame / 6.0), 20.0) / 20.0;\n  float stripes = step(0.5, fract(uv.y * 12.0 + stepped * 6.0));\n  vec3 color = mix(vec3(0.08, 0.11, 0.18), vec3(0.95, 0.62, 0.18), stripes);\n  color += vec3(stepped * 0.35, uv.x * 0.18, 0.05);\n  gl_FragColor = vec4(color, 1.0);\n}",
+            },
+        ],
+    },
+    {
+        id: 'shader-custom-uniforms',
+        label: 'Shader Custom Uniforms',
+        metadata: {
+            renderer: 'shader',
+            resolution: '960x540',
+            shader_uniforms: 'intensity:float=0.8|invert:bool=false|focus:vec2=0.5,0.5',
+        },
+        blocks: [
+            {
+                type: 'vertex',
+                content: "attribute vec2 a_position;\nvarying vec2 v_uv;\n\nvoid main() {\n  v_uv = a_position * 0.5 + 0.5;\n  gl_Position = vec4(a_position, 0.0, 1.0);\n}",
+            },
+            {
+                type: 'fragment',
+                content: "precision mediump float;\n\nuniform vec2 u_resolution;\nuniform float intensity;\nuniform bool invert;\nuniform vec2 focus;\n\nvoid main() {\n  vec2 uv = gl_FragCoord.xy / u_resolution;\n  float distanceToFocus = distance(uv, focus);\n  float ring = smoothstep(0.45, 0.08, distanceToFocus);\n  vec3 color = vec3(uv.x, uv.y, ring * intensity);\n\n  if (invert) {\n    color = 1.0 - color;\n  }\n\n  gl_FragColor = vec4(color, 1.0);\n}",
+            },
+        ],
+    },
+    {
+        id: 'shader-vector-uniforms',
+        label: 'Shader Vector Uniforms',
+        metadata: {
+            renderer: 'shader',
+            resolution: '960x540',
+            shader_uniforms: 'tint:vec3=0.15,0.75,1|mask:vec4=1,0.45,0.2,0.8',
+        },
+        blocks: [
+            {
+                type: 'vertex',
+                content: "attribute vec2 a_position;\nvarying vec2 v_uv;\n\nvoid main() {\n  v_uv = a_position * 0.5 + 0.5;\n  gl_Position = vec4(a_position, 0.0, 1.0);\n}",
+            },
+            {
+                type: 'fragment',
+                content: "precision mediump float;\n\nuniform vec2 u_resolution;\nuniform vec3 tint;\nuniform vec4 mask;\n\nvoid main() {\n  vec2 uv = gl_FragCoord.xy / u_resolution;\n  vec3 base = vec3(uv.x, uv.y, 1.0 - uv.x);\n  vec3 color = mix(base, tint, mask.w);\n  color *= mix(vec3(1.0), mask.rgb, 0.5);\n  gl_FragColor = vec4(color, 1.0);\n}",
+            },
+        ],
+    },
+    {
+        id: 'shader-ranged-uniforms',
+        label: 'Shader Ranged Uniforms',
+        metadata: {
+            renderer: 'shader',
+            resolution: '960x540',
+            shader_uniforms: 'intensity:float=0.8[0,1.5,0.01]|bands:int=6[2,18,1]',
+        },
+        blocks: [
+            {
+                type: 'vertex',
+                content: "attribute vec2 a_position;\nvarying vec2 v_uv;\n\nvoid main() {\n  v_uv = a_position * 0.5 + 0.5;\n  gl_Position = vec4(a_position, 0.0, 1.0);\n}",
+            },
+            {
+                type: 'fragment',
+                content: "precision mediump float;\n\nuniform vec2 u_resolution;\nuniform float intensity;\nuniform int bands;\n\nvoid main() {\n  vec2 uv = gl_FragCoord.xy / u_resolution;\n  float bandCount = max(float(bands), 1.0);\n  float stepped = floor(uv.x * bandCount) / bandCount;\n  vec3 color = vec3(stepped * intensity, uv.y * intensity, 1.0 - stepped * 0.5);\n  gl_FragColor = vec4(color, 1.0);\n}",
+            },
+        ],
+    },
+    {
+        id: 'shader-textures',
+        label: 'Shader Textures',
+        metadata: {
+            renderer: 'shader',
+            resolution: '960x540',
+            shader_textures: 'u_checker=checker.svg|u_spot=spotlight.svg',
+        },
+        blocks: [
+            {
+                type: 'vertex',
+                content: "attribute vec2 a_position;\nvarying vec2 v_uv;\n\nvoid main() {\n  v_uv = a_position * 0.5 + 0.5;\n  gl_Position = vec4(a_position, 0.0, 1.0);\n}",
+            },
+            {
+                type: 'fragment',
+                content: "precision mediump float;\n\nuniform vec2 u_resolution;\nuniform sampler2D u_checker;\nuniform sampler2D u_spot;\n\nvoid main() {\n  vec2 uv = gl_FragCoord.xy / u_resolution;\n  vec3 checker = texture2D(u_checker, uv * 2.0).rgb;\n  vec3 spot = texture2D(u_spot, uv).rgb;\n  vec3 color = mix(checker, spot, 0.45);\n  gl_FragColor = vec4(color, 1.0);\n}",
+            },
+        ],
+    },
     {
         id: 'react-jsx',
         label: 'React JSX',

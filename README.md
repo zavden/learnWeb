@@ -10,6 +10,7 @@ La app combina:
 - renderizado de teoria en Markdown
 - previsualizacion en vivo en un `iframe`
 - compilacion local de `Pug`, `SCSS`, `SASS`, `TypeScript`, React y Vue
+- preview shader local con WebGL para documentos `Vertex + Fragment`
 - consola runtime opt-in, modo ejercicio y comparacion intento vs solucion
 
 La idea central del proyecto es simple: el contenido no vive en una base de datos, vive en el filesystem dentro de la carpeta `material/`. El backend solo lee y escribe esos archivos, y el frontend actua como explorador, editor y visor.
@@ -48,8 +49,10 @@ Permite:
 - trabajar con ejemplos compilados (`Pug`, `SCSS`, `SASS`, `TypeScript`)
 - trabajar con React `single-file` y `multi-file`
 - trabajar con Vue `single-file`, `multi-file` y `.vue` SFC controlados
+- trabajar con documentos shader `Vertex + Fragment`
 - alternar entre layout por paneles verticales o tabs
 - usar consola runtime opt-in por ejemplo
+- usar panel shader con FPS, resolucion, pausa y reset
 - usar modo ejercicio con pistas, archivos ocultos y comparacion
 - crear, guardar, modificar, renombrar y eliminar ejemplos
 - crear nuevos capitulos, secciones, topics y ejemplos
@@ -62,6 +65,7 @@ Permite:
 - JavaScript vanilla con modulos ES
 - CodeMirror 6
 - `marked` para renderizar Markdown
+- WebGL para preview shader
 - React y ReactDOM para modos React
 - Vue runtime y compiladores de Vue para modos Vue
 - `Web Worker` para orquestacion y cache de compilacion en cliente
@@ -221,12 +225,60 @@ El sistema soporta combinaciones como:
 - `Pug + SCSS`
 - `Pug + TypeScript`
 - `HTML + SASS + TypeScript`
+- `Vertex + Fragment` con `renderer: shader`
 
 Los paneles visibles del editor dependen de los bloques reales del archivo.
 
 `HTML` y `HTML-B` significan lo mismo: contenido que se inyecta dentro del `<body>` generado por la app. No debes escribir `<!DOCTYPE html>`, `<html>`, `<head>` ni `<body>` dentro de esos bloques.
 
 `HTML-FULL` es distinto: representa un documento HTML completo y el preview no lo envuelve dentro de otro `<!DOCTYPE html><html>...</html>`. En este modo, los estilos y scripts deben vivir dentro del propio documento; no se deben mezclar bloques `CSS` o `JavaScript` separados.
+
+#### Documentos shader
+
+El sistema tambien soporta documentos shader basados en dos bloques obligatorios:
+
+~~~~md
+---
+renderer: shader
+resolution: 800x600
+---
+
+# Vertex
+
+```vertex
+attribute vec2 a_position;
+varying vec2 v_uv;
+
+void main() {
+  v_uv = a_position * 0.5 + 0.5;
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+```
+
+# Fragment
+
+```fragment
+precision mediump float;
+
+uniform float u_time;
+uniform vec2 u_resolution;
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  gl_FragColor = vec4(uv, 0.5 + 0.5 * sin(u_time), 1.0);
+}
+```
+~~~~
+
+Reglas del modo shader:
+
+- el formato canonico es `Vertex + Fragment`
+- `renderer: shader` es la via explicita recomendada
+- si existen exactamente un bloque `vertex` y uno `fragment`, el parser tambien autodetecta el documento como shader
+- `resolution: WIDTHxHEIGHT` define la resolucion base del canvas
+- `shader_textures` permite declarar samplers cargados desde `assets/` del topic
+- no se mezclan bloques `HTML`, `CSS` o `JavaScript` con shaders
+- no se usa consola runtime: el preview muestra un panel shader especifico
 
 #### Frontmatter simple
 
@@ -250,6 +302,10 @@ Notas:
 Claves soportadas mas importantes:
 
 - `framework: react | vue`
+- `renderer: shader | web`
+- `resolution: 800x600`
+- `shader_uniforms: intensity:float=0.8[0,1.5,0.01]|invert:bool=false|focus:vec2=0.5,0.5`
+- `shader_textures: u_checker=checker.svg|u_spot=spotlight.svg`
 - `mode: multi-file`
 - `entry: ruta/del/entry`
 - `console: true | false`
@@ -449,6 +505,81 @@ Si `console: true` esta activo en el ejemplo:
 - permite ejecutar comandos manuales
 - mantiene historial por ejemplo y soporta filtros, zoom y resize
 
+Si el documento usa `renderer: shader`:
+
+- el preview cambia al pipeline WebGL
+- se renderiza un fullscreen quad con `Vertex + Fragment`
+- la consola se reemplaza por un panel shader
+- el panel muestra `FPS`, resolucion efectiva, uniforms built-in, uniforms personalizados y estado de texturas
+- el panel permite cambiar resolucion, pausar tiempo y resetear runtime
+
+#### Uniforms personalizados en shaders
+
+La V1 de shaders tambien soporta uniforms definidos por metadata:
+
+~~~~md
+---
+renderer: shader
+resolution: 960x540
+shader_uniforms: intensity:float=0.8|invert:bool=false|focus:vec2=0.5,0.5
+---
+~~~~
+
+Formato actual:
+
+- `name:type=value`
+- o `name:type=value[min,max,step]` para `float` e `int`
+- separador entre uniforms: `|`
+- tipos soportados:
+  - `float`
+  - `int`
+  - `bool`
+  - `vec2`
+  - `vec3`
+  - `vec4`
+
+Reglas:
+
+- no puedes redefinir built-ins como `u_time` o `u_resolution`
+- si una declaracion es invalida, se muestra diagnostico y se ignora
+- el panel shader crea controles automaticamente para esos uniforms
+- el runtime los aplica solo si el shader realmente declara esos uniforms
+- `float` e `int` pueden declarar un rango opcional y el panel mostrara un slider
+
+#### Texturas locales en shaders
+
+La V1 de shaders tambien soporta samplers definidos por metadata y cargados desde `assets/` del topic actual:
+
+~~~~md
+---
+renderer: shader
+resolution: 960x540
+shader_textures: u_checker=checker.svg|u_spot=spotlight.svg
+---
+~~~~
+
+Formato actual:
+
+- `uniformName=asset-file`
+- separador entre texturas: `|`
+- extensiones soportadas:
+  - `.png`
+  - `.jpg`
+  - `.jpeg`
+  - `.gif`
+  - `.webp`
+  - `.avif`
+  - `.bmp`
+  - `.svg`
+
+Reglas:
+
+- el archivo debe existir en `assets/` del topic actual
+- por ahora solo se soportan archivos en la raiz de `assets/`, no subcarpetas
+- el panel shader muestra estado de carga y dimensiones cuando la textura ya esta lista
+- el runtime asigna una unidad de textura por declaracion y la conecta al uniform del mismo nombre
+- si el shader no declara ese sampler, la textura se carga pero no afecta el programa
+
 ### 5. Guardado
 
 Hay dos flujos distintos:
@@ -503,6 +634,7 @@ Cuando creas un `Example`, el backend genera una plantilla minima segun el prese
 Actualmente el dialogo incluye presets para:
 
 - sesiones clasicas
+- shaders (`shader-basic`, `shader-time`, `shader-mouse`, `shader-frame`, `shader-custom-uniforms`, `shader-vector-uniforms`, `shader-ranged-uniforms`, `shader-textures`)
 - sesiones con `SCSS`, `SASS` y `TypeScript`
 - React `single-file`
 - React `multi-file`
@@ -876,6 +1008,38 @@ Capacidades actuales:
 - stacks runtime mas legibles
 - deduplicacion de errores repetidos
 
+### Modo shader
+
+Cuando el documento es shader:
+
+- el preview usa WebGL en vez del pipeline HTML habitual
+- el panel inferior cambia de `Console` a `Shader`
+- los controles editables viven en un drawer plegable al fondo del editor
+- el runtime expone estos uniforms built-in:
+  - `u_time`
+  - `u_delta`
+  - `u_resolution`
+  - `u_mouse`
+  - `u_mouse_pressed`
+  - `u_frame`
+- el panel inferior permite:
+  - cambiar resolucion con presets
+  - pausar y reanudar el tiempo
+  - resetear `time`, `frame` y mouse
+  - inspeccionar uniforms personalizados
+  - inspeccionar estado de texturas locales
+
+Ejemplos listos para probar:
+
+- [ex01.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec02-shaders/top01-overview/examples/ex01.md)
+- [ex02.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec02-shaders/top01-overview/examples/ex02.md)
+- [ex03.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec02-shaders/top01-overview/examples/ex03.md)
+- [ex04.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec02-shaders/top01-overview/examples/ex04.md)
+- [ex05.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec02-shaders/top01-overview/examples/ex05.md)
+- [ex06.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec02-shaders/top01-overview/examples/ex06.md)
+- [ex07.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec02-shaders/top01-overview/examples/ex07.md)
+- [ex08.md](/home/zavden/Learning/Web/learnWeb/material/ch00-tests/sec02-shaders/top01-overview/examples/ex08.md)
+
 ### Responsive preview
 
 El panel de preview tiene dos niveles de ancho:
@@ -942,6 +1106,13 @@ Limitaciones tecnicas actuales:
 - Vue `multi-file` requiere `entry` valido en `JavaScript` o `TypeScript`
 - los proyectos `React` y `Vue` multi-file si soportan archivos `json` virtuales
 - los proyectos multi-file no soportan todavia assets binarios virtuales como `png`, `jpg`, `woff` o `mp4`
+- los documentos shader son V1: un solo canvas y un solo pass
+- el modo shader no soporta todavia multipass, framebuffer ping-pong ni audio-reactive shaders
+- el modo shader no soporta virtual files ni proyectos shader multi-file
+- los shaders solo soportan uniforms personalizados simples por metadata (`float`, `int`, `bool`, `vec2`, `vec3`, `vec4`)
+- los sliders por metadata solo aplican a uniforms `float` e `int`
+- las texturas shader por metadata solo soportan archivos del topic actual y no admiten subcarpetas dentro de `assets/`
+- los shaders no soportan todavia `vec3`, `vec4`, arrays ni structs como uniforms definidos por metadata
 - Vue SFC es controlado: no soporta `template src`, `script src`, `style src`, CSS modules ni custom blocks
 - para imagenes y recursos locales debes usar la carpeta `assets/` del topic
 - el bundle de preview para React es grande porque empaqueta runtime en cada ejemplo

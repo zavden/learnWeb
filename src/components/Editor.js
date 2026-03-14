@@ -20,17 +20,25 @@ import {
     createEmptyExampleDocument,
     duplicateDocumentFile,
     getDocumentEntryCandidates,
+    getDocumentFileVisibilityEntries,
     getExerciseConfig,
     getDocumentLanguageOptions,
+    getShaderConfig,
     hasBlockingDiagnostics,
+    isShaderDocument,
     parseExampleDocument,
     removeDocumentFile,
     setDocumentEntryPath,
     synchronizeDocument,
+    updateDocumentHiddenFiles,
+    updateShaderUniformDefinitions,
     updateDocumentFileDetails,
     updateDocumentFileContent,
     VIRTUAL_FILE_ROLE_OPTIONS,
 } from '../utils/markdown.js';
+
+const SHADER_UNIFORM_TYPE_OPTIONS = ['float', 'int', 'bool', 'vec2', 'vec3', 'vec4'];
+const SHADER_BUILT_IN_UNIFORM_NAMES = ['u_time', 'u_delta', 'u_resolution', 'u_mouse', 'u_mouse_pressed', 'u_frame'];
 
 export class Editor {
     constructor({ onCodeChange, onExerciseStateChange, onRename, onSessionStateChange }) {
@@ -64,6 +72,8 @@ export class Editor {
         this.btnRemove = document.getElementById('btn-remove');
         this.btnRename = document.getElementById('btn-rename');
         this.btnAddFile = document.getElementById('btn-add-file');
+        this.btnEditShaderUniforms = document.getElementById('btn-edit-shader-uniforms');
+        this.btnEditFileVisibility = document.getElementById('btn-edit-file-visibility');
         this.btnDuplicateFile = document.getElementById('btn-duplicate-file');
         this.btnEditFile = document.getElementById('btn-edit-file');
         this.btnDeleteFile = document.getElementById('btn-delete-file');
@@ -88,6 +98,39 @@ export class Editor {
         this.fileDialogCancel = document.getElementById('editor-file-dialog-cancel');
         this.fileDialogConfirm = document.getElementById('editor-file-dialog-confirm');
         this.fileDialogForm = document.getElementById('editor-file-form');
+        this.shaderUniformDialog = document.getElementById('shader-uniform-dialog');
+        this.shaderUniformList = document.getElementById('shader-uniform-list');
+        this.shaderUniformEmpty = document.getElementById('shader-uniform-empty');
+        this.shaderUniformName = document.getElementById('shader-uniform-name');
+        this.shaderUniformType = document.getElementById('shader-uniform-type');
+        this.shaderUniformScalarGroup = document.getElementById('shader-uniform-scalar-group');
+        this.shaderUniformDefaultScalar = document.getElementById('shader-uniform-default-scalar');
+        this.shaderUniformBoolGroup = document.getElementById('shader-uniform-bool-group');
+        this.shaderUniformDefaultBool = document.getElementById('shader-uniform-default-bool');
+        this.shaderUniformVectorGroup = document.getElementById('shader-uniform-vector-group');
+        this.shaderUniformVectorInputs = [
+            document.getElementById('shader-uniform-vector-0'),
+            document.getElementById('shader-uniform-vector-1'),
+            document.getElementById('shader-uniform-vector-2'),
+            document.getElementById('shader-uniform-vector-3'),
+        ];
+        this.shaderUniformRangeGroup = document.getElementById('shader-uniform-range-group');
+        this.shaderUniformRangeMin = document.getElementById('shader-uniform-range-min');
+        this.shaderUniformRangeMax = document.getElementById('shader-uniform-range-max');
+        this.shaderUniformRangeStep = document.getElementById('shader-uniform-range-step');
+        this.shaderUniformDialogHint = document.getElementById('shader-uniform-dialog-hint');
+        this.shaderUniformDialogTypeHint = document.getElementById('shader-uniform-dialog-type-hint');
+        this.btnShaderUniformAdd = document.getElementById('btn-shader-uniform-add');
+        this.btnShaderUniformCancel = document.getElementById('btn-shader-uniform-cancel');
+        this.btnShaderUniformApply = document.getElementById('btn-shader-uniform-apply');
+        this.fileVisibilityDialog = document.getElementById('editor-file-visibility-dialog');
+        this.fileVisibilityList = document.getElementById('editor-file-visibility-list');
+        this.fileVisibilityEmpty = document.getElementById('editor-file-visibility-empty');
+        this.fileVisibilityHint = document.getElementById('editor-file-visibility-hint');
+        this.btnFileVisibilityCancel = document.getElementById('editor-file-visibility-cancel');
+        this.btnFileVisibilityApply = document.getElementById('editor-file-visibility-apply');
+        this.fileContextMenu = document.getElementById('editor-file-context-menu');
+        this.btnContextHideFile = document.getElementById('btn-context-hide-file');
         this.fileDialogState = {
             mode: 'create',
             fileId: null,
@@ -95,12 +138,23 @@ export class Editor {
             suggestedRole: '',
             templateId: 'custom',
         };
+        this.shaderUniformDialogState = {
+            uniforms: [],
+        };
+        this.fileVisibilityDialogState = {
+            hiddenKeys: [],
+        };
+        this.fileContextMenuState = {
+            fileId: null,
+        };
 
         this._initButtons();
         this._initShortcuts();
         this._initPanelControls();
         this._initLayoutControls();
         this._initFileControls();
+        this._initShaderUniformDialog();
+        this._initFileVisibilityDialog();
         this._updateFontSize(0);
         this._applyDocument(createEmptyExampleDocument(), { notify: false });
     }
@@ -275,8 +329,33 @@ export class Editor {
             && this.exerciseConfig.lockedFiles.includes(file.path);
     }
 
+    _getFileVisibilityEntries() {
+        return getDocumentFileVisibilityEntries(this.currentDocument);
+    }
+
+    _getFileVisibilityEntryById(fileId) {
+        return this._getFileVisibilityEntries().find((entry) => entry.file.id === fileId) || null;
+    }
+
+    _getManuallyHiddenFileIdSet() {
+        return new Set(
+            this._getFileVisibilityEntries()
+                .filter((entry) => entry.hidden)
+                .map((entry) => entry.file.id)
+        );
+    }
+
+    _isFileManuallyHidden(file) {
+        if (!file?.id) return false;
+        return this._getManuallyHiddenFileIdSet().has(file.id);
+    }
+
     _getVisibleFiles() {
-        return (this.currentDocument.files || []).filter((file) => this._isExerciseFileVisible(file));
+        const hiddenFileIds = this._getManuallyHiddenFileIdSet();
+        return (this.currentDocument.files || []).filter((file) => (
+            this._isExerciseFileVisible(file)
+            && !hiddenFileIds.has(file.id)
+        ));
     }
 
     getExercisePresentation() {
@@ -530,6 +609,561 @@ export class Editor {
         });
     }
 
+    _initShaderUniformDialog() {
+        this.btnEditShaderUniforms?.addEventListener('click', () => this._openShaderUniformDialog());
+        this.shaderUniformType?.addEventListener('change', () => this._syncShaderUniformDialogTypeFields());
+        this.btnShaderUniformAdd?.addEventListener('click', () => this._handleAddShaderUniform());
+        this.btnShaderUniformCancel?.addEventListener('click', () => this.shaderUniformDialog?.close());
+        this.btnShaderUniformApply?.addEventListener('click', () => this._applyShaderUniformDialog());
+    }
+
+    _initFileVisibilityDialog() {
+        this.btnEditFileVisibility?.addEventListener('click', () => this._openFileVisibilityDialog());
+        this.btnFileVisibilityCancel?.addEventListener('click', () => this.fileVisibilityDialog?.close());
+        this.btnFileVisibilityApply?.addEventListener('click', () => this._applyFileVisibilityDialog());
+        this.btnContextHideFile?.addEventListener('click', () => this._handleContextHideFile());
+
+        this.fileVisibilityDialog?.addEventListener('close', () => {
+            this.fileVisibilityDialogState.hiddenKeys = [];
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!this.fileContextMenu || this.fileContextMenu.classList.contains('hidden')) return;
+            if (this.fileContextMenu.contains(event.target)) return;
+            this._closeFileContextMenu();
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                this._closeFileContextMenu();
+            }
+        });
+
+        window.addEventListener('resize', () => this._closeFileContextMenu());
+    }
+
+    _getFileVisibilityDialogHiddenKeys() {
+        return Array.isArray(this.fileVisibilityDialogState.hiddenKeys)
+            ? this.fileVisibilityDialogState.hiddenKeys
+            : [];
+    }
+
+    _setFileVisibilityHint(message, type = 'info') {
+        if (!this.fileVisibilityHint) return;
+        this.fileVisibilityHint.textContent = message;
+        this.fileVisibilityHint.classList.toggle('is-error', type === 'error');
+    }
+
+    _syncFileVisibilityDialogHint() {
+        const hiddenCount = this._getFileVisibilityDialogHiddenKeys().length;
+        if (hiddenCount === 0) {
+            this._setFileVisibilityHint('All files are currently visible.');
+            return;
+        }
+
+        this._setFileVisibilityHint(`${hiddenCount} file${hiddenCount === 1 ? '' : 's'} hidden. Hidden files stay in the Markdown document and keep compiling normally.`);
+    }
+
+    _renderFileVisibilityDialogList() {
+        if (!this.fileVisibilityList || !this.fileVisibilityEmpty) return;
+
+        const visibilityEntries = this._getFileVisibilityEntries();
+        const hiddenKeys = new Set(this._getFileVisibilityDialogHiddenKeys());
+        this.fileVisibilityList.innerHTML = '';
+
+        if (visibilityEntries.length === 0) {
+            this.fileVisibilityList.appendChild(this.fileVisibilityEmpty);
+            this.fileVisibilityEmpty.classList.remove('hidden');
+            this._setFileVisibilityHint('No files available in this document.');
+            return;
+        }
+
+        this.fileVisibilityEmpty.classList.add('hidden');
+
+        visibilityEntries.forEach((entry) => {
+            const row = document.createElement('div');
+            const isHidden = hiddenKeys.has(entry.key);
+            row.className = `file-visibility-row ${isHidden ? 'is-hidden' : ''}`;
+
+            const meta = document.createElement('div');
+            meta.className = 'file-visibility-meta';
+
+            const title = document.createElement('div');
+            title.className = 'file-visibility-title';
+            title.appendChild(this._createBadge(this._getFileDefinition(entry.file)));
+
+            const path = document.createElement('span');
+            path.className = 'file-visibility-path';
+            path.textContent = entry.file.path;
+            path.title = entry.file.path;
+            title.appendChild(path);
+
+            const details = document.createElement('div');
+            details.className = 'file-visibility-details';
+
+            const source = document.createElement('span');
+            source.textContent = entry.file.sourceKind === 'virtual' ? 'Virtual file' : 'Legacy block';
+            details.appendChild(source);
+
+            if (entry.file.role) {
+                details.appendChild(this._createRolePill(entry.file.role));
+            }
+
+            const key = document.createElement('span');
+            key.textContent = entry.key;
+            details.appendChild(key);
+
+            meta.appendChild(title);
+            meta.appendChild(details);
+
+            const state = document.createElement('label');
+            state.className = 'file-visibility-state';
+
+            const select = document.createElement('select');
+            select.dataset.fileKey = entry.key;
+
+            const visibleOption = document.createElement('option');
+            visibleOption.value = 'visible';
+            visibleOption.textContent = 'Visible';
+            visibleOption.selected = !isHidden;
+
+            const hiddenOption = document.createElement('option');
+            hiddenOption.value = 'hidden';
+            hiddenOption.textContent = 'Hidden';
+            hiddenOption.selected = isHidden;
+
+            select.appendChild(visibleOption);
+            select.appendChild(hiddenOption);
+            select.addEventListener('change', () => {
+                const nextHiddenKeys = new Set(this._getFileVisibilityDialogHiddenKeys());
+                if (select.value === 'hidden') {
+                    nextHiddenKeys.add(entry.key);
+                    row.classList.add('is-hidden');
+                } else {
+                    nextHiddenKeys.delete(entry.key);
+                    row.classList.remove('is-hidden');
+                }
+
+                this.fileVisibilityDialogState.hiddenKeys = Array.from(nextHiddenKeys);
+                this._syncFileVisibilityDialogHint();
+            });
+
+            state.appendChild(select);
+
+            row.appendChild(meta);
+            row.appendChild(state);
+            this.fileVisibilityList.appendChild(row);
+        });
+
+        this._syncFileVisibilityDialogHint();
+    }
+
+    _openFileVisibilityDialog() {
+        if (!this.fileVisibilityDialog) return;
+
+        this.fileVisibilityDialogState.hiddenKeys = this._getFileVisibilityEntries()
+            .filter((entry) => entry.hidden)
+            .map((entry) => entry.key);
+        this._renderFileVisibilityDialogList();
+        this.fileVisibilityDialog.showModal();
+    }
+
+    _applyFileVisibilityDialog() {
+        const nextDocument = updateDocumentHiddenFiles(
+            this.currentDocument,
+            this._getFileVisibilityDialogHiddenKeys(),
+        );
+        const visibleFileCount = getDocumentFileVisibilityEntries(nextDocument)
+            .filter((entry) => !entry.hidden)
+            .length;
+
+        this._applyDocument(nextDocument);
+        this._emitSessionStateChange();
+        this.fileVisibilityDialog?.close();
+        this._showToast(
+            visibleFileCount === 0
+                ? 'All files are hidden. Use Visibility to reveal one again.'
+                : 'File visibility updated.',
+            'success'
+        );
+    }
+
+    _setFileHiddenState(fileId, hidden, { silent = false } = {}) {
+        const visibilityEntries = this._getFileVisibilityEntries();
+        const targetEntry = visibilityEntries.find((entry) => entry.file.id === fileId);
+        if (!targetEntry?.key) return false;
+
+        const hiddenKeys = new Set(
+            visibilityEntries
+                .filter((entry) => entry.hidden)
+                .map((entry) => entry.key)
+        );
+
+        if (hidden) {
+            hiddenKeys.add(targetEntry.key);
+        } else {
+            hiddenKeys.delete(targetEntry.key);
+            this.activeFileId = targetEntry.file.id;
+        }
+
+        const nextDocument = updateDocumentHiddenFiles(this.currentDocument, Array.from(hiddenKeys));
+        this._closeFileContextMenu();
+        this._applyDocument(nextDocument);
+        this._emitSessionStateChange();
+
+        if (!silent) {
+            this._showToast(
+                hidden ? `Hidden: ${targetEntry.file.path}` : `Visible: ${targetEntry.file.path}`,
+                'success'
+            );
+        }
+
+        return true;
+    }
+
+    _openFileContextMenu(file, clientX, clientY) {
+        if (!this.fileContextMenu || !this.btnContextHideFile || !file || this._isExerciseMode()) return;
+
+        this.fileContextMenuState.fileId = file.id;
+        this.btnContextHideFile.textContent = `Hide ${file.name || file.path}`;
+        this.fileContextMenu.classList.remove('hidden');
+        this.fileContextMenu.setAttribute('aria-hidden', 'false');
+
+        const { innerWidth, innerHeight } = window;
+        const menuRect = this.fileContextMenu.getBoundingClientRect();
+        const left = Math.max(12, Math.min(clientX, innerWidth - menuRect.width - 12));
+        const top = Math.max(12, Math.min(clientY, innerHeight - menuRect.height - 12));
+
+        this.fileContextMenu.style.left = `${left}px`;
+        this.fileContextMenu.style.top = `${top}px`;
+    }
+
+    _closeFileContextMenu() {
+        if (!this.fileContextMenu) return;
+
+        this.fileContextMenu.classList.add('hidden');
+        this.fileContextMenu.setAttribute('aria-hidden', 'true');
+        this.fileContextMenuState.fileId = null;
+    }
+
+    _handleContextHideFile() {
+        const fileId = this.fileContextMenuState.fileId;
+        if (!fileId) return;
+        this._setFileHiddenState(fileId, true);
+    }
+
+    _getShaderVectorSize(type = '') {
+        const match = String(type || '').trim().match(/^vec([234])$/);
+        return match ? Number.parseInt(match[1], 10) : 0;
+    }
+
+    _cloneShaderUniform(uniform = {}) {
+        return {
+            control: uniform?.control ? { ...uniform.control } : null,
+            defaultValue: Array.isArray(uniform?.defaultValue)
+                ? [...uniform.defaultValue]
+                : uniform?.defaultValue,
+            name: String(uniform?.name || ''),
+            type: String(uniform?.type || ''),
+            value: Array.isArray(uniform?.value)
+                ? [...uniform.value]
+                : uniform?.value,
+        };
+    }
+
+    _getShaderUniformDialogState() {
+        return Array.isArray(this.shaderUniformDialogState.uniforms)
+            ? this.shaderUniformDialogState.uniforms
+            : [];
+    }
+
+    _setShaderUniformDialogHint(message, type = 'info') {
+        if (!this.shaderUniformDialogHint) return;
+        this.shaderUniformDialogHint.textContent = message;
+        this.shaderUniformDialogHint.classList.toggle('is-error', type === 'error');
+    }
+
+    _syncShaderUniformDialogTypeFields() {
+        const type = this.shaderUniformType?.value || 'float';
+        const isBoolean = type === 'bool';
+        const vectorSize = this._getShaderVectorSize(type);
+        const isVector = vectorSize > 0;
+        const isScalar = !isBoolean && !isVector;
+        const supportsRange = ['float', 'int'].includes(type);
+
+        this.shaderUniformScalarGroup?.classList.toggle('hidden', !isScalar);
+        this.shaderUniformBoolGroup?.classList.toggle('hidden', !isBoolean);
+        this.shaderUniformVectorGroup?.classList.toggle('hidden', !isVector);
+        this.shaderUniformRangeGroup?.classList.toggle('hidden', !supportsRange);
+
+        const scalarStep = type === 'int' ? '1' : '0.01';
+        if (this.shaderUniformDefaultScalar) {
+            this.shaderUniformDefaultScalar.step = scalarStep;
+        }
+        [this.shaderUniformRangeMin, this.shaderUniformRangeMax, this.shaderUniformRangeStep].forEach((input) => {
+            if (input) {
+                input.step = scalarStep;
+            }
+        });
+
+        this.shaderUniformVectorInputs.forEach((input, index) => {
+            if (!input) return;
+            const visible = index < vectorSize;
+            input.classList.toggle('hidden', !visible);
+            input.disabled = !visible;
+        });
+
+        if (this.shaderUniformDialogTypeHint) {
+            this.shaderUniformDialogTypeHint.textContent = supportsRange
+                ? 'Float and int can use optional slider ranges.'
+                : isVector
+                    ? `Set ${vectorSize} numeric components for ${type}.`
+                    : 'Boolean uniforms use a true/false default value.';
+        }
+    }
+
+    _resetShaderUniformDialogForm() {
+        if (this.shaderUniformName) this.shaderUniformName.value = '';
+        if (this.shaderUniformType) this.shaderUniformType.value = 'float';
+        if (this.shaderUniformDefaultScalar) {
+            this.shaderUniformDefaultScalar.value = '0';
+            this.shaderUniformDefaultScalar.step = '0.01';
+        }
+        if (this.shaderUniformDefaultBool) this.shaderUniformDefaultBool.value = 'false';
+        this.shaderUniformVectorInputs.forEach((input) => {
+            if (input) input.value = '0';
+        });
+        if (this.shaderUniformRangeMin) this.shaderUniformRangeMin.value = '';
+        if (this.shaderUniformRangeMax) this.shaderUniformRangeMax.value = '';
+        if (this.shaderUniformRangeStep) this.shaderUniformRangeStep.value = '';
+        this._syncShaderUniformDialogTypeFields();
+        this._setShaderUniformDialogHint('Names must be unique and cannot reuse built-in uniforms.');
+    }
+
+    _serializeShaderUniformPreview(uniform = {}) {
+        const type = String(uniform?.type || '');
+        const formatScalar = (value) => {
+            if (typeof value === 'boolean') return value ? 'true' : 'false';
+            return String(value);
+        };
+
+        const defaultValue = Array.isArray(uniform?.defaultValue)
+            ? uniform.defaultValue.join(', ')
+            : formatScalar(uniform?.defaultValue);
+        const range = uniform?.control?.kind === 'range'
+            ? `[${uniform.control.min}, ${uniform.control.max}, ${uniform.control.step}]`
+            : '';
+
+        return `${type} = ${defaultValue}${range}`;
+    }
+
+    _renderShaderUniformDialogList() {
+        if (!this.shaderUniformList || !this.shaderUniformEmpty) return;
+
+        const uniforms = this._getShaderUniformDialogState();
+        this.shaderUniformList.innerHTML = '';
+
+        if (uniforms.length === 0) {
+            this.shaderUniformList.appendChild(this.shaderUniformEmpty);
+            this.shaderUniformEmpty.classList.remove('hidden');
+            return;
+        }
+
+        this.shaderUniformEmpty.classList.add('hidden');
+        uniforms.forEach((uniform, index) => {
+            const item = document.createElement('div');
+            item.className = 'shader-uniform-item';
+
+            const meta = document.createElement('div');
+            meta.className = 'shader-uniform-item-meta';
+
+            const name = document.createElement('strong');
+            name.className = 'shader-uniform-item-name';
+            name.textContent = uniform.name;
+
+            const details = document.createElement('span');
+            details.className = 'shader-uniform-item-details';
+            details.textContent = this._serializeShaderUniformPreview(uniform);
+
+            meta.appendChild(name);
+            meta.appendChild(details);
+
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'btn btn-secondary shader-uniform-item-remove';
+            removeButton.textContent = 'Remove';
+            removeButton.addEventListener('click', () => {
+                this.shaderUniformDialogState.uniforms.splice(index, 1);
+                this._renderShaderUniformDialogList();
+            });
+
+            item.appendChild(meta);
+            item.appendChild(removeButton);
+            this.shaderUniformList.appendChild(item);
+        });
+    }
+
+    _readShaderUniformDialogDraft() {
+        const type = this.shaderUniformType?.value || 'float';
+        const name = String(this.shaderUniformName?.value || '').trim();
+        let defaultValue = 0;
+
+        if (type === 'bool') {
+            defaultValue = this.shaderUniformDefaultBool?.value === 'true';
+        } else if (this._getShaderVectorSize(type) > 0) {
+            const vectorSize = this._getShaderVectorSize(type);
+            defaultValue = this.shaderUniformVectorInputs
+                .slice(0, vectorSize)
+                .map((input) => Number.parseFloat(input?.value || '0'));
+        } else if (type === 'int') {
+            defaultValue = Number.parseInt(this.shaderUniformDefaultScalar?.value || '0', 10);
+        } else {
+            defaultValue = Number.parseFloat(this.shaderUniformDefaultScalar?.value || '0');
+        }
+
+        const hasRangeInput = [this.shaderUniformRangeMin, this.shaderUniformRangeMax, this.shaderUniformRangeStep]
+            .some((input) => String(input?.value || '').trim() !== '');
+        let control = null;
+
+        if (hasRangeInput && ['float', 'int'].includes(type)) {
+            const parseValue = (input) => type === 'int'
+                ? Number.parseInt(String(input?.value || '').trim(), 10)
+                : Number.parseFloat(String(input?.value || '').trim());
+            control = {
+                kind: 'range',
+                min: parseValue(this.shaderUniformRangeMin),
+                max: parseValue(this.shaderUniformRangeMax),
+                step: parseValue(this.shaderUniformRangeStep),
+            };
+        }
+
+        return {
+            control,
+            defaultValue,
+            name,
+            type,
+        };
+    }
+
+    _validateShaderUniformDraft(draft) {
+        if (!draft.name) {
+            return 'Enter a uniform name.';
+        }
+
+        if (!/^[A-Za-z_]\w*$/.test(draft.name)) {
+            return 'Uniform names must start with a letter or underscore and only use letters, numbers or underscores.';
+        }
+
+        if (!SHADER_UNIFORM_TYPE_OPTIONS.includes(draft.type)) {
+            return 'Select a supported uniform type.';
+        }
+
+        if (SHADER_BUILT_IN_UNIFORM_NAMES.includes(draft.name)) {
+            return 'Built-in uniforms cannot be redefined here.';
+        }
+
+        if (this._getShaderUniformDialogState().some((uniform) => uniform.name === draft.name)) {
+            return 'That uniform name already exists in this document.';
+        }
+
+        if (draft.type === 'bool') {
+            return null;
+        }
+
+        if (this._getShaderVectorSize(draft.type) > 0) {
+            if (!Array.isArray(draft.defaultValue) || draft.defaultValue.some((value) => !Number.isFinite(value))) {
+                return `Enter valid numeric components for ${draft.type}.`;
+            }
+            return null;
+        }
+
+        if (!Number.isFinite(draft.defaultValue)) {
+            return 'Enter a valid numeric default value.';
+        }
+
+        if (draft.type === 'int' && !Number.isInteger(draft.defaultValue)) {
+            return 'Integer uniforms require an integer default value.';
+        }
+
+        if (draft.control) {
+            const { min, max, step } = draft.control;
+            if (![min, max, step].every((value) => Number.isFinite(value))) {
+                return 'Range values must all be numeric.';
+            }
+            if (max <= min || step <= 0) {
+                return 'Range values must satisfy max > min and step > 0.';
+            }
+            if (draft.type === 'int' && ![min, max, step].every((value) => Number.isInteger(value))) {
+                return 'Integer uniforms require integer range values.';
+            }
+            if (draft.defaultValue < min || draft.defaultValue > max) {
+                return 'Default value must stay inside the declared range.';
+            }
+        }
+
+        return null;
+    }
+
+    _handleAddShaderUniform() {
+        const draft = this._readShaderUniformDialogDraft();
+        const validationError = this._validateShaderUniformDraft(draft);
+
+        if (validationError) {
+            this._setShaderUniformDialogHint(validationError, 'error');
+            return;
+        }
+
+        this.shaderUniformDialogState.uniforms.push(this._cloneShaderUniform({
+            ...draft,
+            value: Array.isArray(draft.defaultValue) ? [...draft.defaultValue] : draft.defaultValue,
+        }));
+        this._renderShaderUniformDialogList();
+        this._resetShaderUniformDialogForm();
+        if (this.shaderUniformName) {
+            this.shaderUniformName.focus();
+        }
+    }
+
+    _openShaderUniformDialog() {
+        if (!this._isShaderDocument()) {
+            this._showToast('Uniform editing is only available for shader documents.', 'error');
+            return;
+        }
+
+        if (!this.shaderUniformDialog) return;
+
+        this.shaderUniformDialogState.uniforms = this.currentDocument
+            ? this._cloneShaderUniformsFromDocument()
+            : [];
+        this._renderShaderUniformDialogList();
+        this._resetShaderUniformDialogForm();
+        this.shaderUniformDialog.showModal();
+        this.shaderUniformName?.focus();
+    }
+
+    _cloneShaderUniformsFromDocument() {
+        if (!this._isShaderDocument()) return [];
+
+        return getShaderConfig(this.currentDocument).customUniforms
+            .map((uniform) => this._cloneShaderUniform({
+                ...uniform,
+                value: Array.isArray(uniform.value) ? [...uniform.value] : uniform.value,
+            }));
+    }
+
+    _applyShaderUniformDialog() {
+        if (!this._isShaderDocument()) {
+            this.shaderUniformDialog?.close();
+            return;
+        }
+
+        const nextDocument = updateShaderUniformDefinitions(this.currentDocument, this._getShaderUniformDialogState());
+        this._applyDocument(nextDocument);
+        this._emitSessionStateChange();
+        this.shaderUniformDialog?.close();
+        this._showToast('Shader uniforms updated.', 'success');
+    }
+
     _getDocumentFramework() {
         return String(this.currentDocument?.metadata?.framework || '').trim().toLowerCase();
     }
@@ -540,6 +1174,10 @@ export class Editor {
 
     _isFrameworkMultiFileDocument() {
         return this._isVirtualFileDocument() && ['react', 'vue'].includes(this._getDocumentFramework());
+    }
+
+    _isShaderDocument() {
+        return isShaderDocument(this.currentDocument);
     }
 
     _getActiveTemplateId() {
@@ -686,6 +1324,7 @@ export class Editor {
 
         const fileNameMap = {
             css: 'styles.css',
+            fragment: 'shader.frag',
             html: 'template.html',
             javascript: framework === 'vue' ? 'module.js' : 'module.js',
             json: 'data.json',
@@ -694,6 +1333,7 @@ export class Editor {
             sass: 'styles.sass',
             scss: 'styles.scss',
             svg: 'graphic.svg',
+            vertex: 'shader.vert',
             tsx: 'NewComponent.tsx',
             typescript: framework === 'vue' ? 'module.ts' : 'module.ts',
             vue: 'NewComponent.vue',
@@ -759,6 +1399,25 @@ export class Editor {
             && (this.currentDocument.files || []).some((file) => file.language === 'vue');
 
         switch (normalizedLanguage) {
+            case 'vertex':
+                return `attribute vec2 a_position;
+varying vec2 v_uv;
+
+void main() {
+  v_uv = a_position * 0.5 + 0.5;
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}`;
+            case 'fragment':
+                return `precision mediump float;
+
+uniform float u_time;
+uniform vec2 u_resolution;
+varying vec2 v_uv;
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  gl_FragColor = vec4(uv, 0.5 + 0.5 * sin(u_time), 1.0);
+}`;
             case 'html':
                 return framework === 'vue'
                     ? `<section class="${componentName.toLowerCase()}">\n  <h2>${componentName}</h2>\n</section>`
@@ -1356,19 +2015,39 @@ const title = ref('${componentName}');
         const activeFile = this._getActiveFile();
         const isVirtual = this._isVirtualFileDocument();
         const isFrameworkMultiFile = this._isFrameworkMultiFileDocument();
+        const isShader = this._isShaderDocument();
         const isExerciseMode = this._isExerciseMode();
         const entryCandidates = getDocumentEntryCandidates(this.currentDocument);
+        const languageOptions = getDocumentLanguageOptions(this.currentDocument);
 
         if (this.btnAddFile) {
-            this.btnAddFile.disabled = !hasTopic || isExerciseMode;
+            this.btnAddFile.disabled = !hasTopic || isExerciseMode || languageOptions.length === 0;
             this.btnAddFile.textContent = isVirtual ? '+ File' : '+ Block';
             this.btnAddFile.title = isExerciseMode
                 ? 'Exercise mode keeps the file structure fixed'
-                : (isVirtual ? 'Create a new virtual file' : 'Add a new code block');
+                : languageOptions.length === 0
+                    ? (isShader ? 'Shader documents already contain all supported blocks' : 'No additional blocks are available for this document')
+                    : (isVirtual ? 'Create a new virtual file' : 'Add a new code block');
+        }
+
+        if (this.btnEditShaderUniforms) {
+            this.btnEditShaderUniforms.classList.toggle('hidden', !isShader);
+            this.btnEditShaderUniforms.disabled = !hasTopic || !isShader || isExerciseMode;
+            this.btnEditShaderUniforms.title = isExerciseMode
+                ? 'Exercise mode keeps shader uniforms fixed'
+                : 'Create or remove custom shader uniforms';
+        }
+
+        if (this.btnEditFileVisibility) {
+            const allFiles = this.currentDocument.files || [];
+            this.btnEditFileVisibility.disabled = !hasTopic || allFiles.length === 0 || isExerciseMode;
+            this.btnEditFileVisibility.title = isExerciseMode
+                ? 'Exercise mode keeps file visibility fixed'
+                : 'Show, hide and inspect tabs or vertical panels';
         }
 
         if (this.btnDuplicateFile) {
-            this.btnDuplicateFile.disabled = !activeFile || isExerciseMode;
+            this.btnDuplicateFile.disabled = !activeFile || isExerciseMode || isShader;
         }
 
         if (this.btnEditFile) {
@@ -1417,6 +2096,7 @@ const title = ref('${componentName}');
     }
 
     _renderWorkspace() {
+        this._closeFileContextMenu();
         this._destroyEditors();
         this.workspace.innerHTML = '';
         this.workspace.dataset.layoutMode = this.layoutMode;
@@ -1427,7 +2107,9 @@ const title = ref('${componentName}');
             empty.className = 'editor-empty-state';
             empty.textContent = this._isExerciseMode()
                 ? 'All exercise files are hidden. Reveal reference or solution files from the exercise panel.'
-                : 'Select an example from the gallery to begin.';
+                : (this.currentDocument.files || []).length > 0
+                    ? 'All files are hidden. Use Visibility to reveal one again.'
+                    : 'Select an example from the gallery to begin.';
             this.workspace.appendChild(empty);
             this._updatePanelControlStates();
             this._updateFileControls();
@@ -1534,6 +2216,11 @@ const title = ref('${componentName}');
                 this._startResize(panel.previousElementSibling, panel, event);
             });
 
+            header.addEventListener('contextmenu', (event) => {
+                event.preventDefault();
+                this._openFileContextMenu(file, event.clientX, event.clientY);
+            });
+
             this.editors.push({
                 id: file.id,
                 panel,
@@ -1573,6 +2260,11 @@ const title = ref('${componentName}');
                 this.activeFileId = file.id;
                 this._renderWorkspace();
                 this._emitSessionStateChange();
+            });
+
+            tab.addEventListener('contextmenu', (event) => {
+                event.preventDefault();
+                this._openFileContextMenu(file, event.clientX, event.clientY);
             });
 
             nav.appendChild(tab);
@@ -1720,6 +2412,9 @@ const title = ref('${componentName}');
 
     _getLanguageExtensions(type) {
         switch (type) {
+            case 'vertex':
+            case 'fragment':
+                return [];
             case 'jsx':
                 return [javascript({ jsx: true })];
             case 'tsx':
@@ -2201,6 +2896,11 @@ const title = ref('${componentName}');
 
     _navigateToDiagnostic(target) {
         if (!target?.file) return;
+
+        if (this._isFileManuallyHidden(target.file)) {
+            const didReveal = this._setFileHiddenState(target.file.id, false, { silent: true });
+            if (!didReveal) return;
+        }
 
         this.pendingNavigationTarget = target;
 

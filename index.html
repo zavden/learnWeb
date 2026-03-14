@@ -165,6 +165,8 @@
             </div>
             <div class="editor-file-actions">
               <button id="btn-add-file" class="btn btn-secondary" disabled>+ Block</button>
+              <button id="btn-edit-shader-uniforms" class="btn btn-secondary hidden" disabled>Uniforms</button>
+              <button id="btn-edit-file-visibility" class="btn btn-secondary" disabled>Visibility</button>
               <button id="btn-duplicate-file" class="btn btn-secondary" disabled>Duplicate</button>
               <button id="btn-edit-file" class="btn btn-secondary" disabled>Edit File</button>
               <button id="btn-delete-file" class="btn btn-secondary" disabled>Delete File</button>
@@ -209,6 +211,54 @@
           </div>
 
           <div class="editor-panels"></div>
+
+          <section id="shader-editor-controls" class="shader-editor-controls hidden">
+            <div class="shader-editor-controls-header">
+              <div>
+                <p class="shader-editor-controls-kicker">Shader Controls</p>
+                <h3 class="shader-editor-controls-title">Runtime Controls</h3>
+              </div>
+              <div class="shader-editor-controls-header-actions">
+                <p class="shader-editor-controls-note">Edit uniforms and runtime values without covering the preview.</p>
+                <button id="btn-toggle-shader-controls" class="btn-icon shader-editor-controls-toggle" type="button" title="Collapse shader controls" aria-label="Collapse shader controls" aria-expanded="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div id="shader-editor-controls-body" class="shader-editor-controls-body">
+              <div class="preview-shader-controls shader-editor-controls-toolbar">
+                <label class="preview-shader-control">
+                  <span class="preview-shader-control-label">Resolution</span>
+                  <select id="preview-shader-resolution-select" class="preview-shader-select"></select>
+                </label>
+                <button id="btn-shader-toggle-pause" class="btn btn-secondary preview-shader-action" type="button">Pause Time</button>
+                <button id="btn-shader-reset" class="btn btn-secondary preview-shader-action" type="button">Reset Runtime</button>
+              </div>
+              <div class="shader-editor-controls-grid">
+                <section class="preview-shader-custom">
+                  <div class="preview-shader-uniforms-header">
+                    <strong>Custom Uniforms</strong>
+                    <span class="preview-shader-updated">Metadata driven</span>
+                  </div>
+                  <div id="preview-shader-custom-list" class="preview-shader-custom-list">
+                    <div id="preview-shader-custom-empty" class="preview-shader-custom-empty">No custom uniforms defined.</div>
+                  </div>
+                </section>
+                <section class="preview-shader-custom">
+                  <div class="preview-shader-uniforms-header">
+                    <strong>Textures</strong>
+                    <span class="preview-shader-updated">Topic assets</span>
+                  </div>
+                  <div id="preview-shader-texture-list" class="preview-shader-custom-list">
+                    <div id="preview-shader-texture-empty" class="preview-shader-custom-empty">No shader textures defined.</div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </section>
         </div>
         <div id="workspace-resizer" title="Resize editor and preview"></div>
 
@@ -266,7 +316,7 @@
           <div id="preview-console-resizer" class="preview-console-resizer hidden" title="Resize console"></div>
           <section id="preview-console" class="preview-console hidden" aria-live="polite">
             <div class="preview-console-header">
-              <span class="lang-badge preview">Console</span>
+              <span id="preview-runtime-title" class="lang-badge preview">Console</span>
               <div id="preview-console-controls" class="preview-console-controls">
                 <div class="preview-console-filters" role="group" aria-label="Console filters">
                   <button class="preview-console-filter active" data-level="all" type="button">All</button>
@@ -290,14 +340,39 @@
               </button>
             </div>
             <div id="preview-console-body" class="preview-console-body">
-              <div id="preview-console-output" class="preview-console-output">
-                <div id="preview-console-empty" class="preview-console-empty">Console disabled for this example.</div>
+              <div id="preview-console-content" class="preview-console-content">
+                <div id="preview-console-output" class="preview-console-output">
+                  <div id="preview-console-empty" class="preview-console-empty">Console disabled for this example.</div>
+                </div>
+                <form id="preview-console-form" class="preview-console-form">
+                  <span class="preview-console-prompt">&gt;</span>
+                  <input id="preview-console-input" class="preview-console-input" type="text" placeholder="Run code inside the preview context" autocomplete="off" spellcheck="false" />
+                  <button id="btn-run-console" class="btn btn-secondary preview-console-run" type="submit">Run</button>
+                </form>
               </div>
-              <form id="preview-console-form" class="preview-console-form">
-                <span class="preview-console-prompt">&gt;</span>
-                <input id="preview-console-input" class="preview-console-input" type="text" placeholder="Run code inside the preview context" autocomplete="off" spellcheck="false" />
-                <button id="btn-run-console" class="btn btn-secondary preview-console-run" type="submit">Run</button>
-              </form>
+              <div id="preview-shader-panel" class="preview-shader-panel hidden">
+                <div class="preview-shader-summary">
+                  <article class="preview-shader-metric">
+                    <span class="preview-shader-metric-label">FPS</span>
+                    <strong id="preview-shader-fps" class="preview-shader-metric-value">--</strong>
+                  </article>
+                  <article class="preview-shader-metric">
+                    <span class="preview-shader-metric-label">Resolution</span>
+                    <strong id="preview-shader-resolution" class="preview-shader-metric-value">--</strong>
+                  </article>
+                  <article class="preview-shader-metric">
+                    <span class="preview-shader-metric-label">Frame</span>
+                    <strong id="preview-shader-frame" class="preview-shader-metric-value">--</strong>
+                  </article>
+                </div>
+                <section class="preview-shader-uniforms">
+                  <div class="preview-shader-uniforms-header">
+                    <strong>Built-in Uniforms</strong>
+                    <span id="preview-shader-updated" class="preview-shader-updated">Waiting for first frame</span>
+                  </div>
+                  <div id="preview-shader-uniform-list" class="preview-shader-uniform-list"></div>
+                </section>
+              </div>
             </div>
           </section>
         </div>
@@ -363,6 +438,116 @@
       </div>
     </form>
   </dialog>
+
+  <dialog id="shader-uniform-dialog">
+    <form method="dialog" class="shader-uniform-dialog-form">
+      <h2>Shader Uniforms</h2>
+      <div class="shader-uniform-dialog-layout">
+        <section class="shader-uniform-dialog-section">
+          <div class="shader-uniform-dialog-section-header">
+            <strong>Current Uniforms</strong>
+            <span class="shader-uniform-dialog-section-note">Metadata order</span>
+          </div>
+          <div id="shader-uniform-list" class="shader-uniform-list">
+            <p id="shader-uniform-empty" class="dialog-hint">No custom uniforms defined.</p>
+          </div>
+        </section>
+
+        <section class="shader-uniform-dialog-section">
+          <div class="shader-uniform-dialog-section-header">
+            <strong>Add Uniform</strong>
+            <span id="shader-uniform-dialog-type-hint" class="shader-uniform-dialog-section-note">Float and int can use optional slider ranges.</span>
+          </div>
+
+          <div class="form-group">
+            <label for="shader-uniform-name">Name</label>
+            <input id="shader-uniform-name" type="text" placeholder="intensity" autocomplete="off" spellcheck="false" />
+          </div>
+
+          <div class="form-group">
+            <label for="shader-uniform-type">Type</label>
+            <select id="shader-uniform-type">
+              <option value="float">float</option>
+              <option value="int">int</option>
+              <option value="bool">bool</option>
+              <option value="vec2">vec2</option>
+              <option value="vec3">vec3</option>
+              <option value="vec4">vec4</option>
+            </select>
+          </div>
+
+          <div id="shader-uniform-scalar-group" class="form-group">
+            <label for="shader-uniform-default-scalar">Default Value</label>
+            <input id="shader-uniform-default-scalar" type="number" step="0.01" placeholder="0.8" />
+          </div>
+
+          <div id="shader-uniform-bool-group" class="form-group hidden">
+            <label for="shader-uniform-default-bool">Default Value</label>
+            <select id="shader-uniform-default-bool">
+              <option value="false">false</option>
+              <option value="true">true</option>
+            </select>
+          </div>
+
+          <div id="shader-uniform-vector-group" class="form-group hidden">
+            <label>Default Value</label>
+            <div class="shader-uniform-vector-inputs">
+              <input id="shader-uniform-vector-0" type="number" step="0.01" placeholder="x" />
+              <input id="shader-uniform-vector-1" type="number" step="0.01" placeholder="y" />
+              <input id="shader-uniform-vector-2" type="number" step="0.01" placeholder="z" />
+              <input id="shader-uniform-vector-3" type="number" step="0.01" placeholder="w" />
+            </div>
+          </div>
+
+          <div id="shader-uniform-range-group" class="form-group">
+            <label>Optional Range</label>
+            <div class="shader-uniform-range-inputs">
+              <input id="shader-uniform-range-min" type="number" step="0.01" placeholder="min" />
+              <input id="shader-uniform-range-max" type="number" step="0.01" placeholder="max" />
+              <input id="shader-uniform-range-step" type="number" step="0.01" placeholder="step" />
+            </div>
+          </div>
+
+          <p id="shader-uniform-dialog-hint" class="dialog-hint">Names must be unique and cannot reuse built-in uniforms.</p>
+          <div class="shader-uniform-dialog-add-row">
+            <button id="btn-shader-uniform-add" type="button" class="btn btn-secondary">Add Uniform</button>
+          </div>
+        </section>
+      </div>
+
+      <div class="form-actions">
+        <button id="btn-shader-uniform-cancel" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="btn-shader-uniform-apply" type="button" class="btn btn-primary">Apply</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="editor-file-visibility-dialog">
+    <form method="dialog" class="shader-uniform-dialog-form">
+      <h2>File Visibility</h2>
+      <div class="shader-uniform-dialog-layout">
+        <section class="shader-uniform-dialog-section">
+          <div class="shader-uniform-dialog-section-header">
+            <strong>Files and Blocks</strong>
+            <span class="shader-uniform-dialog-section-note">Persisted in frontmatter</span>
+          </div>
+          <div id="editor-file-visibility-list" class="file-visibility-list">
+            <p id="editor-file-visibility-empty" class="dialog-hint">No files available in this document.</p>
+          </div>
+        </section>
+      </div>
+
+      <p id="editor-file-visibility-hint" class="dialog-hint">Hidden files stay in the Markdown document and keep compiling normally.</p>
+      <div class="form-actions">
+        <button id="editor-file-visibility-cancel" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="editor-file-visibility-apply" type="button" class="btn btn-primary">Apply</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="editor-file-context-menu" class="editor-file-context-menu hidden" role="menu" aria-hidden="true">
+    <button id="btn-context-hide-file" type="button" class="editor-file-context-action" role="menuitem">Hide</button>
+  </div>
 
   <script type="module" src="/src/main.js"></script>
 </body>

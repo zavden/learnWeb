@@ -6,17 +6,24 @@ import {
     createExampleDocumentFromPreset,
     createDocumentFile,
     duplicateDocumentFile,
+    getDocumentFileVisibilityEntries,
     getExerciseConfig,
     getExampleStage,
+    getDocumentLanguageOptions,
+    getShaderConfig,
+    isShaderDocument,
     parseExampleDocument,
     removeDocumentFile,
     setDocumentEntryPath,
+    updateDocumentHiddenFiles,
+    updateShaderUniformDefinitions,
     updateDocumentFileDetails,
 } from '../src/utils/markdown.js';
 import { createCompileCacheKey } from '../src/utils/compileCache.js';
 import { compileExampleDocument } from '../src/utils/exampleCompiler.js';
 import { resolveExerciseComparison } from '../src/utils/exerciseComparison.js';
-import { renderCompiledExampleDocument } from '../src/utils/exampleRenderer.js';
+import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../src/utils/exampleRenderer.js';
+import { parseShaderCompilerLog } from '../src/utils/shaderPreviewDiagnostics.js';
 
 function getDiagnosticCodes(documentModel) {
     return (documentModel.diagnostics || []).map((diagnostic) => diagnostic.code);
@@ -118,6 +125,677 @@ example_stage: FINAL-SOLUTION
 \`\`\``);
 
     assert.equal(getExampleStage(documentModel), 'final-solution');
+});
+
+test('shader documents normalize renderer and resolution metadata', () => {
+    const documentModel = parseExampleDocument(`---
+renderer: Shader
+resolution: 1920 x 1080
+---
+
+# Vertex
+
+\`\`\`vertex
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+\`\`\`
+
+# Fragment
+
+\`\`\`fragment
+precision mediump float;
+
+void main() {
+  gl_FragColor = vec4(1.0);
+}
+\`\`\``);
+    const shaderConfig = getShaderConfig(documentModel);
+
+    assert.equal(documentModel.rendererMode, 'shader');
+    assert.equal(documentModel.metadata.renderer, 'shader');
+    assert.equal(documentModel.metadata.resolution, '1920x1080');
+    assert.equal(isShaderDocument(documentModel), true);
+    assert.deepEqual(shaderConfig.resolution, { width: 1920, height: 1080 });
+    assert.deepEqual(shaderConfig.builtInUniforms, [
+        'u_time',
+        'u_delta',
+        'u_resolution',
+        'u_mouse',
+        'u_mouse_pressed',
+        'u_frame',
+    ]);
+});
+
+test('shader documents parse metadata-driven custom uniforms', () => {
+    const documentModel = parseExampleDocument(`---
+renderer: shader
+resolution: 640x360
+shader_uniforms: intensity:float=0.75|invert:bool=false|focus:vec2=0.5,0.25
+---
+
+# Vertex
+
+\`\`\`vertex
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+\`\`\`
+
+# Fragment
+
+\`\`\`fragment
+precision mediump float;
+
+uniform float intensity;
+uniform bool invert;
+uniform vec2 focus;
+
+void main() {
+  gl_FragColor = vec4(intensity, focus.x, invert ? 1.0 : 0.0, 1.0);
+}
+\`\`\``);
+    const shaderConfig = getShaderConfig(documentModel);
+
+    assert.deepEqual(shaderConfig.customUniforms, [
+        {
+            control: null,
+            defaultValue: 0.75,
+            name: 'intensity',
+            type: 'float',
+            value: 0.75,
+        },
+        {
+            control: null,
+            defaultValue: false,
+            name: 'invert',
+            type: 'bool',
+            value: false,
+        },
+        {
+            control: null,
+            defaultValue: [0.5, 0.25],
+            name: 'focus',
+            type: 'vec2',
+            value: [0.5, 0.25],
+        },
+    ]);
+});
+
+test('shader documents parse ranged float and int uniforms', () => {
+    const documentModel = parseExampleDocument(`---
+renderer: shader
+resolution: 640x360
+shader_uniforms: intensity:float=0.8[0,1.5,0.01]|bands:int=6[2,18,1]
+---
+
+# Vertex
+
+\`\`\`vertex
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+\`\`\`
+
+# Fragment
+
+\`\`\`fragment
+precision mediump float;
+
+void main() {
+  gl_FragColor = vec4(1.0);
+}
+\`\`\``);
+    const shaderConfig = getShaderConfig(documentModel);
+
+    assert.deepEqual(shaderConfig.customUniforms, [
+        {
+            control: { kind: 'range', max: 1.5, min: 0, step: 0.01 },
+            defaultValue: 0.8,
+            name: 'intensity',
+            type: 'float',
+            value: 0.8,
+        },
+        {
+            control: { kind: 'range', max: 18, min: 2, step: 1 },
+            defaultValue: 6,
+            name: 'bands',
+            type: 'int',
+            value: 6,
+        },
+    ]);
+});
+
+test('shader uniform metadata can be replaced from structured dialog data', () => {
+    const documentModel = parseExampleDocument(`---
+renderer: shader
+resolution: 640x360
+---
+
+# Vertex
+
+\`\`\`vertex
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+\`\`\`
+
+# Fragment
+
+\`\`\`fragment
+precision mediump float;
+
+void main() {
+  gl_FragColor = vec4(1.0);
+}
+\`\`\``);
+
+    const nextDocument = updateShaderUniformDefinitions(documentModel, [
+        {
+            control: { kind: 'range', min: 0, max: 1.5, step: 0.01 },
+            defaultValue: 0.8,
+            name: 'intensity',
+            type: 'float',
+        },
+        {
+            control: null,
+            defaultValue: [0.1, 0.6, 1],
+            name: 'tint',
+            type: 'vec3',
+        },
+    ]);
+
+    assert.equal(nextDocument.metadata.shader_uniforms, 'intensity:float=0.8[0,1.5,0.01]|tint:vec3=0.1,0.6,1');
+
+    const clearedDocument = updateShaderUniformDefinitions(nextDocument, []);
+    assert.equal(Object.prototype.hasOwnProperty.call(clearedDocument.metadata, 'shader_uniforms'), false);
+});
+
+test('shader documents parse vec3 and vec4 custom uniforms', () => {
+    const documentModel = parseExampleDocument(`---
+renderer: shader
+resolution: 640x360
+shader_uniforms: tint:vec3=0.2,0.4,1|mask:vec4=1,0.5,0.25,0.8
+---
+
+# Vertex
+
+\`\`\`vertex
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+\`\`\`
+
+# Fragment
+
+\`\`\`fragment
+precision mediump float;
+
+void main() {
+  gl_FragColor = vec4(1.0);
+}
+\`\`\``);
+    const shaderConfig = getShaderConfig(documentModel);
+
+    assert.deepEqual(shaderConfig.customUniforms, [
+        {
+            control: null,
+            defaultValue: [0.2, 0.4, 1],
+            name: 'tint',
+            type: 'vec3',
+            value: [0.2, 0.4, 1],
+        },
+        {
+            control: null,
+            defaultValue: [1, 0.5, 0.25, 0.8],
+            name: 'mask',
+            type: 'vec4',
+            value: [1, 0.5, 0.25, 0.8],
+        },
+    ]);
+});
+
+test('shader documents parse metadata-driven textures', () => {
+    const documentModel = parseExampleDocument(`---
+renderer: shader
+resolution: 640x360
+shader_textures: u_checker=checker.svg|u_spot=spotlight.svg
+---
+
+# Vertex
+
+\`\`\`vertex
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+\`\`\`
+
+# Fragment
+
+\`\`\`fragment
+precision mediump float;
+
+uniform sampler2D u_checker;
+uniform sampler2D u_spot;
+
+void main() {
+  gl_FragColor = texture2D(u_checker, vec2(0.5)) + texture2D(u_spot, vec2(0.5));
+}
+\`\`\``);
+    const shaderConfig = getShaderConfig(documentModel);
+
+    assert.deepEqual(shaderConfig.textures, [
+        { assetPath: 'checker.svg', name: 'u_checker' },
+        { assetPath: 'spotlight.svg', name: 'u_spot' },
+    ]);
+});
+
+test('shader documents warn about invalid custom uniform metadata', () => {
+    const documentModel = parseExampleDocument(`---
+renderer: shader
+resolution: 640x360
+shader_uniforms: u_time:float=1|bad-entry|radius:vec2=0.5
+---
+
+# Vertex
+
+\`\`\`vertex
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+\`\`\`
+
+# Fragment
+
+\`\`\`fragment
+precision mediump float;
+
+void main() {
+  gl_FragColor = vec4(1.0);
+}
+\`\`\``);
+    const codes = getDiagnosticCodes(documentModel);
+
+    assert.ok(codes.includes('shader-uniform-conflicts-built-in'));
+    assert.ok(codes.includes('invalid-shader-uniform-declaration'));
+    assert.ok(codes.includes('invalid-shader-uniform-default'));
+});
+
+test('shader documents warn about invalid texture metadata', () => {
+    const documentModel = parseExampleDocument(`---
+renderer: shader
+resolution: 640x360
+shader_textures: u_checker=folder/checker.svg|bad-entry|u_spot=document.txt
+---
+
+# Vertex
+
+\`\`\`vertex
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+\`\`\`
+
+# Fragment
+
+\`\`\`fragment
+precision mediump float;
+
+void main() {
+  gl_FragColor = vec4(1.0);
+}
+\`\`\``);
+    const codes = getDiagnosticCodes(documentModel);
+
+    assert.ok(codes.includes('nested-shader-texture-path-not-supported'));
+    assert.ok(codes.includes('invalid-shader-texture-declaration'));
+    assert.ok(codes.includes('unsupported-shader-texture-extension'));
+});
+
+test('shader documents warn when shader textures reuse a custom uniform name', () => {
+    const documentModel = parseExampleDocument(`---
+renderer: shader
+resolution: 640x360
+shader_uniforms: accent:float=0.5
+shader_textures: accent=checker.svg
+---
+
+# Vertex
+
+\`\`\`vertex
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+\`\`\`
+
+# Fragment
+
+\`\`\`fragment
+precision mediump float;
+
+uniform float accent;
+uniform sampler2D accentSampler;
+
+void main() {
+  gl_FragColor = vec4(1.0);
+}
+\`\`\``);
+    const codes = getDiagnosticCodes(documentModel);
+
+    assert.ok(codes.includes('shader-texture-conflicts-uniform'));
+});
+
+test('shader documents can be autodetected from vertex and fragment blocks', () => {
+    const documentModel = parseExampleDocument(`# Vertex
+
+\`\`\`vertex
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+\`\`\`
+
+# Fragment
+
+\`\`\`fragment
+precision mediump float;
+
+void main() {
+  gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+}
+\`\`\``);
+
+    assert.equal(documentModel.rendererMode, 'shader');
+    assert.equal(isShaderDocument(documentModel), true);
+});
+
+test('shader documents validate missing fragment and invalid resolution', () => {
+    const documentModel = parseExampleDocument(`---
+renderer: shader
+resolution: wide
+---
+
+# Vertex
+
+\`\`\`vertex
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+\`\`\``);
+    const codes = getDiagnosticCodes(documentModel);
+
+    assert.ok(codes.includes('invalid-shader-resolution'));
+    assert.ok(codes.includes('missing-shader-fragment'));
+});
+
+test('shader documents reject extra web blocks and framework metadata', () => {
+    const documentModel = parseExampleDocument(`---
+renderer: shader
+framework: react
+resolution: 800x600
+---
+
+# Vertex
+
+\`\`\`vertex
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+\`\`\`
+
+# Fragment
+
+\`\`\`fragment
+precision mediump float;
+
+void main() {
+  gl_FragColor = vec4(1.0);
+}
+\`\`\`
+
+# CSS
+
+\`\`\`css
+body { background: red; }
+\`\`\``);
+    const codes = getDiagnosticCodes(documentModel);
+
+    assert.ok(codes.includes('shader-framework-not-supported'));
+    assert.ok(codes.includes('shader-extra-blocks-not-allowed'));
+});
+
+test('shader preset creates a shader document and only offers missing shader blocks', () => {
+    const shaderDocument = createExampleDocumentFromPreset('shader-basic');
+    const timeDocument = createExampleDocumentFromPreset('shader-time');
+    const mouseDocument = createExampleDocumentFromPreset('shader-mouse');
+    const customUniformDocument = createExampleDocumentFromPreset('shader-custom-uniforms');
+    const vectorUniformDocument = createExampleDocumentFromPreset('shader-vector-uniforms');
+    const rangedUniformDocument = createExampleDocumentFromPreset('shader-ranged-uniforms');
+    const textureDocument = createExampleDocumentFromPreset('shader-textures');
+    const fragmentOnlyDocument = parseExampleDocument(`---
+renderer: shader
+resolution: 800x600
+---
+
+# Fragment
+
+\`\`\`fragment
+precision mediump float;
+
+void main() {
+  gl_FragColor = vec4(1.0);
+}
+\`\`\``);
+
+    assert.equal(shaderDocument.rendererMode, 'shader');
+    assert.equal(timeDocument.metadata.resolution, '960x540');
+    assert.equal(mouseDocument.metadata.resolution, '800x800');
+    assert.equal(customUniformDocument.metadata.shader_uniforms, 'intensity:float=0.8|invert:bool=false|focus:vec2=0.5,0.5');
+    assert.equal(vectorUniformDocument.metadata.shader_uniforms, 'tint:vec3=0.15,0.75,1|mask:vec4=1,0.45,0.2,0.8');
+    assert.equal(rangedUniformDocument.metadata.shader_uniforms, 'intensity:float=0.8[0,1.5,0.01]|bands:int=6[2,18,1]');
+    assert.equal(textureDocument.metadata.shader_textures, 'u_checker=checker.svg|u_spot=spotlight.svg');
+    assert.deepEqual(
+        shaderDocument.blocks.map((block) => block.type),
+        ['vertex', 'fragment']
+    );
+    assert.deepEqual(getDocumentLanguageOptions(shaderDocument), []);
+    assert.deepEqual(getDocumentLanguageOptions(fragmentOnlyDocument), ['vertex']);
+});
+
+test('shader renderer builds a WebGL canvas document for valid shader examples', () => {
+    const documentModel = parseExampleDocument(`---
+renderer: shader
+resolution: 640x360
+---
+
+# Vertex
+
+\`\`\`vertex
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+\`\`\`
+
+# Fragment
+
+\`\`\`fragment
+precision mediump float;
+
+void main() {
+  gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+}
+\`\`\``);
+    const rendered = renderShaderExampleDocument(documentModel, {
+        consoleEnabled: false,
+        diagnostics: documentModel.diagnostics,
+        renderId: 7,
+    });
+
+    assert.match(rendered, /<canvas id="shader-canvas"/);
+    assert.match(rendered, /getContext\('webgl'/);
+    assert.match(rendered, /640 x 360/);
+    assert.match(rendered, /a_position/);
+    assert.match(rendered, /gl_FragColor = vec4\(1\.0, 0\.0, 0\.0, 1\.0\);/);
+});
+
+test('shader renderer runtime updates built-in uniforms and pointer state', () => {
+    const documentModel = parseExampleDocument(`---
+renderer: shader
+resolution: 512x512
+---
+
+# Vertex
+
+\`\`\`vertex
+attribute vec2 a_position;
+
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+\`\`\`
+
+# Fragment
+
+\`\`\`fragment
+precision mediump float;
+
+uniform float u_time;
+uniform float u_delta;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+uniform float u_mouse_pressed;
+uniform float u_frame;
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  gl_FragColor = vec4(uv, fract(u_time + u_delta + u_frame * 0.01 + u_mouse_pressed), 1.0);
+}
+\`\`\``);
+    const rendered = renderShaderExampleDocument(documentModel, {
+        consoleEnabled: false,
+        diagnostics: documentModel.diagnostics,
+        renderId: 9,
+        shaderControls: {
+            currentResolution: { width: 1280, height: 720 },
+            customUniforms: [
+                { name: 'intensity', type: 'float', value: 0.9 },
+                { name: 'invert', type: 'bool', value: true },
+            ],
+            textures: [
+                { name: 'u_checker', assetPath: 'checker.svg' },
+            ],
+            paused: true,
+        },
+        topicPath: 'ch00-tests/sec02-shaders/top01-overview',
+    });
+
+    assert.match(rendered, /requestAnimationFrame\(drawFrame\)/);
+    assert.match(rendered, /cancelAnimationFrame\(animationFrameId\)/);
+    assert.match(rendered, /u_time/);
+    assert.match(rendered, /u_delta/);
+    assert.match(rendered, /u_resolution/);
+    assert.match(rendered, /u_mouse/);
+    assert.match(rendered, /u_mouse_pressed/);
+    assert.match(rendered, /u_frame/);
+    assert.match(rendered, /kind: 'shader-stats'/);
+    assert.match(rendered, /renderId: payload\.renderId/);
+    assert.match(rendered, /const SHADER_CONTROL_SOURCE = 'learncode-shader-control'/);
+    assert.match(rendered, /data\.action === 'set-resolution'/);
+    assert.match(rendered, /data\.action === 'set-paused'/);
+    assert.match(rendered, /data\.action === 'reset-runtime'/);
+    assert.match(rendered, /data\.action === 'set-custom-uniform'/);
+    assert.match(rendered, /normalizeTextures/);
+    assert.match(rendered, /createTextureUploadCanvas/);
+    assert.match(rendered, /upload-error/);
+    assert.match(rendered, /checker\.svg/);
+    assert.match(rendered, /\/api\/topic\/ch00-tests\/sec02-shaders\/top01-overview\/assets\//);
+    assert.match(rendered, /"paused":true/);
+    assert.match(rendered, /"name":"intensity"/);
+    assert.match(rendered, /"type":"bool"/);
+    assert.match(rendered, /gl\.uniform3f/);
+    assert.match(rendered, /gl\.uniform4f/);
+    assert.match(rendered, /1280 x 720/);
+    assert.match(rendered, /canvas\.addEventListener\('pointermove', handlePointerMove\)/);
+    assert.match(rendered, /canvas\.addEventListener\('pointerdown', handlePointerDown\)/);
+    assert.match(rendered, /window\.addEventListener\('pointerup', handlePointerUp\)/);
+    assert.match(rendered, /window\.addEventListener\('message', handleControlMessage\)/);
+    assert.match(rendered, /mouseState\.y = \(1 - clampedY\) \* canvas\.height/);
+});
+
+test('shader renderer shows a fallback state when the shader document is incomplete', () => {
+    const documentModel = parseExampleDocument(`---
+renderer: shader
+resolution: 640x360
+---
+
+# Fragment
+
+\`\`\`fragment
+precision mediump float;
+
+void main() {
+  gl_FragColor = vec4(1.0);
+}
+\`\`\``);
+    const rendered = renderShaderExampleDocument(documentModel, {
+        consoleEnabled: false,
+        diagnostics: documentModel.diagnostics,
+        renderId: 8,
+    });
+
+    assert.match(rendered, /Shader preview unavailable/);
+    assert.doesNotMatch(rendered, /getContext\('webgl'/);
+});
+
+test('shader compiler log parser extracts line information for fragment diagnostics', () => {
+    const diagnostics = parseShaderCompilerLog('ERROR: 0:7: undeclared identifier', {
+        file: 'shader.frag',
+        stage: 'fragment',
+    });
+
+    assert.equal(diagnostics.length, 1);
+    assert.equal(diagnostics[0].code, 'shader-fragment-compile-error');
+    assert.equal(diagnostics[0].file, 'shader.frag');
+    assert.equal(diagnostics[0].line, 7);
+    assert.equal(diagnostics[0].type, 'fragment');
+});
+
+test('shader compiler log parser falls back to generic vertex diagnostics when no line format exists', () => {
+    const diagnostics = parseShaderCompilerLog('Vertex stage exploded badly', {
+        file: 'shader.vert',
+        stage: 'vertex',
+    });
+
+    assert.equal(diagnostics.length, 1);
+    assert.equal(diagnostics[0].code, 'shader-vertex-compile-error');
+    assert.equal(diagnostics[0].file, 'shader.vert');
+    assert.equal(diagnostics[0].line ?? null, null);
+    assert.match(diagnostics[0].message, /Vertex stage exploded badly/);
 });
 
 test('exercise comparison resolves explicit internal pairs', () => {
@@ -989,4 +1667,72 @@ test('legacy block CRUD can add, duplicate and remove blocks', () => {
     const styleFile = duplicatedMarkup.files.find((file) => file.language === 'css');
     const withoutStyle = removeDocumentFile(duplicatedMarkup, styleFile.id);
     assert.equal(withoutStyle.files.some((file) => file.language === 'css'), false);
+});
+
+test('virtual documents persist hidden file visibility metadata by file path', () => {
+    const documentModel = parseExampleDocument(`---
+framework: react
+mode: multi-file
+entry: src/main.jsx
+---
+
+## @file src/main.jsx
+## @lang jsx
+## @role entry
+
+\`\`\`jsx
+export function App() {
+  return <main>Hello</main>;
+}
+\`\`\`
+
+## @file src/App.jsx
+## @lang jsx
+## @role app
+
+\`\`\`jsx
+export function AppShell() {
+  return <section>Shell</section>;
+}
+\`\`\``);
+    const visibilityEntries = getDocumentFileVisibilityEntries(documentModel);
+    const appEntry = visibilityEntries.find((entry) => entry.file.path === 'src/App.jsx');
+    assert.equal(appEntry.key, 'file:src/App.jsx');
+    assert.equal(appEntry.hidden, false);
+
+    const hiddenDocument = updateDocumentHiddenFiles(documentModel, [appEntry.key]);
+    const hiddenEntries = getDocumentFileVisibilityEntries(hiddenDocument);
+    const hiddenAppEntry = hiddenEntries.find((entry) => entry.file.path === 'src/App.jsx');
+
+    assert.equal(hiddenDocument.metadata.editor_hidden_files, 'file:src/App.jsx');
+    assert.equal(hiddenAppEntry.hidden, true);
+});
+
+test('legacy documents persist hidden file visibility metadata by block identity', () => {
+    const documentModel = parseExampleDocument(`# HTML
+
+\`\`\`html
+<main>Hello</main>
+\`\`\`
+
+# CSS
+
+\`\`\`css
+main { color: red; }
+\`\`\`
+
+# JavaScript
+
+\`\`\`javascript
+console.log('hi');
+\`\`\``);
+    const visibilityEntries = getDocumentFileVisibilityEntries(documentModel);
+    const cssEntry = visibilityEntries.find((entry) => entry.file.language === 'css');
+    assert.equal(cssEntry.key, 'block:css:1');
+
+    const hiddenDocument = updateDocumentHiddenFiles(documentModel, ['block:css:1']);
+    const hiddenEntries = getDocumentFileVisibilityEntries(hiddenDocument);
+
+    assert.equal(hiddenDocument.metadata.editor_hidden_files, 'block:css:1');
+    assert.equal(hiddenEntries.find((entry) => entry.key === 'block:css:1').hidden, true);
 });

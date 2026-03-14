@@ -7,7 +7,19 @@ import {
 } from '../config/exampleBlocks.js';
 
 const SUPPORTED_FRAMEWORKS = new Set(['react', 'vue']);
+const SUPPORTED_RENDERERS = new Set(['shader', 'web']);
 const SUPPORTED_FRAMEWORK_MODES = new Set(['single-file', 'multi-file']);
+const SHADER_BLOCK_TYPES = new Set(['vertex', 'fragment']);
+const SHADER_BUILTIN_UNIFORMS = Object.freeze([
+    'u_time',
+    'u_delta',
+    'u_resolution',
+    'u_mouse',
+    'u_mouse_pressed',
+    'u_frame',
+]);
+const SHADER_CUSTOM_UNIFORM_TYPES = new Set(['float', 'int', 'bool', 'vec2', 'vec3', 'vec4']);
+const SHADER_TEXTURE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.bmp', '.svg']);
 const EXERCISE_METADATA_KEYS = new Set([
     'exercise',
     'exercise_title',
@@ -54,9 +66,14 @@ const LIKELY_VIRTUAL_ASSET_EXTENSIONS = new Set([
 ]);
 const KNOWN_METADATA_KEYS = new Set([
     'framework',
+    'renderer',
     'mode',
     'entry',
     'console',
+    'editor_hidden_files',
+    'resolution',
+    'shader_uniforms',
+    'shader_textures',
     'example_stage',
     ...EXERCISE_METADATA_KEYS,
 ]);
@@ -89,6 +106,7 @@ export const LEGACY_DEFAULT_BLOCK_LANGUAGE_OPTIONS = [
     'jsx',
     'tsx',
 ];
+export const SHADER_BLOCK_LANGUAGE_OPTIONS = ['vertex', 'fragment'];
 export const LEGACY_REACT_BLOCK_LANGUAGE_OPTIONS = ['jsx', 'tsx', 'css', 'scss', 'sass'];
 export const LEGACY_VUE_BLOCK_LANGUAGE_OPTIONS = ['html', 'css', 'scss', 'sass', 'javascript', 'typescript'];
 export const REACT_MULTI_FILE_LANGUAGE_OPTIONS = ['jsx', 'tsx', 'javascript', 'typescript', 'css', 'scss', 'sass', 'json'];
@@ -113,6 +131,7 @@ export const VIRTUAL_FILE_ROLE_OPTIONS = [
 ];
 const LANGUAGE_FILE_EXTENSIONS = {
     css: ['.css'],
+    fragment: ['.frag', '.glsl'],
     html: ['.html', '.htm'],
     'html-full': ['.html', '.htm'],
     javascript: ['.js', '.mjs'],
@@ -124,6 +143,7 @@ const LANGUAGE_FILE_EXTENSIONS = {
     svg: ['.svg'],
     typescript: ['.ts', '.mts'],
     tsx: ['.tsx'],
+    vertex: ['.vert', '.glsl'],
     vue: ['.vue'],
 };
 
@@ -134,6 +154,8 @@ const LEGACY_FILE_TEMPLATES = {
     'html-full': { path: 'document.html', role: 'markup' },
     svg: { path: 'graphic.svg', role: 'markup' },
     pug: { path: 'template.pug', role: 'markup' },
+    vertex: { path: 'shader.vert', role: 'shader' },
+    fragment: { path: 'shader.frag', role: 'shader' },
     css: { path: 'styles.css', role: 'style' },
     scss: { path: 'styles.scss', role: 'style' },
     sass: { path: 'styles.sass', role: 'style' },
@@ -188,6 +210,36 @@ function normalizeModeValue(value = '') {
     return normalized;
 }
 
+function normalizeRendererValue(value = '') {
+    return String(value).trim().toLowerCase();
+}
+
+function parseShaderResolutionValue(value = '') {
+    const text = String(value ?? '').trim();
+    if (!text) return null;
+
+    const match = text.match(/^(\d+)\s*x\s*(\d+)$/i);
+    if (!match) return null;
+
+    const width = Number.parseInt(match[1], 10);
+    const height = Number.parseInt(match[2], 10);
+
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+        return null;
+    }
+
+    return {
+        width,
+        height,
+        value: `${width}x${height}`,
+    };
+}
+
+function normalizeResolutionMetadataValue(value = '') {
+    const parsed = parseShaderResolutionValue(value);
+    return parsed ? parsed.value : String(value ?? '').trim();
+}
+
 function normalizeBooleanMetadataValue(value) {
     if (typeof value === 'boolean') {
         return value;
@@ -221,6 +273,11 @@ function normalizeMetadata(metadata = {}) {
             return;
         }
 
+        if (normalizedKey === 'renderer') {
+            normalized.renderer = normalizeRendererValue(value);
+            return;
+        }
+
         if (normalizedKey === 'mode') {
             normalized.mode = normalizeModeValue(value);
             return;
@@ -233,6 +290,26 @@ function normalizeMetadata(metadata = {}) {
 
         if (normalizedKey === 'console') {
             normalized.console = normalizeBooleanMetadataValue(value);
+            return;
+        }
+
+        if (normalizedKey === 'editor_hidden_files') {
+            normalized.editor_hidden_files = String(value).trim();
+            return;
+        }
+
+        if (normalizedKey === 'resolution') {
+            normalized.resolution = normalizeResolutionMetadataValue(value);
+            return;
+        }
+
+        if (normalizedKey === 'shader_uniforms') {
+            normalized.shader_uniforms = String(value).trim();
+            return;
+        }
+
+        if (normalizedKey === 'shader_textures') {
+            normalized.shader_textures = String(value).trim();
             return;
         }
 
@@ -539,6 +616,443 @@ function parseExercisePathList(value) {
         .filter(Boolean);
 }
 
+function cloneShaderUniformValue(value) {
+    if (Array.isArray(value)) {
+        return value.map((entry) => Number(entry));
+    }
+
+    if (typeof value === 'boolean') {
+        return value;
+    }
+
+    return Number(value);
+}
+
+function cloneShaderUniformControl(control = null) {
+    return control && typeof control === 'object'
+        ? { ...control }
+        : null;
+}
+
+function serializeShaderUniformValue(type, value) {
+    if (type === 'bool') {
+        return value ? 'true' : 'false';
+    }
+
+    if (type.startsWith('vec')) {
+        const size = Number.parseInt(type.slice(3), 10) || 2;
+        const vector = Array.isArray(value) ? value : Array.from({ length: size }, () => 0);
+        return vector.slice(0, size).map((entry) => String(Number(entry))).join(',');
+    }
+
+    return String(Number(value));
+}
+
+function serializeShaderUniformControl(control = null) {
+    if (!control || control.kind !== 'range') return '';
+    return `[${control.min},${control.max},${control.step}]`;
+}
+
+function parseShaderUniformDefaultValue(type, rawValue) {
+    const value = String(rawValue || '').trim();
+
+    if (type === 'bool') {
+        const normalized = normalizeBooleanMetadataValue(value);
+        return typeof normalized === 'boolean' ? normalized : null;
+    }
+
+    if (type.startsWith('vec')) {
+        const size = Number.parseInt(type.slice(3), 10);
+        const parts = value.split(',').map((entry) => entry.trim()).filter(Boolean);
+        if (!Number.isFinite(size) || size <= 1 || parts.length !== size) return null;
+
+        const vector = parts.map((entry) => Number.parseFloat(entry));
+        return vector.every((entry) => Number.isFinite(entry)) ? vector : null;
+    }
+
+    const numericValue = type === 'int'
+        ? Number.parseInt(value, 10)
+        : Number.parseFloat(value);
+
+    if (!Number.isFinite(numericValue)) {
+        return null;
+    }
+
+    if (type === 'int' && !Number.isInteger(numericValue)) {
+        return null;
+    }
+
+    return numericValue;
+}
+
+function parseShaderUniformControlValue(type, rawValue, defaultValue, declaration, name) {
+    const text = String(rawValue || '').trim();
+    if (!text) {
+        return {
+            control: null,
+            diagnostics: [],
+        };
+    }
+
+    const diagnostics = [];
+    if (!['float', 'int'].includes(type)) {
+        diagnostics.push(createDiagnostic(
+            'warning',
+            'unsupported-shader-uniform-control',
+            `Shader uniform "${name}" only supports range controls for float or int types.`,
+            { declaration, name, uniformType: type }
+        ));
+        return {
+            control: null,
+            diagnostics,
+        };
+    }
+
+    const parts = text.split(',').map((entry) => entry.trim()).filter(Boolean);
+    if (parts.length !== 3) {
+        diagnostics.push(createDiagnostic(
+            'warning',
+            'invalid-shader-uniform-control',
+            `Shader uniform "${name}" has an invalid control hint. Use "[min,max,step]".`,
+            { declaration, name }
+        ));
+        return {
+            control: null,
+            diagnostics,
+        };
+    }
+
+    const numericParts = parts.map((entry) => type === 'int'
+        ? Number.parseInt(entry, 10)
+        : Number.parseFloat(entry));
+
+    if (!numericParts.every((entry) => Number.isFinite(entry))) {
+        diagnostics.push(createDiagnostic(
+            'warning',
+            'invalid-shader-uniform-control',
+            `Shader uniform "${name}" has an invalid control hint. Use numeric "[min,max,step]".`,
+            { declaration, name }
+        ));
+        return {
+            control: null,
+            diagnostics,
+        };
+    }
+
+    const [min, max, step] = numericParts;
+    if (max <= min || step <= 0) {
+        diagnostics.push(createDiagnostic(
+            'warning',
+            'invalid-shader-uniform-control',
+            `Shader uniform "${name}" must use control values where max > min and step > 0.`,
+            { declaration, name }
+        ));
+        return {
+            control: null,
+            diagnostics,
+        };
+    }
+
+    if (type === 'int' && !numericParts.every((entry) => Number.isInteger(entry))) {
+        diagnostics.push(createDiagnostic(
+            'warning',
+            'invalid-shader-uniform-control',
+            `Shader uniform "${name}" must use integer control values for int uniforms.`,
+            { declaration, name }
+        ));
+        return {
+            control: null,
+            diagnostics,
+        };
+    }
+
+    if (typeof defaultValue === 'number' && (defaultValue < min || defaultValue > max)) {
+        diagnostics.push(createDiagnostic(
+            'warning',
+            'shader-uniform-default-out-of-range',
+            `Shader uniform "${name}" default value is outside its declared control range.`,
+            { declaration, name, max, min, value: defaultValue }
+        ));
+        return {
+            control: null,
+            diagnostics,
+        };
+    }
+
+    return {
+        control: {
+            kind: 'range',
+            max,
+            min,
+            step,
+        },
+        diagnostics,
+    };
+}
+
+function parseShaderUniformMetadataValue(value = '') {
+    const text = String(value || '').trim();
+    if (!text) {
+        return {
+            normalizedValue: '',
+            uniforms: [],
+            diagnostics: [],
+        };
+    }
+
+    const uniforms = [];
+    const diagnostics = [];
+    const entries = text.split('|').map((entry) => entry.trim()).filter(Boolean);
+    const seenNames = new Set();
+
+    entries.forEach((entry) => {
+        const match = entry.match(/^([A-Za-z_][\w]*)\s*:\s*(float|int|bool|vec2|vec3|vec4)\s*=\s*(.+?)(?:\[([^\]]+)\])?$/i);
+        if (!match) {
+            diagnostics.push(createDiagnostic(
+                'warning',
+                'invalid-shader-uniform-declaration',
+                `Shader uniform declaration "${entry}" is invalid. Use "name:type=value".`,
+                { declaration: entry }
+            ));
+            return;
+        }
+
+        const name = match[1];
+        const type = match[2].trim().toLowerCase();
+        const defaultValue = parseShaderUniformDefaultValue(type, match[3]);
+        const parsedControl = parseShaderUniformControlValue(type, match[4], defaultValue, entry, name);
+        diagnostics.push(...parsedControl.diagnostics);
+
+        if (!SHADER_CUSTOM_UNIFORM_TYPES.has(type)) {
+            diagnostics.push(createDiagnostic(
+                'warning',
+                'unsupported-shader-uniform-type',
+                `Shader uniform "${name}" uses unsupported type "${type}".`,
+                { declaration: entry, name, uniformType: type }
+            ));
+            return;
+        }
+
+        if (SHADER_BUILTIN_UNIFORMS.includes(name)) {
+            diagnostics.push(createDiagnostic(
+                'warning',
+                'shader-uniform-conflicts-built-in',
+                `Shader uniform "${name}" conflicts with a built-in uniform and will be ignored.`,
+                { declaration: entry, name }
+            ));
+            return;
+        }
+
+        if (seenNames.has(name)) {
+            diagnostics.push(createDiagnostic(
+                'warning',
+                'duplicate-shader-uniform',
+                `Shader uniform "${name}" is declared more than once. Only the first declaration is used.`,
+                { declaration: entry, name }
+            ));
+            return;
+        }
+
+        if (defaultValue == null) {
+            diagnostics.push(createDiagnostic(
+                'warning',
+                'invalid-shader-uniform-default',
+                `Shader uniform "${name}" has an invalid default for type "${type}".`,
+                { declaration: entry, name, uniformType: type }
+            ));
+            return;
+        }
+
+        seenNames.add(name);
+        uniforms.push({
+            name,
+            type,
+            control: cloneShaderUniformControl(parsedControl.control),
+            defaultValue: cloneShaderUniformValue(defaultValue),
+            value: cloneShaderUniformValue(defaultValue),
+        });
+    });
+
+    return {
+        normalizedValue: uniforms.map((uniform) => (
+            `${uniform.name}:${uniform.type}=${serializeShaderUniformValue(uniform.type, uniform.defaultValue)}${serializeShaderUniformControl(uniform.control)}`
+        )).join('|'),
+        uniforms,
+        diagnostics,
+    };
+}
+
+function serializeShaderUniformDeclaration(uniform = {}) {
+    const name = String(uniform?.name || '').trim();
+    const type = String(uniform?.type || '').trim().toLowerCase();
+
+    if (!name || !SHADER_CUSTOM_UNIFORM_TYPES.has(type)) {
+        return '';
+    }
+
+    return `${name}:${type}=${serializeShaderUniformValue(type, uniform.defaultValue)}${serializeShaderUniformControl(uniform.control)}`;
+}
+
+function parseShaderTextureMetadataValue(value = '') {
+    const text = String(value || '').trim();
+    if (!text) {
+        return {
+            normalizedValue: '',
+            textures: [],
+            diagnostics: [],
+        };
+    }
+
+    const textures = [];
+    const diagnostics = [];
+    const entries = text.split('|').map((entry) => entry.trim()).filter(Boolean);
+    const seenNames = new Set();
+
+    entries.forEach((entry) => {
+        const match = entry.match(/^([A-Za-z_][\w]*)\s*=\s*(.+)$/);
+        if (!match) {
+            diagnostics.push(createDiagnostic(
+                'warning',
+                'invalid-shader-texture-declaration',
+                `Shader texture declaration "${entry}" is invalid. Use "uniformName=asset-file".`,
+                { declaration: entry }
+            ));
+            return;
+        }
+
+        const name = match[1];
+        const assetPath = normalizeVirtualPath(match[2]);
+        const assetIssue = getVirtualPathIssue(assetPath);
+        const assetExtension = getFileExtension(assetPath);
+
+        if (seenNames.has(name)) {
+            diagnostics.push(createDiagnostic(
+                'warning',
+                'duplicate-shader-texture',
+                `Shader texture "${name}" is declared more than once. Only the first declaration is used.`,
+                { declaration: entry, name }
+            ));
+            return;
+        }
+
+        if (!assetPath || assetIssue) {
+            diagnostics.push(createDiagnostic(
+                'warning',
+                'invalid-shader-texture-path',
+                `Shader texture "${name}" points to an invalid asset path.`,
+                { declaration: entry, name, assetPath }
+            ));
+            return;
+        }
+
+        if (assetPath.includes('/')) {
+            diagnostics.push(createDiagnostic(
+                'warning',
+                'nested-shader-texture-path-not-supported',
+                `Shader texture "${name}" must reference a top-level file in the topic assets folder.`,
+                { declaration: entry, name, assetPath }
+            ));
+            return;
+        }
+
+        if (!SHADER_TEXTURE_EXTENSIONS.has(assetExtension)) {
+            diagnostics.push(createDiagnostic(
+                'warning',
+                'unsupported-shader-texture-extension',
+                `Shader texture "${name}" uses unsupported asset extension "${assetExtension || '(none)'}".`,
+                { declaration: entry, name, assetPath }
+            ));
+            return;
+        }
+
+        seenNames.add(name);
+        textures.push({
+            assetPath,
+            name,
+        });
+    });
+
+    return {
+        normalizedValue: textures.map((texture) => `${texture.name}=${texture.assetPath}`).join('|'),
+        textures,
+        diagnostics,
+    };
+}
+
+function normalizeEditorHiddenFileKey(value = '') {
+    const text = String(value || '').trim();
+    if (!text) return '';
+
+    if (text.startsWith('file:')) {
+        const path = normalizeVirtualPath(text.slice(5));
+        return path ? `file:${path}` : '';
+    }
+
+    const blockMatch = text.match(/^block:([A-Za-z0-9_-]+):(\d+)$/);
+    if (!blockMatch) return '';
+
+    const type = normalizeBlockType(blockMatch[1]);
+    const occurrence = Number.parseInt(blockMatch[2], 10);
+
+    if (!type || !Number.isFinite(occurrence) || occurrence <= 0) {
+        return '';
+    }
+
+    return `block:${type}:${occurrence}`;
+}
+
+function parseEditorHiddenFilesMetadataValue(value = '') {
+    const text = String(value || '').trim();
+    if (!text) {
+        return {
+            diagnostics: [],
+            keys: [],
+            normalizedValue: '',
+        };
+    }
+
+    const diagnostics = [];
+    const seenKeys = new Set();
+    const keys = [];
+    const entries = text
+        .split('|')
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+
+    entries.forEach((entry) => {
+        const normalizedKey = normalizeEditorHiddenFileKey(entry);
+
+        if (!normalizedKey) {
+            diagnostics.push(createDiagnostic(
+                'warning',
+                'invalid-editor-hidden-file-entry',
+                `Hidden file entry "${entry}" is invalid. Use "file:path/to/file" or "block:type:index".`,
+                { value: entry }
+            ));
+            return;
+        }
+
+        if (seenKeys.has(normalizedKey)) {
+            diagnostics.push(createDiagnostic(
+                'warning',
+                'duplicate-editor-hidden-file-entry',
+                `Hidden file entry "${normalizedKey}" is declared more than once. Only the first value is used.`,
+                { value: normalizedKey }
+            ));
+            return;
+        }
+
+        seenKeys.add(normalizedKey);
+        keys.push(normalizedKey);
+    });
+
+    return {
+        diagnostics,
+        keys,
+        normalizedValue: keys.join('|'),
+    };
+}
+
 function hasExerciseMetadata(metadata = {}) {
     return Array.from(EXERCISE_METADATA_KEYS).some((key) => {
         const value = metadata[key];
@@ -585,6 +1099,117 @@ export function getExerciseConfig(documentModel) {
 export function getExampleStage(documentModel) {
     const stage = String(documentModel?.metadata?.example_stage || '').trim().toLowerCase();
     return EXAMPLE_STAGE_VALUES.has(stage) ? stage : '';
+}
+
+function hasShaderBlocks(blocks = []) {
+    return (blocks || []).some((block) => SHADER_BLOCK_TYPES.has(block.type));
+}
+
+function inferRendererMode({ blocks = [], metadata = {}, sourceFormat = 'legacy-blocks' } = {}) {
+    if (sourceFormat === 'legacy-blocks' && (metadata.renderer === 'shader' || hasShaderBlocks(blocks))) {
+        return 'shader';
+    }
+
+    return 'web';
+}
+
+export function getShaderConfig(documentModel) {
+    const metadata = documentModel?.metadata || {};
+    const blocks = documentModel?.blocks || [];
+    const rendererMode = inferRendererMode({
+        blocks,
+        metadata,
+        sourceFormat: documentModel?.sourceFormat || 'legacy-blocks',
+    });
+    const parsedResolution = parseShaderResolutionValue(metadata.resolution);
+    const parsedCustomUniforms = parseShaderUniformMetadataValue(metadata.shader_uniforms);
+    const parsedTextures = parseShaderTextureMetadataValue(metadata.shader_textures);
+
+    return {
+        enabled: rendererMode === 'shader',
+        explicit: metadata.renderer === 'shader',
+        builtInUniforms: [...SHADER_BUILTIN_UNIFORMS],
+        customUniforms: parsedCustomUniforms.uniforms.map((uniform) => ({
+            ...uniform,
+            control: cloneShaderUniformControl(uniform.control),
+            defaultValue: cloneShaderUniformValue(uniform.defaultValue),
+            value: cloneShaderUniformValue(uniform.value),
+        })),
+        textures: parsedTextures.textures.map((texture) => ({
+            assetPath: texture.assetPath,
+            name: texture.name,
+        })),
+        rendererMode,
+        resolution: parsedResolution
+            ? {
+                width: parsedResolution.width,
+                height: parsedResolution.height,
+            }
+            : null,
+        resolutionText: String(metadata.resolution || '').trim(),
+        shaderUniformsText: parsedCustomUniforms.normalizedValue || String(metadata.shader_uniforms || '').trim(),
+        shaderTexturesText: parsedTextures.normalizedValue || String(metadata.shader_textures || '').trim(),
+    };
+}
+
+export function isShaderDocument(documentModel) {
+    return getShaderConfig(documentModel).enabled;
+}
+
+export function getDocumentFileVisibilityKey(file, files = []) {
+    if (!file) return '';
+
+    if (file.sourceKind === 'virtual') {
+        const path = normalizeVirtualPath(file.path);
+        return path ? `file:${path}` : '';
+    }
+
+    const blockType = normalizeBlockType(file.blockType || file.language);
+    if (!blockType) return '';
+
+    let occurrence = 0;
+
+    for (const entry of files) {
+        const isLegacy = entry?.sourceKind !== 'virtual';
+        const entryType = normalizeBlockType(entry?.blockType || entry?.language);
+
+        if (isLegacy && entryType === blockType) {
+            occurrence += 1;
+        }
+
+        if (entry?.id === file.id) {
+            return `block:${blockType}:${Math.max(1, occurrence)}`;
+        }
+    }
+
+    const fallbackOrder = Number.isFinite(file?.order)
+        ? Number.parseInt(file.order, 10) + 1
+        : 1;
+
+    return `block:${blockType}:${Math.max(1, fallbackOrder)}`;
+}
+
+export function getDocumentFileVisibilityEntries(documentModel) {
+    const document = synchronizeDocument(documentModel);
+    const files = document.files || [];
+    const parsedHiddenFiles = parseEditorHiddenFilesMetadataValue(document.metadata?.editor_hidden_files);
+    const hiddenKeySet = new Set(parsedHiddenFiles.keys);
+
+    return files.map((file) => {
+        const key = getDocumentFileVisibilityKey(file, files);
+
+        return {
+            file,
+            hidden: Boolean(key) && hiddenKeySet.has(key),
+            key,
+        };
+    });
+}
+
+export function getHiddenFileVisibilityKeys(documentModel) {
+    return getDocumentFileVisibilityEntries(documentModel)
+        .filter((entry) => entry.hidden)
+        .map((entry) => entry.key);
 }
 
 function deriveFilesFromBlocks(blocks = []) {
@@ -943,9 +1568,11 @@ function parseVirtualFiles(lines, startIndex, diagnostics, metadata = {}) {
 
 function validateMetadata(metadata, diagnostics, sourceFormat) {
     const framework = metadata.framework || '';
+    const renderer = metadata.renderer || '';
     const mode = metadata.mode || '';
     const hasConsole = Object.prototype.hasOwnProperty.call(metadata, 'console');
     const hasEntry = Object.prototype.hasOwnProperty.call(metadata, 'entry');
+    const hasResolution = Object.prototype.hasOwnProperty.call(metadata, 'resolution');
 
     if (framework && !SUPPORTED_FRAMEWORKS.has(framework)) {
         diagnostics.push(
@@ -954,6 +1581,17 @@ function validateMetadata(metadata, diagnostics, sourceFormat) {
                 'unsupported-framework',
                 `Framework "${framework}" is not supported.`,
                 { framework }
+            )
+        );
+    }
+
+    if (renderer && !SUPPORTED_RENDERERS.has(renderer)) {
+        diagnostics.push(
+            createDiagnostic(
+                'error',
+                'unsupported-renderer',
+                `Renderer "${renderer}" is not supported.`,
+                { renderer }
             )
         );
     }
@@ -969,6 +1607,67 @@ function validateMetadata(metadata, diagnostics, sourceFormat) {
         );
     }
 
+    if (hasResolution) {
+        const parsedResolution = parseShaderResolutionValue(metadata.resolution);
+        if (!parsedResolution) {
+            diagnostics.push(
+                createDiagnostic(
+                    renderer === 'shader' ? 'error' : 'warning',
+                    renderer === 'shader' ? 'invalid-shader-resolution' : 'invalid-resolution-metadata',
+                    'Metadata "resolution" must use the format WIDTHxHEIGHT with positive integers.',
+                    { value: metadata.resolution }
+                )
+            );
+        }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(metadata, 'shader_uniforms')) {
+        const parsedShaderUniforms = parseShaderUniformMetadataValue(metadata.shader_uniforms);
+        diagnostics.push(...parsedShaderUniforms.diagnostics);
+
+        if (renderer !== 'shader' && parsedShaderUniforms.uniforms.length > 0) {
+            diagnostics.push(
+                createDiagnostic(
+                    'warning',
+                    'shader-uniforms-without-shader-renderer',
+                    'Metadata "shader_uniforms" only applies to shader documents.',
+                    { value: metadata.shader_uniforms }
+                )
+            );
+        }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(metadata, 'shader_textures')) {
+        const parsedShaderTextures = parseShaderTextureMetadataValue(metadata.shader_textures);
+        diagnostics.push(...parsedShaderTextures.diagnostics);
+
+        if (renderer !== 'shader' && parsedShaderTextures.textures.length > 0) {
+            diagnostics.push(
+                createDiagnostic(
+                    'warning',
+                    'shader-textures-without-shader-renderer',
+                    'Metadata "shader_textures" only applies to shader documents.',
+                    { value: metadata.shader_textures }
+                )
+            );
+        }
+
+        const parsedShaderUniforms = parseShaderUniformMetadataValue(metadata.shader_uniforms);
+        const uniformNames = new Set(parsedShaderUniforms.uniforms.map((uniform) => uniform.name));
+        parsedShaderTextures.textures.forEach((texture) => {
+            if (uniformNames.has(texture.name)) {
+                diagnostics.push(
+                    createDiagnostic(
+                        'warning',
+                        'shader-texture-conflicts-uniform',
+                        `Shader texture "${texture.name}" conflicts with a custom uniform of the same name.`,
+                        { name: texture.name, assetPath: texture.assetPath }
+                    )
+                );
+            }
+        });
+    }
+
     if (hasConsole && typeof metadata.console !== 'boolean') {
         diagnostics.push(
             createDiagnostic(
@@ -978,6 +1677,11 @@ function validateMetadata(metadata, diagnostics, sourceFormat) {
                 { value: metadata.console }
             )
         );
+    }
+
+    if (Object.prototype.hasOwnProperty.call(metadata, 'editor_hidden_files')) {
+        const parsedHiddenFiles = parseEditorHiddenFilesMetadataValue(metadata.editor_hidden_files);
+        diagnostics.push(...parsedHiddenFiles.diagnostics);
     }
 
     if (hasEntry && getVirtualPathIssue(metadata.entry)) {
@@ -1020,6 +1724,39 @@ function validateMetadata(metadata, diagnostics, sourceFormat) {
                 'mode-without-framework',
                 'Metadata "mode" is currently meaningful only together with `framework: react` or `framework: vue`.',
                 { mode }
+            )
+        );
+    }
+
+    if (renderer === 'shader' && framework) {
+        diagnostics.push(
+            createDiagnostic(
+                'error',
+                'shader-framework-not-supported',
+                'Shader documents cannot declare `framework`. Use `renderer: shader` with block-based Vertex/Fragment shaders.',
+                { framework }
+            )
+        );
+    }
+
+    if (renderer === 'shader' && mode) {
+        diagnostics.push(
+            createDiagnostic(
+                'warning',
+                'shader-mode-ignored',
+                'Metadata "mode" is ignored for shader documents.',
+                { mode }
+            )
+        );
+    }
+
+    if (renderer === 'shader' && sourceFormat === 'virtual-files') {
+        diagnostics.push(
+            createDiagnostic(
+                'error',
+                'shader-virtual-files-not-supported',
+                'Shader documents currently use block-based Vertex/Fragment format, not `## @file` sections.',
+                { sourceFormat }
             )
         );
     }
@@ -1117,7 +1854,103 @@ function validateVirtualFileShape(file, diagnostics) {
     }
 }
 
+function validateShaderLegacyDocument(blocks, metadata, diagnostics) {
+    const vertexBlocks = blocks.filter((block) => block.type === 'vertex');
+    const fragmentBlocks = blocks.filter((block) => block.type === 'fragment');
+    const extraBlocks = blocks.filter((block) => !SHADER_BLOCK_TYPES.has(block.type));
+    const parsedResolution = parseShaderResolutionValue(metadata.resolution);
+
+    if (metadata.renderer === 'web') {
+        diagnostics.push(
+            createDiagnostic(
+                'error',
+                'renderer-metadata-conflicts-with-shader-blocks',
+                'Renderer "web" conflicts with shader blocks. Remove `renderer: web` or remove the shader blocks.',
+                { renderer: metadata.renderer }
+            )
+        );
+    }
+
+    if (vertexBlocks.length === 0) {
+        diagnostics.push(
+            createDiagnostic(
+                'error',
+                'missing-shader-vertex',
+                'Shader examples must contain exactly one Vertex block.'
+            )
+        );
+    }
+
+    if (vertexBlocks.length > 1) {
+        diagnostics.push(
+            createDiagnostic(
+                'error',
+                'multiple-shader-vertex-blocks',
+                'Shader examples cannot contain more than one Vertex block.'
+            )
+        );
+    }
+
+    if (fragmentBlocks.length === 0) {
+        diagnostics.push(
+            createDiagnostic(
+                'error',
+                'missing-shader-fragment',
+                'Shader examples must contain exactly one Fragment block.'
+            )
+        );
+    }
+
+    if (fragmentBlocks.length > 1) {
+        diagnostics.push(
+            createDiagnostic(
+                'error',
+                'multiple-shader-fragment-blocks',
+                'Shader examples cannot contain more than one Fragment block.'
+            )
+        );
+    }
+
+    if (extraBlocks.length > 0) {
+        diagnostics.push(
+            createDiagnostic(
+                'error',
+                'shader-extra-blocks-not-allowed',
+                `Shader examples only support Vertex and Fragment blocks for now. Found extra block types: ${extraBlocks.map((block) => block.type).join(', ')}.`,
+                { blockTypes: extraBlocks.map((block) => block.type) }
+            )
+        );
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(metadata, 'resolution') || !String(metadata.resolution || '').trim()) {
+        diagnostics.push(
+            createDiagnostic(
+                'error',
+                'missing-shader-resolution',
+                'Shader examples must declare `resolution: WIDTHxHEIGHT` in frontmatter.'
+            )
+        );
+    } else if (!parsedResolution) {
+        const hasExistingDiagnostic = diagnostics.some((diagnostic) => diagnostic.code === 'invalid-shader-resolution');
+        if (!hasExistingDiagnostic) {
+            diagnostics.push(
+                createDiagnostic(
+                    'error',
+                    'invalid-shader-resolution',
+                    'Shader examples must use `resolution: WIDTHxHEIGHT` with positive integers.',
+                    { value: metadata.resolution }
+                )
+            );
+        }
+    }
+}
+
 function validateLegacyDocument(blocks, metadata, diagnostics) {
+    if (inferRendererMode({ blocks, metadata, sourceFormat: 'legacy-blocks' }) === 'shader') {
+        validateShaderLegacyDocument(blocks, metadata, diagnostics);
+        return;
+    }
+
     const appBlocks = blocks.filter((block) => block.slot === 'app');
     const markupBlocks = blocks.filter((block) => block.slot === 'markup');
     const styleBlocks = blocks.filter((block) => block.slot === 'style');
@@ -1488,6 +2321,7 @@ function validateVirtualDocument(files, metadata, diagnostics) {
         }
     }
 
+    validateEditorHiddenFiles(files, metadata, diagnostics);
     validateExerciseDocument(files, metadata, diagnostics);
 }
 
@@ -1553,6 +2387,26 @@ function validateExerciseDocument(files, metadata, diagnostics) {
     }
 }
 
+function validateEditorHiddenFiles(files, metadata, diagnostics) {
+    const parsedHiddenFiles = parseEditorHiddenFilesMetadataValue(metadata.editor_hidden_files);
+    if (parsedHiddenFiles.keys.length === 0) return;
+
+    const validKeys = new Set(files.map((file) => getDocumentFileVisibilityKey(file, files)).filter(Boolean));
+
+    parsedHiddenFiles.keys.forEach((key) => {
+        if (validKeys.has(key)) return;
+
+        diagnostics.push(
+            createDiagnostic(
+                'warning',
+                'editor-hidden-file-not-found',
+                `Hidden file entry "${key}" does not match any file in this document.`,
+                { value: key }
+            )
+        );
+    });
+}
+
 function buildLegacyMarkdown(blocks = [], metadata = {}) {
     const frontmatter = buildFrontmatter(metadata);
     const content = sortBlocks(blocks)
@@ -1603,6 +2457,7 @@ function cloneFiles(files = []) {
 
 export function createEmptyExampleDocument() {
     return {
+        rendererMode: 'web',
         sessionId: '',
         metadata: {},
         blocks: [],
@@ -1618,6 +2473,7 @@ export function synchronizeDocument(documentModel) {
     const metadata = normalizeMetadata(document.metadata || {});
     const blocks = (document.blocks || []).map((block) => ({ ...block }));
     const files = cloneFiles(document.files || []);
+    const sourceFormat = document.sourceFormat || 'legacy-blocks';
 
     if (document.sourceFormat === 'legacy-blocks') {
         files.forEach((file) => {
@@ -1631,12 +2487,13 @@ export function synchronizeDocument(documentModel) {
 
     return {
         ...document,
+        rendererMode: inferRendererMode({ blocks, metadata, sourceFormat }),
         metadata,
         blocks,
-        files: document.sourceFormat === 'legacy-blocks' ? deriveFilesFromBlocks(blocks) : files,
+        files: sourceFormat === 'legacy-blocks' ? deriveFilesFromBlocks(blocks) : files,
         sessionId: inferSessionIdFromDocument({
             blocks,
-            files: document.sourceFormat === 'legacy-blocks' ? deriveFilesFromBlocks(blocks) : files,
+            files: sourceFormat === 'legacy-blocks' ? deriveFilesFromBlocks(blocks) : files,
             metadata,
         }),
     };
@@ -1644,6 +2501,7 @@ export function synchronizeDocument(documentModel) {
 
 export function getDocumentLanguageOptions(documentModel) {
     const framework = String(documentModel?.metadata?.framework || '').trim().toLowerCase();
+    const rendererMode = String(documentModel?.rendererMode || '').trim().toLowerCase();
 
     if (documentModel?.sourceFormat === 'virtual-files') {
         if (framework === 'react') {
@@ -1655,6 +2513,11 @@ export function getDocumentLanguageOptions(documentModel) {
         }
 
         return [];
+    }
+
+    if (rendererMode === 'shader') {
+        const existingTypes = new Set((documentModel?.blocks || []).map((block) => block.type));
+        return SHADER_BLOCK_LANGUAGE_OPTIONS.filter((language) => !existingTypes.has(language));
     }
 
     if (framework === 'react') {
@@ -1740,6 +2603,14 @@ export function createDocumentFile(documentModel, options = {}) {
             `${language}-${nextDocument.blocks?.length || 0}`
         ),
     ];
+
+    if (SHADER_BLOCK_TYPES.has(language)) {
+        nextDocument.metadata = {
+            ...(nextDocument.metadata || {}),
+            renderer: 'shader',
+            resolution: String(nextDocument.metadata?.resolution || '').trim() || '800x600',
+        };
+    }
 
     if (!nextDocument.metadata?.framework && ['jsx', 'tsx'].includes(language)) {
         nextDocument.metadata = {
@@ -1887,6 +2758,49 @@ export function setDocumentEntryPath(documentModel, entryPath = '') {
     return reparseDocument(nextDocument);
 }
 
+export function updateShaderUniformDefinitions(documentModel, uniforms = []) {
+    const nextDocument = cloneExampleDocument(documentModel);
+    const declarations = Array.isArray(uniforms)
+        ? uniforms.map((uniform) => serializeShaderUniformDeclaration(uniform)).filter(Boolean)
+        : [];
+    const metadata = {
+        ...(nextDocument.metadata || {}),
+    };
+
+    if (declarations.length > 0) {
+        metadata.shader_uniforms = declarations.join('|');
+    } else {
+        delete metadata.shader_uniforms;
+    }
+
+    nextDocument.metadata = metadata;
+    return reparseDocument(nextDocument);
+}
+
+export function updateDocumentHiddenFiles(documentModel, hiddenKeys = []) {
+    const nextDocument = cloneExampleDocument(documentModel);
+    const visibilityEntries = getDocumentFileVisibilityEntries(nextDocument);
+    const validKeys = new Set(visibilityEntries.map((entry) => entry.key).filter(Boolean));
+    const requestedKeys = Array.isArray(hiddenKeys) ? hiddenKeys : [];
+    const normalizedKeys = Array.from(new Set(
+        requestedKeys
+            .map((entry) => normalizeEditorHiddenFileKey(entry))
+            .filter((entry) => entry && validKeys.has(entry))
+    ));
+    const metadata = {
+        ...(nextDocument.metadata || {}),
+    };
+
+    if (normalizedKeys.length > 0) {
+        metadata.editor_hidden_files = normalizedKeys.join('|');
+    } else {
+        delete metadata.editor_hidden_files;
+    }
+
+    nextDocument.metadata = metadata;
+    return reparseDocument(nextDocument);
+}
+
 export function createExampleDocumentFromPreset(presetId = 'html-css-javascript') {
     const preset = getSessionPreset(presetId);
     const metadata = normalizeMetadata(preset.metadata || {});
@@ -1920,6 +2834,7 @@ export function cloneExampleDocument(documentModel) {
     }
 
     return {
+        rendererMode: documentModel.rendererMode || 'web',
         sessionId: documentModel.sessionId || '',
         metadata: cloneMetadata(documentModel.metadata || {}),
         blocks: (documentModel.blocks || []).map((block) => ({ ...block })),
@@ -1971,6 +2886,7 @@ export function parseExampleDocument(text = '') {
     validateLegacyDocument(blocks, metadata, diagnostics);
 
     const legacyFiles = deriveFilesFromBlocks(blocks);
+    validateEditorHiddenFiles(legacyFiles, metadata, diagnostics);
     validateExerciseDocument(legacyFiles, metadata, diagnostics);
 
     return synchronizeDocument({
