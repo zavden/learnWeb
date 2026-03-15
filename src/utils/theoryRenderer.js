@@ -543,7 +543,7 @@ export function renderTheoryHtml(content = '', options = {}) {
     let html = marked.parse(withPlaceholders);
 
     for (let i = 0; i < embeds.length; i++) {
-        html = html.replace(`<!--LEARNWEB_EMBED_${i}-->`, embeds[i]);
+        html = html.replace(`<!--LEARNWEB_EMBED_${i}-->`, () => embeds[i]);
     }
 
     return html;

@@ -293,47 +293,53 @@ export async function loadTheoryExerciseEmbeds(topicPath, content = '') {
                 const data = await fetchExample(normalizedTopicPath, filename);
                 const documentModel = parseExampleDocument(data?.content || '');
                 const editorial = getExampleEditorialMetadata(documentModel);
-                let previewSrcdoc = '';
-
-                if (isShaderDocument(documentModel)) {
-                    previewSrcdoc = renderShaderExampleDocument(documentModel, {
-                        diagnostics: documentModel.diagnostics || [],
-                        renderId: 0,
-                        shaderControls: {
-                            paused: true,
-                            stillFrame: true,
-                        },
-                        topicPath: normalizedTopicPath,
-                    });
-                } else {
-                    const result = await compileExample({ document: documentModel });
-                    previewSrcdoc = renderCompiledExampleDocument(
-                        result.compiledDocument,
-                        normalizedTopicPath,
-                        result.compileDiagnostics || []
-                    );
-                }
 
                 const highlightsMap = parseHighlights(
                     String(documentModel.metadata?.highlights || ''),
                     documentModel.files
                 );
 
+                const codeFiles = documentModel.files.map((file) => {
+                    const fileLineMap = highlightsMap.get(file.id);
+                    return {
+                        content: file.content,
+                        highlights: fileLineMap
+                            ? Array.from(fileLineMap.entries())
+                                .sort(([a], [b]) => a - b)
+                                .map(([line, colorId]) => ({ line, colorId }))
+                            : [],
+                        language: file.language,
+                        name: file.name,
+                        path: file.path,
+                    };
+                });
+
+                let previewSrcdoc = '';
+                try {
+                    if (isShaderDocument(documentModel)) {
+                        previewSrcdoc = renderShaderExampleDocument(documentModel, {
+                            diagnostics: documentModel.diagnostics || [],
+                            renderId: 0,
+                            shaderControls: {
+                                paused: true,
+                                stillFrame: true,
+                            },
+                            topicPath: normalizedTopicPath,
+                        });
+                    } else {
+                        const result = await compileExample({ document: documentModel });
+                        previewSrcdoc = renderCompiledExampleDocument(
+                            result.compiledDocument,
+                            normalizedTopicPath,
+                            result.compileDiagnostics || []
+                        );
+                    }
+                } catch {
+                    // Compilation failed — code files are still available, just no preview
+                }
+
                 return [filename, {
-                    codeFiles: documentModel.files.map((file) => {
-                        const fileLineMap = highlightsMap.get(file.id);
-                        return {
-                            content: file.content,
-                            highlights: fileLineMap
-                                ? Array.from(fileLineMap.entries())
-                                    .sort(([a], [b]) => a - b)
-                                    .map(([line, colorId]) => ({ line, colorId }))
-                                : [],
-                            language: file.language,
-                            name: file.name,
-                            path: file.path,
-                        };
-                    }),
+                    codeFiles,
                     description: editorial.description || '',
                     exists: true,
                     filename,
