@@ -1,7 +1,7 @@
 // ─── Theory Viewer Component ────────────────────────────
 
 import { fetchTopicMain } from '../utils/api.js';
-import { renderTheoryHtml } from '../utils/theoryRenderer.js';
+import { renderTheoryExportDocument, renderTheoryHtml } from '../utils/theoryRenderer.js';
 import { loadTheoryExerciseEmbeds } from '../utils/theoryExerciseEmbeds.js';
 
 export class TheoryViewer {
@@ -13,6 +13,7 @@ export class TheoryViewer {
     this.container = document.getElementById('theory-content');
     this.btnTheory = document.getElementById('btn-theory');
     this.btnEdit = document.getElementById('btn-edit-theory');
+    this.btnExport = document.getElementById('btn-export-theory');
     this.btnClose = document.getElementById('btn-close-theory');
     this.currentContent = '';
     this.currentTopicPath = '';
@@ -34,6 +35,8 @@ export class TheoryViewer {
       if (!this.currentTopicPath || typeof this.onEditRequest !== 'function') return;
       this.onEditRequest(this.currentTopicPath, this.currentContent);
     });
+
+    this.btnExport?.addEventListener('click', () => this._exportHtml());
 
     this.container?.addEventListener('click', (event) => {
       const openButton = event.target.closest('[data-theory-exercise-open]');
@@ -73,6 +76,9 @@ export class TheoryViewer {
     this.currentTopicPath = topicPath || '';
     if (this.btnEdit) {
       this.btnEdit.disabled = !this.currentTopicPath;
+    }
+    if (this.btnExport) {
+      this.btnExport.disabled = !this.currentTopicPath;
     }
 
     const data = await fetchTopicMain(topicPath);
@@ -121,6 +127,9 @@ export class TheoryViewer {
     if (this.btnEdit) {
       this.btnEdit.disabled = true;
     }
+    if (this.btnExport) {
+      this.btnExport.disabled = true;
+    }
     this.container.innerHTML = `
       <div class="empty-state">
         <span class="empty-icon">📖</span>
@@ -128,6 +137,26 @@ export class TheoryViewer {
       </div>
     `;
     this.hide();
+  }
+
+  async _exportHtml() {
+    if (!this.currentTopicPath || !this.currentContent) return;
+
+    const topicSlug = this.currentTopicPath.split('/').filter(Boolean).pop() || 'theory';
+    const exerciseEmbeds = await loadTheoryExerciseEmbeds(this.currentTopicPath, this.currentContent);
+    const html = renderTheoryExportDocument(this.currentContent, {
+      title: topicSlug,
+      topicPath: this.currentTopicPath,
+      exerciseEmbeds,
+    });
+
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${topicSlug}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   _handleExercisePreview(filename) {

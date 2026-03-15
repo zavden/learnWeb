@@ -1,5 +1,139 @@
 # TODO
 
+## Exportar Theory como HTML standalone
+
+Complejidad: **BAJA**. El 90% del trabajo ya existe en `renderTheoryPreviewDocument()`.
+
+### Contexto
+
+`renderTheoryPreviewDocument()` en `src/utils/theoryRenderer.js` ya genera un documento HTML
+completo y autónomo con todo el CSS inline, exercise embeds (previews como iframes `srcdoc`),
+code embeds con syntax highlighting y tabs, y JS para tab switching. Se usa actualmente para
+el iframe de Preview cuando se edita un `main.md`.
+
+El goal: un botón en el header del sidebar de Theory que descargue ese mismo HTML como archivo
+`.html` standalone, listo para abrir en un navegador sin necesidad del servidor.
+
+### Qué hacer
+
+#### 1. Botón de exportar en el sidebar header
+
+En `index.html`, añadir un botón `id="btn-export-theory"` en `.theory-sidebar-actions`,
+**antes** del botón de editar (`btn-edit-theory`). Icono: download/export (flecha abajo con
+línea). Debe estar `disabled` cuando no hay topic cargado (igual que el botón de editar).
+
+#### 2. Nueva función `renderTheoryExportDocument()` en `theoryRenderer.js`
+
+Crear una función que reutilice `renderTheoryPreviewDocument()` pero con ajustes para export:
+
+1. **Título**: Recibir `options.title` (string) y usarlo en `<title>` del HTML.
+2. **Sin `<base href>`**: No incluir la etiqueta `<base>` — las imágenes se referencian
+   con rutas relativas (el usuario copiará los assets junto con el HTML si los necesita).
+3. **Sin JS de postMessage**: Eliminar el bloque `<script>` que usa `window.parent.postMessage`
+   (no hay padre en un HTML standalone). Conservar **solo** el JS de:
+   - Inyección de preview iframes (`srcdoc`)
+   - Tab switching de code embeds
+4. **Google Fonts**: Añadir `<link>` a Google Fonts para cargar JetBrains Mono e Inter
+   (para que el HTML se vea bien sin las fuentes locales):
+   ```html
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+   ```
+5. **Timestamp/metadata**: Agregar un comentario HTML al inicio:
+   `<!-- Exported from LearnWeb — {topicPath} — {fecha ISO} -->`
+
+La firma de la función:
+```javascript
+export function renderTheoryExportDocument(content = '', options = {})
+// options: { title, topicPath, exerciseEmbeds }
+```
+
+Internamente puede componer el HTML de forma similar a `renderTheoryPreviewDocument` pero sin
+el `renderId`, sin el `<base>`, y con el script reducido.
+
+**Alternativa más simple**: Puede llamar a `renderTheoryPreviewDocument` y hacer un
+post-procesamiento string (quitar `<base>`, quitar el bloque de postMessage, inyectar el
+`<link>` de fonts y el `<title>`). Usar la alternativa que resulte más limpia.
+
+#### 3. Lógica de exportación en `TheoryViewer.js`
+
+En el constructor, capturar `btn-export-theory`. En `_initEvents`, añadir click handler:
+
+```javascript
+this.btnExport?.addEventListener('click', () => this._exportHtml());
+```
+
+Método `_exportHtml()`:
+1. Guard: si no hay `this.currentTopicPath` o `this.currentContent`, return.
+2. Cargar los exercise embeds: `await loadTheoryExerciseEmbeds(this.currentTopicPath, this.currentContent)`
+3. Generar HTML: `renderTheoryExportDocument(this.currentContent, { ... })`
+4. Descargar como archivo:
+   ```javascript
+   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+   const url = URL.createObjectURL(blob);
+   const a = document.createElement('a');
+   a.href = url;
+   a.download = `${topicSlug}.html`; // ej: "top01-positioning.html"
+   a.click();
+   URL.revokeObjectURL(url);
+   ```
+5. El nombre del archivo: tomar el último segmento del `topicPath`
+   (ej: `ch04-javascript/sec01-basics/top01-positioning` → `top01-positioning.html`).
+
+Actualizar `load()` y `clear()` para habilitar/deshabilitar `btnExport` igual que `btnEdit`.
+
+#### 4. Previews con resize horizontal en el export
+
+**Solo en el HTML exportado** (no en la app). Los preview iframes de ejercicios tienen
+`height: 170px` fijo, lo cual es pequeño. En el export, los previews deben poder
+redimensionarse horizontalmente para probar layouts responsive.
+
+En el CSS del documento exportado (`renderTheoryExportDocument`), sobreescribir los estilos
+del preview:
+
+```css
+.theory-exercise-embed-preview {
+  resize: horizontal;   /* handle nativo del navegador */
+  min-width: 200px;
+  max-width: 100%;
+  height: 300px;        /* más alto que los 170px de la app */
+}
+```
+
+`resize: horizontal` funciona porque el contenedor ya tiene `overflow: hidden`. El navegador
+muestra un handle de arrastre en la esquina inferior derecha que permite cambiar el ancho.
+
+**Nota**: Estos estilos van SOLO en el CSS inline de `renderTheoryExportDocument`, no en
+`07-theory.css` ni en `renderTheoryPreviewDocument`. La app mantiene los 170px fijos.
+
+#### 5. Estilo del botón
+
+Reutilizar la clase `btn-icon` existente. No se necesita CSS adicional — los botones del
+sidebar header ya tienen estilos. Solo agregar el SVG del icono.
+
+### Archivos a modificar
+
+| Archivo | Cambio |
+|---------|--------|
+| `index.html` | Añadir botón `btn-export-theory` en `.theory-sidebar-actions` |
+| `src/utils/theoryRenderer.js` | Nueva función `renderTheoryExportDocument()` |
+| `src/components/TheoryViewer.js` | Capturar botón, `_exportHtml()`, enable/disable en `load()`/`clear()` |
+
+### Reglas
+
+1. El HTML exportado debe ser **completamente standalone**: abrirlo en el navegador sin
+   servidor debe mostrar todo el contenido correctamente (excepto imágenes que referencien
+   assets del servidor).
+2. Los exercise previews (`srcdoc` iframes) deben funcionar en el HTML exportado.
+3. Los tabs de code embeds deben funcionar (el JS de tab switching debe estar incluido).
+4. Los previews del export deben tener `resize: horizontal` con handle nativo del navegador.
+   Esto NO aplica a la app, solo al HTML exportado.
+5. NO crear archivos nuevos — todo va en archivos existentes.
+6. Validación: `npm run build`.
+
+---
+
 ## Bug corregido: línea de error en React/Vue ✓
 
 Resuelto: el bridge ahora decodifica inline source maps (VLQ) para resolver
