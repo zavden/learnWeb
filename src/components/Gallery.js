@@ -13,6 +13,14 @@ import {
     parseExampleDocument,
 } from '../utils/markdown.js';
 
+const EXAMPLE_TYPE_META = {
+    html:    { label: 'HTML',    className: 'type-html' },
+    vue:     { label: 'VUE',     className: 'type-vue' },
+    react:   { label: 'REACT',   className: 'type-react' },
+    svg:     { label: 'SVG',     className: 'type-svg' },
+    shader:  { label: 'SHADER',  className: 'type-shader' },
+};
+
 const EXAMPLE_STAGE_META = {
     minimal: { label: 'Minimal', rank: 0, className: 'stage-minimal' },
     intermediate: { label: 'Intermediate', rank: 1, className: 'stage-intermediate' },
@@ -26,15 +34,18 @@ export class Gallery {
         this.view = document.getElementById('gallery-view');
         this.grid = document.getElementById('gallery-grid');
         this.btnMetaToggle = document.getElementById('btn-gallery-meta-toggle');
+        this.filtersContainer = document.getElementById('gallery-type-filters');
         this.onExampleSelect = onExampleSelect;
         this.currentTopicPath = null;
         this.metaOverlayHiddenStorageKey = 'learncode.gallery.metaOverlayHidden';
         this.metaOverlayHidden = window.localStorage.getItem(this.metaOverlayHiddenStorageKey) === '1';
+        this.activeTypeFilter = null;
 
         this.btnMetaToggle?.addEventListener('click', () => {
             this.setMetaOverlayHidden(!this.metaOverlayHidden);
         });
         this._syncMetaToggle();
+        this._renderTypeFilters();
     }
 
     show() {
@@ -64,10 +75,12 @@ export class Gallery {
 
         if (examples.length === 0) {
             this.grid.innerHTML = '<div class="empty-state">No examples yet</div>';
+            this._updateTypeFilterCounts({});
             return;
         }
 
         const cards = await Promise.all(examples.map((filename) => this.createCard(filename)));
+        this._cards = cards;
         cards
             .sort((left, right) => {
                 if (left.stageRank !== right.stageRank) {
@@ -77,6 +90,13 @@ export class Gallery {
                 return left.filename.localeCompare(right.filename);
             })
             .forEach((card) => this.grid.appendChild(card.element));
+
+        const typeCounts = {};
+        for (const card of cards) {
+            typeCounts[card.exampleType] = (typeCounts[card.exampleType] || 0) + 1;
+        }
+        this._updateTypeFilterCounts(typeCounts);
+        this._applyTypeFilter();
     }
 
     async createCard(filename) {
@@ -86,6 +106,7 @@ export class Gallery {
 
         const preview = document.createElement('div');
         preview.className = 'card-preview';
+        let exampleType = 'html';
 
         try {
             const data = await fetchExample(this.currentTopicPath, filename);
@@ -98,6 +119,9 @@ export class Gallery {
                     div.dataset.stage = stage;
                     div.dataset.stageRank = String(stageMeta.rank);
                 }
+
+                exampleType = this._getExampleType(documentModel);
+
                 const iframe = document.createElement('iframe');
                 iframe.sandbox = 'allow-scripts';
 
@@ -133,6 +157,8 @@ export class Gallery {
             preview.style.fontSize = '12px';
         }
 
+        div.dataset.exampleType = exampleType;
+
         const footer = document.createElement('div');
         footer.className = 'card-footer';
         const title = document.createElement('div');
@@ -147,6 +173,14 @@ export class Gallery {
             badge.className = `card-stage-badge ${stageMeta.className}`;
             badge.textContent = stageMeta.label;
             footer.appendChild(badge);
+        }
+
+        const typeMeta = EXAMPLE_TYPE_META[exampleType];
+        if (typeMeta) {
+            const typeTag = document.createElement('span');
+            typeTag.className = `card-type-tag ${typeMeta.className}`;
+            typeTag.textContent = typeMeta.label;
+            footer.appendChild(typeTag);
         }
 
         const deleteBtn = document.createElement('button');
@@ -173,8 +207,66 @@ export class Gallery {
         return {
             element: div,
             filename,
+            exampleType,
             stageRank: stageMeta?.rank ?? Number.MAX_SAFE_INTEGER,
         };
+    }
+
+    _getExampleType(documentModel) {
+        if (isShaderDocument(documentModel)) return 'shader';
+        const framework = String(documentModel?.metadata?.framework || '').trim().toLowerCase();
+        if (framework === 'vue') return 'vue';
+        if (framework === 'react') return 'react';
+        const files = documentModel?.files || [];
+        const blocks = documentModel?.blocks || [];
+        if (files.some((f) => f.language === 'svg') || blocks.some((b) => b.type === 'svg')) return 'svg';
+        return 'html';
+    }
+
+    _renderTypeFilters() {
+        if (!this.filtersContainer) return;
+        this.filtersContainer.innerHTML = '';
+
+        for (const [type, meta] of Object.entries(EXAMPLE_TYPE_META)) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = `gallery-filter-btn ${meta.className}`;
+            btn.dataset.filterType = type;
+            btn.textContent = meta.label;
+            btn.addEventListener('click', () => this._setTypeFilter(type));
+            this.filtersContainer.appendChild(btn);
+        }
+    }
+
+    _updateTypeFilterCounts(typeCounts) {
+        if (!this.filtersContainer) return;
+        this.filtersContainer.querySelectorAll('.gallery-filter-btn').forEach((btn) => {
+            const type = btn.dataset.filterType;
+            const count = typeCounts[type] || 0;
+            btn.classList.toggle('is-empty', count === 0);
+            btn.disabled = count === 0 && this.activeTypeFilter !== type;
+        });
+    }
+
+    _setTypeFilter(type) {
+        this.activeTypeFilter = this.activeTypeFilter === type ? null : type;
+        this._applyTypeFilter();
+    }
+
+    _applyTypeFilter() {
+        if (!this.filtersContainer) return;
+
+        this.filtersContainer.querySelectorAll('.gallery-filter-btn').forEach((btn) => {
+            btn.classList.toggle('is-active', btn.dataset.filterType === this.activeTypeFilter);
+        });
+
+        this.grid?.querySelectorAll('.example-card').forEach((card) => {
+            if (!this.activeTypeFilter) {
+                card.classList.remove('is-filtered-out');
+            } else {
+                card.classList.toggle('is-filtered-out', card.dataset.exampleType !== this.activeTypeFilter);
+            }
+        });
     }
 
     async _deleteExample(filename) {
