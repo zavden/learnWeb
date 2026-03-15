@@ -2,7 +2,7 @@ import { EditorView, drawSelection, keymap, lineNumbers, highlightActiveLine, hi
 import { EditorState } from '@codemirror/state';
 import { defaultKeymap, indentWithTab, history, historyKeymap } from '@codemirror/commands';
 import { html } from '@codemirror/lang-html';
-import { css } from '@codemirror/lang-css';
+import { css, cssLanguage } from '@codemirror/lang-css';
 import { javascript } from '@codemirror/lang-javascript';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { bracketMatching, indentOnInput } from '@codemirror/language';
@@ -1290,9 +1290,16 @@ export class Editor {
                 return [javascript({ jsx: true, typescript: true })];
             case 'html':
             case 'html-full':
-            case 'vue':
             case 'svg':
                 return [html(), htmlLearningSupport()];
+            case 'vue':
+                return [html({
+                    nestedLanguages: [{
+                        tag: 'style',
+                        attrs: (attrs) => /^(scss|sass|less)$/.test(attrs.lang),
+                        parser: cssLanguage.parser,
+                    }],
+                }), htmlLearningSupport()];
             case 'css':
             case 'scss':
             case 'sass':
