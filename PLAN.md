@@ -1,393 +1,561 @@
-# Plan: Cambio De Etiqueta/Tipo De Archivo Desde El Editor
+# Plan: Code Embed en Theory — `[[exercise:file.md-]]`
 
-## Objetivo
+## Contexto
 
-Permitir que el usuario haga click en la etiqueta del archivo o bloque (`HTML`, `CSS`, `JS`, `TSX`, `Vue`, etc.) y abra un menu para cambiarla por otra compatible.
+Theory documents (`main.md`) ya soportan `[[exercise:ta.md]]` que renderiza un embed
+interactivo con preview iframe, estrellas, descripcion y botones. Este plan implementa
+una **segunda variante** con sintaxis `[[exercise:ta.md-]]` que muestra el **codigo fuente**
+del ejemplo con syntax highlighting y tabs para navegar archivos.
 
-La meta no es solo cambiar el badge visual. La meta real es cambiar el `language` o `blockType` del documento activo de forma segura, persistible y consistente con:
+### Tres variantes de sintaxis
 
-- legacy blocks
-- virtual files
-- React multi-file
-- Vue multi-file
-- Vue SFC
-- entry files
-- extensiones de path
-- validaciones actuales
-- preview y compilacion
+| Shortcode | Comportamiento |
+|-----------|---------------|
+| `[[exercise:ta.md-]]` | Todos los archivos del ejemplo, en tabs |
+| `[[exercise:ta.md-App.vue]]` | Solo `App.vue`, sin tabs |
+| `[[exercise:ta.md-(App.vue\|main.ts)]]` | Solo esos archivos, en ese orden, en tabs |
 
-## Por Que Es Delicado
+### Dos contextos de renderizado
 
-Este cambio toca una zona sensible del proyecto:
+1. **Iframe** — preview de theory en el editor (`renderTheoryPreviewDocument` en `theoryRenderer.js`)
+2. **DOM directo** — theory viewer del hamburger menu (`TheoryViewer.js` usa `renderTheoryHtml`)
 
-- en `legacy-blocks`, cambiar `HTML` por `PUG` o `CSS` por `SCSS` cambia el significado del documento
-- en `virtual-files`, cambiar `language` puede volver invalida la extension del path
-- en React y Vue multi-file, algunas combinaciones de lenguaje no son validas
-- si el archivo es `entry`, cambiar el lenguaje puede volver invalido `metadata.entry`
-- en Vue SFC, un `.vue` no es equivalente a `html` o `javascript`
-- en shaders, `vertex` y `fragment` forman una pareja especial
-- en ejercicios, archivos locked/reference/solution no deben romperse por una edicion accidental
+Ambos usan la misma funcion `injectTheoryExerciseEmbeds` para reemplazar shortcodes por HTML.
 
-Por eso el cambio necesita fases y una matriz de transiciones validas.
+### Modelo de datos del ejemplo
 
-## Alcance Inicial
+`parseExampleDocument(content)` retorna un document model con:
+```javascript
+{
+  files: [
+    {
+      id: 'src/main.ts:0',
+      path: 'src/main.ts',         // ruta completa
+      name: 'main.ts',             // solo nombre
+      language: 'typescript',       // typescript, vue, scss, etc.
+      content: 'import ...',        // codigo fuente
+      role: 'entry',               // entry, app, component, style, etc.
+      // ... otros campos
+    },
+    // ...
+  ],
+  metadata: { framework: 'vue', mode: 'multi-file', ... },
+}
+```
 
-Incluye:
+### hljs y lenguajes
 
-- click en badge para abrir menu de cambio
-- popup de cambio con validacion explicita
-- cambio de tipo para bloques legacy
-- cambio de `language` para virtual files
-- guardrails para React/Vue/shaders
-- actualizacion de `path` cuando la extension ya no coincide
-- actualizacion de `metadata.entry` si aplica
-- guardado por flujo normal del editor
+`highlightCode(code, lang)` en `theoryRenderer.js` usa hljs con estos lenguajes registrados:
+`xml/html/svg`, `css/scss`, `javascript/jsx`, `typescript/tsx`, `json`, `glsl`, `bash`, `markdown`.
 
-No incluye de entrada:
+**Vue NO esta registrado**. Para archivos `.vue`, hay que usar `xml` como lenguaje de highlight
+(los SFC son estructuralmente XML). El plan incluye un mapeo `vue → xml` en la funcion de rendering.
 
-- cambiar `role` desde el badge
-- conversion semantica profunda del contenido
-- refactors automaticos dentro del codigo
-- migraciones masivas de varios archivos al mismo tiempo
+---
 
-## Decisiones Base
+## Paso 1 — Parsing del shortcode (theoryExerciseEmbeds.js)
 
-### 1. El cambio sera guiado por compatibilidad, no libre
+### Que hacer
 
-El menu no mostrara “todos los tipos del sistema” siempre.
+1. **No cambiar el regex** `THEORY_EXERCISE_SHORTCODE_PATTERN`. El regex actual
+   `^[ \t]*\[\[exercise:([^\]\n]+)\]\][ \t]*$` ya captura todo entre `exercise:` y `]]`.
+   Para `[[exercise:ta.md-]]` captura `ta.md-`. Para `[[exercise:ta.md-(App.vue|main.ts)]]`
+   captura `ta.md-(App.vue|main.ts)`. Solo necesitamos parsear el grupo capturado.
 
-Mostrara solo los compatibles con el contexto actual:
+2. **Crear `parseExerciseShortcode(raw)`** que reciba el contenido capturado y retorne:
 
-- `legacy-blocks`: solo tipos legacy compatibles
-- `virtual-files` sin framework: solo lenguajes de archivos soportados
-- React multi-file: solo lenguajes validos para React
-- Vue multi-file: solo lenguajes validos para Vue
-- shader: solo `vertex` o `fragment` donde aplique
+```javascript
+// [[exercise:ta.md]] → embed estandar
+{ filename: 'ta.md', codeEmbed: false, codeFilter: null }
 
-### 2. Habra transiciones permitidas y transiciones bloqueadas
+// [[exercise:ta.md-]] → code embed, todos los archivos
+{ filename: 'ta.md', codeEmbed: true, codeFilter: null }
 
-Ejemplos razonables:
+// [[exercise:ta.md-App.vue]] → code embed, un archivo
+{ filename: 'ta.md', codeEmbed: true, codeFilter: ['App.vue'] }
 
-- `css -> scss`: permitido
-- `scss -> css`: permitido
-- `javascript -> typescript`: permitido
-- `typescript -> javascript`: permitido
-- `html -> pug`: permitido en legacy
-- `html -> svg`: permitido en legacy
-- `jsx -> vue`: bloqueado
-- `vue -> tsx`: bloqueado
-- `vertex -> css`: bloqueado
+// [[exercise:ta.md-(App.vue|main.ts)]] → code embed, multiples archivos
+{ filename: 'ta.md', codeEmbed: true, codeFilter: ['App.vue', 'main.ts'] }
+```
 
-### 3. Si cambia la extension, el path se ajusta automaticamente
+Logica de parsing:
+- Si `raw` contiene un `.md` seguido de `-`, es code embed.
+- Encontrar la posicion del ultimo `.md` seguido de `-`.
+- Despues del `-`:
+  - Vacio → `codeFilter: null` (todos los archivos)
+  - `(A|B|C)` → split por `|`, trim cada uno → `codeFilter: ['A', 'B', 'C']`
+  - Cualquier otra cosa → `codeFilter: [valor]` (un solo archivo)
+- El filename es todo lo que esta ANTES del `-` (incluyendo el `.md`).
 
-Ejemplos:
+3. **Actualizar `extractTheoryExerciseReferences`** para que extraiga el filename base
+   (sin el sufijo `-...`). Usar `parseExerciseShortcode` internamente. Debe seguir
+   deduplicando filenames (si `ta.md` aparece como embed estandar Y como code embed,
+   solo se retorna una vez).
 
-- `src/App.jsx -> src/App.tsx`
-- `src/styles.css -> src/styles.scss`
-- `src/main.js -> src/main.ts`
+### Archivos a modificar
 
-Si el usuario cambio el lenguaje pero el path ya tiene una extension incompatible, el sistema corrige el path al guardar el cambio.
+- `src/utils/theoryExerciseEmbeds.js`
 
-### 4. Si el archivo es `entry`, tambien se sincroniza `metadata.entry`
+### Validacion
 
-Ejemplo:
+- `npm run build` (no hay tests existentes en el proyecto)
 
-- `entry: src/main.jsx`
-- cambias `src/main.jsx` a `tsx`
-- el path pasa a `src/main.tsx`
-- `metadata.entry` debe actualizarse tambien
+---
 
-## Criterios De Exito
+## Paso 2 — Datos de codeFiles en el embed (theoryExerciseEmbeds.js)
 
-Al terminar:
+### Que hacer
 
-- hacer click en un badge abre un menu de cambio de tipo/lenguaje
-- el menu abre como popup claro, no como cambio directo sin confirmacion
-- el menu solo ofrece opciones validas para ese archivo
-- si una opcion no es valida, la UI indica por que
-- el usuario no puede aplicar cambios si la transicion sigue bloqueada
-- el cambio actualiza el documento en memoria sin romper el editor
-- si la extension del path ya no coincide, se corrige automaticamente
-- React y Vue multi-file conservan invariantes de compilacion
-- los archivos `entry` siguen siendo validos
-- los shaders no quedan en estados imposibles
-- el preview y los diagnosticos se recalculan bien
-- `Save`, `Modify`, `Ctrl+S` y `:w` persisten el resultado correcto
+1. **Extender `loadTheoryExerciseEmbeds`**: el fetch y `parseExampleDocument` ya ocurren.
+   Agregar un campo `codeFiles` al objeto embed retornado:
 
-## Fase 1: Matriz De Compatibilidad Y Helpers Base
+```javascript
+return [filename, {
+    // ... campos existentes (description, exists, filename, importance, etc.)
+    codeFiles: documentModel.files.map((file) => ({
+        path: file.path,
+        name: file.name,
+        language: file.language,
+        content: file.content,
+    })),
+}];
+```
 
-Objetivo:
+2. **Optimizacion**: `codeFiles` debe poblarse SIEMPRE que el ejemplo exista
+   (el overhead es minimo — solo copiar datos que ya estan en memoria). No vale la pena
+   rastrear cuales filenames tienen variante code porque el mismo embed map se reutiliza
+   para ambas variantes.
 
-- definir formalmente que cambios son validos en cada contexto
+3. **En el catch** (ejemplo no encontrado), `codeFiles` es `[]`.
 
-Cambios:
+### Archivos a modificar
 
-- crear una matriz de transiciones validas por contexto:
-  - legacy
-  - virtual-files sin framework
-  - React multi-file
-  - Vue multi-file
-  - shader
-- crear helpers puros en `markdown.js` o util dedicado para:
-  - listar opciones validas para un archivo
-  - decidir si una transicion es valida
-  - devolver motivo de bloqueo cuando no es valida
-  - calcular extension esperada del path
+- `src/utils/theoryExerciseEmbeds.js` (solo `loadTheoryExerciseEmbeds`)
 
-Riesgo:
+### Validacion
 
-- si esta matriz queda incompleta, la UI dejara entrar cambios que luego el compilador rechaza
+- `npm run build`
 
-Entrega:
+---
 
-- una API interna confiable para preguntar “que opciones tiene este badge”
+## Paso 3 — Exportar highlightCode (theoryRenderer.js)
 
-## Fase 2: Cambio Seguro En Legacy Blocks
+### Que hacer
 
-Objetivo:
+1. Cambiar `function highlightCode(code, lang)` a `export function highlightCode(code, lang)`.
 
-- soportar primero el caso mas simple: documentos por bloques
+Eso es todo. La funcion ya existe y funciona. Solo necesita ser exportable para que
+`theoryExerciseEmbeds.js` la use en el paso 4.
 
-Cambios:
+### Archivos a modificar
 
-- permitir cambiar `block.type` y `block.language` en legacy
-- recalcular el `file` derivado para ese bloque
-- mantener la posicion del bloque y su contenido
-- bloquear transiciones peligrosas entre mundos incompatibles
+- `src/utils/theoryRenderer.js` (linea 47: agregar `export` keyword)
 
-Casos clave:
+### Validacion
 
-- `HTML <-> PUG`
-- `HTML <-> SVG`
-- `CSS <-> SCSS <-> SASS`
-- `JavaScript <-> TypeScript`
+- `npm run build`
 
-Riesgo:
+---
 
-- ciertos cambios hacen que el contenido ya no sea valido semanticamente
+## Paso 4 — Renderizado HTML del code embed (theoryExerciseEmbeds.js)
 
-Mitigacion:
+### Que hacer
 
-- el sistema solo cambia el tipo
-- no promete migrar el contenido
-- los errores posteriores se muestran como diagnosticos normales
+1. **Crear mapeo de lenguaje para hljs**. Agregar una funcion helper:
 
-Entrega:
+```javascript
+function getHighlightLanguage(language) {
+    if (language === 'vue') return 'xml';
+    return language || '';
+}
+```
 
-- cambio de badge funcional para legacy
+2. **Crear `renderTheoryCodeEmbedMarkup(embed, codeFilter)`**:
 
-## Fase 3: Cambio Seguro En Virtual Files
+   - Recibir el embed (con `codeFiles`) y `codeFilter` (null o string[]).
+   - Filtrar archivos segun `codeFilter`:
+     - `null` → todos los archivos, en orden original.
+     - `['App.vue']` → solo ese archivo (match por `file.name` o sufijo de `file.path`).
+     - `['App.vue', 'main.ts']` → esos archivos en ese orden.
+   - Si no hay archivos visibles despues del filtro → renderizar mensaje de error.
+   - Importar `highlightCode` desde `theoryRenderer.js`.
+   - Aplicar `highlightCode(file.content, getHighlightLanguage(file.language))` a cada archivo.
 
-Objetivo:
+3. **HTML generado — un solo archivo** (sin tabs):
 
-- soportar cambio de `language` en archivos virtuales sin romper path ni metadata
+```html
+<div class="theory-code-embed is-single" data-theory-code-file="ta.md">
+  <div class="theory-code-embed-file-header">
+    <span class="theory-code-embed-file-name">App.vue</span>
+    <span class="theory-code-embed-file-lang">vue</span>
+  </div>
+  <pre><code class="hljs language-xml">[highlighted code]</code></pre>
+</div>
+```
 
-Cambios:
+4. **HTML generado — multiples archivos** (con tabs):
 
-- extender `updateDocumentFileDetails(...)` o helper nuevo para:
-  - cambiar `language`
-  - actualizar extension del path si hace falta
-  - conservar basename si es posible
-  - sincronizar `entry` si el archivo cambiado es el `entry`
-  - devolver error explicito si el cambio termina en colision o estado invalido
+```html
+<div class="theory-code-embed" data-theory-code-file="ta.md">
+  <div class="theory-code-embed-tabs">
+    <button type="button" class="theory-code-embed-tab is-active" data-code-tab="0">main.ts</button>
+    <button type="button" class="theory-code-embed-tab" data-code-tab="1">App.vue</button>
+    <button type="button" class="theory-code-embed-tab" data-code-tab="2">styles.scss</button>
+  </div>
+  <div class="theory-code-embed-panel is-active" data-code-panel="0">
+    <pre><code class="hljs language-typescript">[highlighted]</code></pre>
+  </div>
+  <div class="theory-code-embed-panel" data-code-panel="1">
+    <pre><code class="hljs language-xml">[highlighted]</code></pre>
+  </div>
+  <div class="theory-code-embed-panel" data-code-panel="2">
+    <pre><code class="hljs language-scss">[highlighted]</code></pre>
+  </div>
+</div>
+```
 
-Casos clave:
+5. **Actualizar `injectTheoryExerciseEmbeds`**: usar `parseExerciseShortcode` en el callback
+   del replace. Si `codeEmbed` es true, llamar a `renderTheoryCodeEmbedMarkup`. Si no,
+   llamar al existente `renderTheoryExerciseEmbedMarkup`.
 
-- `App.jsx -> App.tsx`
-- `main.js -> main.ts`
-- `styles.css -> styles.scss`
-- `Widget.ts -> Widget.js`
-
-Riesgo:
-
-- dos archivos pueden terminar colisionando en el mismo path
-
-Mitigacion:
-
-- si el path recalculado ya existe, el cambio debe bloquearse con mensaje claro
-
-Entrega:
-
-- cambios de lenguaje virtual-file consistentes y sin colisiones silenciosas
-
-## Fase 4: Guardrails Especiales Para React, Vue Y Shaders
-
-Objetivo:
-
-- endurecer el cambio donde mas facil es romper el proyecto
-
-Cambios:
-
-- React multi-file:
-  - solo permitir lenguajes soportados por React
-  - validar entry languages React
-- Vue multi-file:
-  - solo permitir lenguajes soportados por Vue
-  - respetar reglas de `.vue`
-  - respetar entry languages Vue
-- shader:
-  - permitir solo `vertex` y `fragment`
-  - bloquear cualquier cambio que destruya el modelo `Vertex + Fragment`
-
-Riesgo:
-
-- una conversion aparentemente trivial puede dejar el documento en estado invalido pero guardable
-
-Entrega:
-
-- el menu ya no deja hacer transiciones absurdas en frameworks o shaders
-
-## Fase 5: UI Del Menu De Cambio Desde El Badge
-
-Objetivo:
-
-- hacer visible la funcionalidad en el editor
-
-Cambios:
-
-- el badge del panel/tab se vuelve clickable
-- al hacer click, abrir un popup pequeno y centrado respecto al badge
-- mostrar:
-  - tipo/lenguaje actual
-  - lista de opciones compatibles
-  - opcion deshabilitada si una transicion esta bloqueada
-  - razon visible de bloqueo para la opcion seleccionada
-  - resumen de que cambiara si la transicion es valida:
-    - lenguaje
-    - path/extension
-    - `entry` si aplica
-- incluir botones explicitos:
-  - `Cancel`
-  - `Apply`
-- `Apply` solo se habilita si la transicion actual es valida
-
-Detalles UX:
-
-- en `Tabs`, debe funcionar tanto en el tab como en la meta del archivo activo
-- en `Panels`, debe funcionar desde el header del panel
-- el cambio debe restaurar foco al editor luego de cerrar el menu
-- si el usuario elige una opcion invalida, el popup no se cierra y debe mostrar claramente la razon
-
-Riesgo:
-
-- el menu puede competir con el click del tab o con el header del panel
-- si la razon de bloqueo no se entiende, el usuario percibira el sistema como arbitrario
-
-Entrega:
-
-- cambio accesible, explicable y bloqueado correctamente desde la UI
-
-## Fase 6: Integracion Con Preview, Diagnostics Y Session State
-
-Objetivo:
-
-- asegurar que el resto de la app entienda el nuevo tipo inmediatamente
-
-Cambios:
-
-- rerender del workspace si cambia el badge
-- recompilacion o rerender del preview
-- resincronizacion de diagnostics
-- mantener foco y archivo activo
-- persistir bien en session state si el usuario cambia layout o recarga
-
-Riesgo:
-
-- cambiar tipo y luego cambiar de `Tabs` a `Panels` puede rehidratar mal el documento si algo sigue usando el tipo viejo
-
-Entrega:
-
-- flujo estable despues del cambio de tipo
-
-## Fase 7: Casos Especiales
-
-Objetivo:
-
-- cerrar zonas problematica antes de darlo por terminado
-
-Cambios:
-
-- ejercicios:
-  - bloquear cambios sobre archivos locked si aplica
-  - revisar reference/solution files
-- theory edit:
-  - confirmar que `main.md` no expone esta UI
-- hidden files:
-  - si un archivo oculto cambia de tipo, la visibilidad no debe perderse
-- favorites:
-  - no debe cambiar nada porque siguen apuntando al Markdown, no a archivos virtuales internos
-
-Riesgo:
-
-- edge cases de UI que no fallan en compile pero si en flujo de trabajo
-
-Entrega:
-
-- funcionalidad robusta en escenarios reales
-
-## Fase 8: Tests
-
-Objetivo:
-
-- cubrir la logica antes de abrir el feature por completo
-
-Tests minimos:
-
-- matriz de compatibilidad por contexto
-- motivo de bloqueo correcto por contexto
-- legacy transitions validas e invalidas
-- virtual-file language change con rename de extension
-- sync de `metadata.entry`
-- colision de path al cambiar extension
-- React invalid language blocked
-- Vue invalid language blocked
-- shader invalid transition blocked
-- popup con `Apply` deshabilitado cuando la opcion sigue bloqueada
-- foco restaurado tras cerrar el menu
-
-Riesgo:
-
-- sin tests, este feature puede romper silenciosamente proyectos multi-file
-
-Entrega:
-
-- suite de regresion razonable
-
-## Fase 9: README Y QA Manual
-
-Objetivo:
-
-- documentar el comportamiento y validar el flujo real
-
-Cambios:
-
-- actualizar README
-- documentar que el cambio de tipo no migra automaticamente el contenido
-- dejar claro que algunas transiciones se bloquean por compatibilidad
-
-QA manual sugerido:
-
-- cambiar `CSS -> SCSS`
-- cambiar `JS -> TS`
-- cambiar `App.jsx -> App.tsx`
-- cambiar `main.js -> main.ts` cuando es `entry`
-- probar un Vue SFC y confirmar que no ofrece cambios invalidos
-- probar shader y confirmar que solo aparecen opciones validas
-
-## Orden Recomendado
-
-1. Fase 1
-2. Fase 2
-3. Fase 3
-4. Fase 4
-5. Fase 5
-6. Fase 6
-7. Fase 7
-8. Fase 8
-9. Fase 9
-
-## Resultado Esperado
-
-Al final del roadmap, el badge del archivo deja de ser decorativo y se vuelve una herramienta real de edicion.
-
-Pero el sistema no debe tratar esto como un simple cambio cosmetico: debe tratarlo como una migracion controlada de tipo de archivo, con reglas distintas para legacy, virtual-files, React, Vue y shaders.
+```javascript
+return source.replace(THEORY_EXERCISE_SHORTCODE_PATTERN, (_match, rawContent) => {
+    const parsed = parseExerciseShortcode(rawContent);
+    const embed = embedMap[parsed.filename] || { /* fallback missing */ };
+
+    if (parsed.codeEmbed) {
+        return renderTheoryCodeEmbedMarkup(embed, parsed.codeFilter);
+    }
+
+    return renderTheoryExerciseEmbedMarkup(embed);
+});
+```
+
+### Archivos a modificar
+
+- `src/utils/theoryExerciseEmbeds.js` (agregar import de `highlightCode`, nueva funcion, modificar `injectTheoryExerciseEmbeds`)
+
+### Validacion
+
+- `npm run build`
+
+---
+
+## Paso 5 — CSS para code embed
+
+### Que hacer
+
+Agregar estilos para `.theory-code-embed*` en **dos lugares** (mismos estilos, distinto scope):
+
+1. **`src/utils/theoryRenderer.js`** — dentro del `<style>` del iframe (despues de los estilos
+   de `.theory-exercise-embed`, alrededor de linea 397). Selectores SIN prefijo `#theory-content`.
+
+2. **`src/styles/07-theory.css`** — al final del archivo. Selectores CON prefijo `#theory-content`.
+
+### Estilos necesarios
+
+```css
+/* Contenedor */
+.theory-code-embed {
+  margin: 18px 0;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  background: #111827;
+  overflow: hidden;
+}
+
+/* Barra de tabs */
+.theory-code-embed-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.6);
+  overflow-x: auto;
+}
+
+/* Tab individual */
+.theory-code-embed-tab {
+  appearance: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #94a3b8;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 12px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.theory-code-embed-tab:hover {
+  color: #e2e8f0;
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.theory-code-embed-tab.is-active {
+  color: #60a5fa;
+  border-bottom-color: #60a5fa;
+}
+
+/* Panel de codigo (oculto por defecto) */
+.theory-code-embed-panel {
+  display: none;
+}
+
+.theory-code-embed-panel.is-active {
+  display: block;
+}
+
+/* Header de archivo (modo single) */
+.theory-code-embed-file-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.theory-code-embed-file-name {
+  font-size: 12px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  color: #e2e8f0;
+}
+
+.theory-code-embed-file-lang {
+  font-size: 10px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* Pre/code dentro del embed — sin margin extra */
+.theory-code-embed pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  padding: 14px 16px;
+  background: transparent;
+}
+
+.theory-code-embed pre code {
+  font-size: 13px;
+  line-height: 1.6;
+}
+```
+
+Para `07-theory.css`, prefijar cada selector con `#theory-content`:
+```css
+#theory-content .theory-code-embed { ... }
+#theory-content .theory-code-embed-tabs { ... }
+/* etc. */
+```
+
+### Archivos a modificar
+
+- `src/utils/theoryRenderer.js` (agregar CSS inline al `<style>` del iframe)
+- `src/styles/07-theory.css` (agregar CSS al final)
+
+### Validacion
+
+- `npm run build`
+
+---
+
+## Paso 6 — Hidratacion interactiva de tabs
+
+### Que hacer
+
+Agregar JavaScript para el switching de tabs (click en tab → mostrar panel correspondiente,
+ocultar los demas).
+
+1. **Iframe** (`renderTheoryPreviewDocument` en `theoryRenderer.js`):
+   Extender el `<script>` inline existente (alrededor de linea 416). Agregar DESPUES
+   del bloque de exercise embed handlers (despues de la linea del `keydown` listener,
+   antes del cierre `})();`):
+
+```javascript
+// Code embed tab switching
+document.addEventListener('click', function(event) {
+    var tab = event.target.closest('.theory-code-embed-tab');
+    if (!tab) return;
+    var embed = tab.closest('.theory-code-embed');
+    if (!embed) return;
+    var index = tab.getAttribute('data-code-tab');
+    embed.querySelectorAll('.theory-code-embed-tab').forEach(function(t) {
+        t.classList.toggle('is-active', t.getAttribute('data-code-tab') === index);
+    });
+    embed.querySelectorAll('.theory-code-embed-panel').forEach(function(p) {
+        p.classList.toggle('is-active', p.getAttribute('data-code-panel') === index);
+    });
+});
+```
+
+   **Nota**: este listener es un segundo `document.addEventListener('click', ...)`. El existente
+   maneja exercise embeds (open/preview buttons + card clicks). Este nuevo es independiente y
+   puede coexistir. NO mezclar con el listener existente — agregar uno separado.
+
+2. **Theory viewer** (`TheoryViewer.js`):
+   Agregar un metodo `_hydrateCodeEmbedTabs()` y llamarlo al final de `renderContent()`
+   (despues de `_hydrateExercisePreviewSlots`):
+
+```javascript
+_hydrateCodeEmbedTabs() {
+    if (!this.container) return;
+    this.container.querySelectorAll('.theory-code-embed').forEach((embed) => {
+        embed.addEventListener('click', (event) => {
+            const tab = event.target.closest('.theory-code-embed-tab');
+            if (!tab) return;
+            const index = tab.getAttribute('data-code-tab');
+            embed.querySelectorAll('.theory-code-embed-tab').forEach((t) => {
+                t.classList.toggle('is-active', t.getAttribute('data-code-tab') === index);
+            });
+            embed.querySelectorAll('.theory-code-embed-panel').forEach((p) => {
+                p.classList.toggle('is-active', p.getAttribute('data-code-panel') === index);
+            });
+        });
+    });
+}
+```
+
+   En `renderContent()`, agregar la llamada:
+```javascript
+this._hydrateExercisePreviewSlots(exerciseEmbeds);
+this._hydrateCodeEmbedTabs();  // <-- nueva linea
+```
+
+### Archivos a modificar
+
+- `src/utils/theoryRenderer.js` (agregar click handler al script inline del iframe)
+- `src/components/TheoryViewer.js` (agregar metodo + llamada)
+
+### Validacion
+
+- `npm run build`
+
+---
+
+## Paso 7 — Integracion en el dialogo Embed (theoryEditor.js)
+
+### Que hacer
+
+Actualizar el dialogo de "Insert Exercise Embed" para ofrecer la opcion de insertar code embed.
+
+1. **Modificar cada card** en `_openExerciseEmbedDialog()`: agregar un segundo boton
+   debajo de cada card (o junto al existente) que copie `[[exercise:filename-]]` en vez
+   de `[[exercise:filename]]`.
+
+   Cambiar la estructura de cada card. Actualmente cada card es un `<button>` que al click
+   copia `[[exercise:filename]]`. Cambiar a un contenedor con dos botones:
+
+```javascript
+// Reemplazar el card <button> por un <div> con dos botones
+const card = document.createElement('div');
+card.className = 'exercise-embed-card';
+
+// ... preview y footer existentes ...
+
+const actions = document.createElement('div');
+actions.className = 'exercise-embed-card-actions';
+
+const btnEmbed = document.createElement('button');
+btnEmbed.type = 'button';
+btnEmbed.className = 'exercise-embed-card-action';
+btnEmbed.textContent = 'Embed';
+btnEmbed.title = `Copy [[exercise:${filename}]]`;
+btnEmbed.addEventListener('click', () => {
+    const tag = `[[exercise:${filename}]]`;
+    navigator.clipboard.writeText(tag).then(() => {
+        this._showToast(`Copied: ${tag}`, 'success');
+    }).catch(() => {
+        this._showToast(`Tag: ${tag}`, 'success');
+    });
+    this.exerciseEmbedDialog.close();
+});
+
+const btnCode = document.createElement('button');
+btnCode.type = 'button';
+btnCode.className = 'exercise-embed-card-action is-code';
+btnCode.textContent = 'Code';
+btnCode.title = `Copy [[exercise:${filename}-]]`;
+btnCode.addEventListener('click', () => {
+    const tag = `[[exercise:${filename}-]]`;
+    navigator.clipboard.writeText(tag).then(() => {
+        this._showToast(`Copied: ${tag}`, 'success');
+    }).catch(() => {
+        this._showToast(`Tag: ${tag}`, 'success');
+    });
+    this.exerciseEmbedDialog.close();
+});
+
+actions.appendChild(btnEmbed);
+actions.appendChild(btnCode);
+card.appendChild(actions);
+```
+
+2. **CSS para los botones** en `src/styles/06-dialogs.css`:
+
+```css
+.exercise-embed-card-actions {
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.12));
+}
+
+.exercise-embed-card-action {
+  flex: 1;
+  appearance: none;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  background: rgba(30, 64, 175, 0.18);
+  color: #dbeafe;
+}
+
+.exercise-embed-card-action:hover {
+  background: rgba(30, 64, 175, 0.32);
+}
+
+.exercise-embed-card-action.is-code {
+  background: rgba(15, 23, 42, 0.52);
+  color: #e5e7eb;
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.exercise-embed-card-action.is-code:hover {
+  background: rgba(15, 23, 42, 0.72);
+}
+```
+
+### Archivos a modificar
+
+- `src/components/editor/theoryEditor.js` (`_openExerciseEmbedDialog`)
+- `src/styles/06-dialogs.css` (agregar estilos al final)
+
+### Validacion
+
+- `npm run build` + verificacion visual manual
+
+---
+
+## Orden de implementacion
+
+Implementar en el orden exacto de los pasos (1 → 7). Cada paso construye sobre el anterior.
+Correr `npm run build` despues de cada paso para verificar que no hay errores de compilacion.
+
+## Archivos involucrados (resumen)
+
+| Archivo | Pasos |
+|---------|-------|
+| `src/utils/theoryExerciseEmbeds.js` | 1, 2, 4 |
+| `src/utils/theoryRenderer.js` | 3, 5, 6 |
+| `src/styles/07-theory.css` | 5 |
+| `src/components/TheoryViewer.js` | 6 |
+| `src/components/editor/theoryEditor.js` | 7 |
+| `src/styles/06-dialogs.css` | 7 |

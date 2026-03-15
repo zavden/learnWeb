@@ -11,6 +11,7 @@ import {
     isShaderDocument,
     parseExampleDocument,
 } from './markdown.js';
+import { highlightCode } from './theoryRenderer.js';
 
 const THEORY_EXERCISE_SHORTCODE_PATTERN = /^[ \t]*\[\[exercise:([^\]\n]+)\]\][ \t]*$/gim;
 
@@ -87,16 +88,40 @@ function buildTheoryExerciseEmbedBody(embed = {}) {
     ].join('');
 }
 
+export function parseExerciseShortcode(raw = '') {
+    const normalized = String(raw || '').trim();
+    const mdDashIndex = normalized.lastIndexOf('.md-');
+
+    if (mdDashIndex === -1) {
+        return { filename: normalized, codeEmbed: false, codeFilter: null };
+    }
+
+    const filename = normalized.slice(0, mdDashIndex + 3); // includes '.md', excludes '-'
+    const filterPart = normalized.slice(mdDashIndex + 4);  // after '.md-'
+
+    let codeFilter = null;
+    if (filterPart) {
+        if (filterPart.startsWith('(') && filterPart.endsWith(')')) {
+            codeFilter = filterPart.slice(1, -1).split('|').map((s) => s.trim()).filter(Boolean);
+        } else {
+            codeFilter = [filterPart.trim()];
+        }
+    }
+
+    return { filename, codeEmbed: true, codeFilter };
+}
+
 export function extractTheoryExerciseReferences(content = '') {
     const source = typeof content === 'string' ? content : String(content ?? '');
     const filenames = [];
     const seen = new Set();
 
     for (const match of source.matchAll(THEORY_EXERCISE_SHORTCODE_PATTERN)) {
-        const filename = normalizeFilename(match[1]);
-        if (!filename || seen.has(filename)) continue;
-        seen.add(filename);
-        filenames.push(filename);
+        const { filename } = parseExerciseShortcode(match[1]);
+        const normalized = normalizeFilename(filename);
+        if (!normalized || seen.has(normalized)) continue;
+        seen.add(normalized);
+        filenames.push(normalized);
     }
 
     return filenames;
@@ -112,23 +137,89 @@ export function renderTheoryExerciseEmbedMarkup(embed = {}) {
     return `<div class="theory-exercise-embed${exists ? '' : ' is-missing'}" data-theory-exercise-file="${escapeHtml(filename)}" data-theory-exercise-exists="${exists ? '1' : '0'}"${interactiveAttrs}>${buildTheoryExerciseEmbedBody({ ...embed, filename })}</div>`;
 }
 
+function getHighlightLanguage(language) {
+    if (language === 'vue') return 'xml';
+    return language || '';
+}
+
+function matchesCodeFilter(file, filter) {
+    if (!Array.isArray(filter)) return true;
+    return filter.some((name) => file.name === name || file.path === name || file.path?.endsWith(`/${name}`));
+}
+
+export function renderTheoryCodeEmbedMarkup(embed = {}, codeFilter = null) {
+    const filename = normalizeFilename(embed.filename);
+    const allFiles = Array.isArray(embed.codeFiles) ? embed.codeFiles : [];
+
+    const files = codeFilter === null
+        ? allFiles
+        : codeFilter.map((name) => allFiles.find((f) => matchesCodeFilter(f, [name]))).filter(Boolean);
+
+    if (files.length === 0) {
+        return `<div class="theory-code-embed is-empty" data-theory-code-file="${escapeHtml(filename)}"><p>No files to display.</p></div>`;
+    }
+
+    if (files.length === 1) {
+        const file = files[0];
+        const lang = getHighlightLanguage(file.language);
+        const highlighted = highlightCode(file.content || '', lang);
+        return [
+            `<div class="theory-code-embed is-single" data-theory-code-file="${escapeHtml(filename)}">`,
+            `<div class="theory-code-embed-file-header">`,
+            `<span class="theory-code-embed-file-name">${escapeHtml(file.name || file.path || '')}</span>`,
+            `<span class="theory-code-embed-file-lang">${escapeHtml(file.language || '')}</span>`,
+            `</div>`,
+            `<pre><code class="hljs language-${escapeHtml(lang)}">${highlighted}</code></pre>`,
+            `</div>`,
+        ].join('');
+    }
+
+    const tabs = files.map((file, i) =>
+        `<button type="button" class="theory-code-embed-tab${i === 0 ? ' is-active' : ''}" data-code-tab="${i}">${escapeHtml(file.name || file.path || '')}</button>`
+    ).join('');
+
+    const panels = files.map((file, i) => {
+        const lang = getHighlightLanguage(file.language);
+        const highlighted = highlightCode(file.content || '', lang);
+        return [
+            `<div class="theory-code-embed-panel${i === 0 ? ' is-active' : ''}" data-code-panel="${i}">`,
+            `<pre><code class="hljs language-${escapeHtml(lang)}">${highlighted}</code></pre>`,
+            `</div>`,
+        ].join('');
+    }).join('');
+
+    return [
+        `<div class="theory-code-embed" data-theory-code-file="${escapeHtml(filename)}">`,
+        `<div class="theory-code-embed-tabs">${tabs}</div>`,
+        panels,
+        `</div>`,
+    ].join('');
+}
+
 export function injectTheoryExerciseEmbeds(content = '', exerciseEmbeds = {}) {
     const source = typeof content === 'string' ? content : String(content ?? '');
     const embedMap = exerciseEmbeds && typeof exerciseEmbeds === 'object'
         ? exerciseEmbeds
         : {};
 
-    return source.replace(THEORY_EXERCISE_SHORTCODE_PATTERN, (_match, rawFilename) => {
-        const filename = normalizeFilename(rawFilename);
-        return renderTheoryExerciseEmbedMarkup(embedMap[filename] || {
+    return source.replace(THEORY_EXERCISE_SHORTCODE_PATTERN, (_match, rawContent) => {
+        const parsed = parseExerciseShortcode(rawContent);
+        const embed = embedMap[parsed.filename] || {
+            codeFiles: [],
             description: '',
             exists: false,
-            filename,
+            filename: parsed.filename,
             importance: '',
             rating: null,
             stage: '',
             tags: [],
-        });
+        };
+
+        if (parsed.codeEmbed) {
+            return renderTheoryCodeEmbedMarkup(embed, parsed.codeFilter);
+        }
+
+        return renderTheoryExerciseEmbedMarkup(embed);
     });
 }
 
@@ -168,6 +259,12 @@ export async function loadTheoryExerciseEmbeds(topicPath, content = '') {
                 }
 
                 return [filename, {
+                    codeFiles: documentModel.files.map((file) => ({
+                        content: file.content,
+                        language: file.language,
+                        name: file.name,
+                        path: file.path,
+                    })),
                     description: editorial.description || '',
                     exists: true,
                     filename,
@@ -179,6 +276,7 @@ export async function loadTheoryExerciseEmbeds(topicPath, content = '') {
                 }];
             } catch {
                 return [filename, {
+                    codeFiles: [],
                     description: '',
                     exists: false,
                     filename,

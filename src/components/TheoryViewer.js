@@ -90,6 +90,7 @@ export class TheoryViewer {
         exerciseEmbeds,
       });
       this._hydrateExercisePreviewSlots(exerciseEmbeds);
+      this._hydrateCodeEmbedTabs();
       return;
     }
 
@@ -162,6 +163,24 @@ export class TheoryViewer {
       slot.classList.remove('is-empty');
       slot.innerHTML = '';
       slot.appendChild(iframe);
+    });
+  }
+
+  _hydrateCodeEmbedTabs() {
+    if (!this.container) return;
+
+    this.container.querySelectorAll('.theory-code-embed').forEach((embed) => {
+      embed.addEventListener('click', (event) => {
+        const tab = event.target.closest('.theory-code-embed-tab');
+        if (!tab) return;
+        const index = tab.getAttribute('data-code-tab');
+        embed.querySelectorAll('.theory-code-embed-tab').forEach((t) => {
+          t.classList.toggle('is-active', t.getAttribute('data-code-tab') === index);
+        });
+        embed.querySelectorAll('.theory-code-embed-panel').forEach((p) => {
+          p.classList.toggle('is-active', p.getAttribute('data-code-panel') === index);
+        });
+      });
     });
   }
 }

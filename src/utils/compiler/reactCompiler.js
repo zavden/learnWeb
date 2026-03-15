@@ -1,3 +1,4 @@
+import path from 'path';
 import { build } from 'esbuild';
 import * as sass from 'sass';
 import {
@@ -9,23 +10,20 @@ import {
     getFileBySlot,
 } from './helpers.js';
 import { compileStyle } from './styleCompiler.js';
-import { createVirtualFilesPlugin } from './virtualFilesPlugin.js';
+import { createVirtualFilesPlugin, createInlineModulesPlugin } from './virtualFilesPlugin.js';
 
-function buildReactSingleFileEntry(appSource = '') {
+function buildReactSingleFileEntry(appImportPath) {
     return `
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import { App } from ${JSON.stringify(appImportPath)};
 
-${appSource}
+globalThis.React = React;
 
 const rootElement = document.getElementById('root');
 
 if (!rootElement) {
   throw new Error('React root element "#root" was not found.');
-}
-
-if (typeof App !== 'function') {
-  throw new Error('React single-file examples must define a top-level App component.');
 }
 
 const root = createRoot(rootElement);
@@ -85,30 +83,52 @@ function validateReactSingleFileAppBlock(appBlock) {
     return diagnostics;
 }
 
-async function buildReactBundle({ contents, loader, sourcefile }) {
+async function buildReactSingleFileBundle({ appSource, appPath, loader }) {
+    const entryPath = '__learncode_react_single__/entry.js';
+    const normalizedAppPath = normalizeSourcePath(appPath, `react-example.${loader}`);
+    const appImportPath = `./${path.posix.relative(
+        path.posix.dirname(entryPath),
+        normalizedAppPath,
+    )}`;
+
+    const files = new Map([
+        [
+            entryPath,
+            {
+                contents: buildReactSingleFileEntry(appImportPath),
+                loader: 'jsx',
+                resolveDir: process.cwd(),
+            },
+        ],
+        [
+            normalizedAppPath,
+            {
+                contents: `${appSource}\nexport { App };`,
+                loader,
+                resolveDir: process.cwd(),
+            },
+        ],
+    ]);
+
     const result = await build({
         absWorkingDir: process.cwd(),
         bundle: true,
         define: {
             'process.env.NODE_ENV': '"development"',
         },
+        entryPoints: [entryPath],
         format: 'iife',
         jsx: 'automatic',
         jsxImportSource: 'react',
         logLevel: 'silent',
         minify: false,
+        outdir: 'out',
         platform: 'browser',
+        plugins: [createInlineModulesPlugin(files, entryPath)],
         sourcemap: 'inline',
         sourcesContent: true,
         target: ['es2020'],
         write: false,
-        stdin: {
-            contents,
-            loader,
-            resolveDir: process.cwd(),
-            sourcefile: normalizeSourcePath(sourcefile, `react-example.${loader}`),
-        },
-        outdir: 'out',
     });
 
     return {
@@ -140,10 +160,10 @@ export async function compileReactSingleFileDocument(sourceDocument) {
 
     try {
         const appFile = getFileBySlot(sourceDocument, 'app');
-        const bundle = await buildReactBundle({
-            contents: buildReactSingleFileEntry(appBlock.content || ''),
+        const bundle = await buildReactSingleFileBundle({
+            appSource: appBlock.content || '',
+            appPath: appFile?.path || '',
             loader: appBlock.type === 'tsx' ? 'tsx' : 'jsx',
-            sourcefile: appFile?.path || `react-example.${appBlock.type === 'tsx' ? 'tsx' : 'jsx'}`,
         });
 
         return {

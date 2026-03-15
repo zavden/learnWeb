@@ -44,7 +44,7 @@ function serializeInlineScriptValue(value) {
         .replace(/\u2029/g, '\\u2029');
 }
 
-function highlightCode(code, lang) {
+export function highlightCode(code, lang) {
     const language = String(lang || '').trim().toLowerCase();
     if (language && hljs.getLanguage(language)) {
         try {
@@ -408,6 +408,89 @@ export function renderTheoryPreviewDocument(content = '', options = {}) {
       font-size: 38px;
       margin-bottom: 10px;
     }
+
+    .theory-code-embed {
+      margin: 18px 0;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 12px;
+      background: #111827;
+      overflow: hidden;
+    }
+
+    .theory-code-embed-tabs {
+      display: flex;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+      background: rgba(15, 23, 42, 0.6);
+      overflow-x: auto;
+    }
+
+    .theory-code-embed-tab {
+      appearance: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      background: transparent;
+      color: #94a3b8;
+      padding: 8px 14px;
+      font: inherit;
+      font-size: 12px;
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .theory-code-embed-tab:hover {
+      color: #e2e8f0;
+      background: rgba(148, 163, 184, 0.08);
+    }
+
+    .theory-code-embed-tab.is-active {
+      color: #60a5fa;
+      border-bottom-color: #60a5fa;
+    }
+
+    .theory-code-embed-panel {
+      display: none;
+    }
+
+    .theory-code-embed-panel.is-active {
+      display: block;
+    }
+
+    .theory-code-embed-file-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 14px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+      background: rgba(15, 23, 42, 0.6);
+    }
+
+    .theory-code-embed-file-name {
+      font-size: 12px;
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      color: #e2e8f0;
+    }
+
+    .theory-code-embed-file-lang {
+      font-size: 10px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .theory-code-embed pre {
+      margin: 0;
+      border: none;
+      border-radius: 0;
+      padding: 14px 16px;
+      background: transparent;
+      overflow-x: auto;
+    }
+
+    .theory-code-embed pre code {
+      font-size: 13px;
+      line-height: 1.6;
+    }
   </style>
 </head>
 <body>
@@ -478,6 +561,20 @@ export function renderTheoryPreviewDocument(content = '', options = {}) {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
         post('preview-exercise', card.getAttribute('data-theory-exercise-file'));
+      });
+
+      document.addEventListener('click', (event) => {
+        const tab = event.target.closest('.theory-code-embed-tab');
+        if (!tab) return;
+        const embed = tab.closest('.theory-code-embed');
+        if (!embed) return;
+        const index = tab.getAttribute('data-code-tab');
+        embed.querySelectorAll('.theory-code-embed-tab').forEach((t) => {
+          t.classList.toggle('is-active', t.getAttribute('data-code-tab') === index);
+        });
+        embed.querySelectorAll('.theory-code-embed-panel').forEach((p) => {
+          p.classList.toggle('is-active', p.getAttribute('data-code-panel') === index);
+        });
       });
     })();
   </script>

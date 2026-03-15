@@ -366,3 +366,90 @@
   color: var(--text-muted) !important;
   font-size: 13px;
 }
+
+/* ═══════════════════════════════════════════════════════
+   Theory Code Embed
+   ═══════════════════════════════════════════════════════ */
+
+#theory-content .theory-code-embed {
+  margin: 18px 0;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  background: #111827;
+  overflow: hidden;
+}
+
+#theory-content .theory-code-embed-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.6);
+  overflow-x: auto;
+}
+
+#theory-content .theory-code-embed-tab {
+  appearance: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #94a3b8;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 12px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#theory-content .theory-code-embed-tab:hover {
+  color: #e2e8f0;
+  background: rgba(148, 163, 184, 0.08);
+}
+
+#theory-content .theory-code-embed-tab.is-active {
+  color: #60a5fa;
+  border-bottom-color: #60a5fa;
+}
+
+#theory-content .theory-code-embed-panel {
+  display: none;
+}
+
+#theory-content .theory-code-embed-panel.is-active {
+  display: block;
+}
+
+#theory-content .theory-code-embed-file-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.6);
+}
+
+#theory-content .theory-code-embed-file-name {
+  font-size: 12px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  color: #e2e8f0;
+}
+
+#theory-content .theory-code-embed-file-lang {
+  font-size: 10px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+#theory-content .theory-code-embed pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  padding: 14px 16px;
+  background: transparent;
+  overflow-x: auto;
+}
+
+#theory-content .theory-code-embed pre code {
+  font-size: 13px;
+  line-height: 1.6;
+}

@@ -14,13 +14,11 @@ código de usuario (ignora node_modules).
 | `src/utils/renderer/documentRenderer.js` | sourceURL + inyección sin try/catch para compiled code |
 | `src/components/Preview.js` | Seleccionar frame de usuario (no framework) |
 | `src/components/editor/diagnostics.js` | Fallback genérico para `learncode-inline:` paths |
-
-**Limitación conocida**: en React single-file (stdin mode), las líneas pueden tener
-un offset de ~4 debido al wrapper de imports. Multi-file funciona correctamente.
+| `src/utils/compiler/reactCompiler.js` | React single-file refactorizado a módulos inline (como Vue); elimina offset +4 |
 
 ---
 
-## Code Embed en Theory — `[[exercise:file.md-]]`
+## Code Embed en Theory — `[[exercise:file.md-]]` ✓
 
 Nueva variante de embed para theory (`main.md`) que muestra el **código fuente** de un ejemplo
 en vez de su preview ejecutado. Tres sintaxis:
@@ -36,162 +34,16 @@ Diferencias con el embed estándar (`[[exercise:ta.md]]`):
 - Muestra bloques de código con syntax highlighting (highlight.js).
 - Usa tabs para navegar entre archivos (cuando hay más de uno).
 
-### Fase 1 — Parsing del nuevo shortcode
+Implementado. Archivos modificados:
 
-Estado: `pendiente`
-
-Extender `theoryExerciseEmbeds.js`:
-
-1. Ampliar `THEORY_EXERCISE_SHORTCODE_PATTERN` (o añadir un segundo regex) para capturar:
-   - `[[exercise:file.md-]]` → `filename=file.md`, `mode=all-files`, `filter=null`
-   - `[[exercise:file.md-Name.ext]]` → `filename=file.md`, `mode=single-file`, `filter=["Name.ext"]`
-   - `[[exercise:file.md-(A.ext|B.ext)]]` → `filename=file.md`, `mode=multi-file`, `filter=["A.ext","B.ext"]`
-2. Actualizar `extractTheoryExerciseReferences()` para que también detecte las variantes con `-`.
-   Debe seguir retornando los filenames únicos de los `.md` referenciados (sin duplicar si
-   `ta.md` aparece como embed estándar y como code embed al mismo tiempo).
-3. Crear una función `parseExerciseShortcode(raw)` que, dado el contenido entre `[[exercise:` y `]]`,
-   retorne `{ filename, codeEmbed: true|false, codeFilter: null|string[] }`.
-
-Archivos: `src/utils/theoryExerciseEmbeds.js`
-
-Validación: `npm test` (añadir tests para las 3 variantes + el embed estándar existente)
-
-### Fase 2 — Datos de code embed
-
-Estado: `pendiente`
-
-Extender `loadTheoryExerciseEmbeds()`:
-
-1. Para cada filename referenciado, el fetch ya se hace. No hay que duplicar llamadas.
-   Lo que cambia es que el objeto retornado necesita incluir los archivos parseados del ejemplo.
-2. Añadir al objeto de embed un campo `codeFiles`:
-   ```javascript
-   codeFiles: [
-     { name: "src/main.ts", language: "typescript", content: "import ..." },
-     { name: "src/App.vue", language: "vue", content: "<template>..." },
-     ...
-   ]
-   ```
-   Estos se extraen de `parseExampleDocument(data.content).files`.
-3. Los datos de code-files se necesitan **solo** si hay al menos un code embed para ese filename.
-   Optimizar: rastrear cuáles filenames tienen variante code y cuáles no, y solo poblar
-   `codeFiles` cuando sea necesario (evitar overhead para embeds estándar que no usan el código).
-
-Archivos: `src/utils/theoryExerciseEmbeds.js`
-
-Validación: `npm test`
-
-### Fase 3 — Renderizado HTML del code embed
-
-Estado: `pendiente`
-
-Crear la función `renderTheoryCodeEmbedMarkup(embed, codeFilter)` en `theoryExerciseEmbeds.js`:
-
-1. Recibir el embed (con `codeFiles`) y el `codeFilter` (null = todos, array = filtrar/ordenar).
-2. Filtrar y ordenar los archivos según `codeFilter`:
-   - `null` → todos los archivos visibles, en orden original.
-   - `["App.vue"]` → solo ese archivo (match por nombre base, sin `src/`).
-   - `["App.vue", "main.ts"]` → esos archivos en ese orden.
-3. Generar HTML:
-   - Si hay **1 solo archivo**: bloque `<pre><code>` con la clase hljs y el nombre como header.
-   - Si hay **varios archivos**: barra de tabs + paneles de código, el primer tab activo.
-   - Aplicar `highlightCode(content, language)` de `theoryRenderer.js` para colorear.
-4. Actualizar `injectTheoryExerciseEmbeds()` para usar `parseExerciseShortcode()` y llamar
-   a la función de renderizado correcta según si es code embed o embed estándar.
-
-Estructura HTML generada (multi-tab):
-```html
-<div class="theory-code-embed" data-theory-code-file="ta.md">
-  <div class="theory-code-embed-tabs">
-    <button class="theory-code-embed-tab is-active" data-tab="0">App.vue</button>
-    <button class="theory-code-embed-tab" data-tab="1">main.ts</button>
-  </div>
-  <div class="theory-code-embed-panel is-active" data-tab="0">
-    <pre><code class="hljs language-vue">...</code></pre>
-  </div>
-  <div class="theory-code-embed-panel" data-tab="1">
-    <pre><code class="hljs language-typescript">...</code></pre>
-  </div>
-</div>
-```
-
-Estructura HTML (single file, sin tabs):
-```html
-<div class="theory-code-embed is-single" data-theory-code-file="ta.md">
-  <div class="theory-code-embed-file-header">App.vue</div>
-  <pre><code class="hljs language-vue">...</code></pre>
-</div>
-```
-
-Archivos: `src/utils/theoryExerciseEmbeds.js`, `src/utils/theoryRenderer.js` (exportar `highlightCode`)
-
-Validación: `npm test`
-
-### Fase 4 — CSS para code embed
-
-Estado: `pendiente`
-
-Añadir estilos para las clases `.theory-code-embed*` en dos lugares:
-
-1. `src/utils/theoryRenderer.js` — estilos inline del iframe (modo edición de theory).
-2. `src/styles/07-theory.css` — estilos del DOM principal (theory viewer hamburguesa).
-
-Estilos necesarios:
-- `.theory-code-embed` — contenedor con borde, border-radius, fondo oscuro, margin vertical.
-- `.theory-code-embed-tabs` — barra de tabs horizontal con gap, border-bottom.
-- `.theory-code-embed-tab` — botón de tab con estado activo (borde inferior coloreado).
-- `.theory-code-embed-panel` — oculto por defecto, visible cuando `.is-active`.
-- `.theory-code-embed-file-header` — nombre de archivo en modo single (font mono, color sutil).
-- `pre` y `code` dentro del embed — sin margin extra, overflow-x auto.
-
-Archivos: `src/utils/theoryRenderer.js`, `src/styles/07-theory.css`
-
-Validación: `npm run build`
-
-### Fase 5 — Hidratación interactiva (tabs)
-
-Estado: `pendiente`
-
-Añadir lógica JavaScript para el switching de tabs en ambas rutas de renderizado:
-
-1. **Iframe** (`renderTheoryPreviewDocument` en `theoryRenderer.js`):
-   Extender el `<script>` inline para que escuche clicks en `.theory-code-embed-tab`
-   y active/desactive los paneles correspondientes con `.is-active`.
-
-2. **Theory viewer** (`TheoryViewer.js`):
-   Añadir un método `_hydrateCodeEmbedTabs()` llamado después de `renderContent()`.
-   Attach event listeners de click a los tabs de todos los `.theory-code-embed`.
-
-Archivos: `src/utils/theoryRenderer.js`, `src/components/TheoryViewer.js`
-
-Validación: `npm run build` + verificación visual manual
-
-### Fase 6 — Integración en el diálogo Embed
-
-Estado: `pendiente`
-
-Actualizar el diálogo de "Insert Exercise Embed" (botón Embed en la toolbar de theory):
-
-1. Añadir un selector por tarjeta que permita elegir el modo de inserción:
-   - `[[exercise:file.md]]` — embed estándar (preview + meta), ya existente.
-   - `[[exercise:file.md-]]` — code embed (todos los archivos).
-   - O bien un menú contextual al hacer click en la tarjeta: "Insert embed" vs "Insert code".
-2. Si el usuario elige "Insert code", copiar `[[exercise:file.md-]]` al portapapeles.
-3. Opcionalmente, mostrar un segundo diálogo o expandir la tarjeta para dejar elegir
-   qué archivos incluir (generando la sintaxis `(A|B)` o `single`).
-   Esto es un refinamiento; la inserción manual de la sintaxis filtrada también es válida.
-
-Archivos: `src/components/editor/theoryEditor.js`, posiblemente `src/styles/06-dialogs.css`
-
-Validación: `npm run build` + verificación visual manual
-
-### Reglas para cada fase
-
-1. `highlightCode` debe exportarse desde `theoryRenderer.js` para reutilizarse en el markup de code embeds.
-2. No duplicar fetch: si `ta.md` aparece como embed estándar y code embed, el fetch solo ocurre una vez.
-3. La barra de tabs no se renderiza si solo hay un archivo visible.
-4. El match de `codeFilter` se hace por nombre base del archivo (ej. `App.vue` matchea `src/App.vue`).
-5. Correr `npm test` después de las fases 1-3. Correr `npm run build` después de las fases 4-6.
+| Archivo | Cambio |
+|---------|--------|
+| `src/utils/theoryExerciseEmbeds.js` | `parseExerciseShortcode`, `codeFiles` en embed data, `renderTheoryCodeEmbedMarkup`, `injectTheoryExerciseEmbeds` actualizado |
+| `src/utils/theoryRenderer.js` | `highlightCode` exportado, CSS inline, tab switching JS |
+| `src/styles/07-theory.css` | Estilos `.theory-code-embed*` |
+| `src/components/TheoryViewer.js` | `_hydrateCodeEmbedTabs()` |
+| `src/components/editor/theoryEditor.js` | Botones Embed/Code en el diálogo |
+| `src/styles/06-dialogs.css` | Estilos de los botones de acción |
 
 ---
 

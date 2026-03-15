@@ -107,10 +107,8 @@ export const theoryEditorMixin = {
             this.exerciseEmbedList.innerHTML = '';
 
             for (const filename of examples) {
-                const card = document.createElement('button');
-                card.type = 'button';
+                const card = document.createElement('div');
                 card.className = 'exercise-embed-card';
-                card.title = `Copy [[exercise:${filename}]]`;
 
                 const preview = document.createElement('div');
                 preview.className = 'exercise-embed-card-preview';
@@ -120,10 +118,15 @@ export const theoryEditorMixin = {
                 footer.className = 'exercise-embed-card-footer';
                 footer.innerHTML = `<span class="exercise-embed-card-name">${filename}</span>`;
 
-                card.appendChild(preview);
-                card.appendChild(footer);
+                const actions = document.createElement('div');
+                actions.className = 'exercise-embed-card-actions';
 
-                card.addEventListener('click', () => {
+                const btnEmbed = document.createElement('button');
+                btnEmbed.type = 'button';
+                btnEmbed.className = 'exercise-embed-card-action';
+                btnEmbed.textContent = 'Embed';
+                btnEmbed.title = `Copy [[exercise:${filename}]]`;
+                btnEmbed.addEventListener('click', () => {
                     const tag = `[[exercise:${filename}]]`;
                     navigator.clipboard.writeText(tag).then(() => {
                         this._showToast(`Copied: ${tag}`, 'success');
@@ -132,6 +135,28 @@ export const theoryEditorMixin = {
                     });
                     this.exerciseEmbedDialog.close();
                 });
+
+                const btnCode = document.createElement('button');
+                btnCode.type = 'button';
+                btnCode.className = 'exercise-embed-card-action is-code';
+                btnCode.textContent = 'Code';
+                btnCode.title = `Copy [[exercise:${filename}-]]`;
+                btnCode.addEventListener('click', () => {
+                    const tag = `[[exercise:${filename}-]]`;
+                    navigator.clipboard.writeText(tag).then(() => {
+                        this._showToast(`Copied: ${tag}`, 'success');
+                    }).catch(() => {
+                        this._showToast(`Tag: ${tag}`, 'success');
+                    });
+                    this.exerciseEmbedDialog.close();
+                });
+
+                actions.appendChild(btnEmbed);
+                actions.appendChild(btnCode);
+
+                card.appendChild(preview);
+                card.appendChild(footer);
+                card.appendChild(actions);
 
                 this.exerciseEmbedList.appendChild(card);
 
