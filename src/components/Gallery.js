@@ -1,4 +1,4 @@
-import { fetchExamples, fetchExample } from '../utils/api.js';
+import { fetchExamples, fetchExample, removeExample } from '../utils/api.js';
 import { compileExample } from '../utils/compileClient.js';
 import {
     formatExampleRatingStars,
@@ -149,6 +149,18 @@ export class Gallery {
             footer.appendChild(badge);
         }
 
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'card-delete-btn';
+        deleteBtn.title = 'Delete example';
+        deleteBtn.setAttribute('aria-label', 'Delete example');
+        deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
+        deleteBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            this._deleteExample(filename);
+        });
+        footer.appendChild(deleteBtn);
+
         div.appendChild(preview);
         div.appendChild(footer);
 
@@ -163,6 +175,18 @@ export class Gallery {
             filename,
             stageRank: stageMeta?.rank ?? Number.MAX_SAFE_INTEGER,
         };
+    }
+
+    async _deleteExample(filename) {
+        if (!this.currentTopicPath) return;
+        if (!window.confirm(`Delete "${filename}"?`)) return;
+
+        try {
+            await removeExample(this.currentTopicPath, filename);
+            await this.load(this.currentTopicPath);
+        } catch (err) {
+            console.error('Failed to delete example:', err);
+        }
     }
 
     setMetaOverlayHidden(hidden) {
