@@ -4,7 +4,17 @@ import { buildRuntimeBridgeMarkup } from './runtimeBridge.js';
 function buildUserScriptMarkup(js = '', options = {}) {
     const consoleEnabled = Boolean(options.consoleEnabled);
     const runtimeScriptPath = String(options.runtimeScriptPath || '').trim();
+    const hasInlineSourceMap = /sourceMappingURL=data:/i.test(js);
     const scriptBody = appendUserScriptSourceReference(js, runtimeScriptPath);
+
+    // Compiled code with inline source maps: inject without try/catch wrapper
+    // and without leading newline so script line 1 = source map line 1.
+    // The runtime bridge handles error reporting independently.
+    if (hasInlineSourceMap) {
+        return `
+  <script>${scriptBody}
+  </script>`;
+    }
 
     if (consoleEnabled) {
         return `
@@ -25,8 +35,20 @@ ${scriptBody}
 }
 
 function appendUserScriptSourceReference(js = '', runtimeScriptPath = '') {
-    if (!js || !runtimeScriptPath) return js;
-    if (/sourceURL=|sourceMappingURL=/i.test(js)) return js;
+    if (!js) return js;
+
+    // esbuild output: has sourceMappingURL but no sourceURL.
+    // Add a sourceURL so browsers attribute stack frames to a known script name,
+    // with line numbers relative to the script content (not the HTML document).
+    if (/sourceMappingURL=/i.test(js) && !/sourceURL=/i.test(js)) {
+        return js.replace(
+            /(\/\/# sourceMappingURL=)/,
+            '//# sourceURL=learncode-compiled.js\n$1',
+        );
+    }
+
+    if (!runtimeScriptPath) return js;
+    if (/sourceURL=/i.test(js)) return js;
     return `${js}\n//# sourceURL=${runtimeScriptPath}`;
 }
 
@@ -145,14 +167,14 @@ body {
   flex: 0 0 auto;
   max-width: none;
   height: auto;
-  background: transparent;
+  background: #fff;
 }
         `
         : framework === 'react'
-            ? `body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }${hasBlockingDiagnostics ? '' : ' #root { min-height: calc(100vh - 32px); }'}`
+            ? `html, body { margin: 0; padding: 0; } body { padding: 16px; box-sizing: border-box; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }${hasBlockingDiagnostics ? '' : ' #root { min-height: calc(100vh - 32px); }'}`
             : framework === 'vue'
-                ? `body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }${hasBlockingDiagnostics ? '' : ' #app { min-height: calc(100vh - 32px); }'}`
-                : 'body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }';
+                ? `html, body { margin: 0; padding: 0; } body { padding: 16px; box-sizing: border-box; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }${hasBlockingDiagnostics ? '' : ' #app { min-height: calc(100vh - 32px); }'}`
+                : 'html, body { margin: 0; padding: 0; } body { padding: 16px; box-sizing: border-box; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }';
     const trailingStyles = isPureSvgDocument
         ? `
 html,
@@ -178,7 +200,7 @@ body {
   display: block !important;
   flex: 0 0 auto !important;
   margin: 0 !important;
-  background: transparent !important;
+  background: #fff !important;
 }
         `
         : '';

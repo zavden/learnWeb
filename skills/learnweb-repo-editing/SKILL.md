@@ -18,7 +18,11 @@ Read [references/hotspots.md](references/hotspots.md) when you need the file map
 - the task requires changing content under `material/`
 - the AI needs to know which validations to run
 
-If the task is narrowly about example authoring, theory authoring, or shader authoring, prefer the more specific local skills when available.
+If the task is narrowly about content creation, prefer the specific skills:
+
+- `skills/learnweb-example-authoring/SKILL.md` — all example formats, frontmatter, virtual files
+- `skills/learnweb-theory-authoring/SKILL.md` — theory files and exercise embeds
+- `skills/learnweb-shader-authoring/SKILL.md` — shader examples, uniforms, textures
 
 ## Default Workflow
 
@@ -31,7 +35,7 @@ If the task is narrowly about example authoring, theory authoring, or shader aut
 3. Inspect the exact files before making assumptions.
 4. Keep edits local to the subsystem involved:
    - content requests should usually not change app code
-   - UI behavior changes usually live in `src/components/`, `src/utils/`, `index.html`, or `src/style.css`
+   - UI behavior changes usually live in `src/components/`, `src/utils/`, `index.html`, or `src/styles/`
 5. Validate at the smallest level that still proves the change:
    - content-only updates: targeted checks or no build if unnecessary
    - parser/runtime/editor changes: `npm test`
@@ -41,7 +45,10 @@ If the task is narrowly about example authoring, theory authoring, or shader aut
 
 - `material/` is source content, not generated output.
 - `main.md` is theory. `examples/*.md` are runnable examples.
-- Many behaviors depend on shared helpers in `src/utils/markdown.js`, `src/utils/exampleCompiler.js`, and `src/utils/exampleRenderer.js`.
+- App code is modularized. Facades like `src/utils/markdown.js`, `src/utils/exampleCompiler.js`, and `src/utils/exampleRenderer.js` re-export from subdirectory modules (`markdown/`, `compiler/`, `renderer/`).
+- Editor methods are split into mixins in `src/components/editor/` applied to `Editor.prototype`.
+- Preview methods are split into modules in `src/components/preview/`.
+- Vim support is split into `src/editor/vim/`.
 - Vim shortcuts are configurable through `vim-shortcuts.yaml`.
 - Favorites are stored in `.favorites`, not in example frontmatter.
 - Hidden chapters, Vim default, and clipboard default are persisted in dotfiles at repo root.

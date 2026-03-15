@@ -1,5 +1,38 @@
 import { marked } from 'marked';
 import { injectTheoryExerciseEmbeds } from './theoryExerciseEmbeds.js';
+import hljs from 'highlight.js/lib/core';
+import hljsXml from 'highlight.js/lib/languages/xml';
+import hljsCss from 'highlight.js/lib/languages/css';
+import hljsJavascript from 'highlight.js/lib/languages/javascript';
+import hljsTypescript from 'highlight.js/lib/languages/typescript';
+import hljsJson from 'highlight.js/lib/languages/json';
+import hljsScss from 'highlight.js/lib/languages/scss';
+import hljsGlsl from 'highlight.js/lib/languages/glsl';
+import hljsBash from 'highlight.js/lib/languages/bash';
+import hljsMarkdown from 'highlight.js/lib/languages/markdown';
+
+hljs.registerLanguage('xml', hljsXml);
+hljs.registerLanguage('html', hljsXml);
+hljs.registerLanguage('svg', hljsXml);
+hljs.registerLanguage('pug', hljsXml);
+hljs.registerLanguage('css', hljsCss);
+hljs.registerLanguage('scss', hljsScss);
+hljs.registerLanguage('sass', hljsScss);
+hljs.registerLanguage('javascript', hljsJavascript);
+hljs.registerLanguage('js', hljsJavascript);
+hljs.registerLanguage('jsx', hljsJavascript);
+hljs.registerLanguage('typescript', hljsTypescript);
+hljs.registerLanguage('ts', hljsTypescript);
+hljs.registerLanguage('tsx', hljsTypescript);
+hljs.registerLanguage('json', hljsJson);
+hljs.registerLanguage('glsl', hljsGlsl);
+hljs.registerLanguage('vertex', hljsGlsl);
+hljs.registerLanguage('fragment', hljsGlsl);
+hljs.registerLanguage('bash', hljsBash);
+hljs.registerLanguage('shell', hljsBash);
+hljs.registerLanguage('sh', hljsBash);
+hljs.registerLanguage('markdown', hljsMarkdown);
+hljs.registerLanguage('md', hljsMarkdown);
 
 let markedConfigured = false;
 
@@ -11,12 +44,32 @@ function serializeInlineScriptValue(value) {
         .replace(/\u2029/g, '\\u2029');
 }
 
+function highlightCode(code, lang) {
+    const language = String(lang || '').trim().toLowerCase();
+    if (language && hljs.getLanguage(language)) {
+        try {
+            return hljs.highlight(code, { language }).value;
+        } catch (_) { /* fall through */ }
+    }
+    return hljs.highlightAuto(code).value;
+}
+
 function ensureMarkedConfigured() {
     if (markedConfigured) return;
 
     marked.setOptions({
         breaks: true,
         gfm: true,
+    });
+
+    marked.use({
+        renderer: {
+            code(code, lang) {
+                const highlighted = highlightCode(code, lang);
+                const langClass = lang ? ` language-${lang}` : '';
+                return `<pre><code class="hljs${langClass}">${highlighted}</code></pre>`;
+            },
+        },
     });
 
     markedConfigured = true;
@@ -146,6 +199,21 @@ export function renderTheoryPreviewDocument(content = '', options = {}) {
       display: block;
       padding: 0;
     }
+
+    /* highlight.js — atom-one-dark (adapted) */
+    pre code.hljs { display: block; overflow-x: auto; padding: 0; background: transparent; }
+    .hljs { color: #abb2bf; }
+    .hljs-comment, .hljs-quote { color: #5c6370; font-style: italic; }
+    .hljs-doctag, .hljs-formula, .hljs-keyword { color: #c678dd; }
+    .hljs-deletion, .hljs-name, .hljs-section, .hljs-selector-tag, .hljs-subst { color: #e06c75; }
+    .hljs-literal { color: #56b6c2; }
+    .hljs-addition, .hljs-attribute, .hljs-meta .hljs-string, .hljs-regexp, .hljs-string { color: #98c379; }
+    .hljs-attr, .hljs-number, .hljs-selector-attr, .hljs-selector-class, .hljs-selector-pseudo, .hljs-template-variable, .hljs-type, .hljs-variable { color: #d19a66; }
+    .hljs-bullet, .hljs-link, .hljs-meta, .hljs-selector-id, .hljs-symbol, .hljs-title { color: #61aeee; }
+    .hljs-built_in, .hljs-class .hljs-title, .hljs-title.class_ { color: #e6c07b; }
+    .hljs-emphasis { font-style: italic; }
+    .hljs-strong { font-weight: 700; }
+    .hljs-link { text-decoration: underline; }
 
     blockquote {
       border-left: 3px solid #38bdf8;

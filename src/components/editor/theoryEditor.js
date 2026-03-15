@@ -1,6 +1,8 @@
-import { getExampleEditorialMetadata, buildExampleDocument, isShaderDocument } from '../../utils/markdown.js';
+import { getExampleEditorialMetadata, buildExampleDocument, isShaderDocument, hasBlockingDiagnostics, parseExampleDocument, updateShaderResolution } from '../../utils/markdown.js';
 import { getTheoryDocumentContent, isTheoryDocument } from '../../utils/theoryDocument.js';
-import { modifyTopicMain } from '../../utils/api.js';
+import { modifyTopicMain, fetchExamples, fetchExample } from '../../utils/api.js';
+import { compileExample } from '../../utils/compileClient.js';
+import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../../utils/exampleRenderer.js';
 
 export const theoryEditorMixin = {
     getDocumentTarget() {
@@ -68,5 +70,112 @@ export const theoryEditorMixin = {
 
     async saveTheoryDocument() {
         return this._handleModifyTheory();
+    },
+
+    _initExerciseEmbedDialog() {
+        if (!this.btnInsertExerciseEmbed || !this.exerciseEmbedDialog) return;
+
+        this.btnInsertExerciseEmbed.addEventListener('click', () => {
+            this._openExerciseEmbedDialog();
+        });
+
+        this.btnExerciseEmbedDialogClose?.addEventListener('click', () => {
+            this.exerciseEmbedDialog.close();
+        });
+
+        this.exerciseEmbedDialog.addEventListener('click', (event) => {
+            if (event.target === this.exerciseEmbedDialog) {
+                this.exerciseEmbedDialog.close();
+            }
+        });
+    },
+
+    async _openExerciseEmbedDialog() {
+        if (!this.currentTopicPath || !this.exerciseEmbedDialog) return;
+
+        this.exerciseEmbedList.innerHTML = '<p class="dialog-hint">Loading examples...</p>';
+        this.exerciseEmbedDialog.showModal();
+
+        try {
+            const examples = await fetchExamples(this.currentTopicPath);
+
+            if (!examples || examples.length === 0) {
+                this.exerciseEmbedList.innerHTML = '<p class="dialog-hint">No examples in this topic.</p>';
+                return;
+            }
+
+            this.exerciseEmbedList.innerHTML = '';
+
+            for (const filename of examples) {
+                const card = document.createElement('button');
+                card.type = 'button';
+                card.className = 'exercise-embed-card';
+                card.title = `Copy [[exercise:${filename}]]`;
+
+                const preview = document.createElement('div');
+                preview.className = 'exercise-embed-card-preview';
+                preview.innerHTML = '<span class="exercise-embed-card-loading">Loading...</span>';
+
+                const footer = document.createElement('div');
+                footer.className = 'exercise-embed-card-footer';
+                footer.innerHTML = `<span class="exercise-embed-card-name">${filename}</span>`;
+
+                card.appendChild(preview);
+                card.appendChild(footer);
+
+                card.addEventListener('click', () => {
+                    const tag = `[[exercise:${filename}]]`;
+                    navigator.clipboard.writeText(tag).then(() => {
+                        this._showToast(`Copied: ${tag}`, 'success');
+                    }).catch(() => {
+                        this._showToast(`Tag: ${tag}`, 'success');
+                    });
+                    this.exerciseEmbedDialog.close();
+                });
+
+                this.exerciseEmbedList.appendChild(card);
+
+                this._loadExerciseEmbedPreview(filename, preview);
+            }
+        } catch (error) {
+            console.error(error);
+            this.exerciseEmbedList.innerHTML = '<p class="dialog-hint is-error">Failed to load examples.</p>';
+        }
+    },
+
+    async _loadExerciseEmbedPreview(filename, previewElement) {
+        try {
+            const data = await fetchExample(this.currentTopicPath, filename);
+            if (!data?.content) {
+                previewElement.innerHTML = '<span class="exercise-embed-card-loading">No content</span>';
+                return;
+            }
+
+            const documentModel = parseExampleDocument(data.content);
+            const iframe = document.createElement('iframe');
+            iframe.sandbox = 'allow-scripts';
+
+            if (isShaderDocument(documentModel)) {
+                iframe.srcdoc = renderShaderExampleDocument(documentModel, {
+                    diagnostics: documentModel.diagnostics || [],
+                    renderId: 0,
+                    shaderControls: { paused: true, stillFrame: true },
+                    topicPath: this.currentTopicPath,
+                });
+            } else {
+                const result = await compileExample({ document: documentModel });
+                iframe.srcdoc = renderCompiledExampleDocument(
+                    result.compiledDocument,
+                    this.currentTopicPath,
+                    result.compileDiagnostics || [],
+                );
+            }
+
+            previewElement.innerHTML = '';
+            previewElement.appendChild(iframe);
+        } catch (error) {
+            console.error(`Failed to load preview for ${filename}`, error);
+            previewElement.innerHTML = '<span class="exercise-embed-card-loading">Preview unavailable</span>';
+        }
     },
 };

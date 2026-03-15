@@ -1,4 +1,0 @@
-interface:
-  display_name: "LearnWeb Shaders"
-  short_description: "Author LearnWeb shader examples"
-  default_prompt: "Use $learnweb-shader-authoring to create or update a shader example with valid metadata for this repo."

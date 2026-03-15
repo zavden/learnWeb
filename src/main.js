@@ -951,7 +951,7 @@ class App {
     _applyPreviewZoom(percent, { persist = true } = {}) {
         if (!this.previewFrame || !this.previewZoomSlider || !this.previewZoomDisplay) return;
 
-        const nextZoom = Math.max(50, Math.min(200, Math.round((Number(percent) || 100) / 5) * 5));
+        const nextZoom = Math.max(50, Math.min(300, Math.round((Number(percent) || 100) / 5) * 5));
         this.previewZoomPercent = nextZoom;
         const scale = nextZoom / 100;
         const isDefaultZoom = nextZoom === 100;
@@ -970,7 +970,7 @@ class App {
         this.previewZoomSlider.value = String(nextZoom);
         this.previewZoomDisplay.textContent = `${nextZoom}%`;
         this.btnPreviewZoomDec?.toggleAttribute('disabled', nextZoom <= 50);
-        this.btnPreviewZoomInc?.toggleAttribute('disabled', nextZoom >= 200);
+        this.btnPreviewZoomInc?.toggleAttribute('disabled', nextZoom >= 300);
         if (this.btnPreviewZoomReset) {
             this.btnPreviewZoomReset.textContent = `${nextZoom}%`;
             this.btnPreviewZoomReset.title = nextZoom === 100

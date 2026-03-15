@@ -1,4 +1,0 @@
-interface:
-  display_name: "LearnWeb Repo"
-  short_description: "Guide to edit this repository"
-  default_prompt: "Use $learnweb-repo-editing to understand and safely modify this repository."

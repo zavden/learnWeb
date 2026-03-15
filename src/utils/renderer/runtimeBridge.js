@@ -26,6 +26,105 @@ export function buildRuntimeBridgeMarkup(renderId = 0) {
       return text.replace(/^\\/+/, '');
     }
 
+    // Source map resolver for compiled code positions.
+    const VLQ_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    let _sourceMapCache = null;
+    let _sourceMapLoaded = false;
+
+    function decodeVLQSegment(encoded) {
+      const values = [];
+      let shift = 0;
+      let value = 0;
+      for (let i = 0; i < encoded.length; i++) {
+        const digit = VLQ_CHARS.indexOf(encoded[i]);
+        if (digit === -1) continue;
+        value += (digit & 31) << shift;
+        if (digit & 32) {
+          shift += 5;
+        } else {
+          values.push(value & 1 ? -(value >> 1) : value >> 1);
+          shift = 0;
+          value = 0;
+        }
+      }
+      return values;
+    }
+
+    function loadSourceMap() {
+      if (_sourceMapLoaded) return _sourceMapCache;
+      _sourceMapLoaded = true;
+      try {
+        var scripts = document.querySelectorAll('script');
+        for (var si = 0; si < scripts.length; si++) {
+          var text = scripts[si].textContent || '';
+          var match = text.match(/\\/\\/# sourceMappingURL=data:application\\/json;(?:charset=[^;]+;)?base64,([A-Za-z0-9+\\/=]+)/);
+          if (!match) continue;
+          var json = JSON.parse(atob(match[1]));
+          if (!json.mappings || !Array.isArray(json.sources)) continue;
+
+          var lineMap = new Map();
+          var mapLines = json.mappings.split(';');
+          var srcIdx = 0, srcLine = 0, srcCol = 0;
+
+          for (var genLine = 0; genLine < mapLines.length; genLine++) {
+            if (!mapLines[genLine]) continue;
+            var segments = mapLines[genLine].split(',');
+            var genCol = 0;
+
+            for (var segI = 0; segI < segments.length; segI++) {
+              if (!segments[segI]) continue;
+              var vals = decodeVLQSegment(segments[segI]);
+              if (vals.length < 4) continue;
+
+              genCol += vals[0];
+              srcIdx += vals[1];
+              srcLine += vals[2];
+              srcCol += vals[3];
+
+              if (!lineMap.has(genLine + 1)) {
+                lineMap.set(genLine + 1, {
+                  source: json.sources[srcIdx] || '',
+                  line: srcLine + 1,
+                });
+              }
+            }
+          }
+
+          _sourceMapCache = lineMap;
+          return lineMap;
+        }
+      } catch (e) {
+        // Ignore source map loading failures.
+      }
+      return null;
+    }
+
+    function resolveSourcePosition(framePath, line) {
+      if (!line || typeof line !== 'number') return null;
+      if (framePath && framePath !== 'learncode-compiled.js'
+          && !framePath.endsWith('/learncode-compiled.js')
+          && framePath !== 'about:srcdoc') return null;
+      var lineMap = loadSourceMap();
+      if (!lineMap) return null;
+      return lineMap.get(line) || null;
+    }
+
+    function resolveStackFrames(frames) {
+      return frames.map(function(frame) {
+        var resolved = resolveSourcePosition(frame.path, frame.line);
+        if (resolved && resolved.source) {
+          return {
+            functionName: frame.functionName,
+            path: resolved.source,
+            line: resolved.line,
+            column: frame.column,
+            raw: frame.raw,
+          };
+        }
+        return frame;
+      });
+    }
+
     function parseStackFrames(stack) {
       return String(stack || '')
         .split('\\n')
@@ -147,7 +246,7 @@ export function buildRuntimeBridgeMarkup(renderId = 0) {
 
       return {
         message,
-        stackFrames: parseStackFrames(stackText),
+        stackFrames: resolveStackFrames(parseStackFrames(stackText)),
         stackText,
       };
     }
@@ -220,7 +319,7 @@ export function buildRuntimeBridgeMarkup(renderId = 0) {
         column: event.colno || null,
         line: event.lineno || null,
         path: fallbackPath || null,
-        stackFrames: describedError.stackFrames.length > 0 ? describedError.stackFrames : fallbackFrames,
+        stackFrames: describedError.stackFrames.length > 0 ? describedError.stackFrames : resolveStackFrames(fallbackFrames),
         stackText: describedError.stackText,
       });
     });

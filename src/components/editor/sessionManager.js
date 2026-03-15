@@ -1,3 +1,6 @@
+import { cloneExampleDocument, createEmptyExampleDocument } from '../../utils/markdown.js';
+import { isTheoryDocument } from '../../utils/theoryDocument.js';
+
 export const sessionManagerMixin = {
     _readLayoutMode(fallback = 'panels') {
         const stored = window.localStorage.getItem(this.layoutModeStorageKey);

@@ -250,6 +250,10 @@ export const diagnosticsMixin = {
             return '__slot__:entry';
         }
 
+        if (raw.startsWith('learncode-inline:')) {
+            return raw.slice('learncode-inline:'.length);
+        }
+
         return raw;
     },
 

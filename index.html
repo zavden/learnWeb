@@ -278,6 +278,16 @@
                 </svg>
                 <span class="toolbar-btn-label">80 Col</span>
               </button>
+              <button id="btn-insert-exercise-embed" class="btn btn-secondary toolbar-icon-btn hidden" title="Insert exercise embed tag">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="16 3 16 8 21 8"></polyline>
+                  <line x1="8" y1="13" x2="16" y2="13"></line>
+                  <line x1="8" y1="17" x2="12" y2="17"></line>
+                </svg>
+                <span class="toolbar-btn-label">Embed</span>
+              </button>
               <label id="entry-select-group" class="entry-select-group hidden">
                 <span class="entry-select-label">Entry</span>
                 <select id="entry-select" class="editor-file-select" aria-label="Select entry file"></select>
@@ -369,7 +379,7 @@
               <div id="preview-zoom-controls" class="preview-zoom-rail hidden" aria-hidden="true">
                 <div class="preview-zoom-rail-inner">
                   <div class="preview-zoom-slider-wrap">
-                    <input type="range" id="preview-zoom-slider" class="preview-zoom-slider preview-zoom-slider-vertical" min="50" max="200" step="5" value="100">
+                    <input type="range" id="preview-zoom-slider" class="preview-zoom-slider preview-zoom-slider-vertical" min="50" max="300" step="5" value="100">
                   </div>
                   <span id="preview-zoom-display" class="preview-zoom-value">100%</span>
                 </div>
@@ -822,6 +832,25 @@
         <button id="editor-file-type-apply" type="button" class="btn btn-primary">Apply</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="exercise-embed-dialog" class="exercise-embed-dialog">
+    <div class="exercise-embed-dialog-inner">
+      <div class="exercise-embed-dialog-header">
+        <h2>Insert Exercise Embed</h2>
+        <button id="exercise-embed-dialog-close" class="btn-icon" type="button" title="Close" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <p class="exercise-embed-dialog-hint">Click an example to copy its embed tag to the clipboard.</p>
+      <div id="exercise-embed-list" class="exercise-embed-list">
+        <p class="dialog-hint">Loading examples...</p>
+      </div>
+    </div>
   </dialog>
 
   <dialog id="shader-uniform-dialog">

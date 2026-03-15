@@ -454,12 +454,17 @@ export class Preview {
         const isConsoleError = event.data.kind === 'console' && event.data.level === 'error';
 
         if (isRuntimeDiagnostic || isConsoleError) {
+            const primaryFrame = stackFrames.find((f) => {
+                const p = f?.path || '';
+                return p && !p.includes('node_modules') && !p.startsWith('/');
+            }) || stackFrames[0];
+
             this._registerRuntimeDiagnostic({
                 code: event.data.kind === 'console' ? 'console-error' : event.data.kind,
-                column: stackFrames[0]?.column || null,
-                file: stackFrames[0]?.path || event.data.path || '',
+                column: primaryFrame?.column || null,
+                file: primaryFrame?.path || event.data.path || '',
                 level: 'error',
-                line: stackFrames[0]?.line || null,
+                line: primaryFrame?.line || null,
                 location,
                 message: message || '(empty)',
             });

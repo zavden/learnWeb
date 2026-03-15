@@ -26,7 +26,7 @@ import {
     syncSystemClipboardRegister,
 } from '../editor/vimSupport.js';
 import { vueScriptEnterCommand } from '../editor/vueSmartEnter.js';
-import { getWrappedPanelIndex } from '../utils/panelNavigation.js';
+import { getWrappedPanelIndex, findDirectionalPanelTargetIndex } from '../utils/panelNavigation.js';
 import {
     cloneExampleDocument,
     createEmptyExampleDocument,
@@ -268,6 +268,10 @@ export class Editor {
         this.btnShortcutsDialogCloseIcon = document.getElementById('editor-shortcuts-dialog-close-icon');
         this.fileContextMenu = document.getElementById('editor-file-context-menu');
         this.btnContextHideFile = document.getElementById('btn-context-hide-file');
+        this.btnInsertExerciseEmbed = document.getElementById('btn-insert-exercise-embed');
+        this.exerciseEmbedDialog = document.getElementById('exercise-embed-dialog');
+        this.exerciseEmbedList = document.getElementById('exercise-embed-list');
+        this.btnExerciseEmbedDialogClose = document.getElementById('exercise-embed-dialog-close');
         this.fileDialogState = {
             mode: 'create',
             fileId: null,
@@ -320,6 +324,7 @@ export class Editor {
         this._initFileVisibilityDialog();
         this._initContextHintsDialog();
         this._initShortcutsDialog();
+        this._initExerciseEmbedDialog();
         this._updateFontSize(0);
         this._applyDocument(createEmptyExampleDocument(), { notify: false });
     }
@@ -655,6 +660,11 @@ export class Editor {
             this.btnEditExampleMetadata.title = isTheory
                 ? 'Theory metadata uses main.md directly'
                 : 'Edit description, tags, rating and importance';
+        }
+
+        if (this.btnInsertExerciseEmbed) {
+            this.btnInsertExerciseEmbed.classList.toggle('hidden', !isTheory);
+            this.btnInsertExerciseEmbed.disabled = !hasTopic || !isTheory;
         }
 
         if (this.btnEditShaderUniforms) {

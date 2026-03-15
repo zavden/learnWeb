@@ -155,6 +155,21 @@
   color: var(--text-primary);
 }
 
+/* highlight.js — Atom One Dark (for theory viewer) */
+#theory-content pre code.hljs { display: block; overflow-x: auto; padding: 0; background: transparent; }
+#theory-content .hljs { color: #abb2bf; }
+#theory-content .hljs-comment, #theory-content .hljs-quote { color: #5c6370; font-style: italic; }
+#theory-content .hljs-doctag, #theory-content .hljs-formula, #theory-content .hljs-keyword { color: #c678dd; }
+#theory-content .hljs-deletion, #theory-content .hljs-name, #theory-content .hljs-section, #theory-content .hljs-selector-tag, #theory-content .hljs-subst { color: #e06c75; }
+#theory-content .hljs-literal { color: #56b6c2; }
+#theory-content .hljs-addition, #theory-content .hljs-attribute, #theory-content .hljs-meta .hljs-string, #theory-content .hljs-regexp, #theory-content .hljs-string { color: #98c379; }
+#theory-content .hljs-attr, #theory-content .hljs-number, #theory-content .hljs-selector-attr, #theory-content .hljs-selector-class, #theory-content .hljs-selector-pseudo, #theory-content .hljs-template-variable, #theory-content .hljs-type, #theory-content .hljs-variable { color: #d19a66; }
+#theory-content .hljs-bullet, #theory-content .hljs-link, #theory-content .hljs-meta, #theory-content .hljs-selector-id, #theory-content .hljs-symbol, #theory-content .hljs-title { color: #61aeee; }
+#theory-content .hljs-built_in, #theory-content .hljs-class .hljs-title, #theory-content .hljs-title.class_ { color: #e6c07b; }
+#theory-content .hljs-emphasis { font-style: italic; }
+#theory-content .hljs-strong { font-weight: 700; }
+#theory-content .hljs-link { text-decoration: underline; }
+
 #theory-content ul,
 #theory-content ol {
   margin: 8px 0 8px 20px;

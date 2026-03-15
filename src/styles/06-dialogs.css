@@ -575,3 +575,112 @@ dialog h2 {
     grid-template-columns: 1fr;
   }
 }
+
+/* ═══════════════════════════════════════════════════════
+   Exercise Embed Picker Dialog
+   ═══════════════════════════════════════════════════════ */
+
+.exercise-embed-dialog {
+  width: min(720px, 90vw);
+  max-height: 85vh;
+  padding: 0;
+}
+
+.exercise-embed-dialog-inner {
+  padding: 24px;
+}
+
+.exercise-embed-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.exercise-embed-dialog-header h2 {
+  margin-bottom: 0;
+}
+
+.exercise-embed-dialog-hint {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin: 0 0 16px;
+}
+
+.exercise-embed-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.exercise-embed-card {
+  display: flex;
+  flex-direction: column;
+  height: 220px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+  cursor: pointer;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.exercise-embed-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+  border-color: var(--accent-blue);
+}
+
+.exercise-embed-card:active {
+  transform: translateY(0);
+}
+
+.exercise-embed-card-preview {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #f5f5f5;
+  border-bottom: 1px solid var(--border-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.exercise-embed-card-preview iframe {
+  width: 200%;
+  height: 200%;
+  border: none;
+  transform: scale(0.5);
+  transform-origin: 0 0;
+  pointer-events: none;
+  background: #fff;
+}
+
+.exercise-embed-card-loading {
+  color: #888;
+  font-size: 11px;
+}
+
+.exercise-embed-card-footer {
+  padding: 10px 12px;
+  background: #fff;
+  border-top: 1px solid var(--border-muted);
+  display: flex;
+  align-items: center;
+}
+
+.exercise-embed-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-blue);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

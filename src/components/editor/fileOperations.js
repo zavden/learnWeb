@@ -1,7 +1,7 @@
 import { buildFrameworkFileTemplate, getFrameworkFileTemplateOptions } from '../../config/fileTemplates.js';
 import { getBlockDefinition } from '../../config/exampleBlocks.js';
 import { fetchExample, modifyExample, removeExample, renameExample, saveExample } from '../../utils/api.js';
-import { cloneExampleDocument, createDocumentFile, createEmptyExampleDocument, duplicateDocumentFile, getDocumentEntryCandidates, hasBlockingDiagnostics, isShaderDocument, parseExampleDocument, removeDocumentFile, setDocumentEntryPath, synchronizeDocument, updateDocumentFileDetails, updateDocumentFileContent, VIRTUAL_FILE_ROLE_OPTIONS } from '../../utils/markdown.js';
+import { buildExampleDocument, cloneExampleDocument, createDocumentFile, createEmptyExampleDocument, duplicateDocumentFile, getDocumentEntryCandidates, hasBlockingDiagnostics, isShaderDocument, parseExampleDocument, removeDocumentFile, setDocumentEntryPath, synchronizeDocument, updateDocumentFileDetails, updateDocumentFileContent, VIRTUAL_FILE_ROLE_OPTIONS } from '../../utils/markdown.js';
 import { createTheoryDocument } from '../../utils/theoryDocument.js';
 
 export const fileOperationsMixin = {

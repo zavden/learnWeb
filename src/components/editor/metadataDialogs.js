@@ -1,5 +1,5 @@
 import { getBlockDefinition, normalizeBlockType } from '../../config/exampleBlocks.js';
-import { getVimShortcutSections } from '../../editor/vimSupport.js';
+import { getVimShortcutSections, getDefaultVimShortcutConfig } from '../../editor/vimSupport.js';
 import { evaluateDocumentFileTypeChange, getDocumentFileTypeChangeOptions, getDocumentLanguageOptions, getExampleEditorialMetadata, updateDocumentFileType, updateExampleEditorialMetadata, updateDocumentHiddenFiles } from '../../utils/markdown.js';
 import { findDirectionalPanelTargetIndex } from '../../utils/panelNavigation.js';
 

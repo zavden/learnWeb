@@ -1,322 +1,358 @@
 # TODO
 
-## Modularización del código fuente
+## Bug corregido: línea de error en React/Vue ✓
 
-Patrón a seguir: `markdown.js` → re-exporta desde `markdown/`.
-Cada módulo grande se convierte en un directorio con un archivo índice.
+Resuelto: el bridge ahora decodifica inline source maps (VLQ) para resolver
+posiciones del bundle a archivos/líneas originales. Se añadió `sourceURL` al
+script compilado para que los line numbers del stack trace sean relativos al
+contenido del script (no al HTML). Preview selecciona el primer frame de
+código de usuario (ignora node_modules).
 
-### Fase 1 — `exampleCompiler.js` (1,647 líneas)
+| Archivo | Cambio |
+|---------|--------|
+| `src/utils/renderer/runtimeBridge.js` | VLQ decoder + source map resolver en el bridge |
+| `src/utils/renderer/documentRenderer.js` | sourceURL + inyección sin try/catch para compiled code |
+| `src/components/Preview.js` | Seleccionar frame de usuario (no framework) |
+| `src/components/editor/diagnostics.js` | Fallback genérico para `learncode-inline:` paths |
 
-Estado: `completada`
+**Limitación conocida**: en React single-file (stdin mode), las líneas pueden tener
+un offset de ~4 debido al wrapper de imports. Multi-file funciona correctamente.
 
-Dividir en `src/utils/compiler/`:
+---
 
-- `compiler/reactCompiler.js` — compilación React single-file y multi-file
-- `compiler/vueCompiler.js` — compilación Vue single-file, multi-file y SFC
-- `compiler/markupCompiler.js` — Pug, HTML, SVG
-- `compiler/styleCompiler.js` — CSS, SCSS, SASS
-- `compiler/scriptCompiler.js` — JavaScript, TypeScript
-- `compiler/virtualFilesPlugin.js` — plugin esbuild de módulos inline
-- `compiler/helpers.js` — `createCompileDiagnostic`, normalización, utilidades compartidas
-- `exampleCompiler.js` — fachada: `compileExampleDocument()` + re-exports
+## Code Embed en Theory — `[[exercise:file.md-]]`
+
+Nueva variante de embed para theory (`main.md`) que muestra el **código fuente** de un ejemplo
+en vez de su preview ejecutado. Tres sintaxis:
+
+| Sintaxis | Resultado |
+|----------|-----------|
+| `[[exercise:ta.md-]]` | Tabs con **todos** los archivos del ejemplo |
+| `[[exercise:ta.md-App.vue]]` | Solo el código de `App.vue`, sin tabs |
+| `[[exercise:ta.md-(App.vue\|main.ts)]]` | Tabs con solo `App.vue` y `main.ts`, en ese orden |
+
+Diferencias con el embed estándar (`[[exercise:ta.md]]`):
+- No muestra preview iframe, estrellas, descripción ni botones de acción.
+- Muestra bloques de código con syntax highlighting (highlight.js).
+- Usa tabs para navegar entre archivos (cuando hay más de uno).
+
+### Fase 1 — Parsing del nuevo shortcode
+
+Estado: `pendiente`
+
+Extender `theoryExerciseEmbeds.js`:
+
+1. Ampliar `THEORY_EXERCISE_SHORTCODE_PATTERN` (o añadir un segundo regex) para capturar:
+   - `[[exercise:file.md-]]` → `filename=file.md`, `mode=all-files`, `filter=null`
+   - `[[exercise:file.md-Name.ext]]` → `filename=file.md`, `mode=single-file`, `filter=["Name.ext"]`
+   - `[[exercise:file.md-(A.ext|B.ext)]]` → `filename=file.md`, `mode=multi-file`, `filter=["A.ext","B.ext"]`
+2. Actualizar `extractTheoryExerciseReferences()` para que también detecte las variantes con `-`.
+   Debe seguir retornando los filenames únicos de los `.md` referenciados (sin duplicar si
+   `ta.md` aparece como embed estándar y como code embed al mismo tiempo).
+3. Crear una función `parseExerciseShortcode(raw)` que, dado el contenido entre `[[exercise:` y `]]`,
+   retorne `{ filename, codeEmbed: true|false, codeFilter: null|string[] }`.
+
+Archivos: `src/utils/theoryExerciseEmbeds.js`
+
+Validación: `npm test` (añadir tests para las 3 variantes + el embed estándar existente)
+
+### Fase 2 — Datos de code embed
+
+Estado: `pendiente`
+
+Extender `loadTheoryExerciseEmbeds()`:
+
+1. Para cada filename referenciado, el fetch ya se hace. No hay que duplicar llamadas.
+   Lo que cambia es que el objeto retornado necesita incluir los archivos parseados del ejemplo.
+2. Añadir al objeto de embed un campo `codeFiles`:
+   ```javascript
+   codeFiles: [
+     { name: "src/main.ts", language: "typescript", content: "import ..." },
+     { name: "src/App.vue", language: "vue", content: "<template>..." },
+     ...
+   ]
+   ```
+   Estos se extraen de `parseExampleDocument(data.content).files`.
+3. Los datos de code-files se necesitan **solo** si hay al menos un code embed para ese filename.
+   Optimizar: rastrear cuáles filenames tienen variante code y cuáles no, y solo poblar
+   `codeFiles` cuando sea necesario (evitar overhead para embeds estándar que no usan el código).
+
+Archivos: `src/utils/theoryExerciseEmbeds.js`
 
 Validación: `npm test`
 
-### Fase 2 — `exampleRenderer.js` (1,561 líneas)
+### Fase 3 — Renderizado HTML del code embed
 
-Estado: `completada`
+Estado: `pendiente`
 
-Dividir en `src/utils/renderer/`:
+Crear la función `renderTheoryCodeEmbedMarkup(embed, codeFilter)` en `theoryExerciseEmbeds.js`:
 
-- `renderer/runtimeBridge.js` — `buildRuntimeBridgeMarkup`, consola del iframe
-- `renderer/diagnosticsMarkup.js` — `buildDiagnosticsMarkup`, `formatDiagnosticLocation`
-- `renderer/shaderRenderer.js` — `renderShaderExampleDocument`, script WebGL, panel shader
-- `renderer/documentRenderer.js` — `renderCompiledExampleDocument`, `injectFullDocumentMarkup`, helpers HTML
-- `exampleRenderer.js` — fachada con re-exports
+1. Recibir el embed (con `codeFiles`) y el `codeFilter` (null = todos, array = filtrar/ordenar).
+2. Filtrar y ordenar los archivos según `codeFilter`:
+   - `null` → todos los archivos visibles, en orden original.
+   - `["App.vue"]` → solo ese archivo (match por nombre base, sin `src/`).
+   - `["App.vue", "main.ts"]` → esos archivos en ese orden.
+3. Generar HTML:
+   - Si hay **1 solo archivo**: bloque `<pre><code>` con la clase hljs y el nombre como header.
+   - Si hay **varios archivos**: barra de tabs + paneles de código, el primer tab activo.
+   - Aplicar `highlightCode(content, language)` de `theoryRenderer.js` para colorear.
+4. Actualizar `injectTheoryExerciseEmbeds()` para usar `parseExerciseShortcode()` y llamar
+   a la función de renderizado correcta según si es code embed o embed estándar.
 
-Validación: `npm test`
+Estructura HTML generada (multi-tab):
+```html
+<div class="theory-code-embed" data-theory-code-file="ta.md">
+  <div class="theory-code-embed-tabs">
+    <button class="theory-code-embed-tab is-active" data-tab="0">App.vue</button>
+    <button class="theory-code-embed-tab" data-tab="1">main.ts</button>
+  </div>
+  <div class="theory-code-embed-panel is-active" data-tab="0">
+    <pre><code class="hljs language-vue">...</code></pre>
+  </div>
+  <div class="theory-code-embed-panel" data-tab="1">
+    <pre><code class="hljs language-typescript">...</code></pre>
+  </div>
+</div>
+```
 
-### Fase 3 — `Preview.js` (2,071 líneas)
+Estructura HTML (single file, sin tabs):
+```html
+<div class="theory-code-embed is-single" data-theory-code-file="ta.md">
+  <div class="theory-code-embed-file-header">App.vue</div>
+  <pre><code class="hljs language-vue">...</code></pre>
+</div>
+```
 
-Estado: `completada`
-
-Dividir en `src/components/preview/`:
-
-- `preview/ConsoleManager.js` — sesión de consola, entries, filtros, input, render
-- `preview/ShaderControls.js` — uniformes, texturas, resolución, panel shader
-- `preview/RuntimeDiagnostics.js` — registro, renderizado y emisión de diagnósticos de runtime
-- `Preview.js` — clase principal orquestadora + re-exports
-
-Validación: `npm test` + `npm run build`
-
-### Fase 4 — `Editor.js` (5,285 líneas)
-
-Estado: `completada`
-
-Dividir en `src/components/editor/`:
-
-- `editor/diagnostics.js` — `DiagnosticGutterMarker`, `buildEditorDiagnosticSets`, `editorDiagnosticsField`, collect/resolve/sync
-- `editor/sessionManager.js` — snapshots, workspace state, session persistence
-- `editor/shaderDialogs.js` — diálogos de uniforms, texturas, resolución
-- `editor/metadataDialogs.js` — editorial metadata, file details, file type change
-- `editor/fileOperations.js` — save, modify, rename, delete, create file
-- `editor/theoryEditor.js` — modo edición de `main.md`, theory preview bridge
-- `editor/exercisePanel.js` — comparación attempt/solution, panel de ejercicios
-- `Editor.js` — clase principal orquestadora + re-exports
-
-Validación: `npm test` + `npm run build`
-
-### Fase 5 — Archivos medianos
-
-Estado: `completada`
-
-- `vimSupport.js` (587 líneas) → extraer `vim/clipboardBridge.js`
-- `vimShortcutConfig.js` (472 líneas) → extraer `vim/yamlParser.js`
+Archivos: `src/utils/theoryExerciseEmbeds.js`, `src/utils/theoryRenderer.js` (exportar `highlightCode`)
 
 Validación: `npm test`
+
+### Fase 4 — CSS para code embed
+
+Estado: `pendiente`
+
+Añadir estilos para las clases `.theory-code-embed*` en dos lugares:
+
+1. `src/utils/theoryRenderer.js` — estilos inline del iframe (modo edición de theory).
+2. `src/styles/07-theory.css` — estilos del DOM principal (theory viewer hamburguesa).
+
+Estilos necesarios:
+- `.theory-code-embed` — contenedor con borde, border-radius, fondo oscuro, margin vertical.
+- `.theory-code-embed-tabs` — barra de tabs horizontal con gap, border-bottom.
+- `.theory-code-embed-tab` — botón de tab con estado activo (borde inferior coloreado).
+- `.theory-code-embed-panel` — oculto por defecto, visible cuando `.is-active`.
+- `.theory-code-embed-file-header` — nombre de archivo en modo single (font mono, color sutil).
+- `pre` y `code` dentro del embed — sin margin extra, overflow-x auto.
+
+Archivos: `src/utils/theoryRenderer.js`, `src/styles/07-theory.css`
+
+Validación: `npm run build`
+
+### Fase 5 — Hidratación interactiva (tabs)
+
+Estado: `pendiente`
+
+Añadir lógica JavaScript para el switching de tabs en ambas rutas de renderizado:
+
+1. **Iframe** (`renderTheoryPreviewDocument` en `theoryRenderer.js`):
+   Extender el `<script>` inline para que escuche clicks en `.theory-code-embed-tab`
+   y active/desactive los paneles correspondientes con `.is-active`.
+
+2. **Theory viewer** (`TheoryViewer.js`):
+   Añadir un método `_hydrateCodeEmbedTabs()` llamado después de `renderContent()`.
+   Attach event listeners de click a los tabs de todos los `.theory-code-embed`.
+
+Archivos: `src/utils/theoryRenderer.js`, `src/components/TheoryViewer.js`
+
+Validación: `npm run build` + verificación visual manual
+
+### Fase 6 — Integración en el diálogo Embed
+
+Estado: `pendiente`
+
+Actualizar el diálogo de "Insert Exercise Embed" (botón Embed en la toolbar de theory):
+
+1. Añadir un selector por tarjeta que permita elegir el modo de inserción:
+   - `[[exercise:file.md]]` — embed estándar (preview + meta), ya existente.
+   - `[[exercise:file.md-]]` — code embed (todos los archivos).
+   - O bien un menú contextual al hacer click en la tarjeta: "Insert embed" vs "Insert code".
+2. Si el usuario elige "Insert code", copiar `[[exercise:file.md-]]` al portapapeles.
+3. Opcionalmente, mostrar un segundo diálogo o expandir la tarjeta para dejar elegir
+   qué archivos incluir (generando la sintaxis `(A|B)` o `single`).
+   Esto es un refinamiento; la inserción manual de la sintaxis filtrada también es válida.
+
+Archivos: `src/components/editor/theoryEditor.js`, posiblemente `src/styles/06-dialogs.css`
+
+Validación: `npm run build` + verificación visual manual
 
 ### Reglas para cada fase
 
-1. Leer el archivo completo antes de mover código.
-2. No cambiar lógica: solo reorganizar.
-3. El archivo original queda como fachada que re-exporta todo.
-4. Imports internos del proyecto no deben romperse.
-5. Correr `npm test` después de cada fase. Si hay tests específicos, correrlos también.
-6. Si la fase toca componentes de UI, correr `npm run build` además.
-7. Reportar qué archivos se crearon y cuáles se modificaron.
+1. `highlightCode` debe exportarse desde `theoryRenderer.js` para reutilizarse en el markup de code embeds.
+2. No duplicar fetch: si `ta.md` aparece como embed estándar y code embed, el fetch solo ocurre una vez.
+3. La barra de tabs no se renderiza si solo hay un archivo visible.
+4. El match de `codeFilter` se hace por nombre base del archivo (ej. `App.vue` matchea `src/App.vue`).
+5. Correr `npm test` después de las fases 1-3. Correr `npm run build` después de las fases 4-6.
 
 ---
 
-## Bug Resuelto: React/Vue no muestran el recuadro rojo de error bajo el preview
+## Resaltado de líneas en el editor
 
-Estado actual:
+Permite resaltar líneas individuales con colores configurables. Los resaltados son
+visibles tanto en el editor como en los code embeds de theory (`[[exercise:file.md-]]`).
 
-- En `shaders` el recuadro de error visible sí funciona.
-- En `HTML` simple hay casos estructurales que sí muestran warning.
-- En `React` y `Vue`, cuando el usuario provoca errores deliberados, la consola del preview sí recibe errores, pero no aparece el recuadro rojo debajo del preview ni el panel esperado por ese flujo.
+### Fase 1 — Configuración de colores y modelo de estado
 
-Síntomas observados:
+Estado: `pendiente`
 
-- El preview deja de funcionar o queda vacío.
-- La consola puede mostrar el error.
-- El bloque visual de error del preview no aparece.
-- El estado no coincide entre:
-  - errores de compilación estructural
-  - errores de runtime
-  - errores de frameworks React/Vue
+1. Crear archivo de configuración `src/config/highlightColors.js` que exporte un array de colores:
+   ```javascript
+   export const HIGHLIGHT_COLORS = [
+     { id: 'yellow',  label: 'Yellow',  bg: 'rgba(250, 204, 21, 0.18)', border: 'rgba(250, 204, 21, 0.4)' },
+     { id: 'green',   label: 'Green',   bg: 'rgba(74, 222, 128, 0.18)', border: 'rgba(74, 222, 128, 0.4)' },
+     { id: 'blue',    label: 'Blue',    bg: 'rgba(96, 165, 250, 0.18)', border: 'rgba(96, 165, 250, 0.4)' },
+     { id: 'red',     label: 'Red',     bg: 'rgba(248, 113, 113, 0.18)', border: 'rgba(248, 113, 113, 0.4)' },
+     { id: 'purple',  label: 'Purple',  bg: 'rgba(192, 132, 252, 0.18)', border: 'rgba(192, 132, 252, 0.4)' },
+     { id: 'orange',  label: 'Orange',  bg: 'rgba(251, 146, 60, 0.18)',  border: 'rgba(251, 146, 60, 0.4)' },
+   ];
+   ```
+2. Definir modelo de estado por archivo en el editor:
+   ```javascript
+   // Map<fileId, Map<lineNumber, colorId>>
+   this.lineHighlights = new Map();
+   // Color activo seleccionado
+   this.activeHighlightColor = HIGHLIGHT_COLORS[0].id;
+   ```
+3. Los highlights son **persistentes**: se guardan en el frontmatter del `.md` al hacer
+   Modify/Ctrl+S y se restauran al cargar el ejemplo. Solo se eliminan de dos maneras:
+   - Editando el contenido de una línea resaltada (auto-eliminación).
+   - Usando el botón `×` que aparece al posicionar el cursor en la última columna de la línea.
+4. Serialización en frontmatter. Usar una clave `highlights` en el metadata del documento:
+   ```yaml
+   ---
+   highlights: src/App.vue:3:yellow,7:blue||src/main.ts:1:green
+   ---
+   ```
+   Formato: rutas separadas por `||`, cada ruta seguida de pares `línea:color` separados por `,`.
+   Funciones necesarias:
+   - `serializeHighlights(Map<fileId, Map<line, colorId>>, files)` → string para frontmatter.
+   - `parseHighlights(string, files)` → `Map<fileId, Map<line, colorId>>`.
+5. Integrar con `buildExampleDocument()` / `parseExampleDocument()`:
+   - Al construir: leer `this.lineHighlights` y añadir a `metadata.highlights`.
+   - Al parsear: leer `metadata.highlights` y poblar `this.lineHighlights`.
 
-Hipótesis anteriores (contexto original):
+Archivos: `src/config/highlightColors.js` (nuevo), `src/components/Editor.js` (estado),
+`src/utils/markdown/core.js` (parse/serialize highlights)
 
-1. Parte de los errores de React/Vue no están llegando como `compileDiagnostics`, sino como errores de runtime posteriores al bootstrap.
-2. El flujo visual del preview distingue entre:
-   - errores de compilación renderizados dentro del `iframe`
-   - errores de runtime enviados por `postMessage`
-   y esos dos caminos no están unificados todavía para React/Vue.
-3. Puede haber una diferencia entre errores de:
-   - compilación real del documento
-   - bootstrap del framework dentro del `iframe`
-   - render inicial de componentes
-4. El warning de `DOCTYPE` sí aparece porque vive en el flujo de diagnósticos estructurales del documento, no en el flujo React/Vue.
+Validación: `npm run build`
 
-Intentos ya hechos:
+### Fase 2 — Extensión de CodeMirror 6 para decoraciones de línea
 
-- Se evitó reservar `min-height` en `#root` / `#app` cuando hay errores bloqueantes.
-- Se dejó visible `Compile diagnostics` aun con consola activa si el error es bloqueante.
-- Se añadieron diagnósticos de runtime al estado del editor y a un contenedor visual debajo del preview.
+Estado: `pendiente`
 
-Resultado:
+Crear `src/editor/lineHighlightExtension.js`:
 
-- Todo eso compila y pasa tests, pero no resolvió el caso real reportado por el usuario.
+1. Implementar un `StateField` de CM6 que almacene el set de líneas resaltadas con sus colores.
+2. Implementar un `ViewPlugin` o `Decoration.line` que aplique clases CSS de fondo a cada línea
+   resaltada (ej. `.cm-highlight-yellow`, `.cm-highlight-green`, etc.).
+3. Definir un `StateEffect` para añadir/eliminar resaltados:
+   - `addLineHighlight.of({ line, colorId })` — resalta la línea actual.
+   - `removeLineHighlight.of({ line })` — elimina el resaltado de una línea.
+   - `clearFileHighlights.of()` — limpia todos los resaltados del archivo.
+4. **Auto-eliminación al editar**: usar `Transaction.changes` en el campo de estado para detectar
+   cuando el contenido de una línea resaltada cambia. Si un cambio toca una línea con resaltado,
+   eliminar ese resaltado automáticamente.
+5. Registrar los estilos del tema en la extensión:
+   ```javascript
+   EditorView.baseTheme({
+     '.cm-highlight-yellow': { backgroundColor: 'rgba(250, 204, 21, 0.18)' },
+     '.cm-highlight-green':  { backgroundColor: 'rgba(74, 222, 128, 0.18)' },
+     // ...
+   })
+   ```
 
----
+Archivos: `src/editor/lineHighlightExtension.js` (nuevo)
 
-## Investigación profunda — Análisis del flujo de errores
+Validación: `npm test` + `npm run build`
 
-Fecha: 2026-03-14
+### Fase 3 — UI de botones en el editor
 
-### Flujo completo trazado
+Estado: `pendiente`
 
-El error recorre esta cadena:
+Añadir dos botones al header de cada panel/tab:
 
-```
-Editor cambia código
-  → Preview.compileAndRender()
-    → compileClient.js → Worker → API /api/compile → server.js
-      → exampleCompiler.js: compileReactSingleFileDocument() / compileVueSingleFileDocument()
-      → retorna { compiledDocument, compileDiagnostics }
-    → Preview recibe resultado
-      → renderCompiledExampleDocument(compiledDocument, ..., diagnostics, { consoleEnabled })
-        → genera srcdoc del iframe con posible recuadro de error inline
-      → _emitCompileState(diagnostics) → Editor.setCompileDiagnostics() → line markers
+**En modo cascada** (`_renderPanelsLayout`):
+- Insertar después de `pathLabel` y antes de `btnMaximize` en el `panel-header`:
+  - Botón **color** (swatch circular con el color activo, click abre dropdown de colores).
+  - Botón **aplicar** (click resalta la línea actual del cursor con el color activo).
 
-Errores de runtime (dentro del iframe):
-  → buildRuntimeBridgeMarkup() → window.addEventListener('error') / 'unhandledrejection'
-    → postMessage(kind: 'runtime-error') al padre
-  → Preview._handleIframeMessage()
-    → isRuntimeDiagnostic? → _registerRuntimeDiagnostic() → _renderRuntimeDiagnostics()
-      → muestra #preview-runtime-status + _emitRuntimeDiagnostics() → Editor.setRuntimeDiagnostics()
-    → consola intercepta console.error() → appendConsoleEntry() → renderConsoleEntries()
-```
+**En modo tabs** (`_renderTabsLayout`):
+- Insertar en `editor-tab-meta`, a la derecha de `pathLabel`:
+  - Mismos dos botones que en cascada.
 
-### Por qué shaders SÍ funcionan
+Comportamiento:
+- **Botón color**: al hacer click muestra un dropdown/popover con los colores de
+  `HIGHLIGHT_COLORS`. Al seleccionar uno, se actualiza `this.activeHighlightColor`
+  y el swatch del botón cambia de color.
+- **Botón aplicar**: obtiene la línea actual del cursor del editor activo, despacha
+  `addLineHighlight` con el color activo. Si la línea ya tiene resaltado, lo elimina (toggle).
 
-Los shaders NO usan el runtime bridge ni la consola. Su error se detecta al compilar
-el shader con WebGL (`gl.getShaderInfoLog`), se genera markup de error estático directamente
-en `buildShaderStatusMarkup()` y se inyecta en el DOM del panel shader. Es un flujo autocontenido
-que no depende de `compileDiagnostics`, `postMessage`, ni del bridge del iframe.
+Archivos: `src/components/Editor.js`, `src/styles/03-editor.css` o similar
 
-### Hipótesis investigadas y confirmadas
+Validación: `npm run build` + verificación visual
 
-#### H1 (ALTA PROBABILIDAD) — `console.error()` de React/Vue no se registra como diagnóstico de runtime
+### Fase 4 — Botón de borrado inline al final de línea resaltada
 
-**Archivo**: `exampleRenderer.js:252-280` (bridge), `Preview.js:737-748` (listener)
+Estado: `pendiente`
 
-El bridge en el iframe registra como diagnóstico de runtime **solo** eventos de tipo
-`'runtime-error'` (de `window.addEventListener('error')`) y `'unhandled-rejection'`.
+1. Crear un `WidgetType` de CM6 que renderice un botón `×` pequeño al final de cada línea resaltada.
+2. Usar `Decoration.widget` con `side: 1` posicionado al final de la línea.
+3. El widget aparece solo cuando el cursor está en esa línea o al hacer hover
+   (para no saturar visualmente).
+4. Al hacer click en el `×`, despacha `removeLineHighlight` para esa línea.
 
-Pero React 18+ y Vue 3 **capturan los errores internamente** dentro de su propio árbol de componentes.
-React los atrapa en su reconciler, llama a `console.error()` con el mensaje formateado, y puede
-que el error no propague a `window.onerror` en todos los casos (especialmente errores de render,
-hooks inválidos, y errores dentro de event handlers que React envuelve).
+Archivos: `src/editor/lineHighlightExtension.js`
 
-Vue 3 tiene `app.config.errorHandler` interno que atrapa errores de componentes y emite
-`console.warn()` / `console.error()` sin dejar que el error llegue a `window.onerror`.
+Validación: `npm run build` + verificación visual
 
-Cuando el error llega como `console.error()`:
-- El bridge lo intercepta como `kind: 'console'`, `level: 'error'`
-- La consola del preview lo muestra ✓
-- Pero `isRuntimeDiagnostic` en Preview.js:737 es `false` (requiere `kind === 'runtime-error'`)
-- **No se llama** `_registerRuntimeDiagnostic()` → no hay recuadro rojo ni line markers ✗
+### Fase 5 — Exportar highlights al modelo de code embeds
 
-**Esto explica exactamente el síntoma**: "la consola sí recibe errores, pero no aparece
-el recuadro rojo ni los marcadores de línea".
+Estado: `pendiente`
 
-#### H2 (ALTA PROBABILIDAD) — Renderer descarta markup de error dentro del iframe cuando consola está activa
+Conectar los highlights del editor con el sistema de code embeds de theory:
 
-**Archivo**: `exampleRenderer.js:408-410`
+1. Cuando se renderiza un code embed (`[[exercise:file.md-]]`), extraer los highlights
+   activos de cada archivo del editor (si están disponibles).
+2. Añadir un campo `highlights` al modelo de `codeFiles`:
+   ```javascript
+   codeFiles: [
+     {
+       name: "src/App.vue",
+       language: "vue",
+       content: "...",
+       highlights: [{ line: 3, colorId: 'yellow' }, { line: 7, colorId: 'blue' }]
+     }
+   ]
+   ```
+3. En `renderTheoryCodeEmbedMarkup()` (fase 3 de Code Embed), al generar el `<pre><code>`,
+   envolver las líneas resaltadas en `<span>` con clase de color:
+   ```html
+   <span class="code-embed-highlight-yellow">  const x = 1;</span>
+   ```
+4. Añadir los estilos de highlight correspondientes tanto en el CSS inline del iframe
+   (`theoryRenderer.js`) como en `07-theory.css`.
 
-```js
-const diagnosticsMarkup = consoleEnabled && !hasBlockingDiagnostics
-    ? ''
-    : buildDiagnosticsMarkup(diagnostics);
-```
+**Nota**: Esta fase depende de que las fases 1-3 de Code Embed estén completadas.
 
-Si `consoleEnabled === true` y no hay errores bloqueantes en `compileDiagnostics`,
-el renderer **no genera markup de error** dentro del iframe. La idea es que el bridge
-se encargue de mostrar errores vía `postMessage`. Pero combinado con H1, si React/Vue
-no dejan que sus errores lleguen a `window.onerror`, el bridge no los registra como
-diagnósticos y **nadie muestra el error visual**.
+Archivos: `src/utils/theoryExerciseEmbeds.js`, `src/utils/theoryRenderer.js`,
+`src/styles/07-theory.css`, `src/components/Editor.js` (bridge de datos)
 
-Para errores de compilación bloqueantes (esbuild falla), el markup SÍ se genera
-(`!hasBlockingDiagnostics` es false). Pero para errores de runtime de framework,
-`compileDiagnostics` está vacío → `hasBlockingDiagnostics = false` → sin markup.
+Validación: `npm run build` + verificación visual
 
-#### H3 (MEDIA) — React single-file descarta `appDiagnostics` en el path de éxito
+### Reglas para cada fase
 
-**Archivo**: `exampleCompiler.js:506-516`
-
-Cuando esbuild compila exitosamente un ejemplo React single-file, solo se retornan
-`styleResult.diagnostics`. Los `appDiagnostics` de `validateReactSingleFileAppBlock()`
-se descartan completamente:
-
-```js
-compileDiagnostics: [
-    ...styleResult.diagnostics,
-    // appDiagnostics no se incluye aquí
-],
-```
-
-Los errores de validación nivel 'error' SÍ se capturan antes del try (líneas 483-496),
-pero warnings de validación del bloque app se pierden silenciosamente.
-
-#### H4 (MEDIA) — Vue single-file filtra diagnósticos de error en path de éxito
-
-**Archivo**: `exampleCompiler.js:1183-1184`
-
-Después de compilación exitosa de Vue, los diagnósticos de validación y template se filtran:
-
-```js
-...validationDiagnostics.filter((diagnostic) => diagnostic.level !== 'error'),
-...templateResult.diagnostics.filter((diagnostic) => diagnostic.level !== 'error'),
-```
-
-Aunque los errores nivel 'error' ya se capturaron en la línea 1146-1149, este filtro
-es defensivo pero potencialmente confuso. Si alguna ruta generara diagnósticos de error
-que no fueran "bloqueantes" según el check inicial, se perderían aquí.
-
-#### H5 (BAJA) — Offset de líneas en bundles React/Vue
-
-**Archivo**: `exampleCompiler.js:371-387` (`buildReactSingleFileEntry`)
-
-El entry de React envuelve el código del usuario con imports (~4 líneas antes del código real):
-
-```js
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-${appSource}   // código del usuario empieza en línea ~4
-```
-
-Aunque esbuild genera sourcemaps inline, los stack traces de errores de runtime podrían
-referenciar paths y líneas del bundle que no coinciden con los archivos del document model.
-`_findFileForDiagnostic()` podría no resolver el path del stack trace al file correcto.
-
-Esto NO causa la ausencia del recuadro (ese viene de otra vía), pero SÍ podría explicar
-que los line markers no se posicionen correctamente incluso si los datos llegan.
-
-#### H6 (DESCARTADA) — CSS roto por la refactorización de styles
-
-Los estilos para error existen y están completos:
-- `.editor-status.error` → recuadro en el editor
-- `.preview-runtime-status` → recuadro bajo el preview (con `.hidden` para ocultar)
-- `.cm-diagnostic-gutter-error` → punto rojo en líneas
-- `.cm-diagnostic-line-error` → highlight de línea
-
-El CSS no es la causa. El problema es que los datos nunca llegan al JS que
-remueve `.hidden` de los contenedores.
-
----
-
-### Diagnóstico raíz (combinación de H1 + H2)
-
-Los errores de React/Vue son **errores de framework** que los propios React 18+ y Vue 3
-capturan internamente. Estos frameworks emiten los errores por `console.error()` en vez
-de dejarlos propagar a `window.onerror`. El bridge del iframe intercepta `console.error()`
-y lo envía al padre como `kind: 'console'`, pero Preview.js solo registra diagnósticos
-de runtime para `kind: 'runtime-error'` o `'unhandled-rejection'`.
-
-El resultado neto:
-1. `console.error()` del framework → llega a la consola del preview ✓
-2. Pero no dispara `_registerRuntimeDiagnostic()` → sin recuadro rojo ✗
-3. Sin runtime diagnostics → sin `setRuntimeDiagnostics()` → sin line markers ✗
-4. `compileDiagnostics` vacío (build exitoso) → renderer no genera markup inline ✗
-
-### Plan de corrección sugerido
-
-1. **En Preview.js**: promover `console.error()` de nivel 'error' con `kind: 'console'`
-   a runtime diagnostic cuando el framework es React o Vue. Opcionalmente,
-   hacer esto para TODOS los `console.error()` que parezcan errores de framework
-   (detectar patterns como "React error", "Uncaught", "TypeError", etc.).
-
-2. **En el bridge** (`exampleRenderer.js:230-250`): cuando `console.error()` se
-   intercepta, si el mensaje parece un error no trivial (no un warning de dev),
-   emitir un `postMessage` adicional con `kind: 'runtime-error'` para que el
-   listener del padre lo registre como diagnóstico visual.
-
-3. **Alternativa más simple**: en Preview.js, cuando se recibe un entry de consola
-   con `level: 'error'` y `kind: 'console'`, también llamar a
-   `_registerRuntimeDiagnostic()` con los datos disponibles. Esto unificaría
-   el flujo sin necesidad de cambiar el bridge.
-
-4. **Para líneas**: asegurarse de que los stack traces de `console.error()` de framework
-   se parseen correctamente y que `_findFileForDiagnostic()` pueda resolver
-   los paths del bundle a los archivos del document model.
-
-### Archivos a modificar
-
-| Prioridad | Archivo | Cambio |
-|-----------|---------|--------|
-| P0 | `src/components/Preview.js:737-761` | Promover `console.error()` a runtime diagnostic |
-| P1 | `src/utils/exampleRenderer.js:230-250` | Opcionalmente emitir `runtime-error` desde el bridge para `console.error()` graves |
-| P2 | `src/utils/exampleCompiler.js:513-515` | Incluir `appDiagnostics` en return de React success path |
-| P2 | `src/utils/exampleCompiler.js:1183-1184` | Revisar filtro de Vue success path |
-| P3 | `src/components/Editor.js:5160-5214` | Verificar resolución de paths de runtime para React/Vue bundles |
+1. Los highlights se persisten en el frontmatter del `.md` al guardar (Modify/Ctrl+S). Se restauran al cargar el ejemplo. Solo se eliminan al editar la línea o con el botón `×`.
+2. La auto-eliminación es por línea: si se edita una línea resaltada, solo esa pierde su resaltado.
+3. Los botones de color y aplicar solo aparecen cuando hay un documento cargado (no en estado vacío).
+4. Los colores deben contrastar bien con el tema One Dark del editor, usando fondos con baja opacidad.
+5. El botón `×` inline no debe interferir con la edición — debe estar fuera del flujo del texto.
+6. Correr `npm run build` después de cada fase. Fase 2 también `npm test`.
