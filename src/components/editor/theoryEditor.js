@@ -38,16 +38,18 @@ export const theoryEditorMixin = {
     },
 
     _getPersistableDocument() {
+        let doc;
+
         if (!this._isShaderDocument() || !this.getShaderPersistedState) {
-            return this.currentDocument;
+            doc = this.currentDocument;
+        } else {
+            const persistedState = this.getShaderPersistedState();
+            doc = persistedState?.resolution
+                ? updateShaderResolution(this.currentDocument, persistedState.resolution)
+                : this.currentDocument;
         }
 
-        const persistedState = this.getShaderPersistedState();
-        if (!persistedState?.resolution) {
-            return this.currentDocument;
-        }
-
-        return updateShaderResolution(this.currentDocument, persistedState.resolution);
+        return this._injectHighlightsIntoDocument(doc);
     },
 
     async _handleModifyTheory() {

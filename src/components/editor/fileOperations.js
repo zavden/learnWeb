@@ -803,6 +803,8 @@ const title = ref('${componentName}');
         this._renderContextHints();
         this._updateButtonStates();
         this._syncAllEditorDiagnostics();
+        this._loadHighlightsFromDocument(this.currentDocument);
+        this._syncAllEditorHighlights();
         this._emitExerciseStateChange();
 
         if (notify) {

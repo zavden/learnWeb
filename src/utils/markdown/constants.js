@@ -69,6 +69,7 @@ export const KNOWN_METADATA_KEYS = new Set([
     'entry',
     'console',
     'editor_hidden_files',
+    'highlights',
     'resolution',
     'shader_uniforms',
     'shader_textures',

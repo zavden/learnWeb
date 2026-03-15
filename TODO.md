@@ -54,7 +54,7 @@ visibles tanto en el editor como en los code embeds de theory (`[[exercise:file.
 
 ### Fase 1 — Configuración de colores y modelo de estado
 
-Estado: `pendiente`
+Estado: `completado` ✓
 
 1. Crear archivo de configuración `src/config/highlightColors.js` que exporte un array de colores:
    ```javascript
@@ -99,7 +99,7 @@ Validación: `npm run build`
 
 ### Fase 2 — Extensión de CodeMirror 6 para decoraciones de línea
 
-Estado: `pendiente`
+Estado: `completado` ✓
 
 Crear `src/editor/lineHighlightExtension.js`:
 
@@ -128,7 +128,7 @@ Validación: `npm test` + `npm run build`
 
 ### Fase 3 — UI de botones en el editor
 
-Estado: `pendiente`
+Estado: `completado` ✓
 
 Añadir dos botones al header de cada panel/tab:
 
@@ -154,7 +154,7 @@ Validación: `npm run build` + verificación visual
 
 ### Fase 4 — Botón de borrado inline al final de línea resaltada
 
-Estado: `pendiente`
+Estado: `completado` ✓
 
 1. Crear un `WidgetType` de CM6 que renderice un botón `×` pequeño al final de cada línea resaltada.
 2. Usar `Decoration.widget` con `side: 1` posicionado al final de la línea.
@@ -168,7 +168,7 @@ Validación: `npm run build` + verificación visual
 
 ### Fase 5 — Exportar highlights al modelo de code embeds
 
-Estado: `pendiente`
+Estado: `completado` ✓
 
 Conectar los highlights del editor con el sistema de code embeds de theory:
 

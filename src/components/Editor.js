@@ -10,6 +10,7 @@ import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap } 
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 
 import { getBlockDefinition } from '../config/exampleBlocks.js';
+import { HIGHLIGHT_COLORS } from '../config/highlightColors.js';
 import { glslLanguage } from '../editor/glslLanguage.js';
 import {
     cssLearningSupport,
@@ -44,6 +45,8 @@ import {
     editorDiagnosticsField,
     diagnosticsMixin,
 } from './editor/diagnostics.js';
+import { lineHighlightField, lineHighlightTheme } from './editor/lineHighlightExtension.js';
+import { lineHighlightsMixin } from './editor/lineHighlightsMixin.js';
 
 import { sessionManagerMixin } from './editor/sessionManager.js';
 import { exercisePanelMixin } from './editor/exercisePanel.js';
@@ -117,6 +120,8 @@ export class Editor {
         this.compileDiagnostics = [];
         this.runtimeDiagnostics = [];
         this.editors = [];
+        this.lineHighlights = new Map();
+        this.activeHighlightColor = HIGHLIGHT_COLORS[0].id;
         this.fontSize = 13;
         this.layoutModeStorageKey = 'learncode.editor.layout';
         this.vimEnabledStorageKey = 'learncode.editor.vim';
@@ -744,6 +749,7 @@ export class Editor {
 
     _renderWorkspace() {
         this._closeFileContextMenu();
+        this._captureHighlightsFromViews();
         this._destroyEditors();
         this.workspace.innerHTML = '';
         this._clearTabFileSelectHost();
@@ -823,6 +829,11 @@ export class Editor {
                 header.appendChild(this._createRolePill('locked'));
             }
 
+            const btnHighlightColor = this._buildHighlightColorButton();
+            const btnHighlightApply = this._buildHighlightApplyButton();
+            header.appendChild(btnHighlightColor);
+            header.appendChild(btnHighlightApply);
+
             const btnMaximize = document.createElement('button');
             btnMaximize.className = 'btn-icon btn-maximize';
             btnMaximize.title = 'Maximize Panel';
@@ -845,6 +856,16 @@ export class Editor {
             stack.appendChild(panel);
 
             const { view, vimCleanup } = this._createEditor(editorHost, file);
+
+            btnHighlightColor.addEventListener('click', (event) => {
+                event.stopPropagation();
+                this._toggleHighlightColorPicker(btnHighlightColor);
+            });
+
+            btnHighlightApply.addEventListener('click', (event) => {
+                event.stopPropagation();
+                this._applyHighlightToCurrentLine(view);
+            });
 
             btnCollapse.addEventListener('click', (event) => {
                 event.stopPropagation();
@@ -955,6 +976,11 @@ export class Editor {
             meta.appendChild(this._createRolePill('locked'));
         }
 
+        const btnHighlightColor = this._buildHighlightColorButton();
+        const btnHighlightApply = this._buildHighlightApplyButton();
+        meta.appendChild(btnHighlightColor);
+        meta.appendChild(btnHighlightApply);
+
         layout.appendChild(meta);
 
         const editorHost = document.createElement('div');
@@ -962,6 +988,17 @@ export class Editor {
         layout.appendChild(editorHost);
 
         const { view, vimCleanup } = this._createEditor(editorHost, activeFile);
+
+        btnHighlightColor.addEventListener('click', (event) => {
+            event.stopPropagation();
+            this._toggleHighlightColorPicker(btnHighlightColor);
+        });
+
+        btnHighlightApply.addEventListener('click', (event) => {
+            event.stopPropagation();
+            this._applyHighlightToCurrentLine(view);
+        });
+
         this.editors.push({
             id: activeFile.id,
             panel: editorHost,
@@ -1098,6 +1135,8 @@ export class Editor {
             extensions: [
                 EditorState.allowMultipleSelections.of(true),
                 editorDiagnosticsField,
+                lineHighlightField,
+                lineHighlightTheme,
                 lineNumbers(),
                 drawSelection(),
                 highlightActiveLine(),
@@ -1133,6 +1172,7 @@ export class Editor {
 
         const view = new EditorView({ state, parent: container });
         this._applyDiagnosticsToView(view, file);
+        this._applyHighlightsToView(view, file);
 
         const vimCleanup = this.vimEnabled
             ? bindVimView(view, {
@@ -1822,6 +1862,7 @@ export class Editor {
 Object.assign(
     Editor.prototype,
     diagnosticsMixin,
+    lineHighlightsMixin,
     sessionManagerMixin,
     exercisePanelMixin,
     theoryEditorMixin,

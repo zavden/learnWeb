@@ -12,6 +12,7 @@ import {
     parseExampleDocument,
 } from './markdown.js';
 import { highlightCode } from './theoryRenderer.js';
+import { parseHighlights } from './highlights.js';
 
 const THEORY_EXERCISE_SHORTCODE_PATTERN = /^[ \t]*\[\[exercise:([^\]\n]+)\]\][ \t]*$/gim;
 
@@ -142,6 +143,61 @@ function getHighlightLanguage(language) {
     return language || '';
 }
 
+const EMBED_HIGHLIGHT_BG = {
+    yellow: 'rgba(250, 204, 21, 0.18)',
+    green:  'rgba(74, 222, 128, 0.18)',
+    blue:   'rgba(96, 165, 250, 0.18)',
+    red:    'rgba(248, 113, 113, 0.18)',
+    purple: 'rgba(192, 132, 252, 0.18)',
+    orange: 'rgba(251, 146, 60, 0.18)',
+};
+
+// Split hljs-highlighted HTML by lines, properly closing and reopening <span> tags at
+// each newline so every resulting segment is valid HTML on its own.
+function splitHighlightedLines(html) {
+    const lines = [];
+    let current = '';
+    const openTags = [];
+    let i = 0;
+
+    while (i < html.length) {
+        if (html[i] === '\n') {
+            for (let j = openTags.length - 1; j >= 0; j--) current += '</span>';
+            lines.push(current);
+            current = openTags.join('');
+            i++;
+        } else if (html[i] === '<') {
+            const end = html.indexOf('>', i);
+            if (end === -1) { current += html.slice(i); break; }
+            const tag = html.slice(i, end + 1);
+            if (/^<\/span\b/.test(tag)) openTags.pop();
+            else if (/^<span\b/.test(tag)) openTags.push(tag);
+            current += tag;
+            i = end + 1;
+        } else {
+            current += html[i];
+            i++;
+        }
+    }
+    lines.push(current);
+    return lines;
+}
+
+function buildHighlightedCodeHtml(content, lang, highlights) {
+    const highlighted = highlightCode(content, lang);
+    if (!Array.isArray(highlights) || highlights.length === 0) return highlighted;
+
+    const hlMap = new Map(highlights.map(({ line, colorId }) => [line, colorId]));
+    const lines = splitHighlightedLines(highlighted);
+
+    return lines.map((lineHtml, i) => {
+        const colorId = hlMap.get(i + 1);
+        if (!colorId) return lineHtml;
+        const bg = EMBED_HIGHLIGHT_BG[colorId] || EMBED_HIGHLIGHT_BG.yellow;
+        return `<span style="display:inline-block;width:100%;background:${bg}">${lineHtml}</span>`;
+    }).join('\n');
+}
+
 function matchesCodeFilter(file, filter) {
     if (!Array.isArray(filter)) return true;
     return filter.some((name) => file.name === name || file.path === name || file.path?.endsWith(`/${name}`));
@@ -162,14 +218,14 @@ export function renderTheoryCodeEmbedMarkup(embed = {}, codeFilter = null) {
     if (files.length === 1) {
         const file = files[0];
         const lang = getHighlightLanguage(file.language);
-        const highlighted = highlightCode(file.content || '', lang);
+        const codeHtml = buildHighlightedCodeHtml(file.content || '', lang, file.highlights);
         return [
             `<div class="theory-code-embed is-single" data-theory-code-file="${escapeHtml(filename)}">`,
             `<div class="theory-code-embed-file-header">`,
             `<span class="theory-code-embed-file-name">${escapeHtml(file.name || file.path || '')}</span>`,
             `<span class="theory-code-embed-file-lang">${escapeHtml(file.language || '')}</span>`,
             `</div>`,
-            `<pre><code class="hljs language-${escapeHtml(lang)}">${highlighted}</code></pre>`,
+            `<pre><code class="hljs language-${escapeHtml(lang)}">${codeHtml}</code></pre>`,
             `</div>`,
         ].join('');
     }
@@ -180,10 +236,10 @@ export function renderTheoryCodeEmbedMarkup(embed = {}, codeFilter = null) {
 
     const panels = files.map((file, i) => {
         const lang = getHighlightLanguage(file.language);
-        const highlighted = highlightCode(file.content || '', lang);
+        const codeHtml = buildHighlightedCodeHtml(file.content || '', lang, file.highlights);
         return [
             `<div class="theory-code-embed-panel${i === 0 ? ' is-active' : ''}" data-code-panel="${i}">`,
-            `<pre><code class="hljs language-${escapeHtml(lang)}">${highlighted}</code></pre>`,
+            `<pre><code class="hljs language-${escapeHtml(lang)}">${codeHtml}</code></pre>`,
             `</div>`,
         ].join('');
     }).join('');
@@ -258,13 +314,26 @@ export async function loadTheoryExerciseEmbeds(topicPath, content = '') {
                     );
                 }
 
+                const highlightsMap = parseHighlights(
+                    String(documentModel.metadata?.highlights || ''),
+                    documentModel.files
+                );
+
                 return [filename, {
-                    codeFiles: documentModel.files.map((file) => ({
-                        content: file.content,
-                        language: file.language,
-                        name: file.name,
-                        path: file.path,
-                    })),
+                    codeFiles: documentModel.files.map((file) => {
+                        const fileLineMap = highlightsMap.get(file.id);
+                        return {
+                            content: file.content,
+                            highlights: fileLineMap
+                                ? Array.from(fileLineMap.entries())
+                                    .sort(([a], [b]) => a - b)
+                                    .map(([line, colorId]) => ({ line, colorId }))
+                                : [],
+                            language: file.language,
+                            name: file.name,
+                            path: file.path,
+                        };
+                    }),
                     description: editorial.description || '',
                     exists: true,
                     filename,

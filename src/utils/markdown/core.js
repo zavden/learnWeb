@@ -260,6 +260,11 @@ export function normalizeMetadata(metadata = {}) {
             return;
         }
 
+        if (normalizedKey === 'highlights') {
+            normalized.highlights = String(value).trim();
+            return;
+        }
+
         normalized[normalizedKey] = value;
     });
 

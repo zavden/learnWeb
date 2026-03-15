@@ -711,3 +711,84 @@
   font-size: 13px;
   text-align: center;
 }
+
+/* ── Highlight Line Buttons ── */
+.btn-highlight-color {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 4px;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.btn-highlight-color::after {
+  content: '';
+  display: block;
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: var(--hl-swatch-bg, rgba(250, 204, 21, 0.3));
+  border: 1.5px solid var(--hl-swatch-border, rgba(250, 204, 21, 0.6));
+}
+
+.btn-highlight-color:hover {
+  opacity: 1;
+  background: var(--bg-hover);
+}
+
+.btn-highlight-apply {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 4px;
+  flex-shrink: 0;
+  opacity: 0.6;
+  color: var(--text-muted);
+}
+
+.btn-highlight-apply:hover {
+  opacity: 1;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ── Highlight Color Picker ── */
+.highlight-color-picker {
+  position: fixed;
+  z-index: 1000;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 6px;
+  display: flex;
+  gap: 5px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.highlight-color-picker-option {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  padding: 0;
+  cursor: pointer;
+  background: var(--picker-option-bg);
+  border: 2px solid transparent;
+  outline: 1.5px solid var(--picker-option-border);
+  outline-offset: 0;
+  transition: transform 0.1s ease;
+}
+
+.highlight-color-picker-option:hover {
+  transform: scale(1.2);
+}
+
+.highlight-color-picker-option.is-active {
+  border-color: rgba(255, 255, 255, 0.55);
+}
