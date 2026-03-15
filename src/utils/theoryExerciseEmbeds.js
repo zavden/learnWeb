@@ -252,7 +252,7 @@ export function renderTheoryCodeEmbedMarkup(embed = {}, codeFilter = null) {
     ].join('');
 }
 
-export function injectTheoryExerciseEmbeds(content = '', exerciseEmbeds = {}) {
+export function injectTheoryExerciseEmbeds(content = '', exerciseEmbeds = {}, wrapEmbed = null) {
     const source = typeof content === 'string' ? content : String(content ?? '');
     const embedMap = exerciseEmbeds && typeof exerciseEmbeds === 'object'
         ? exerciseEmbeds
@@ -271,11 +271,11 @@ export function injectTheoryExerciseEmbeds(content = '', exerciseEmbeds = {}) {
             tags: [],
         };
 
-        if (parsed.codeEmbed) {
-            return renderTheoryCodeEmbedMarkup(embed, parsed.codeFilter);
-        }
+        const html = parsed.codeEmbed
+            ? renderTheoryCodeEmbedMarkup(embed, parsed.codeFilter)
+            : renderTheoryExerciseEmbedMarkup(embed);
 
-        return renderTheoryExerciseEmbedMarkup(embed);
+        return typeof wrapEmbed === 'function' ? wrapEmbed(html) : html;
     });
 }
 

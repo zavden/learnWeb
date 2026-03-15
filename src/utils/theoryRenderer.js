@@ -529,8 +529,24 @@ export function renderTheoryExportDocument(content = '', options = {}) {
 export function renderTheoryHtml(content = '', options = {}) {
     ensureMarkedConfigured();
     const source = typeof content === 'string' ? content : String(content ?? '');
-    const prepared = injectTheoryExerciseEmbeds(source, options.exerciseEmbeds || {});
-    return marked.parse(prepared);
+
+    // Replace exercise shortcodes with HTML-comment placeholders BEFORE marked runs,
+    // then swap in the real embed HTML AFTER. This prevents marked from processing
+    // backticks, pipes, and other Markdown-sensitive characters inside hljs output.
+    const embeds = [];
+    const withPlaceholders = injectTheoryExerciseEmbeds(source, options.exerciseEmbeds || {}, (embedHtml) => {
+        const index = embeds.length;
+        embeds.push(embedHtml);
+        return `<!--LEARNWEB_EMBED_${index}-->`;
+    });
+
+    let html = marked.parse(withPlaceholders);
+
+    for (let i = 0; i < embeds.length; i++) {
+        html = html.replace(`<!--LEARNWEB_EMBED_${i}-->`, embeds[i]);
+    }
+
+    return html;
 }
 
 export function renderTheoryPreviewDocument(content = '', options = {}) {
