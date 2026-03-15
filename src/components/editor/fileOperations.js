@@ -725,6 +725,10 @@ const title = ref('${componentName}');
         this.btnToggleFavoriteExample?.addEventListener('click', async () => {
             await this.onToggleFavoriteCurrentExample?.();
         });
+
+        this.btnTogglePendingExample?.addEventListener('click', async () => {
+            await this.onTogglePendingCurrentExample?.();
+        });
     },
 
     async _handleRenameCurrentFile() {
@@ -849,6 +853,11 @@ const title = ref('${componentName}');
 
     setCurrentExampleFavorite(enabled) {
         this.currentExampleFavorite = enabled === true;
+        this._updateButtonStates();
+    },
+
+    setCurrentExamplePending(enabled) {
+        this.currentExamplePending = enabled === true;
         this._updateButtonStates();
     },
 };

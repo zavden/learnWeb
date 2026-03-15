@@ -93,6 +93,7 @@ export class Editor {
         onOpenShaderTextures,
         onOpenShaderUniforms,
         onToggleFavoriteCurrentExample,
+        onTogglePendingCurrentExample,
         onToggleSidebar,
         onCenterWorkspace,
     }) {
@@ -111,6 +112,7 @@ export class Editor {
         this.onOpenShaderTextures = onOpenShaderTextures;
         this.onOpenShaderUniforms = onOpenShaderUniforms;
         this.onToggleFavoriteCurrentExample = onToggleFavoriteCurrentExample;
+        this.onTogglePendingCurrentExample = onTogglePendingCurrentExample;
         this.onToggleSidebar = onToggleSidebar;
         this.onCenterWorkspace = onCenterWorkspace;
 
@@ -151,6 +153,7 @@ export class Editor {
         this.btnRemove = document.getElementById('btn-remove');
         this.btnAddFile = document.getElementById('btn-add-file');
         this.btnToggleFavoriteExample = document.getElementById('btn-toggle-favorite-example');
+        this.btnTogglePendingExample = document.getElementById('btn-toggle-pending-example');
         this.btnEditExampleMetadata = document.getElementById('btn-edit-example-metadata');
         this.btnEditShaderUniforms = document.getElementById('btn-edit-shader-uniforms');
         this.btnEditShaderTextures = document.getElementById('btn-edit-shader-textures');
@@ -315,6 +318,7 @@ export class Editor {
         this._dialogFocusTargetFileId = null;
         this._restoreFocusFrameId = 0;
         this.currentExampleFavorite = false;
+        this.currentExamplePending = false;
 
         this._initButtons();
         this._initShortcuts();
@@ -1785,6 +1789,14 @@ export class Editor {
             this.btnToggleFavoriteExample.title = this.currentExampleFavorite
                 ? 'Remove from favorites'
                 : 'Add to favorites';
+        }
+        if (this.btnTogglePendingExample) {
+            this.btnTogglePendingExample.disabled = !hasFile || isTheory;
+            this.btnTogglePendingExample.classList.toggle('is-active', this.currentExamplePending);
+            this.btnTogglePendingExample.setAttribute('aria-pressed', String(this.currentExamplePending));
+            this.btnTogglePendingExample.title = this.currentExamplePending
+                ? 'Remove from pending'
+                : 'Add to pending';
         }
         if (this.previewFilenameDisplay) {
             this.previewFilenameDisplay.classList.toggle('is-actionable', canRenameCurrentFile);

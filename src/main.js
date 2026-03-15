@@ -8,17 +8,21 @@ import { ExercisePanel } from './components/ExercisePanel.js';
 import { Preview } from './components/Preview.js';
 import { CreateDialog } from './components/CreateDialog.js';
 import { FavoritesDialog } from './components/FavoritesDialog.js';
+import { PendingDialog } from './components/PendingDialog.js';
 import { Gallery } from './components/Gallery.js';
 import { TheoryExerciseDialog } from './components/TheoryExerciseDialog.js';
 import { formatExampleRatingStars, getExampleImportanceMeta } from './utils/exampleEditorial.js';
 import {
     addFavorite,
+    addPending,
     fetchFavorites,
+    fetchPending,
     fetchVimShortcutConfig,
     fetchTopicMain,
     fetchClipboardDefaultState,
     fetchVimDefaultState,
     removeFavorite,
+    removePending,
     updateClipboardDefaultState,
     updateVimDefaultState,
 } from './utils/api.js';
@@ -49,6 +53,8 @@ class App {
         this.theoryReturnState = null;
         this.favoritePaths = new Set();
         this.favoriteEntries = [];
+        this.pendingPaths = new Set();
+        this.pendingEntries = [];
 
         // UI Elements for View Switching
         this.appShell = document.getElementById('app');
@@ -132,6 +138,7 @@ class App {
             onSessionStateChange: () => {
                 this._syncTheoryEditorUi();
                 this._syncCurrentExampleFavoriteState();
+                this._syncCurrentExamplePendingState();
                 this._persistSessionState();
             },
             onResetShaderRuntime: () => {
@@ -158,6 +165,7 @@ class App {
                 this.editor?.openShaderUniformDialog?.();
             },
             onToggleFavoriteCurrentExample: () => this._toggleCurrentExampleFavorite(),
+            onTogglePendingCurrentExample: () => this._toggleCurrentExamplePending(),
             onToggleSidebar: () => {
                 const nextState = !this.appShell.classList.contains('sidebar-collapsed');
                 this._setSidebarCollapsed(nextState);
@@ -179,6 +187,11 @@ class App {
             onRemoveFavorite: (favoritePath) => this._removeFavoritePath(favoritePath),
         });
 
+        this.pendingDialog = new PendingDialog({
+            onExampleSelect: (topicPath, filename) => this._openPendingExample(topicPath, filename),
+            onRemovePending: (pendingPath) => this._removePendingPath(pendingPath),
+        });
+
         this.theoryExerciseDialog = new TheoryExerciseDialog({
             onOpenExample: (topicPath, filename) => this._openTheoryExercise(topicPath, filename),
         });
@@ -192,6 +205,7 @@ class App {
         this.sidebar = new Sidebar({
             onClipboardDefaultToggle: (enabled) => this._handleClipboardDefaultToggle(enabled),
             onFavoritesClick: () => this._openFavoritesDialog(),
+            onPendingClick: () => this._openPendingDialog(),
             onPreviewInfoToggle: (visible) => this._setPreviewEditorialSummaryVisible(visible),
             onTopicSelect: (path, label) => this.selectTopic(path, label),
             onCreateClick: (topicPath) => this.openCreateDialog(topicPath),
@@ -243,7 +257,19 @@ class App {
         await this._loadVimDefaultState({ persist: false });
         await this._loadVimShortcutConfig();
         await this._loadFavorites();
+        await this._loadPending();
         await this._restoreSessionState();
+        this._showPendingOnStartup();
+    }
+
+    _showPendingOnStartup() {
+        if (this.pendingEntries.length === 0) return;
+        if (this.currentTopicPath) return;
+
+        this.showGallery();
+        this.gallery.renderPendingEntries(this.pendingEntries, {
+            onOpenEntry: (topicPath, filename) => this._openPendingExample(topicPath, filename),
+        });
     }
 
     async _loadVimShortcutConfig() {
@@ -361,6 +387,7 @@ class App {
         await this.gallery.load(topicPath);
         this.showGallery();
         this._syncCurrentExampleFavoriteState();
+        this._syncCurrentExamplePendingState();
 
         if (persist) {
             this._persistSessionState();
@@ -372,6 +399,7 @@ class App {
         await this.editor.loadExample(filename);
         this._syncTheoryEditorUi();
         this._syncCurrentExampleFavoriteState();
+        this._syncCurrentExamplePendingState();
 
         if (persist) {
             this._persistSessionState();
@@ -441,6 +469,7 @@ class App {
         this._clearPreviewEditorialSummary();
         this._syncTheoryEditorUi();
         this._syncCurrentExampleFavoriteState();
+        this._syncCurrentExamplePendingState();
     }
 
     showEditor() {
@@ -449,6 +478,7 @@ class App {
         this.editorPanels.classList.remove('hidden');
         this._syncTheoryEditorUi();
         this._syncCurrentExampleFavoriteState();
+        this._syncCurrentExamplePendingState();
         this._syncPreviewEditorialSummary();
     }
 
@@ -514,6 +544,83 @@ class App {
     }
 
     async _openFavoriteExample(topicPath, filename) {
+        const topic = this._findTopicByPath(topicPath);
+        if (!topic) return;
+
+        if (this.currentTopicPath !== topicPath) {
+            await this.selectTopic(topicPath, topic.label, { persist: false });
+        }
+
+        await this.loadExample(filename);
+    }
+
+    async _loadPending() {
+        try {
+            const state = await fetchPending();
+            this.pendingEntries = Array.isArray(state?.entries) ? state.entries : [];
+            this.pendingPaths = new Set(Array.isArray(state?.items) ? state.items : []);
+            this.gallery.setPendingPaths(this.pendingPaths);
+            this._syncCurrentExamplePendingState();
+        } catch (error) {
+            console.error('Failed to load pending.', error);
+        }
+    }
+
+    _syncCurrentExamplePendingState() {
+        const pendingPath = this._getCurrentExampleFavoritePath();
+        this.editor?.setCurrentExamplePending?.(pendingPath ? this.pendingPaths.has(pendingPath) : false);
+    }
+
+    async _toggleCurrentExamplePending() {
+        const pendingPath = this._getCurrentExampleFavoritePath();
+        if (!pendingPath) return;
+
+        try {
+            const state = this.pendingPaths.has(pendingPath)
+                ? await removePending(pendingPath)
+                : await addPending(pendingPath);
+
+            this.pendingEntries = Array.isArray(state?.entries) ? state.entries : [];
+            this.pendingPaths = new Set(Array.isArray(state?.items) ? state.items : []);
+            this.gallery.setPendingPaths(this.pendingPaths);
+            this._syncCurrentExamplePendingState();
+
+            if (this.pendingDialog?.dialog?.open) {
+                await this.pendingDialog.render(this.pendingEntries);
+            }
+
+            this.editor?._showToast?.(
+                this.pendingPaths.has(pendingPath)
+                    ? 'Added to pending.'
+                    : 'Removed from pending.',
+                'success',
+            );
+        } catch (error) {
+            console.error('Failed to toggle pending.', error);
+            this.editor?._showToast?.(`Pending update failed: ${error.message}`, 'error');
+        }
+    }
+
+    async _removePendingPath(pendingPath) {
+        try {
+            const state = await removePending(pendingPath);
+            this.pendingEntries = Array.isArray(state?.entries) ? state.entries : [];
+            this.pendingPaths = new Set(Array.isArray(state?.items) ? state.items : []);
+            this.gallery.setPendingPaths(this.pendingPaths);
+            this._syncCurrentExamplePendingState();
+            await this.pendingDialog.render(this.pendingEntries);
+        } catch (error) {
+            console.error('Failed to remove pending.', error);
+            this.editor?._showToast?.(`Pending remove failed: ${error.message}`, 'error');
+        }
+    }
+
+    async _openPendingDialog() {
+        await this._loadPending();
+        this.pendingDialog.open(this.pendingEntries);
+    }
+
+    async _openPendingExample(topicPath, filename) {
         const topic = this._findTopicByPath(topicPath);
         if (!topic) return;
 

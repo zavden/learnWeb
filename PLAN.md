@@ -1,561 +1,667 @@
-# Plan: Code Embed en Theory — `[[exercise:file.md-]]`
+# Mejoras de escalabilidad y desarrollo futuro
 
-## Contexto
+Recomendaciones organizadas por prioridad y esfuerzo. El objetivo es que la app sea mas
+facil de mantener, extender, depurar y escalar a medida que crece.
 
-Theory documents (`main.md`) ya soportan `[[exercise:ta.md]]` que renderiza un embed
-interactivo con preview iframe, estrellas, descripcion y botones. Este plan implementa
-una **segunda variante** con sintaxis `[[exercise:ta.md-]]` que muestra el **codigo fuente**
-del ejemplo con syntax highlighting y tabs para navegar archivos.
+---
 
-### Tres variantes de sintaxis
+## 1. Code-splitting y optimizacion del bundle
 
-| Shortcode | Comportamiento |
-|-----------|---------------|
-| `[[exercise:ta.md-]]` | Todos los archivos del ejemplo, en tabs |
-| `[[exercise:ta.md-App.vue]]` | Solo `App.vue`, sin tabs |
-| `[[exercise:ta.md-(App.vue\|main.ts)]]` | Solo esos archivos, en ese orden, en tabs |
+### Problema
 
-### Dos contextos de renderizado
+El build genera un unico chunk JS de ~1.3MB. Vite advierte `Some chunks are larger than 500 kB`.
+Todo se carga en el primer paint aunque el usuario no necesite todas las funcionalidades.
 
-1. **Iframe** — preview de theory en el editor (`renderTheoryPreviewDocument` en `theoryRenderer.js`)
-2. **DOM directo** — theory viewer del hamburger menu (`TheoryViewer.js` usa `renderTheoryHtml`)
+### Acciones
 
-Ambos usan la misma funcion `injectTheoryExerciseEmbeds` para reemplazar shortcodes por HTML.
+1. **Configurar `manualChunks` en `vite.config.js`** para separar dependencias pesadas:
 
-### Modelo de datos del ejemplo
-
-`parseExampleDocument(content)` retorna un document model con:
 ```javascript
-{
-  files: [
-    {
-      id: 'src/main.ts:0',
-      path: 'src/main.ts',         // ruta completa
-      name: 'main.ts',             // solo nombre
-      language: 'typescript',       // typescript, vue, scss, etc.
-      content: 'import ...',        // codigo fuente
-      role: 'entry',               // entry, app, component, style, etc.
-      // ... otros campos
+// vite.config.js
+export default defineConfig({
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    codemirror: [
+                        '@codemirror/state',
+                        '@codemirror/view',
+                        '@codemirror/lang-html',
+                        '@codemirror/lang-css',
+                        '@codemirror/lang-javascript',
+                        // ... demas paquetes de codemirror
+                    ],
+                    highlightjs: ['highlight.js'],
+                    markdown: ['marked'],
+                },
+            },
+        },
     },
-    // ...
-  ],
-  metadata: { framework: 'vue', mode: 'multi-file', ... },
+});
+```
+
+2. **Lazy import de subsistemas pesados**: los compiladores de framework (Vue, React, esbuild)
+   solo se necesitan cuando el usuario abre un ejemplo de ese tipo. Convertir a `import()` dinamico:
+
+```javascript
+// En vez de: import { compileVue } from './compiler/vue.js';
+// Usar:
+async function compileVue(doc) {
+    const { compileVue } = await import('./compiler/vue.js');
+    return compileVue(doc);
 }
 ```
 
-### hljs y lenguajes
+3. **Carga on-demand de lenguajes hljs**: registrar solo html/css/js por defecto, cargar
+   typescript/vue/scss/glsl cuando se necesiten.
 
-`highlightCode(code, lang)` en `theoryRenderer.js` usa hljs con estos lenguajes registrados:
-`xml/html/svg`, `css/scss`, `javascript/jsx`, `typescript/tsx`, `json`, `glsl`, `bash`, `markdown`.
+4. **Analisis de bundle**: agregar `rollup-plugin-visualizer` para ver que ocupa espacio:
 
-**Vue NO esta registrado**. Para archivos `.vue`, hay que usar `xml` como lenguaje de highlight
-(los SFC son estructuralmente XML). El plan incluye un mapeo `vue → xml` en la funcion de rendering.
-
----
-
-## Paso 1 — Parsing del shortcode (theoryExerciseEmbeds.js)
-
-### Que hacer
-
-1. **No cambiar el regex** `THEORY_EXERCISE_SHORTCODE_PATTERN`. El regex actual
-   `^[ \t]*\[\[exercise:([^\]\n]+)\]\][ \t]*$` ya captura todo entre `exercise:` y `]]`.
-   Para `[[exercise:ta.md-]]` captura `ta.md-`. Para `[[exercise:ta.md-(App.vue|main.ts)]]`
-   captura `ta.md-(App.vue|main.ts)`. Solo necesitamos parsear el grupo capturado.
-
-2. **Crear `parseExerciseShortcode(raw)`** que reciba el contenido capturado y retorne:
-
-```javascript
-// [[exercise:ta.md]] → embed estandar
-{ filename: 'ta.md', codeEmbed: false, codeFilter: null }
-
-// [[exercise:ta.md-]] → code embed, todos los archivos
-{ filename: 'ta.md', codeEmbed: true, codeFilter: null }
-
-// [[exercise:ta.md-App.vue]] → code embed, un archivo
-{ filename: 'ta.md', codeEmbed: true, codeFilter: ['App.vue'] }
-
-// [[exercise:ta.md-(App.vue|main.ts)]] → code embed, multiples archivos
-{ filename: 'ta.md', codeEmbed: true, codeFilter: ['App.vue', 'main.ts'] }
+```bash
+npm install -D rollup-plugin-visualizer
 ```
 
-Logica de parsing:
-- Si `raw` contiene un `.md` seguido de `-`, es code embed.
-- Encontrar la posicion del ultimo `.md` seguido de `-`.
-- Despues del `-`:
-  - Vacio → `codeFilter: null` (todos los archivos)
-  - `(A|B|C)` → split por `|`, trim cada uno → `codeFilter: ['A', 'B', 'C']`
-  - Cualquier otra cosa → `codeFilter: [valor]` (un solo archivo)
-- El filename es todo lo que esta ANTES del `-` (incluyendo el `.md`).
-
-3. **Actualizar `extractTheoryExerciseReferences`** para que extraiga el filename base
-   (sin el sufijo `-...`). Usar `parseExerciseShortcode` internamente. Debe seguir
-   deduplicando filenames (si `ta.md` aparece como embed estandar Y como code embed,
-   solo se retorna una vez).
-
-### Archivos a modificar
-
-- `src/utils/theoryExerciseEmbeds.js`
-
-### Validacion
-
-- `npm run build` (no hay tests existentes en el proyecto)
-
----
-
-## Paso 2 — Datos de codeFiles en el embed (theoryExerciseEmbeds.js)
-
-### Que hacer
-
-1. **Extender `loadTheoryExerciseEmbeds`**: el fetch y `parseExampleDocument` ya ocurren.
-   Agregar un campo `codeFiles` al objeto embed retornado:
-
 ```javascript
-return [filename, {
-    // ... campos existentes (description, exists, filename, importance, etc.)
-    codeFiles: documentModel.files.map((file) => ({
-        path: file.path,
-        name: file.name,
-        language: file.language,
-        content: file.content,
-    })),
-}];
+// vite.config.js
+import { visualizer } from 'rollup-plugin-visualizer';
+export default defineConfig({
+    plugins: [visualizer({ open: true })],
+});
 ```
 
-2. **Optimizacion**: `codeFiles` debe poblarse SIEMPRE que el ejemplo exista
-   (el overhead es minimo — solo copiar datos que ya estan en memoria). No vale la pena
-   rastrear cuales filenames tienen variante code porque el mismo embed map se reutiliza
-   para ambas variantes.
-
-3. **En el catch** (ejemplo no encontrado), `codeFiles` es `[]`.
-
 ### Archivos a modificar
 
-- `src/utils/theoryExerciseEmbeds.js` (solo `loadTheoryExerciseEmbeds`)
-
-### Validacion
-
-- `npm run build`
+- `vite.config.js`
+- `src/utils/compileClient.js` (lazy imports)
+- `src/utils/theoryRenderer.js` (hljs on-demand)
 
 ---
 
-## Paso 3 — Exportar highlightCode (theoryRenderer.js)
+## 2. Descomposicion de main.js (god object)
 
-### Que hacer
+### Problema
 
-1. Cambiar `function highlightCode(code, lang)` a `export function highlightCode(code, lang)`.
+`main.js` es una unica clase `App` de ~1400 lineas que maneja:
+- 80+ referencias DOM
+- Estado de layout, sesion, preferencias, favoritos, pending
+- Inicializacion de todos los componentes
+- Resize handlers, shortcuts, zoom, viewport
 
-Eso es todo. La funcion ya existe y funciona. Solo necesita ser exportable para que
-`theoryExerciseEmbeds.js` la use en el paso 4.
+Cualquier cambio requiere leer y entender todo el archivo.
 
-### Archivos a modificar
+### Acciones
 
-- `src/utils/theoryRenderer.js` (linea 47: agregar `export` keyword)
+Extraer en managers independientes que `App` solo coordina:
 
-### Validacion
+```
+src/
+├── managers/
+│   ├── LayoutManager.js       // sidebar resize, workspace resize, console resize
+│   ├── SessionManager.js      // save/restore session, localStorage
+│   ├── PreviewManager.js      // zoom, viewport, width mode
+│   └── FavoritesManager.js    // favorites + pending (ya comparten patron)
+```
 
-- `npm run build`
-
----
-
-## Paso 4 — Renderizado HTML del code embed (theoryExerciseEmbeds.js)
-
-### Que hacer
-
-1. **Crear mapeo de lenguaje para hljs**. Agregar una funcion helper:
+Ejemplo de extraccion:
 
 ```javascript
-function getHighlightLanguage(language) {
-    if (language === 'vue') return 'xml';
-    return language || '';
+// src/managers/LayoutManager.js
+export class LayoutManager {
+    constructor({ appShell, sidebarElement, workspaceElement, ... }) { ... }
+    initSidebarControls() { ... }
+    initWorkspaceResizer() { ... }
+    initConsoleResizer() { ... }
+    resetLayout() { ... }
 }
+
+// main.js - queda limpio
+this.layout = new LayoutManager({ ... });
+this.session = new SessionManager({ ... });
 ```
 
-2. **Crear `renderTheoryCodeEmbedMarkup(embed, codeFilter)`**:
+### Criterio de separacion
 
-   - Recibir el embed (con `codeFiles`) y `codeFilter` (null o string[]).
-   - Filtrar archivos segun `codeFilter`:
-     - `null` → todos los archivos, en orden original.
-     - `['App.vue']` → solo ese archivo (match por `file.name` o sufijo de `file.path`).
-     - `['App.vue', 'main.ts']` → esos archivos en ese orden.
-   - Si no hay archivos visibles despues del filtro → renderizar mensaje de error.
-   - Importar `highlightCode` desde `theoryRenderer.js`.
-   - Aplicar `highlightCode(file.content, getHighlightLanguage(file.language))` a cada archivo.
+| Manager | Lineas actuales | Responsabilidad |
+|---------|----------------|-----------------|
+| `LayoutManager` | ~300 | Resize de sidebar, workspace, consola |
+| `SessionManager` | ~150 | Lectura/escritura de sesion en localStorage |
+| `PreviewManager` | ~200 | Zoom, viewport width, slider controls |
+| `FavoritesManager` | ~200 | Favorites + Pending (CRUD, sync, dialogs) |
 
-3. **HTML generado — un solo archivo** (sin tabs):
+### Archivos a crear
 
-```html
-<div class="theory-code-embed is-single" data-theory-code-file="ta.md">
-  <div class="theory-code-embed-file-header">
-    <span class="theory-code-embed-file-name">App.vue</span>
-    <span class="theory-code-embed-file-lang">vue</span>
-  </div>
-  <pre><code class="hljs language-xml">[highlighted code]</code></pre>
-</div>
-```
+- `src/managers/LayoutManager.js`
+- `src/managers/SessionManager.js`
+- `src/managers/PreviewManager.js`
+- `src/managers/FavoritesManager.js`
 
-4. **HTML generado — multiples archivos** (con tabs):
+### Archivos a modificar
 
-```html
-<div class="theory-code-embed" data-theory-code-file="ta.md">
-  <div class="theory-code-embed-tabs">
-    <button type="button" class="theory-code-embed-tab is-active" data-code-tab="0">main.ts</button>
-    <button type="button" class="theory-code-embed-tab" data-code-tab="1">App.vue</button>
-    <button type="button" class="theory-code-embed-tab" data-code-tab="2">styles.scss</button>
-  </div>
-  <div class="theory-code-embed-panel is-active" data-code-panel="0">
-    <pre><code class="hljs language-typescript">[highlighted]</code></pre>
-  </div>
-  <div class="theory-code-embed-panel" data-code-panel="1">
-    <pre><code class="hljs language-xml">[highlighted]</code></pre>
-  </div>
-  <div class="theory-code-embed-panel" data-code-panel="2">
-    <pre><code class="hljs language-scss">[highlighted]</code></pre>
-  </div>
-</div>
-```
+- `src/main.js` (reducir a ~400 lineas de coordinacion)
 
-5. **Actualizar `injectTheoryExerciseEmbeds`**: usar `parseExerciseShortcode` en el callback
-   del replace. Si `codeEmbed` es true, llamar a `renderTheoryCodeEmbedMarkup`. Si no,
-   llamar al existente `renderTheoryExerciseEmbedMarkup`.
+---
+
+## 3. Reemplazar mixins por composicion
+
+### Problema
+
+El Editor usa 8 mixins que se mezclan via `Object.assign(Editor.prototype, mixin)`.
+Cada mixin accede a `this` del Editor, comparte estado implicitamente, y no se puede
+testear de forma independiente. Agregar un campo nuevo requiere verificar que no colisione
+con los otros 7 mixins.
+
+### Mixins actuales del Editor
+
+| Mixin | Lineas | Responsabilidad |
+|-------|--------|-----------------|
+| `fileOperationsMixin` | 863 | CRUD de archivos, save, modify, rename |
+| `metadataDialogsMixin` | 983 | Dialogos de metadata editorial |
+| `sessionManagerMixin` | ~200 | Estado de sesion del editor |
+| `exercisePanelMixin` | ~300 | Logica de ejercicios |
+| `theoryEditorMixin` | ~200 | Edicion de teoria |
+| `diagnosticsMixin` | ~150 | Compile/runtime diagnostics |
+| `shaderDialogsMixin` | ~400 | Dialogos de shaders |
+| `lineHighlightsMixin` | ~150 | Highlight de lineas |
+
+### Acciones
+
+Convertir cada mixin en un **service class** que recibe las dependencias que necesita
+en vez de acceder a `this` del Editor:
 
 ```javascript
-return source.replace(THEORY_EXERCISE_SHORTCODE_PATTERN, (_match, rawContent) => {
-    const parsed = parseExerciseShortcode(rawContent);
-    const embed = embedMap[parsed.filename] || { /* fallback missing */ };
+// Antes (mixin):
+export const fileOperationsMixin = {
+    async _handleSave() {
+        if (!this.currentTopicPath) return;  // accede a this del Editor
+        const content = buildExampleDocument(this.currentDocument);
+        await saveExample(this.currentTopicPath, content);
+        this._showToast('Saved', 'success');
+    },
+};
 
-    if (parsed.codeEmbed) {
-        return renderTheoryCodeEmbedMarkup(embed, parsed.codeFilter);
+// Despues (service):
+export class FileService {
+    constructor(editor) {
+        this.editor = editor;
     }
 
-    return renderTheoryExerciseEmbedMarkup(embed);
+    async handleSave() {
+        if (!this.editor.currentTopicPath) return;
+        const content = buildExampleDocument(this.editor.currentDocument);
+        await saveExample(this.editor.currentTopicPath, content);
+        this.editor.showToast('Saved', 'success');
+    }
+}
+
+// En Editor:
+this.fileService = new FileService(this);
+```
+
+Beneficios: cada service se puede testear con un mock del editor, las dependencias
+son explicitas, no hay colision de nombres.
+
+### Archivos a crear/modificar
+
+- Renombrar `src/components/editor/*.js` de mixins a services
+- `src/components/Editor.js` (instanciar services en vez de mezclar mixins)
+
+---
+
+## 4. Server: I/O asincrono y validacion
+
+### Problema
+
+`server.js` usa `fs.readFileSync`/`fs.writeFileSync` en todos los endpoints. Con multiples
+usuarios concurrentes, cada peticion bloquea el event loop mientras lee/escribe disco.
+Tambien faltan validaciones de path que podrian permitir directory traversal.
+
+### Acciones
+
+1. **Convertir a async I/O**:
+
+```javascript
+// Antes:
+const content = fs.readFileSync(filePath, 'utf-8');
+
+// Despues:
+import { promises as fsp } from 'fs';
+const content = await fsp.readFile(filePath, 'utf-8');
+```
+
+Aplicar en: `server.js`, `favoritesStore.js`, `pendingStore.js`, `editorDefaults.js`, `materialTree.js`.
+
+2. **Validacion de paths** — crear un helper:
+
+```javascript
+function safePath(base, ...segments) {
+    const resolved = path.resolve(base, ...segments);
+    if (!resolved.startsWith(path.resolve(base))) {
+        throw new Error('Path traversal detected');
+    }
+    return resolved;
+}
+```
+
+3. **Middleware de errores** centralizado:
+
+```javascript
+app.use((err, req, res, next) => {
+    console.error(`[${req.method}] ${req.path}:`, err.message);
+    res.status(err.status || 500).json({ error: err.message });
 });
+```
+
+4. **Compresion gzip**:
+
+```bash
+npm install compression
+```
+
+```javascript
+import compression from 'compression';
+app.use(compression());
+```
+
+5. **Cache del arbol de material**: el arbol cambia raramente, cachearlo 60 segundos:
+
+```javascript
+let treeCache = null;
+let treeCacheExpiry = 0;
+
+function getCachedTree(options) {
+    if (treeCache && Date.now() < treeCacheExpiry) return treeCache;
+    treeCache = buildMaterialTree(MATERIAL_DIR, options);
+    treeCacheExpiry = Date.now() + 60_000;
+    return treeCache;
+}
 ```
 
 ### Archivos a modificar
 
-- `src/utils/theoryExerciseEmbeds.js` (agregar import de `highlightCode`, nueva funcion, modificar `injectTheoryExerciseEmbeds`)
-
-### Validacion
-
-- `npm run build`
+- `server.js`
+- `src/utils/favoritesStore.js`
+- `src/utils/pendingStore.js`
+- `src/utils/editorDefaults.js`
+- `src/utils/materialTree.js`
 
 ---
 
-## Paso 5 — CSS para code embed
+## 5. Testing
 
-### Que hacer
+### Estado actual
 
-Agregar estilos para `.theory-code-embed*` en **dos lugares** (mismos estilos, distinto scope):
+- 19 archivos de test para utilidades (buen coverage de markdown, validators, renderers)
+- 0 tests para componentes, server, o integracion
 
-1. **`src/utils/theoryRenderer.js`** — dentro del `<style>` del iframe (despues de los estilos
-   de `.theory-exercise-embed`, alrededor de linea 397). Selectores SIN prefijo `#theory-content`.
+### Acciones
 
-2. **`src/styles/07-theory.css`** — al final del archivo. Selectores CON prefijo `#theory-content`.
+1. **Tests de API del servidor** — verificar que cada endpoint responde correctamente:
 
-### Estilos necesarios
+```javascript
+// test/server.test.js
+import { describe, it } from 'node:test';
+import assert from 'node:assert';
+
+describe('GET /api/tree', () => {
+    it('returns array of chapters', async () => {
+        const res = await fetch('http://localhost:3001/api/tree');
+        assert.strictEqual(res.status, 200);
+        const tree = await res.json();
+        assert(Array.isArray(tree));
+    });
+});
+```
+
+2. **Tests de los stores** — `favoritesStore.js`, `pendingStore.js`:
+
+```javascript
+// test/pendingStore.test.js
+describe('addPending', () => {
+    it('adds valid example path', () => { ... });
+    it('rejects invalid path', () => { ... });
+    it('deduplicates', () => { ... });
+});
+```
+
+3. **Tests de componentes** (futuro) — considerar Vitest + happy-dom para testear
+   Gallery, Editor, Sidebar con DOM simulado.
+
+4. **CI con GitHub Actions**:
+
+```yaml
+# .github/workflows/test.yml
+name: Tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install
+      - run: npm test
+      - run: npx vite build
+```
+
+### Archivos a crear
+
+- `test/server.test.js`
+- `test/pendingStore.test.js`
+- `.github/workflows/test.yml`
+
+---
+
+## 6. Linting y formateo
+
+### Problema
+
+No hay ESLint ni Prettier configurados. El estilo del codigo es consistente por convencion
+pero no hay enforcement automatico. Cualquier colaborador podria introducir inconsistencias.
+
+### Acciones
+
+```bash
+npm install -D eslint prettier eslint-config-prettier
+```
+
+```javascript
+// eslint.config.js (flat config)
+export default [
+    {
+        files: ['**/*.js'],
+        rules: {
+            'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+            'no-console': 'off',
+            'prefer-const': 'error',
+        },
+    },
+];
+```
+
+```json
+// .prettierrc
+{
+    "singleQuote": true,
+    "tabWidth": 4,
+    "trailingComma": "all",
+    "printWidth": 120
+}
+```
+
+Agregar scripts:
+
+```json
+{
+    "scripts": {
+        "lint": "eslint src/",
+        "format": "prettier --write src/"
+    }
+}
+```
+
+### Archivos a crear
+
+- `eslint.config.js`
+- `.prettierrc`
+
+### Archivos a modificar
+
+- `package.json` (scripts)
+
+---
+
+## 7. Type safety con JSDoc
+
+### Problema
+
+No hay tipos definidos. Las funciones aceptan objetos complejos (`documentModel`, `embedMap`,
+`sessionState`) sin documentar su forma. Esto hace dificil saber que campos existen
+sin leer la implementacion.
+
+### Acciones
+
+No migrar a TypeScript (seria muy disruptivo), pero agregar **JSDoc typedefs** para los
+modelos de datos principales:
+
+```javascript
+// src/types.js (archivo de definiciones)
+
+/**
+ * @typedef {Object} DocumentFile
+ * @property {string} id
+ * @property {string} path
+ * @property {string} name
+ * @property {string} language
+ * @property {string} content
+ * @property {string} [role]
+ */
+
+/**
+ * @typedef {Object} ExampleDocument
+ * @property {DocumentFile[]} files
+ * @property {Object} metadata
+ * @property {string} [sourceFormat]
+ * @property {Array} [blocks]
+ * @property {Array} [diagnostics]
+ */
+
+/**
+ * @typedef {Object} FavoriteEntry
+ * @property {boolean} exists
+ * @property {string} filename
+ * @property {string} path
+ * @property {string} topicPath
+ */
+
+/**
+ * @typedef {Object} SessionState
+ * @property {number} version
+ * @property {string} topicPath
+ * @property {string} documentFilename
+ * @property {string} documentTarget
+ * @property {Object} editor
+ * @property {Object} preview
+ */
+```
+
+Luego referenciar con `@param {ExampleDocument} document` en las funciones.
+
+Habilitar `checkJs` en un `jsconfig.json` para que el editor de errores de tipo:
+
+```json
+// jsconfig.json
+{
+    "compilerOptions": {
+        "checkJs": true,
+        "strict": false,
+        "target": "ES2022",
+        "module": "ES2022",
+        "moduleResolution": "bundler"
+    },
+    "include": ["src/**/*.js"]
+}
+```
+
+### Archivos a crear
+
+- `src/types.js`
+- `jsconfig.json`
+
+---
+
+## 8. CSS custom properties para theming
+
+### Problema
+
+Los colores estan hardcodeados en cada archivo CSS. Si se quiere cambiar el tema
+(o soportar light mode), hay que buscar y reemplazar en 11 archivos.
+
+### Acciones
+
+Definir variables en `01-base.css`:
 
 ```css
-/* Contenedor */
-.theory-code-embed {
-  margin: 18px 0;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 12px;
-  background: #111827;
-  overflow: hidden;
-}
-
-/* Barra de tabs */
-.theory-code-embed-tabs {
-  display: flex;
-  gap: 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(15, 23, 42, 0.6);
-  overflow-x: auto;
-}
-
-/* Tab individual */
-.theory-code-embed-tab {
-  appearance: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: #94a3b8;
-  padding: 8px 14px;
-  font: inherit;
-  font-size: 12px;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.theory-code-embed-tab:hover {
-  color: #e2e8f0;
-  background: rgba(148, 163, 184, 0.08);
-}
-
-.theory-code-embed-tab.is-active {
-  color: #60a5fa;
-  border-bottom-color: #60a5fa;
-}
-
-/* Panel de codigo (oculto por defecto) */
-.theory-code-embed-panel {
-  display: none;
-}
-
-.theory-code-embed-panel.is-active {
-  display: block;
-}
-
-/* Header de archivo (modo single) */
-.theory-code-embed-file-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 14px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(15, 23, 42, 0.6);
-}
-
-.theory-code-embed-file-name {
-  font-size: 12px;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  color: #e2e8f0;
-}
-
-.theory-code-embed-file-lang {
-  font-size: 10px;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-/* Pre/code dentro del embed — sin margin extra */
-.theory-code-embed pre {
-  margin: 0;
-  border: none;
-  border-radius: 0;
-  padding: 14px 16px;
-  background: transparent;
-}
-
-.theory-code-embed pre code {
-  font-size: 13px;
-  line-height: 1.6;
+:root {
+    --color-bg-primary: #0f172a;
+    --color-bg-secondary: #1e293b;
+    --color-bg-elevated: #111827;
+    --color-border: rgba(148, 163, 184, 0.18);
+    --color-border-strong: rgba(148, 163, 184, 0.3);
+    --color-text-primary: #e2e8f0;
+    --color-text-secondary: #94a3b8;
+    --color-text-muted: #64748b;
+    --color-accent: #60a5fa;
+    --color-accent-hover: #3b82f6;
+    --color-success: #10b981;
+    --color-error: #ef4444;
+    --color-warning: #f59e0b;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
 }
 ```
 
-Para `07-theory.css`, prefijar cada selector con `#theory-content`:
-```css
-#theory-content .theory-code-embed { ... }
-#theory-content .theory-code-embed-tabs { ... }
-/* etc. */
-```
+Luego reemplazar gradualmente los valores hardcodeados por variables.
+No hace falta hacerlo todo de golpe — se puede ir archivo por archivo.
 
 ### Archivos a modificar
 
-- `src/utils/theoryRenderer.js` (agregar CSS inline al `<style>` del iframe)
-- `src/styles/07-theory.css` (agregar CSS al final)
-
-### Validacion
-
-- `npm run build`
+- `src/styles/01-base.css` (definir variables)
+- Todos los demas CSS (gradualmente)
 
 ---
 
-## Paso 6 — Hidratacion interactiva de tabs
+## 9. Event bus para comunicacion entre componentes
 
-### Que hacer
+### Problema
 
-Agregar JavaScript para el switching de tabs (click en tab → mostrar panel correspondiente,
-ocultar los demas).
+La comunicacion entre componentes es via callbacks pasados en constructores.
+El Editor recibe 18 callbacks. Agregar un nuevo evento requiere tocar 3-4 archivos
+(componente origen, main.js, componente destino).
 
-1. **Iframe** (`renderTheoryPreviewDocument` en `theoryRenderer.js`):
-   Extender el `<script>` inline existente (alrededor de linea 416). Agregar DESPUES
-   del bloque de exercise embed handlers (despues de la linea del `keydown` listener,
-   antes del cierre `})();`):
+### Acciones
 
-```javascript
-// Code embed tab switching
-document.addEventListener('click', function(event) {
-    var tab = event.target.closest('.theory-code-embed-tab');
-    if (!tab) return;
-    var embed = tab.closest('.theory-code-embed');
-    if (!embed) return;
-    var index = tab.getAttribute('data-code-tab');
-    embed.querySelectorAll('.theory-code-embed-tab').forEach(function(t) {
-        t.classList.toggle('is-active', t.getAttribute('data-code-tab') === index);
-    });
-    embed.querySelectorAll('.theory-code-embed-panel').forEach(function(p) {
-        p.classList.toggle('is-active', p.getAttribute('data-code-panel') === index);
-    });
-});
-```
-
-   **Nota**: este listener es un segundo `document.addEventListener('click', ...)`. El existente
-   maneja exercise embeds (open/preview buttons + card clicks). Este nuevo es independiente y
-   puede coexistir. NO mezclar con el listener existente — agregar uno separado.
-
-2. **Theory viewer** (`TheoryViewer.js`):
-   Agregar un metodo `_hydrateCodeEmbedTabs()` y llamarlo al final de `renderContent()`
-   (despues de `_hydrateExercisePreviewSlots`):
+Crear un event bus simple:
 
 ```javascript
-_hydrateCodeEmbedTabs() {
-    if (!this.container) return;
-    this.container.querySelectorAll('.theory-code-embed').forEach((embed) => {
-        embed.addEventListener('click', (event) => {
-            const tab = event.target.closest('.theory-code-embed-tab');
-            if (!tab) return;
-            const index = tab.getAttribute('data-code-tab');
-            embed.querySelectorAll('.theory-code-embed-tab').forEach((t) => {
-                t.classList.toggle('is-active', t.getAttribute('data-code-tab') === index);
-            });
-            embed.querySelectorAll('.theory-code-embed-panel').forEach((p) => {
-                p.classList.toggle('is-active', p.getAttribute('data-code-panel') === index);
-            });
-        });
-    });
+// src/utils/eventBus.js
+class EventBus {
+    constructor() {
+        this._listeners = new Map();
+    }
+
+    on(event, callback) {
+        if (!this._listeners.has(event)) this._listeners.set(event, []);
+        this._listeners.get(event).push(callback);
+        return () => this.off(event, callback);
+    }
+
+    off(event, callback) {
+        const list = this._listeners.get(event);
+        if (!list) return;
+        this._listeners.set(event, list.filter((fn) => fn !== callback));
+    }
+
+    emit(event, ...args) {
+        const list = this._listeners.get(event);
+        if (!list) return;
+        list.forEach((fn) => fn(...args));
+    }
 }
+
+export const bus = new EventBus();
 ```
 
-   En `renderContent()`, agregar la llamada:
+Uso:
+
 ```javascript
-this._hydrateExercisePreviewSlots(exerciseEmbeds);
-this._hydrateCodeEmbedTabs();  // <-- nueva linea
+// Editor.js — emitir
+bus.emit('example:favoriteToggle');
+
+// main.js — escuchar
+bus.on('example:favoriteToggle', () => this._toggleCurrentExampleFavorite());
 ```
+
+No reemplazar todos los callbacks de golpe — empezar por los eventos mas frecuentes
+y migrar gradualmente.
+
+### Archivos a crear
+
+- `src/utils/eventBus.js`
+
+---
+
+## 10. Variables de entorno
+
+### Problema
+
+El puerto del servidor (3001) y la URL base de la API (`/api`) estan hardcodeados.
+No se puede cambiar sin editar codigo fuente.
+
+### Acciones
+
+1. **Cliente** — usar variables de Vite:
+
+```javascript
+// src/utils/api.js
+const BASE = import.meta.env.VITE_API_BASE || '/api';
+```
+
+2. **Servidor** — usar variables de entorno:
+
+```javascript
+// server.js
+const PORT = parseInt(process.env.PORT || '3001', 10);
+const MATERIAL_DIR = process.env.MATERIAL_DIR || path.join(__dirname, 'material');
+```
+
+3. **Archivo `.env.example`** para documentar:
+
+```env
+PORT=3001
+MATERIAL_DIR=./material
+VITE_API_BASE=/api
+```
+
+### Archivos a crear
+
+- `.env.example`
 
 ### Archivos a modificar
 
-- `src/utils/theoryRenderer.js` (agregar click handler al script inline del iframe)
-- `src/components/TheoryViewer.js` (agregar metodo + llamada)
-
-### Validacion
-
-- `npm run build`
+- `server.js`
+- `src/utils/api.js`
 
 ---
 
-## Paso 7 — Integracion en el dialogo Embed (theoryEditor.js)
+## Resumen de prioridades
 
-### Que hacer
+### Rapidos (1-2 dias)
 
-Actualizar el dialogo de "Insert Exercise Embed" para ofrecer la opcion de insertar code embed.
+| # | Accion | Impacto |
+|---|--------|---------|
+| 1 | `manualChunks` en vite.config.js | Elimina warning, mejora carga inicial |
+| 2 | ESLint + Prettier | Previene inconsistencias |
+| 3 | Variables de entorno | Flexibilidad de deploy |
+| 4 | CSS custom properties (solo definirlas) | Base para theming |
+| 5 | Compresion gzip en server | Reduce transferencia ~60% |
 
-1. **Modificar cada card** en `_openExerciseEmbedDialog()`: agregar un segundo boton
-   debajo de cada card (o junto al existente) que copie `[[exercise:filename-]]` en vez
-   de `[[exercise:filename]]`.
+### Medios (1-2 semanas)
 
-   Cambiar la estructura de cada card. Actualmente cada card es un `<button>` que al click
-   copia `[[exercise:filename]]`. Cambiar a un contenedor con dos botones:
+| # | Accion | Impacto |
+|---|--------|---------|
+| 6 | Descomponer main.js en managers | Mantenibilidad |
+| 7 | Async I/O en server | Rendimiento con concurrencia |
+| 8 | Tests de API y stores | Confianza en cambios |
+| 9 | JSDoc typedefs | Documentacion viva |
+| 10 | Event bus (empezar gradual) | Reducir acoplamiento |
 
-```javascript
-// Reemplazar el card <button> por un <div> con dos botones
-const card = document.createElement('div');
-card.className = 'exercise-embed-card';
+### Grandes (2-4 semanas)
 
-// ... preview y footer existentes ...
-
-const actions = document.createElement('div');
-actions.className = 'exercise-embed-card-actions';
-
-const btnEmbed = document.createElement('button');
-btnEmbed.type = 'button';
-btnEmbed.className = 'exercise-embed-card-action';
-btnEmbed.textContent = 'Embed';
-btnEmbed.title = `Copy [[exercise:${filename}]]`;
-btnEmbed.addEventListener('click', () => {
-    const tag = `[[exercise:${filename}]]`;
-    navigator.clipboard.writeText(tag).then(() => {
-        this._showToast(`Copied: ${tag}`, 'success');
-    }).catch(() => {
-        this._showToast(`Tag: ${tag}`, 'success');
-    });
-    this.exerciseEmbedDialog.close();
-});
-
-const btnCode = document.createElement('button');
-btnCode.type = 'button';
-btnCode.className = 'exercise-embed-card-action is-code';
-btnCode.textContent = 'Code';
-btnCode.title = `Copy [[exercise:${filename}-]]`;
-btnCode.addEventListener('click', () => {
-    const tag = `[[exercise:${filename}-]]`;
-    navigator.clipboard.writeText(tag).then(() => {
-        this._showToast(`Copied: ${tag}`, 'success');
-    }).catch(() => {
-        this._showToast(`Tag: ${tag}`, 'success');
-    });
-    this.exerciseEmbedDialog.close();
-});
-
-actions.appendChild(btnEmbed);
-actions.appendChild(btnCode);
-card.appendChild(actions);
-```
-
-2. **CSS para los botones** en `src/styles/06-dialogs.css`:
-
-```css
-.exercise-embed-card-actions {
-  display: flex;
-  gap: 6px;
-  padding: 6px 8px;
-  border-top: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.12));
-}
-
-.exercise-embed-card-action {
-  flex: 1;
-  appearance: none;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 6px;
-  padding: 4px 8px;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  background: rgba(30, 64, 175, 0.18);
-  color: #dbeafe;
-}
-
-.exercise-embed-card-action:hover {
-  background: rgba(30, 64, 175, 0.32);
-}
-
-.exercise-embed-card-action.is-code {
-  background: rgba(15, 23, 42, 0.52);
-  color: #e5e7eb;
-  border-color: rgba(148, 163, 184, 0.18);
-}
-
-.exercise-embed-card-action.is-code:hover {
-  background: rgba(15, 23, 42, 0.72);
-}
-```
-
-### Archivos a modificar
-
-- `src/components/editor/theoryEditor.js` (`_openExerciseEmbedDialog`)
-- `src/styles/06-dialogs.css` (agregar estilos al final)
-
-### Validacion
-
-- `npm run build` + verificacion visual manual
-
----
-
-## Orden de implementacion
-
-Implementar en el orden exacto de los pasos (1 → 7). Cada paso construye sobre el anterior.
-Correr `npm run build` despues de cada paso para verificar que no hay errores de compilacion.
-
-## Archivos involucrados (resumen)
-
-| Archivo | Pasos |
-|---------|-------|
-| `src/utils/theoryExerciseEmbeds.js` | 1, 2, 4 |
-| `src/utils/theoryRenderer.js` | 3, 5, 6 |
-| `src/styles/07-theory.css` | 5 |
-| `src/components/TheoryViewer.js` | 6 |
-| `src/components/editor/theoryEditor.js` | 7 |
-| `src/styles/06-dialogs.css` | 7 |
+| # | Accion | Impacto |
+|---|--------|---------|
+| 11 | Reemplazar mixins por services | Testabilidad del Editor |
+| 12 | Lazy imports de compiladores | Reducir bundle ~40% |
+| 13 | CI con GitHub Actions | Automatizar validacion |
+| 14 | Cache del arbol + validacion de paths | Seguridad y rendimiento |

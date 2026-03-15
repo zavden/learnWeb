@@ -281,18 +281,19 @@ export function renderTheoryExportDocument(content = '', options = {}) {
       color: #cbd5e1;
     }
 
-    /* Export-only: resizable preview, taller default height */
+    /* Export-only: resizable preview */
     .theory-exercise-embed-preview {
       margin: 0 0 12px;
       height: 300px;
       min-width: 200px;
+      min-height: 120px;
       max-width: 100%;
       border-radius: 14px;
       overflow: hidden;
       background: #020617;
       border: 1px solid rgba(148, 163, 184, 0.14);
       box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.48);
-      resize: horizontal;
+      resize: both;
     }
 
     .theory-exercise-embed-preview iframe {
@@ -356,32 +357,9 @@ export function renderTheoryExportDocument(content = '', options = {}) {
       font-weight: 700;
     }
 
+    /* Hide app-only buttons in exported files */
     .theory-exercise-embed-actions {
-      margin-top: 14px;
-    }
-
-    .theory-exercise-embed-btn {
-      appearance: none;
-      border: 1px solid rgba(125, 211, 252, 0.24);
-      background: rgba(37, 99, 235, 0.18);
-      color: #dbeafe;
-      border-radius: 999px;
-      padding: 6px 12px;
-      font: inherit;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    .theory-exercise-embed-btn.is-secondary {
-      background: rgba(15, 23, 42, 0.52);
-      color: #e5e7eb;
-      border-color: rgba(148, 163, 184, 0.18);
-    }
-
-    .theory-exercise-embed-btn[disabled] {
-      opacity: 0.5;
-      cursor: not-allowed;
+      display: none;
     }
 
     .theory-empty-state {

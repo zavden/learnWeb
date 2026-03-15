@@ -22,7 +22,7 @@ LearnWeb es una app local para aprender desarrollo web con:
 - teoria por topic en `material/**/main.md`
 - ejemplos ejecutables en `material/**/examples/*.md`
 - preview en vivo con consola, zoom y controles de viewport
-- editor con Tabs/Panels, Vim, metadata editorial y favoritos
+- editor con Tabs/Panels, Vim, metadata editorial, favoritos y pending
 - soporte para vanilla HTML/CSS/JS, Pug, SCSS, TypeScript, React, Vue, SVG, HTML-FULL y shaders WebGL
 
 ## Regla Basica De Enrutado
@@ -39,7 +39,7 @@ Antes de editar, identifica el tipo de tarea:
 | Parsing/serializacion | `src/utils/markdown/` |
 | Compilacion | `src/utils/compiler/` |
 | Theory embeds | `src/utils/theoryRenderer.js`, `src/components/TheoryViewer.js` |
-| Galeria/favoritos | `src/components/Gallery.js`, `src/components/FavoritesDialog.js` |
+| Galeria/favoritos/pending | `src/components/Gallery.js`, `src/components/FavoritesDialog.js`, `src/components/PendingDialog.js` |
 | App wiring | `src/main.js` |
 | Backend/API | `server.js`, `src/utils/api.js` |
 | Vim shortcuts | `vim-shortcuts.yaml`, `src/editor/vimShortcutConfig.js`, `src/editor/vimSupport.js` |
@@ -49,7 +49,7 @@ Para el mapa detallado: [hotspots.md](skills/learnweb-repo-editing/references/ho
 ## Convenciones
 
 - `main.md` es teoria. `examples/*.md` son ejemplos ejecutables. `assets/` son recursos del topic.
-- `.favorites` guarda favoritos. `.hiddens` guarda chapters ocultos.
+- `.favorites` guarda favoritos. `.pending` guarda items pendientes. `.hiddens` guarda chapters ocultos.
 - `vim-shortcuts.yaml` define shortcuts configurables para el modo Vim.
 - No mezcles teoria con ejemplos si la tarea solo pide uno.
 

@@ -90,6 +90,29 @@ export async function removeFavorite(path) {
     return handleResponse(res);
 }
 
+export async function fetchPending() {
+    const res = await fetch(`${BASE}/pending`);
+    return handleResponse(res);
+}
+
+export async function addPending(path) {
+    const res = await fetch(`${BASE}/pending`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+    });
+    return handleResponse(res);
+}
+
+export async function removePending(path) {
+    const res = await fetch(`${BASE}/pending`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+    });
+    return handleResponse(res);
+}
+
 export async function fetchTopicMain(topicPath) {
     const res = await fetch(`${BASE}/topic/${topicPath}/main`);
     if (!res.ok) return { content: '' };

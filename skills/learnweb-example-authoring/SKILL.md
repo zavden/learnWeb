@@ -507,6 +507,16 @@ example_stage: exercise
 
 The solution file is a separate `.md` in the same `examples/` folder, using the same format but with the completed code.
 
+### Exercise Authoring Tips
+
+1. **Instructions should be atomic.** Each step separated by `||` should be one clear action. Bad: "Style the component and add interactivity". Good: "Add a border to .card || Add a click handler to the button".
+2. **Include TODO comments in the code** where the student needs to write. This makes the task immediately obvious.
+3. **Lock files the student shouldn't edit** with `exercise_locked_files`. This prevents accidental changes to boilerplate.
+4. **Keep the starting code functional** if possible. The student should see partial output, not a blank screen or errors.
+5. **Match the topic's difficulty level.** Don't use advanced patterns in beginner exercises.
+6. **Hints should guide, not solve.** A hint like "Use useState" is better than "const [x, setX] = useState(0)".
+7. **Solution files** should use the exact same format/frontmatter as the exercise (minus the exercise fields). Name them descriptively: `exercise-solution.md` or `exercise-card-solution.md`.
+
 ---
 
 ## Frontmatter Reference (All Types)

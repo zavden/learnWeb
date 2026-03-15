@@ -96,19 +96,27 @@ If a request changes example format or metadata behavior, start here.
 - `src/utils/theoryExerciseEmbeds.js` — `[[exercise:...]]` parsing and rendering
 - `src/utils/theoryDocument.js` — theory document model
 
-## 6. Gallery And Favorites
+## 6. Gallery, Favorites And Pending
 
 ### Gallery
 
 - `src/components/Gallery.js`
 
-Use for: example cards, hover overlays, stage badges, info visibility toggles.
+Use for: example cards, hover overlays, stage badges, info visibility toggles, pending badge rendering, pending entries on startup.
 
 ### Favorites
 
 - `src/components/FavoritesDialog.js`
 - `src/utils/favoritesStore.js`
 - `.favorites`
+
+### Pending
+
+- `src/components/PendingDialog.js`
+- `src/utils/pendingStore.js`
+- `.pending`
+
+Pending mirrors the Favorites architecture exactly: file-based JSON storage, server API (GET/POST/DELETE `/api/pending`), client API, dialog component, sidebar button, editor toolbar button. Pending items appear with an amber badge in the gallery and are sorted first.
 
 ## 7. Sidebar And Tree
 
@@ -122,7 +130,7 @@ Use for: example cards, hover overlays, stage badges, info visibility toggles.
 
 ## 9. Backend
 
-- `server.js` — Express API: tree, examples CRUD, compile, theory, favorites, assets, defaults
+- `server.js` — Express API: tree, examples CRUD, compile, theory, favorites, pending, assets, defaults
 - `src/utils/api.js` — frontend API client
 
 ## 10. Vim And Shortcuts

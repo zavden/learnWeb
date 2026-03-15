@@ -3,11 +3,12 @@
 import { fetchTree, setChapterHidden } from '../utils/api.js';
 
 export class Sidebar {
-    constructor({ onTopicSelect, onCreateClick, onClipboardDefaultToggle, onFavoritesClick, onPreviewInfoToggle, onVimDefaultToggle }) {
+    constructor({ onTopicSelect, onCreateClick, onClipboardDefaultToggle, onFavoritesClick, onPendingClick, onPreviewInfoToggle, onVimDefaultToggle }) {
         this.onTopicSelect = onTopicSelect;
         this.onCreateClick = onCreateClick;
         this.onClipboardDefaultToggle = onClipboardDefaultToggle;
         this.onFavoritesClick = onFavoritesClick;
+        this.onPendingClick = onPendingClick;
         this.onPreviewInfoToggle = onPreviewInfoToggle;
         this.onVimDefaultToggle = onVimDefaultToggle;
         this.container = document.getElementById('nav-tree');
@@ -31,6 +32,8 @@ export class Sidebar {
 
         this.btnCreate.addEventListener('click', () => this.onCreateClick());
         this.btnFavorites?.addEventListener('click', () => this.onFavoritesClick?.());
+        this.btnPending = document.getElementById('btn-pending');
+        this.btnPending?.addEventListener('click', () => this.onPendingClick?.());
         this.btnSidebarPreviewInfo?.addEventListener('click', () => this.onPreviewInfoToggle?.(!this.previewInfoVisible));
         this.btnSidebarClipboardDefault?.addEventListener('click', () => this.onClipboardDefaultToggle?.(!this.clipboardDefaultEnabled));
         this.btnSidebarVimDefault?.addEventListener('click', () => this.onVimDefaultToggle?.(!this.vimDefaultEnabled));

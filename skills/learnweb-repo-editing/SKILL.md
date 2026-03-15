@@ -14,7 +14,7 @@ Read [references/hotspots.md](references/hotspots.md) when you need the file map
 ## Use This Skill When
 
 - the task is inside this repo and the correct edit location is not obvious
-- the request touches editor, preview, shaders, theory, gallery, favorites, or markdown parsing
+- the request touches editor, preview, shaders, theory, gallery, favorites, pending, or markdown parsing
 - the task requires changing content under `material/`
 - the AI needs to know which validations to run
 
@@ -51,6 +51,7 @@ If the task is narrowly about content creation, prefer the specific skills:
 - Vim support is split into `src/editor/vim/`.
 - Vim shortcuts are configurable through `vim-shortcuts.yaml`.
 - Favorites are stored in `.favorites`, not in example frontmatter.
+- Pending items are stored in `.pending` with the same architecture as favorites.
 - Hidden chapters, Vim default, and clipboard default are persisted in dotfiles at repo root.
 
 ## What To Check Before Editing

@@ -74,9 +74,123 @@ Antes de crear contenido nuevo, lee 2-3 ejemplos existentes del mismo tipo. Esto
 
 1. Elige el topic donde va (`material/chXX/secXX/topXX/examples/`).
 2. Lee el skill de referencia: `skills/learnweb-example-authoring/SKILL.md`.
-3. Lee 1-2 ejemplos existentes en el mismo topic.
+3. Lee 1-2 ejemplos existentes en el mismo topic para ver el formato exacto.
 4. Crea un archivo `.md` en la carpeta `examples/` con el formato correcto.
 5. Verifica: el frontmatter es valido, los bloques estan bien formados, los paths de archivos virtuales tienen extension correcta.
+
+### Para crear un ejercicio
+
+Los ejercicios son ejemplos con frontmatter adicional. Pasos:
+
+1. Lee `skills/learnweb-example-authoring/SKILL.md` seccion "Format Reference: Exercise".
+2. Elige el formato base (vanilla, React, Vue, etc.) segun el topic.
+3. Crea el archivo `.md` con el frontmatter de ejercicio obligatorio:
+   ```yaml
+   exercise: true
+   exercise_title: "Titulo claro y conciso"
+   exercise_instructions: "Paso 1 || Paso 2 || Paso 3"
+   example_stage: exercise
+   ```
+4. Opciones adicionales utiles:
+   - `exercise_hints: "Pista 1 || Pista 2"` — pistas revelables
+   - `exercise_locked_files: archivo1,archivo2` — archivos que el alumno no puede editar
+   - `exercise_solution_example: solucion.md` — archivo separado con la solucion
+   - `exercise_compare_pairs: src/App.jsx=>src/solution/AppSolution.jsx` — diff lado a lado
+   - `exercise_reference_files: src/data/datos.json` — archivos revelables de referencia
+   - `exercise_solution_files: src/solution/AppSolution.jsx` — archivos de solucion
+5. El codigo inicial del ejercicio debe tener TODOs claros o partes incompletas que el alumno debe completar.
+6. Si creas un archivo de solucion separado, usa el mismo formato que el ejercicio pero con el codigo completo.
+
+**Ejemplo rapido de ejercicio vanilla:**
+```markdown
+---
+exercise: true
+exercise_title: "Centrar un div"
+exercise_instructions: "Usa flexbox en el container || Centra el .box horizontal y verticalmente || El .box debe tener 100px x 100px"
+exercise_hints: "display: flex || justify-content y align-items || width y height"
+example_stage: exercise
+---
+
+# HTML
+
+```html
+<div class="container">
+  <div class="box">Centrado</div>
+</div>
+```
+
+# CSS
+
+```css
+.container {
+  width: 100%;
+  height: 100vh;
+  /* TODO: usa flexbox para centrar */
+}
+
+.box {
+  background: #3b82f6;
+  color: white;
+  /* TODO: define el tamano */
+}
+```
+```
+
+**Ejemplo rapido de ejercicio React multi-file:**
+```markdown
+---
+framework: react
+mode: multi-file
+entry: src/main.jsx
+exercise: true
+exercise_title: "Componente contador"
+exercise_instructions: "Importa useState || Crea el state count || Renderiza un boton que incremente"
+exercise_hints: "const [count, setCount] = useState(0) || onClick={() => setCount(c => c + 1)}"
+exercise_locked_files: src/main.jsx,src/styles.css
+example_stage: exercise
+---
+
+## @file src/main.jsx
+## @lang jsx
+## @role entry
+
+```jsx
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { App } from './App.jsx';
+import './styles.css';
+
+createRoot(document.getElementById('root')).render(<App />);
+```
+
+## @file src/App.jsx
+## @lang jsx
+## @role app
+
+```jsx
+import React from 'react';
+// TODO: importa useState
+
+export function App() {
+  // TODO: crea el state count
+
+  return (
+    <div>
+      <h1>Contador</h1>
+      {/* TODO: boton que incremente count */}
+    </div>
+  );
+}
+```
+
+## @file src/styles.css
+## @lang css
+## @role style
+
+```css
+body { margin: 0; padding: 16px; font-family: system-ui; }
+```
+```
 
 ### Para crear teoria nueva
 
@@ -193,6 +307,17 @@ example_stage: exercise
 | `src/main.js` | Punto de entrada frontend |
 | `package.json` | Dependencias y scripts (`npm test`, `npm run dev`, `npm run build`) |
 
+## Sistema de Pending
+
+La app tiene un sistema de "pending" (items pendientes) que funciona exactamente igual que favoritos:
+
+- `.pending` — archivo JSON en la raiz del proyecto
+- `src/utils/pendingStore.js` — store del backend
+- `src/components/PendingDialog.js` — dialogo para ver/gestionar pendientes
+- API: `GET/POST/DELETE /api/pending`
+- Los items pending aparecen con badge ambar en la galeria y se ordenan primero
+- Al iniciar la app sin topic seleccionado, se muestran los pending automaticamente
+
 ## Errores comunes a evitar
 
 1. **No mezclar teoria con ejemplos.** `main.md` es teoria. Los `.md` en `examples/` son codigo ejecutable. Son cosas distintas.
@@ -202,3 +327,5 @@ example_stage: exercise
 5. **No redeclarar built-in uniforms en shaders.** `u_time`, `u_resolution`, etc. ya existen.
 6. **No crear archivos fuera de la estructura.** Los ejemplos van en `examples/`, la teoria en `main.md`, los assets en `assets/`.
 7. **No asumir.** Lee un ejemplo existente del mismo tipo antes de crear uno nuevo.
+8. **No olvidar `example_stage: exercise` en ejercicios.** Sin esto, el ejercicio no se muestra correctamente en la galeria.
+9. **No olvidar separar instrucciones con `||`.** Las instrucciones y hints usan `||` como separador, no saltos de linea.

@@ -22,6 +22,12 @@ import {
     removeFavorite,
     resolveFavorites,
 } from './src/utils/favoritesStore.js';
+import {
+    addPending,
+    readPendingState,
+    removePending,
+    resolvePending,
+} from './src/utils/pendingStore.js';
 import { loadVimShortcutConfig } from './src/editor/vimShortcutConfig.js';
 import { buildMaterialTree, readHiddenState, setChapterHidden } from './src/utils/materialTree.js';
 
@@ -32,6 +38,7 @@ const HIDDEN_STATE_FILE = path.join(__dirname, '.hiddens');
 const VIM_DEFAULT_FILE = path.join(__dirname, '.vim_enable');
 const CLIPBOARD_DEFAULT_FILE = path.join(__dirname, '.clipboard_default');
 const FAVORITES_FILE = path.join(__dirname, '.favorites');
+const PENDING_FILE = path.join(__dirname, '.pending');
 const VIM_SHORTCUTS_FILE = path.join(__dirname, 'vim-shortcuts.yaml');
 
 const app = express();
@@ -230,6 +237,49 @@ app.delete('/api/favorites', (req, res) => {
             entries,
             items: state.items,
             path: favoritePath,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/pending', (req, res) => {
+    try {
+        const state = readPendingState(PENDING_FILE);
+        const entries = resolvePending(PENDING_FILE, MATERIAL_DIR);
+        res.json({
+            entries,
+            items: state.items,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/pending', (req, res) => {
+    try {
+        const pendingPath = String(req.body?.path || '').trim();
+        const state = addPending(PENDING_FILE, pendingPath);
+        const entries = resolvePending(PENDING_FILE, MATERIAL_DIR);
+        res.json({
+            entries,
+            items: state.items,
+            path: pendingPath,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/pending', (req, res) => {
+    try {
+        const pendingPath = String(req.body?.path || '').trim();
+        const state = removePending(PENDING_FILE, pendingPath);
+        const entries = resolvePending(PENDING_FILE, MATERIAL_DIR);
+        res.json({
+            entries,
+            items: state.items,
+            path: pendingPath,
         });
     } catch (err) {
         res.status(500).json({ error: err.message });

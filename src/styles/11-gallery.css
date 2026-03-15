@@ -343,6 +343,11 @@
   color: #047857;
 }
 
+.card-stage-badge.stage-pending {
+  background: rgba(251, 191, 36, 0.16);
+  color: #b45309;
+}
+
 .favorite-card {
   height: 300px;
 }

@@ -36,6 +36,7 @@ export class Gallery {
         this.btnMetaToggle = document.getElementById('btn-gallery-meta-toggle');
         this.filtersContainer = document.getElementById('gallery-type-filters');
         this.onExampleSelect = onExampleSelect;
+        this.pendingPaths = new Set();
         this.currentTopicPath = null;
         this.metaOverlayHiddenStorageKey = 'learncode.gallery.metaOverlayHidden';
         this.metaOverlayHidden = window.localStorage.getItem(this.metaOverlayHiddenStorageKey) === '1';
@@ -54,6 +55,10 @@ export class Gallery {
 
     hide() {
         this.view.classList.add('hidden');
+    }
+
+    setPendingPaths(paths) {
+        this.pendingPaths = paths instanceof Set ? paths : new Set(paths || []);
     }
 
     async load(topicPath) {
@@ -83,6 +88,10 @@ export class Gallery {
         this._cards = cards;
         cards
             .sort((left, right) => {
+                const leftPending = left.isPending ? 0 : 1;
+                const rightPending = right.isPending ? 0 : 1;
+                if (leftPending !== rightPending) return leftPending - rightPending;
+
                 if (left.stageRank !== right.stageRank) {
                     return left.stageRank - right.stageRank;
                 }
@@ -166,6 +175,17 @@ export class Gallery {
         title.textContent = filename;
         footer.appendChild(title);
 
+        const pendingKey = this.currentTopicPath
+            ? `material/${this.currentTopicPath}/examples/${filename}`
+            : '';
+        const isPending = pendingKey ? this.pendingPaths.has(pendingKey) : false;
+        if (isPending) {
+            const pendingBadge = document.createElement('span');
+            pendingBadge.className = 'card-stage-badge stage-pending';
+            pendingBadge.textContent = 'Pending';
+            footer.appendChild(pendingBadge);
+        }
+
         const stage = div.dataset.stage || '';
         const stageMeta = EXAMPLE_STAGE_META[stage] || null;
         if (stageMeta) {
@@ -208,8 +228,98 @@ export class Gallery {
             element: div,
             filename,
             exampleType,
+            isPending,
             stageRank: stageMeta?.rank ?? Number.MAX_SAFE_INTEGER,
         };
+    }
+
+    async renderPendingEntries(entries, { onOpenEntry }) {
+        this.grid.innerHTML = '';
+        this.grid.classList.toggle('meta-overlay-hidden', this.metaOverlayHidden);
+        this._updateTypeFilterCounts({});
+
+        if (!entries || entries.length === 0) {
+            this.grid.innerHTML = '<div class="empty-state">No pending items</div>';
+            return;
+        }
+
+        const cards = await Promise.all(entries.filter((e) => e.exists).map((entry) => this._createPendingCard(entry, onOpenEntry)));
+        cards.forEach((card) => this.grid.appendChild(card));
+    }
+
+    async _createPendingCard(entry, onOpenEntry) {
+        const div = document.createElement('div');
+        div.className = 'example-card';
+        div.title = entry.path;
+
+        const preview = document.createElement('div');
+        preview.className = 'card-preview';
+
+        if (entry.topicPath && entry.filename) {
+            try {
+                const data = await fetchExample(entry.topicPath, entry.filename);
+                if (data?.content) {
+                    const documentModel = parseExampleDocument(data.content);
+                    const stage = getExampleStage(documentModel);
+                    const stageMeta = EXAMPLE_STAGE_META[stage] || null;
+                    if (stageMeta) {
+                        div.dataset.stage = stage;
+                    }
+
+                    const iframe = document.createElement('iframe');
+                    iframe.sandbox = 'allow-scripts';
+
+                    if (isShaderDocument(documentModel)) {
+                        iframe.srcdoc = renderShaderExampleDocument(documentModel, {
+                            diagnostics: documentModel.diagnostics || [],
+                            renderId: 0,
+                            shaderControls: { paused: true, stillFrame: true },
+                            topicPath: entry.topicPath,
+                        });
+                    } else {
+                        const result = await compileExample({ document: documentModel });
+                        iframe.srcdoc = renderCompiledExampleDocument(
+                            result.compiledDocument,
+                            entry.topicPath,
+                            result.compileDiagnostics || []
+                        );
+                    }
+
+                    preview.appendChild(iframe);
+                }
+            } catch (error) {
+                console.error(`Failed to load pending preview for ${entry.path}`, error);
+                preview.textContent = 'Preview unavailable';
+            }
+        }
+
+        const footer = document.createElement('div');
+        footer.className = 'card-footer';
+
+        const title = document.createElement('div');
+        title.className = 'card-title';
+        title.textContent = entry.filename;
+        footer.appendChild(title);
+
+        const pendingBadge = document.createElement('span');
+        pendingBadge.className = 'card-stage-badge stage-pending';
+        pendingBadge.textContent = 'Pending';
+        footer.appendChild(pendingBadge);
+
+        const pathTag = document.createElement('span');
+        pathTag.className = 'favorite-card-path';
+        pathTag.textContent = entry.topicPath;
+        pathTag.title = entry.path;
+        footer.appendChild(pathTag);
+
+        div.appendChild(preview);
+        div.appendChild(footer);
+
+        div.addEventListener('click', () => {
+            onOpenEntry?.(entry.topicPath, entry.filename);
+        });
+
+        return div;
     }
 
     _getExampleType(documentModel) {
