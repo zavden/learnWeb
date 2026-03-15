@@ -1,5 +1,7 @@
 # Shaders - Overview
 
+[[exercise:ex08.md]]
+
 Esta seccion ya funciona como banco manual de pruebas para el modo shader.
 
 ## Que puedes verificar aqui
