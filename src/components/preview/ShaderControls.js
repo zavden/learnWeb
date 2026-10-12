@@ -1,3 +1,4 @@
+import { encodeAssetPath, getTopicAssetBase } from '../../utils/renderer/paths.js';
 import { shaderAlphaToUnit, shaderHexToVec, shaderVecToHex } from '../../utils/shaderColor.js';
 
 export const SHADER_BUILT_IN_UNIFORMS = [
@@ -421,7 +422,7 @@ export const shaderControlsMixin = {
 
     _buildShaderTextureAssetUrl(assetPath = '') {
         if (!this._currentTopicPath || !assetPath) return '';
-        return `/api/topic/${this._currentTopicPath}/assets/${encodeURIComponent(assetPath)}`;
+        return `${getTopicAssetBase(this._currentTopicPath)}${encodeAssetPath(assetPath)}`;
     },
 
     _toggleShaderTextureViewer() {

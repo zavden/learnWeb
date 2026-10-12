@@ -131,6 +131,9 @@
             <h2>Examples</h2>
             <div class="gallery-header-actions">
               <div id="gallery-type-filters" class="gallery-type-filters"></div>
+              <button id="btn-gallery-assets" class="btn btn-secondary" type="button" title="Browse the files in this topic's assets/ folder" disabled>
+                Assets
+              </button>
               <button id="btn-gallery-meta-toggle" class="btn btn-secondary gallery-meta-toggle" type="button" aria-pressed="true" title="Hide example info overlay">
                 Hide Info
               </button>
@@ -536,6 +539,14 @@
                 title="Reset preview zoom to 100%">
                 100%
               </button>
+              <button id="btn-open-preview-tab" class="btn-icon" type="button" title="Open this preview in a new browser tab (real page: DevTools, device mode, viewport)" aria-label="Open preview in a new tab" disabled>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </button>
               <button id="btn-refresh" class="btn-icon" title="Refresh preview">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   stroke-linecap="round" stroke-linejoin="round">
@@ -546,7 +557,7 @@
             </div>
           </div>
           <div id="preview-frame-container">
-            <iframe id="preview-frame" sandbox="allow-scripts allow-modals"></iframe>
+            <iframe id="preview-frame" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-downloads allow-pointer-lock" allow="fullscreen *; clipboard-read *; clipboard-write *; autoplay *; geolocation *; camera *; microphone *; display-capture *; screen-wake-lock *; web-share *; gamepad *; picture-in-picture *" allowfullscreen></iframe>
             <button id="btn-exit-theory-editor" class="btn-icon preview-theory-exit hidden" title="Done editing theory" aria-label="Done editing theory">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
                 stroke-linecap="round" stroke-linejoin="round">
@@ -720,9 +731,10 @@
         <label for="create-name">Name</label>
         <input type="text" id="create-name" placeholder="e.g. flexbox" required />
       </div>
+      <p id="create-dialog-hint" class="dialog-hint" aria-live="polite"></p>
       <div class="form-actions">
         <button type="button" class="btn btn-secondary" id="btn-cancel-create">Cancel</button>
-        <button type="submit" class="btn btn-primary">Create</button>
+        <button type="submit" class="btn btn-primary" id="btn-submit-create">Create</button>
       </div>
     </form>
   </dialog>
@@ -1127,6 +1139,31 @@
       </div>
       <div class="dialog-actions">
         <button id="pending-dialog-close" type="button" class="btn btn-primary">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="assets-dialog">
+    <form method="dialog" class="editor-context-hints-dialog-form assets-dialog-form">
+      <div class="editor-context-hints-dialog-header">
+        <div class="editor-context-hints-dialog-heading">
+          <h2 id="assets-dialog-title">Assets</h2>
+          <p class="dialog-hint">Files in the topic's <code>assets/</code> folder. Examples load them with relative URLs (<code>fetch('data.json')</code>, <code>&lt;img src="logo.svg"&gt;</code>).</p>
+        </div>
+        <button id="assets-dialog-close-icon" type="button" class="btn-icon" title="Close assets" aria-label="Close assets">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div class="assets-dialog-body">
+        <nav id="assets-dialog-list" class="assets-dialog-list" aria-label="Asset files"></nav>
+        <div id="assets-dialog-viewer" class="assets-dialog-viewer"></div>
+      </div>
+      <div class="dialog-actions">
+        <button id="assets-dialog-close" type="button" class="btn btn-primary">Close</button>
       </div>
     </form>
   </dialog>

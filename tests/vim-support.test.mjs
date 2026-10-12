@@ -138,43 +138,50 @@ shaders:
     assert.ok(sections[2].items.some((item) => item.key === 'Space, Space, z' && /shader runtime panel/.test(item.description)));
 });
 
-test('clipboard bridge can fall back to local shadow clipboard when disabled', async () => {
+test('clipboard bridge syncs Vim yanks without hijacking navigator.clipboard', async () => {
     const originalNavigator = globalThis.navigator;
     const writes = [];
     let currentClipboardText = 'system-value';
+    const clipboard = {
+        async readText() {
+            return currentClipboardText;
+        },
+        async writeText(value) {
+            writes.push(value);
+            currentClipboardText = value;
+        },
+    };
+    const nativeWriteText = clipboard.writeText;
+    const nativeReadText = clipboard.readText;
 
     Object.defineProperty(globalThis, 'navigator', {
         configurable: true,
-        value: {
-            clipboard: {
-                async readText() {
-                    return currentClipboardText;
-                },
-                async writeText(value) {
-                    writes.push(value);
-                    currentClipboardText = value;
-                },
-            },
-        },
+        value: { clipboard },
     });
 
     try {
         assert.equal(installSystemClipboardBridge(), true);
+        // The global API must stay untouched so app copy buttons keep working.
+        assert.equal(globalThis.navigator.clipboard.writeText, nativeWriteText);
+        assert.equal(globalThis.navigator.clipboard.readText, nativeReadText);
+
+        const registerController = Vim.getRegisterController();
 
         setSystemClipboardEnabled(false);
-        await globalThis.navigator.clipboard.writeText('shadow-only');
+        registerController.unnamedRegister.setText('vim-only');
+        await new Promise((resolve) => setTimeout(resolve, 0));
         assert.deepEqual(writes, []);
-        assert.equal(await globalThis.navigator.clipboard.readText(), 'shadow-only');
+
+        // Copy buttons outside Vim still reach the system clipboard while disabled.
+        await globalThis.navigator.clipboard.writeText('copy-button');
+        assert.deepEqual(writes, ['copy-button']);
 
         setSystemClipboardEnabled(true);
-        const registerController = Vim.getRegisterController();
         registerController.unnamedRegister.setText('visual-word');
+        await new Promise((resolve) => setTimeout(resolve, 0));
         assert.equal(registerController.getRegister('+').toString(), 'visual-word');
+        assert.deepEqual(writes, ['copy-button', 'visual-word']);
         assert.equal(await globalThis.navigator.clipboard.readText(), 'visual-word');
-
-        await globalThis.navigator.clipboard.writeText('real-system');
-        assert.deepEqual(writes, ['visual-word', 'real-system']);
-        assert.equal(await globalThis.navigator.clipboard.readText(), 'real-system');
     } finally {
         Object.defineProperty(globalThis, 'navigator', {
             configurable: true,

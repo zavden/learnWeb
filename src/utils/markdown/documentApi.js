@@ -200,7 +200,7 @@ export function cloneExampleDocument(documentModel) {
 }
 
 export function parseExampleDocument(text = '') {
-    const source = String(text).replace(/\r\n/g, '\n');
+    const source = String(text ?? '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
     const lines = source.split('\n');
     const { metadata, startIndex, diagnostics: frontmatterDiagnostics } = parseFrontmatter(lines);
     const diagnostics = [...frontmatterDiagnostics];

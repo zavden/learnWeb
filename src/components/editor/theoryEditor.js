@@ -55,10 +55,12 @@ export const theoryEditorMixin = {
     async _handleModifyTheory() {
         if (!this.currentTopicPath || hasBlockingDiagnostics(this.currentDocument)) return false;
 
-        const content = getTheoryDocumentContent(this.currentDocument);
+        const documentBeforeSave = this.currentDocument;
+        const content = getTheoryDocumentContent(documentBeforeSave);
 
         try {
             await modifyTopicMain(this.currentTopicPath, content);
+            this._markDocumentSaved(documentBeforeSave, { recheck: true });
             this._triggerChange();
             this._emitSessionStateChange();
             this._showToast('Theory saved: main.md', 'success');
@@ -90,16 +92,27 @@ export const theoryEditorMixin = {
                 this.exerciseEmbedDialog.close();
             }
         });
+
+        // Drop the preview iframes on close so they stop running in the background.
+        this.exerciseEmbedDialog.addEventListener('close', () => {
+            this._exerciseEmbedRequestId = (this._exerciseEmbedRequestId || 0) + 1;
+            if (this.exerciseEmbedList) {
+                this.exerciseEmbedList.innerHTML = '';
+            }
+        });
     },
 
     async _openExerciseEmbedDialog() {
         if (!this.currentTopicPath || !this.exerciseEmbedDialog) return;
 
+        const requestId = (this._exerciseEmbedRequestId || 0) + 1;
+        this._exerciseEmbedRequestId = requestId;
         this.exerciseEmbedList.innerHTML = '<p class="dialog-hint">Loading examples...</p>';
         this.exerciseEmbedDialog.showModal();
 
         try {
             const examples = await fetchExamples(this.currentTopicPath);
+            if (requestId !== this._exerciseEmbedRequestId) return;
 
             if (!examples || examples.length === 0) {
                 this.exerciseEmbedList.innerHTML = '<p class="dialog-hint">No examples in this topic.</p>';
@@ -118,7 +131,10 @@ export const theoryEditorMixin = {
 
                 const footer = document.createElement('div');
                 footer.className = 'exercise-embed-card-footer';
-                footer.innerHTML = `<span class="exercise-embed-card-name">${filename}</span>`;
+                const nameLabel = document.createElement('span');
+                nameLabel.className = 'exercise-embed-card-name';
+                nameLabel.textContent = filename;
+                footer.appendChild(nameLabel);
 
                 const actions = document.createElement('div');
                 actions.className = 'exercise-embed-card-actions';
@@ -162,7 +178,7 @@ export const theoryEditorMixin = {
 
                 this.exerciseEmbedList.appendChild(card);
 
-                this._loadExerciseEmbedPreview(filename, preview);
+                this._loadExerciseEmbedPreview(filename, preview, requestId);
             }
         } catch (error) {
             console.error(error);
@@ -170,9 +186,10 @@ export const theoryEditorMixin = {
         }
     },
 
-    async _loadExerciseEmbedPreview(filename, previewElement) {
+    async _loadExerciseEmbedPreview(filename, previewElement, requestId = this._exerciseEmbedRequestId) {
         try {
             const data = await fetchExample(this.currentTopicPath, filename);
+            if (requestId !== this._exerciseEmbedRequestId) return;
             if (!data?.content) {
                 previewElement.innerHTML = '<span class="exercise-embed-card-loading">No content</span>';
                 return;
@@ -191,6 +208,7 @@ export const theoryEditorMixin = {
                 });
             } else {
                 const result = await compileExample({ document: documentModel });
+                if (requestId !== this._exerciseEmbedRequestId) return;
                 iframe.srcdoc = renderCompiledExampleDocument(
                     result.compiledDocument,
                     this.currentTopicPath,
@@ -198,6 +216,7 @@ export const theoryEditorMixin = {
                 );
             }
 
+            if (requestId !== this._exerciseEmbedRequestId || !previewElement.isConnected) return;
             previewElement.innerHTML = '';
             previewElement.appendChild(iframe);
         } catch (error) {

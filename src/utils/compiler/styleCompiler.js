@@ -1,6 +1,29 @@
 import * as sass from 'sass';
 import { createCompileDiagnostic } from './helpers.js';
 
+function spanLocation(span) {
+    const start = span?.start;
+    if (!start || !Number.isFinite(start.line)) return {};
+    return {
+        column: Number.isFinite(start.column) ? start.column + 1 : null,
+        line: start.line + 1,
+    };
+}
+
+// `@warn` messages come without a span; their stack trace looks like "- 3:1  root stylesheet".
+function spanFromStack(stack = '') {
+    const match = /(\d+):(\d+)\s+root stylesheet/.exec(String(stack || ''));
+    if (!match) return null;
+    return { start: { column: Number(match[2]) - 1, line: Number(match[1]) - 1 } };
+}
+
+function formatSassErrorMessage(error) {
+    // `error.message` embeds an ascii-art excerpt of the source; the editor already shows the line.
+    const message = String(error?.sassMessage || error?.message || 'Failed to compile style block.').trim();
+    const location = spanLocation(error?.span);
+    return location.line ? `${message} (line ${location.line}, column ${location.column})` : message;
+}
+
 export function compileStyle(block) {
     if (!block) {
         return {
@@ -17,25 +40,45 @@ export function compileStyle(block) {
     }
 
     if (block.type === 'scss' || block.type === 'sass') {
+        const warnings = [];
+        const pushLoggedMessage = (code, message, span) => {
+            if (warnings.length >= 20) return;
+            warnings.push(createCompileDiagnostic(
+                'warning',
+                code,
+                String(message || '').trim(),
+                { blocking: false, slot: 'style', type: block.type, ...spanLocation(span) }
+            ));
+        };
+
         try {
             const result = sass.compileString(block.content || '', {
+                logger: {
+                    debug: (message, { span } = {}) => pushLoggedMessage('sass-debug', `@debug: ${message}`, span),
+                    warn: (message, { deprecation, span, stack } = {}) => pushLoggedMessage(
+                        deprecation ? 'sass-deprecation' : 'sass-warning',
+                        message,
+                        span || spanFromStack(stack)
+                    ),
+                },
                 syntax: block.type === 'sass' ? 'indented' : 'scss',
                 style: 'expanded',
             });
 
             return {
                 css: result.css,
-                diagnostics: [],
+                diagnostics: warnings,
             };
         } catch (error) {
             return {
                 css: '',
                 diagnostics: [
+                    ...warnings,
                     createCompileDiagnostic(
                         'error',
                         'sass-compile-error',
-                        error.message || 'Failed to compile style block.',
-                        { slot: 'style', type: block.type }
+                        formatSassErrorMessage(error),
+                        { slot: 'style', type: block.type, ...spanLocation(error?.span) }
                     ),
                 ],
             };

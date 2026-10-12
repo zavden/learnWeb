@@ -9,11 +9,13 @@ const EXAMPLE_STAGE_META = {
     'common-error': { label: 'Common Error', rank: 2, className: 'stage-common-error' },
     exercise: { label: 'Exercise', rank: 3, className: 'stage-exercise' },
     'final-solution': { label: 'Final Solution', rank: 4, className: 'stage-final-solution' },
+    professional: { label: 'Professional', rank: 5, className: 'stage-professional' },
 };
 
 export class PendingDialog {
-    constructor({ onExampleSelect, onRemovePending }) {
+    constructor({ getTopicLabel, onExampleSelect, onRemovePending }) {
         this.onExampleSelect = onExampleSelect;
+        this.getTopicLabel = getTopicLabel;
         this.onRemovePending = onRemovePending;
         this.dialog = document.getElementById('pending-dialog');
         this.grid = document.getElementById('pending-grid');
@@ -22,8 +24,17 @@ export class PendingDialog {
         this.btnClose = document.getElementById('pending-dialog-close');
         this.btnCloseIcon = document.getElementById('pending-dialog-close-icon');
 
+        this._renderToken = 0;
+
         this.btnClose?.addEventListener('click', () => this.dialog?.close());
         this.btnCloseIcon?.addEventListener('click', () => this.dialog?.close());
+        // Drop preview iframes when the dialog closes so they stop running.
+        this.dialog?.addEventListener('close', () => this._releasePreviews());
+    }
+
+    _releasePreviews() {
+        this._renderToken += 1;
+        this.grid?.querySelectorAll('iframe').forEach((iframe) => iframe.remove());
     }
 
     open(entries = []) {
@@ -34,6 +45,7 @@ export class PendingDialog {
     async render(entries = []) {
         if (!this.grid || !this.empty || !this.note) return;
 
+        const renderToken = ++this._renderToken;
         this.grid.innerHTML = '';
         this.note.textContent = entries.length === 0
             ? 'Your pending list is empty.'
@@ -47,6 +59,9 @@ export class PendingDialog {
 
         this.empty.classList.add('hidden');
         const cards = await Promise.all(entries.map((entry) => this._createCard(entry)));
+        // A newer render (or closing the dialog) superseded this one.
+        if (renderToken !== this._renderToken) return;
+        this.grid.innerHTML = '';
         cards.forEach((card) => this.grid.appendChild(card));
     }
 
@@ -71,6 +86,7 @@ export class PendingDialog {
 
                     const iframe = document.createElement('iframe');
                     iframe.sandbox = 'allow-scripts';
+                    iframe.loading = 'lazy';
 
                     if (isShaderDocument(documentModel)) {
                         iframe.srcdoc = renderShaderExampleDocument(documentModel, {
@@ -114,7 +130,7 @@ export class PendingDialog {
 
         const pathText = document.createElement('div');
         pathText.className = 'favorite-card-path';
-        pathText.textContent = entry.topicPath || entry.path;
+        pathText.textContent = this.getTopicLabel?.(entry.topicPath) || entry.topicPath || entry.path;
         pathText.title = entry.path;
         textMeta.appendChild(pathText);
 

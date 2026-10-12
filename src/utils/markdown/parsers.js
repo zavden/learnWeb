@@ -13,14 +13,101 @@ import {
     buildFrontmatter,
     buildVirtualFile,
     createDiagnostic,
+    getFenceForContent,
     headingsMatch,
+    isFenceClosingLine,
     isFenceLine,
     isHeadingLine,
+    isIndentedFenceClosingLine,
     isLikelyVirtualAssetPath,
     normalizeBlockType,
     normalizeVirtualPath,
-    parseFenceLanguage,
+    parseFenceOpening,
+    stripSurroundingBlankLines,
 } from './core.js';
+
+const VIRTUAL_DIRECTIVE_PATTERN = /^##\s+@(file|lang|role)\s+/;
+
+function isVirtualDirectiveLine(line = '') {
+    return VIRTUAL_DIRECTIVE_PATTERN.test(line);
+}
+
+function isHtmlFullHeading(heading = '') {
+    return /^html[\s_-]*full$/i.test(String(heading || '').trim());
+}
+
+// Reads the content of a fenced block that starts at lines[startIndex] (the line after the
+// opening fence). The block ends at a closing fence with the same character and at least the
+// same length. If a new opening fence of the same kind shows up at column 0 before that, the
+// previous block was left unclosed: the block is closed there and the trailing heading /
+// directive lines are handed back to the caller so the next block is never swallowed.
+function readFencedContent(lines, startIndex, fence, isStructureLine) {
+    let index = startIndex;
+
+    while (index < lines.length) {
+        const line = lines[index];
+
+        if (isFenceClosingLine(line, fence)) {
+            return {
+                closed: true,
+                content: stripSurroundingBlankLines(lines.slice(startIndex, index)),
+                nextIndex: index + 1,
+                recovered: false,
+            };
+        }
+
+        const nestedOpening = parseFenceOpening(line);
+        if (nestedOpening && nestedOpening.char === fence.char && nestedOpening.length >= fence.length) {
+            let end = index;
+            let resumeIndex = index;
+
+            while (end > startIndex && (lines[end - 1].trim() === '' || isStructureLine(lines[end - 1]))) {
+                end -= 1;
+                if (lines[end].trim() !== '') resumeIndex = end;
+            }
+
+            if (end > startIndex && isIndentedFenceClosingLine(lines[end - 1], fence)) {
+                end -= 1;
+            }
+
+            return {
+                closed: true,
+                content: stripSurroundingBlankLines(lines.slice(startIndex, end)),
+                nextIndex: resumeIndex,
+                recovered: true,
+            };
+        }
+
+        index += 1;
+    }
+
+    // End of file without a closing fence: accept a deeper-indented fence as the closer.
+    let end = lines.length;
+    while (end > startIndex && lines[end - 1].trim() === '') end -= 1;
+
+    if (end > startIndex && isIndentedFenceClosingLine(lines[end - 1], fence)) {
+        return {
+            closed: true,
+            content: stripSurroundingBlankLines(lines.slice(startIndex, end - 1)),
+            nextIndex: lines.length,
+            recovered: true,
+        };
+    }
+
+    return {
+        closed: false,
+        content: stripSurroundingBlankLines(lines.slice(startIndex)),
+        nextIndex: lines.length,
+        recovered: false,
+    };
+}
+
+function buildFencedCode(language, content = '') {
+    const fence = getFenceForContent(content);
+    return `${fence}${language}
+${content}
+${fence}`;
+}
 import { deriveFilesFromBlocks } from './documentMeta.js';
 
 export function inferSessionIdFromDocument({ blocks = [], files = [], metadata = {} }) {
@@ -68,7 +155,8 @@ export function parseLegacyBlocks(lines, startIndex, diagnostics, unsupportedBlo
         if (index >= lines.length) break;
 
         const fenceLine = lines[index];
-        if (!isFenceLine(fenceLine)) {
+        const fence = parseFenceOpening(fenceLine);
+        if (!fence) {
             diagnostics.push(
                 createDiagnostic(
                     'error',
@@ -81,23 +169,27 @@ export function parseLegacyBlocks(lines, startIndex, diagnostics, unsupportedBlo
             continue;
         }
 
-        const language = parseFenceLanguage(fenceLine);
-        index += 1;
+        const fenceLanguage = fence.language;
+        // "# HTML-FULL" + ```html is the documented HTML-FULL format.
+        const language = fenceLanguage === 'html' && isHtmlFullHeading(heading)
+            ? 'html-full'
+            : fenceLanguage;
+        const fenceLineNumber = index + 1;
+        const fenced = readFencedContent(lines, index + 1, fence, isHeadingLine);
+        const { closed, content } = fenced;
+        index = fenced.nextIndex;
 
-        const contentLines = [];
-        let closed = false;
-
-        while (index < lines.length) {
-            if (/^```\s*$/.test(lines[index])) {
-                closed = true;
-                index += 1;
-                break;
-            }
-            contentLines.push(lines[index]);
-            index += 1;
+        if (fenced.recovered) {
+            diagnostics.push(
+                createDiagnostic(
+                    'warning',
+                    'recovered-unclosed-fence',
+                    `The "${language || 'unknown'}" block opened at line ${fenceLineNumber} has no proper closing fence. It was closed before the next block.`,
+                    { language, line: fenceLineNumber }
+                )
+            );
         }
 
-        const content = contentLines.join('\n').trim();
         const definition = getBlockDefinition(language);
 
         if (!closed) {
@@ -149,7 +241,11 @@ export function parseLegacyBlocks(lines, startIndex, diagnostics, unsupportedBlo
             );
         }
 
-        blocks.push(buildBlock(language, content, heading || definition.heading, `${language}-${blockIndex}`));
+        const block = buildBlock(language, content, heading || definition.heading, `${language}-${blockIndex}`);
+        if (fenceLanguage && fenceLanguage !== language) {
+            block.fenceLanguage = fenceLanguage;
+        }
+        blocks.push(block);
         blockIndex += 1;
     }
 
@@ -262,22 +358,23 @@ export function parseVirtualFiles(lines, startIndex, diagnostics, metadata = {})
             break;
         }
 
-        const fenceLanguage = parseFenceLanguage(lines[index]);
+        const fence = parseFenceOpening(lines[index]);
+        const fenceLanguage = fence.language;
         const language = explicitLanguage || fenceLanguage;
-        index += 1;
+        const fenceLineNumber = index + 1;
+        const fenced = readFencedContent(lines, index + 1, fence, isVirtualDirectiveLine);
+        const { closed, content } = fenced;
+        index = fenced.nextIndex;
 
-        const contentLines = [];
-        let closed = false;
-
-        while (index < lines.length) {
-            if (/^```\s*$/.test(lines[index])) {
-                closed = true;
-                index += 1;
-                break;
-            }
-
-            contentLines.push(lines[index]);
-            index += 1;
+        if (fenced.recovered) {
+            diagnostics.push(
+                createDiagnostic(
+                    'warning',
+                    'recovered-unclosed-fence',
+                    `File "${filePath}" opened its code block at line ${fenceLineNumber} without a proper closing fence. It was closed before the next file.`,
+                    { line: fenceLineNumber, path: filePath }
+                )
+            );
         }
 
         if (!closed) {
@@ -341,7 +438,7 @@ export function parseVirtualFiles(lines, startIndex, diagnostics, metadata = {})
         files.push(buildVirtualFile({
             path: filePath || `invalid-file-${files.length}`,
             language: normalizedLanguage,
-            content: contentLines.join('\n').trim(),
+            content,
             role,
             sourceKind: 'virtual',
             index: files.length,
@@ -355,20 +452,31 @@ export function parseVirtualFiles(lines, startIndex, diagnostics, metadata = {})
     return files;
 }
 
+// Keeps the fence language the author used when it still parses back to the same block
+// type (e.g. ```html under "# HTML-FULL"); otherwise uses the canonical block type.
+function getBlockFenceLanguage(block = {}) {
+    const type = normalizeBlockType(block.type);
+    const fenceLanguage = normalizeBlockType(block.fenceLanguage || '');
+
+    if (type === 'html-full' && fenceLanguage === 'html') {
+        return 'html';
+    }
+
+    return block.language || block.type;
+}
+
 export function buildLegacyMarkdown(blocks = [], metadata = {}) {
     const frontmatter = buildFrontmatter(metadata);
     const content = sortBlocks(blocks)
         .map((block) => {
             const definition = getBlockDefinition(block.type);
             const heading = definition?.heading || block.heading || block.type.toUpperCase();
-            const language = block.language || block.type;
+            const language = getBlockFenceLanguage(block);
             const fileContent = block.content || '';
 
             return `# ${heading}
 
-\`\`\`${language}
-${fileContent}
-\`\`\``;
+${buildFencedCode(language, fileContent)}`;
         })
         .join('\n\n');
 
@@ -390,9 +498,7 @@ export function buildVirtualMarkdown(files = [], metadata = {}) {
 
             return `${directives.join('\n')}
 
-\`\`\`${file.language}
-${file.content || ''}
-\`\`\``;
+${buildFencedCode(file.language, file.content || '')}`;
         })
         .join('\n\n');
 

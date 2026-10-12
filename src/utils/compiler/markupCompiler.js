@@ -1,7 +1,18 @@
 import pug from 'pug';
 import { createCompileDiagnostic } from './helpers.js';
+import { addLoopGuardsToHtml } from './loopGuard.js';
 
-export function compileMarkup(block) {
+export function compileMarkup(block, { loopProtect = true } = {}) {
+    const result = compileMarkupSource(block);
+    if (!loopProtect) return result;
+    return {
+        ...result,
+        fullDocumentHtml: result.fullDocumentHtml ? addLoopGuardsToHtml(result.fullDocumentHtml) : result.fullDocumentHtml,
+        html: result.html ? addLoopGuardsToHtml(result.html) : result.html,
+    };
+}
+
+function compileMarkupSource(block) {
     if (!block) {
         return {
             html: '',
@@ -36,6 +47,9 @@ export function compileMarkup(block) {
                 diagnostics: [],
             };
         } catch (error) {
+            const line = Number.isFinite(error?.line) ? error.line : null;
+            const column = Number.isFinite(error?.column) ? error.column : null;
+            const message = String(error?.msg || error?.message || 'Failed to compile Pug.').trim();
             return {
                 html: '',
                 fullDocumentHtml: '',
@@ -43,8 +57,8 @@ export function compileMarkup(block) {
                     createCompileDiagnostic(
                         'error',
                         'pug-compile-error',
-                        error.message || 'Failed to compile Pug.',
-                        { slot: 'markup', type: 'pug' }
+                        line ? `${message} (line ${line}${column ? `, column ${column}` : ''})` : message,
+                        { column, line, slot: 'markup', type: 'pug' }
                     ),
                 ],
             };

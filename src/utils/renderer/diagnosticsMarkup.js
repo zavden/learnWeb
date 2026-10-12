@@ -22,7 +22,7 @@ export function formatDiagnosticLocation(diagnostic = {}) {
 }
 
 export function buildDiagnosticsMarkup(diagnostics = []) {
-    if (!diagnostics.length) return '';
+    if (!Array.isArray(diagnostics) || !diagnostics.length) return '';
 
     const items = diagnostics
         .map((diagnostic) => {
@@ -31,7 +31,12 @@ export function buildDiagnosticsMarkup(diagnostics = []) {
                 ? `<code style="margin-right:8px;color:#7f1d1d;background:rgba(255,255,255,0.55);padding:1px 5px;border-radius:4px;">${escapeHtml(location)}</code>`
                 : '';
 
-            return `<li>${locationMarkup}${escapeHtml(diagnostic.message)}</li>`;
+            const message = String(diagnostic.message || '');
+            const messageStyle = message.includes('\n')
+                ? ' style="display:block;margin-top:4px;white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;"'
+                : '';
+
+            return `<li>${locationMarkup}<span${messageStyle}>${escapeHtml(message)}</span></li>`;
         })
         .join('');
 

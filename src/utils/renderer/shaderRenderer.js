@@ -1,6 +1,7 @@
 import { getShaderConfig } from '../markdown.js';
 import { escapeHtml, buildDiagnosticsMarkup } from './diagnosticsMarkup.js';
-import { buildRuntimeBridgeMarkup } from './runtimeBridge.js';
+import { getTopicAssetBase } from './paths.js';
+import { buildRuntimeBridgeMarkup, serializeForInlineScript } from './runtimeBridge.js';
 
 function buildShaderStatusMarkup(title = '', message = '') {
     return `
@@ -23,7 +24,7 @@ function buildShaderRuntimeScript({
     controls = {},
     assetBase = '',
 } = {}) {
-    const payload = JSON.stringify({
+    const payload = serializeForInlineScript({
         assetBase,
         consoleEnabled: Boolean(consoleEnabled),
         controls: controls && typeof controls === 'object' ? controls : {},
@@ -162,7 +163,9 @@ function buildShaderRuntimeScript({
               status: payload.assetBase ? 'loading' : 'missing-asset-base',
               texture: null,
               unit: index,
-              url: payload.assetBase ? payload.assetBase + encodeURIComponent(texture.assetPath) : '',
+              url: payload.assetBase
+                ? payload.assetBase + String(texture.assetPath).split('/').filter(Boolean).map(encodeURIComponent).join('/')
+                : '',
               width: 0,
               height: 0,
             }))
@@ -214,6 +217,30 @@ function buildShaderRuntimeScript({
         throw new Error('This browser could not create a WebGL context.');
       }
 
+      // The GPU process can reclaim contexts (too many contexts, driver reset, sleep). Stop the loop
+      // while the context is lost and rebuild everything once the browser restores it.
+      let contextLost = false;
+      function handleContextLost(event) {
+        event.preventDefault();
+        contextLost = true;
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+          animationFrameId = 0;
+        }
+        setStatus('WebGL context lost', 'The browser reclaimed the GPU context. Rendering is stopped until it is restored (press Refresh if it does not come back).');
+      }
+      function handleContextRestored() {
+        cleanup();
+        clearStatus();
+        try {
+          render();
+        } catch (error) {
+          setStatus('Shader preview unavailable', error?.message || String(error));
+        }
+      }
+      canvas.addEventListener('webglcontextlost', handleContextLost);
+      canvas.addEventListener('webglcontextrestored', handleContextRestored);
+
       let vertexShader = null;
       let fragmentShader = null;
       let program = null;
@@ -238,7 +265,7 @@ function buildShaderRuntimeScript({
       const uniformLocations = {};
 
       function scheduleDraw() {
-        if (didCleanup || animationFrameId) return;
+        if (didCleanup || contextLost || animationFrameId) return;
         animationFrameId = requestAnimationFrame(drawFrame);
       }
 
@@ -500,6 +527,7 @@ function buildShaderRuntimeScript({
 
         if (data.action === 'set-paused') {
           paused = Boolean(data.paused);
+          if (payload.controls) payload.controls.paused = paused;
           previousFrameTime = null;
           lastReportTime = null;
           reportFrameCount = 0;
@@ -535,6 +563,8 @@ function buildShaderRuntimeScript({
 
       const cleanup = () => {
         if (didCleanup || !gl) return;
+        canvas.removeEventListener('webglcontextlost', handleContextLost);
+        canvas.removeEventListener('webglcontextrestored', handleContextRestored);
         didCleanup = true;
         stopResize();
         if (animationFrameId) {
@@ -595,7 +625,7 @@ function buildShaderRuntimeScript({
       }
 
       function drawFrame(now, shouldSchedule = !stillFrame) {
-        if (didCleanup) return;
+        if (didCleanup || contextLost) return;
         animationFrameId = 0;
 
         initCanvasSize();
@@ -849,7 +879,7 @@ export function renderShaderExampleDocument(documentModel = {}, options = {}) {
             assetPath: texture.assetPath,
             name: texture.name,
         }));
-    const assetBase = topicPath ? `/api/topic/${topicPath}/assets/` : '';
+    const assetBase = getTopicAssetBase(topicPath);
     const diagnosticsMarkup = consoleEnabled ? '' : buildDiagnosticsMarkup(diagnostics);
     const bridgeMarkup = buildShaderBridgeMarkup({ consoleEnabled, renderId });
 

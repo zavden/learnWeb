@@ -12,14 +12,42 @@ function parseScalar(rawValue) {
     return value;
 }
 
+// Removes a trailing `# comment` (preceded by whitespace) that is not inside quotes.
+export function stripYamlInlineComment(line = '') {
+    const text = String(line ?? '');
+    let quote = '';
+
+    for (let index = 0; index < text.length; index += 1) {
+        const char = text[index];
+
+        if (quote) {
+            if (char === quote) quote = '';
+            continue;
+        }
+
+        if (char === '"' || char === '\'') {
+            quote = char;
+            continue;
+        }
+
+        if (char === '#' && (index === 0 || /\s/.test(text[index - 1]))) {
+            return text.slice(0, index).replace(/\s+$/, '');
+        }
+    }
+
+    return text;
+}
+
 export function parseSimpleYamlObject(source = '') {
     const root = {};
     const stack = [{ indent: -1, value: root }];
     const lines = String(source || '').replace(/\r\n?/g, '\n').split('\n');
 
-    lines.forEach((line, index) => {
+    lines.forEach((rawLine, index) => {
+        if (!rawLine.trim()) return;
+        if (/^\s*#/.test(rawLine)) return;
+        const line = stripYamlInlineComment(rawLine);
         if (!line.trim()) return;
-        if (/^\s*#/.test(line)) return;
         if (/\t/.test(line)) {
             throw new Error(`Line ${index + 1}: tabs are not supported in vim-shortcuts.yaml`);
         }

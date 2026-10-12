@@ -81,19 +81,30 @@ export class TheoryViewer {
       this.btnExport.disabled = !this.currentTopicPath;
     }
 
-    const data = await fetchTopicMain(topicPath);
+    // Take the token before fetching: if another topic is loaded while this request is
+    // still in flight, the slower response must not overwrite the newer topic.
+    const loadToken = ++this._renderToken;
+    let data = null;
+    try {
+      data = await fetchTopicMain(topicPath);
+    } catch {
+      data = null;
+    }
+    if (loadToken !== this._renderToken) return;
     await this.renderContent(data?.content || '');
   }
 
   async renderContent(content = '') {
     this.currentContent = typeof content === 'string' ? content : String(content ?? '');
     const renderToken = ++this._renderToken;
+    const topicPath = this.currentTopicPath;
 
     if (this.currentContent) {
-      const exerciseEmbeds = await loadTheoryExerciseEmbeds(this.currentTopicPath, this.currentContent);
+      const exerciseEmbeds = await loadTheoryExerciseEmbeds(topicPath, this.currentContent);
       if (renderToken !== this._renderToken) return;
       this.container.innerHTML = renderTheoryHtml(this.currentContent, {
         exerciseEmbeds,
+        topicPath,
       });
       this._hydrateExercisePreviewSlots(exerciseEmbeds);
       this._hydrateCodeEmbedTabs();

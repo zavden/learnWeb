@@ -22,6 +22,7 @@ const EXAMPLE_STAGE_LABELS = {
     'common-error': 'Common Error',
     exercise: 'Exercise',
     'final-solution': 'Final Solution',
+    professional: 'Professional',
 };
 
 function escapeHtml(value = '') {
@@ -112,18 +113,62 @@ export function parseExerciseShortcode(raw = '') {
     return { filename, codeEmbed: true, codeFilter };
 }
 
+const FENCE_OPENING_PATTERN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+
+// Applies `transform` only to the parts of the Markdown source that are outside fenced code
+// blocks, so shortcodes shown as code samples stay literal.
+function mapOutsideCodeFences(source = '', transform = (segment) => segment) {
+    const lines = String(source ?? '').split('\n');
+    const output = [];
+    let buffer = [];
+    let fence = null;
+
+    const flush = () => {
+        if (buffer.length === 0) return;
+        output.push(transform(buffer.join('\n')));
+        buffer = [];
+    };
+
+    lines.forEach((line) => {
+        if (fence) {
+            output.push(line);
+            const closing = line.match(/^ {0,3}(`{3,}|~{3,})[ \t\r]*$/);
+            if (closing && closing[1][0] === fence.char && closing[1].length >= fence.length) {
+                fence = null;
+            }
+            return;
+        }
+
+        const opening = line.match(FENCE_OPENING_PATTERN);
+        if (opening && !(opening[1][0] === '`' && opening[2].includes('`'))) {
+            flush();
+            fence = { char: opening[1][0], length: opening[1].length };
+            output.push(line);
+            return;
+        }
+
+        buffer.push(line);
+    });
+
+    flush();
+    return output.join('\n');
+}
+
 export function extractTheoryExerciseReferences(content = '') {
     const source = typeof content === 'string' ? content : String(content ?? '');
     const filenames = [];
     const seen = new Set();
 
-    for (const match of source.matchAll(THEORY_EXERCISE_SHORTCODE_PATTERN)) {
-        const { filename } = parseExerciseShortcode(match[1]);
-        const normalized = normalizeFilename(filename);
-        if (!normalized || seen.has(normalized)) continue;
-        seen.add(normalized);
-        filenames.push(normalized);
-    }
+    mapOutsideCodeFences(source, (segment) => {
+        for (const match of segment.matchAll(THEORY_EXERCISE_SHORTCODE_PATTERN)) {
+            const { filename } = parseExerciseShortcode(match[1]);
+            const normalized = normalizeFilename(filename);
+            if (!normalized || seen.has(normalized)) continue;
+            seen.add(normalized);
+            filenames.push(normalized);
+        }
+        return segment;
+    });
 
     return filenames;
 }
@@ -203,6 +248,19 @@ function matchesCodeFilter(file, filter) {
     return filter.some((name) => file.name === name || file.path === name || file.path?.endsWith(`/${name}`));
 }
 
+// Run/open buttons under a code embed, so console-driven examples can be executed from the theory.
+function buildTheoryCodeEmbedActions(embed = {}) {
+    if (embed.exists === false) return '';
+    const filename = escapeHtml(normalizeFilename(embed.filename));
+    return [
+        '<div class="theory-code-embed-actions">',
+        `<span class="theory-code-embed-source">${filename}</span>`,
+        `<button type="button" class="theory-code-embed-action" data-theory-exercise-preview="${filename}" title="Run this example in a preview window (with console)">▶ Run</button>`,
+        `<button type="button" class="theory-code-embed-action" data-theory-exercise-open="${filename}" title="Open this example in the editor">Open in editor</button>`,
+        '</div>',
+    ].join('');
+}
+
 export function renderTheoryCodeEmbedMarkup(embed = {}, codeFilter = null) {
     const filename = normalizeFilename(embed.filename);
     const allFiles = Array.isArray(embed.codeFiles) ? embed.codeFiles : [];
@@ -226,6 +284,7 @@ export function renderTheoryCodeEmbedMarkup(embed = {}, codeFilter = null) {
             `<span class="theory-code-embed-file-lang">${escapeHtml(file.language || '')}</span>`,
             `</div>`,
             `<pre><code class="hljs language-${escapeHtml(lang)}">${codeHtml}</code></pre>`,
+            buildTheoryCodeEmbedActions(embed),
             `</div>`,
         ].join('');
     }
@@ -248,6 +307,7 @@ export function renderTheoryCodeEmbedMarkup(embed = {}, codeFilter = null) {
         `<div class="theory-code-embed" data-theory-code-file="${escapeHtml(filename)}">`,
         `<div class="theory-code-embed-tabs">${tabs}</div>`,
         panels,
+        buildTheoryCodeEmbedActions(embed),
         `</div>`,
     ].join('');
 }
@@ -258,7 +318,7 @@ export function injectTheoryExerciseEmbeds(content = '', exerciseEmbeds = {}, wr
         ? exerciseEmbeds
         : {};
 
-    return source.replace(THEORY_EXERCISE_SHORTCODE_PATTERN, (_match, rawContent) => {
+    return mapOutsideCodeFences(source, (segment) => segment.replace(THEORY_EXERCISE_SHORTCODE_PATTERN, (_match, rawContent) => {
         const parsed = parseExerciseShortcode(rawContent);
         const embed = embedMap[parsed.filename] || {
             codeFiles: [],
@@ -276,7 +336,7 @@ export function injectTheoryExerciseEmbeds(content = '', exerciseEmbeds = {}, wr
             : renderTheoryExerciseEmbedMarkup(embed);
 
         return typeof wrapEmbed === 'function' ? wrapEmbed(html) : html;
-    });
+    }));
 }
 
 export async function loadTheoryExerciseEmbeds(topicPath, content = '') {

@@ -6,6 +6,9 @@ import {
     hasExampleEditorialMetadata,
 } from '../utils/exampleEditorial.js';
 import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../utils/exampleRenderer.js';
+import { highlightCode } from '../utils/theoryRenderer.js';
+import { createRequestGate } from './editor/dirtyTracker.js';
+import { showToast } from './editor/toast.js';
 import {
     getExampleEditorialMetadata,
     getExampleStage,
@@ -15,6 +18,8 @@ import {
 
 const EXAMPLE_TYPE_META = {
     html:    { label: 'HTML',    className: 'type-html' },
+    js:      { label: 'JS',      className: 'type-js' },
+    ts:      { label: 'TS',      className: 'type-ts' },
     vue:     { label: 'VUE',     className: 'type-vue' },
     react:   { label: 'REACT',   className: 'type-react' },
     svg:     { label: 'SVG',     className: 'type-svg' },
@@ -27,20 +32,85 @@ const EXAMPLE_STAGE_META = {
     'common-error': { label: 'Common Error', rank: 2, className: 'stage-common-error' },
     exercise: { label: 'Exercise', rank: 3, className: 'stage-exercise' },
     'final-solution': { label: 'Final Solution', rank: 4, className: 'stage-final-solution' },
+    professional: { label: 'Professional', rank: 5, className: 'stage-professional' },
 };
 
+const PREVIEW_ROOT_MARGIN = '360px 0px';
+
+async function buildExamplePreviewSrcdoc(documentModel, topicPath) {
+    if (isShaderDocument(documentModel)) {
+        return renderShaderExampleDocument(documentModel, {
+            diagnostics: documentModel.diagnostics || [],
+            renderId: 0,
+            shaderControls: {
+                paused: true,
+                stillFrame: true,
+            },
+            topicPath,
+        });
+    }
+
+    const result = await compileExample({ document: documentModel });
+    return renderCompiledExampleDocument(
+        result.compiledDocument,
+        topicPath,
+        result.compileDiagnostics || []
+    );
+}
+
+const CODE_PREVIEW_MAX_LINES = 18;
+
+// The script block of an example whose page would be empty (no markup, not a shader).
+function getScriptOnlyBlock(documentModel) {
+    if (isShaderDocument(documentModel) || documentModel?.metadata?.framework) return null;
+    const blocks = documentModel?.blocks || [];
+    const hasMarkup = blocks.some((block) => block.slot === 'markup' && String(block.content || '').trim());
+    if (hasMarkup) return null;
+    return blocks.find((block) => block.slot === 'script' && String(block.content || '').trim()) || null;
+}
+
+function buildCodePreview(block) {
+    const lines = String(block.content || '').split('\n');
+    const visible = lines.slice(0, CODE_PREVIEW_MAX_LINES).join('\n');
+    const pre = document.createElement('pre');
+    pre.className = 'card-code-preview';
+    const code = document.createElement('code');
+    code.className = 'hljs';
+    code.innerHTML = highlightCode(visible, block.type === 'typescript' ? 'typescript' : 'javascript');
+    pre.appendChild(code);
+    if (lines.length > CODE_PREVIEW_MAX_LINES) {
+        const more = document.createElement('span');
+        more.className = 'card-code-preview-more';
+        more.textContent = `… ${lines.length - CODE_PREVIEW_MAX_LINES} more lines`;
+        pre.appendChild(more);
+    }
+    return pre;
+}
+
 export class Gallery {
-    constructor({ onExampleSelect }) {
+    constructor({ onExampleSelect, onExampleDeleted, getTopicLabel }) {
         this.view = document.getElementById('gallery-view');
         this.grid = document.getElementById('gallery-grid');
         this.btnMetaToggle = document.getElementById('btn-gallery-meta-toggle');
         this.filtersContainer = document.getElementById('gallery-type-filters');
+        this.heading = this.view?.querySelector('.gallery-header h2') || null;
         this.onExampleSelect = onExampleSelect;
+        this.onExampleDeleted = onExampleDeleted;
+        this.getTopicLabel = getTopicLabel;
         this.pendingPaths = new Set();
         this.currentTopicPath = null;
         this.metaOverlayHiddenStorageKey = 'learncode.gallery.metaOverlayHidden';
         this.metaOverlayHidden = window.localStorage.getItem(this.metaOverlayHiddenStorageKey) === '1';
         this.activeTypeFilter = null;
+        this._loadGate = createRequestGate();
+        this._previewRecords = new Map();
+        this._previewsSuspended = false;
+        this._previewObserver = typeof IntersectionObserver === 'function'
+            ? new IntersectionObserver((entries) => this._handlePreviewIntersections(entries), {
+                root: this.grid,
+                rootMargin: PREVIEW_ROOT_MARGIN,
+            })
+            : null;
 
         this.btnMetaToggle?.addEventListener('click', () => {
             this.setMetaOverlayHidden(!this.metaOverlayHidden);
@@ -51,40 +121,71 @@ export class Gallery {
 
     show() {
         this.view.classList.remove('hidden');
+        this.setPreviewsSuspended(false);
     }
 
     hide() {
         this.view.classList.add('hidden');
+        this.setPreviewsSuspended(true);
+    }
+
+    setHeading(text = '') {
+        if (!this.heading) return;
+        const label = String(text || '').trim();
+        this.heading.textContent = label || 'Examples';
+        this.heading.title = label;
     }
 
     setPendingPaths(paths) {
         this.pendingPaths = paths instanceof Set ? paths : new Set(paths || []);
     }
 
-    async load(topicPath) {
+    async load(topicPath, { preserveScroll = false } = {}) {
+        const token = this._loadGate.next();
+        const previousScrollTop = this.grid.scrollTop;
+        const topicChanged = topicPath !== this.currentTopicPath;
+        const keepCurrentCards = preserveScroll && !topicChanged;
         this.currentTopicPath = topicPath;
-        this.grid.innerHTML = '<div class="loading">Loading examples...</div>';
+
+        if (!keepCurrentCards) {
+            // New topic: start at the top instead of the previous topic's scroll offset.
+            this._resetPreviews();
+            this.grid.innerHTML = '<div class="loading">Loading examples...</div>';
+            this.grid.scrollTop = 0;
+        }
 
         try {
             const examples = await fetchExamples(topicPath);
-            await this.render(examples);
+            if (!this._loadGate.isCurrent(token)) return false;
+            const rendered = await this.render(examples, { token, topicPath });
+            if (rendered && keepCurrentCards) {
+                this.grid.scrollTop = previousScrollTop;
+            }
+            return rendered;
         } catch (err) {
+            if (!this._loadGate.isCurrent(token)) return false;
             console.error(err);
             this.grid.innerHTML = '<div class="error">Failed to load examples</div>';
+            return false;
         }
     }
 
-    async render(examples) {
+    async render(examples, { token = this._loadGate.next(), topicPath = this.currentTopicPath } = {}) {
+        const list = Array.isArray(examples) ? examples : [];
+        const cards = await Promise.all(list.map((filename) => this.createCard(filename, topicPath)));
+        // A newer load/render started while previews were being prepared: drop this one.
+        if (!this._loadGate.isCurrent(token)) return false;
+
+        this._resetPreviews();
         this.grid.innerHTML = '';
         this.grid.classList.toggle('meta-overlay-hidden', this.metaOverlayHidden);
 
-        if (examples.length === 0) {
+        if (list.length === 0) {
             this.grid.innerHTML = '<div class="empty-state">No examples yet</div>';
             this._updateTypeFilterCounts({});
-            return;
+            return true;
         }
 
-        const cards = await Promise.all(examples.map((filename) => this.createCard(filename)));
         this._cards = cards;
         cards
             .sort((left, right) => {
@@ -96,19 +197,27 @@ export class Gallery {
                     return left.stageRank - right.stageRank;
                 }
 
-                return left.filename.localeCompare(right.filename);
+                return left.filename.localeCompare(right.filename, undefined, { numeric: true });
             })
-            .forEach((card) => this.grid.appendChild(card.element));
+            .forEach((card) => {
+                this.grid.appendChild(card.element);
+                this._registerPreview(card.preview, card.buildPreview);
+            });
 
         const typeCounts = {};
         for (const card of cards) {
             typeCounts[card.exampleType] = (typeCounts[card.exampleType] || 0) + 1;
         }
+        if (this.activeTypeFilter && !typeCounts[this.activeTypeFilter]) {
+            // The new topic has nothing of the active type: don't show an empty grid.
+            this.activeTypeFilter = null;
+        }
         this._updateTypeFilterCounts(typeCounts);
         this._applyTypeFilter();
+        return true;
     }
 
-    async createCard(filename) {
+    async createCard(filename, topicPath = this.currentTopicPath) {
         const div = document.createElement('div');
         div.className = 'example-card';
         div.title = filename;
@@ -116,9 +225,10 @@ export class Gallery {
         const preview = document.createElement('div');
         preview.className = 'card-preview';
         let exampleType = 'html';
+        let buildPreview = null;
 
         try {
-            const data = await fetchExample(this.currentTopicPath, filename);
+            const data = await fetchExample(topicPath, filename);
             if (data?.content) {
                 const documentModel = parseExampleDocument(data.content);
                 const editorialMetadata = getExampleEditorialMetadata(documentModel);
@@ -130,40 +240,18 @@ export class Gallery {
                 }
 
                 exampleType = this._getExampleType(documentModel);
-
-                const iframe = document.createElement('iframe');
-                iframe.sandbox = 'allow-scripts';
-
-                if (isShaderDocument(documentModel)) {
-                    iframe.srcdoc = renderShaderExampleDocument(documentModel, {
-                        diagnostics: documentModel.diagnostics || [],
-                        renderId: 0,
-                        shaderControls: {
-                            paused: true,
-                            stillFrame: true,
-                        },
-                        topicPath: this.currentTopicPath,
-                    });
+                const scriptOnlyBlock = getScriptOnlyBlock(documentModel);
+                if (scriptOnlyBlock) {
+                    // Console-only examples have an empty page: show their code instead of a live frame.
+                    preview.appendChild(buildCodePreview(scriptOnlyBlock));
                 } else {
-                    const result = await compileExample({ document: documentModel });
-                    iframe.srcdoc = renderCompiledExampleDocument(
-                        result.compiledDocument,
-                        this.currentTopicPath,
-                        result.compileDiagnostics || []
-                    );
+                    buildPreview = () => buildExamplePreviewSrcdoc(documentModel, topicPath);
                 }
-
-                preview.appendChild(iframe);
                 preview.appendChild(this._createEditorialOverlay(editorialMetadata));
             }
         } catch (err) {
             console.error(`Failed to load preview for ${filename}`, err);
-            preview.textContent = 'Preview unavailable';
-            preview.style.display = 'flex';
-            preview.style.alignItems = 'center';
-            preview.style.justifyContent = 'center';
-            preview.style.color = '#888';
-            preview.style.fontSize = '12px';
+            this._renderPreviewUnavailable(preview);
         }
 
         div.dataset.exampleType = exampleType;
@@ -175,8 +263,8 @@ export class Gallery {
         title.textContent = filename;
         footer.appendChild(title);
 
-        const pendingKey = this.currentTopicPath
-            ? `material/${this.currentTopicPath}/examples/${filename}`
+        const pendingKey = topicPath
+            ? `material/${topicPath}/examples/${filename}`
             : '';
         const isPending = pendingKey ? this.pendingPaths.has(pendingKey) : false;
         if (isPending) {
@@ -211,7 +299,7 @@ export class Gallery {
         deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
         deleteBtn.addEventListener('click', (event) => {
             event.stopPropagation();
-            this._deleteExample(filename);
+            this._deleteExample(filename, topicPath);
         });
         footer.appendChild(deleteBtn);
 
@@ -226,6 +314,8 @@ export class Gallery {
 
         return {
             element: div,
+            preview,
+            buildPreview,
             filename,
             exampleType,
             isPending,
@@ -234,17 +324,29 @@ export class Gallery {
     }
 
     async renderPendingEntries(entries, { onOpenEntry }) {
+        const token = this._loadGate.next();
+        this.currentTopicPath = null;
+        this.setHeading('Pending examples');
+        this._resetPreviews();
         this.grid.innerHTML = '';
+        this.grid.scrollTop = 0;
         this.grid.classList.toggle('meta-overlay-hidden', this.metaOverlayHidden);
         this._updateTypeFilterCounts({});
 
-        if (!entries || entries.length === 0) {
-            this.grid.innerHTML = '<div class="empty-state">No pending items</div>';
-            return;
+        const existingEntries = (entries || []).filter((entry) => entry?.exists);
+        if (existingEntries.length === 0) {
+            this.grid.innerHTML = '<div class="empty-state">No pending examples. Pick a topic in the sidebar to browse its examples.</div>';
+            return false;
         }
 
-        const cards = await Promise.all(entries.filter((e) => e.exists).map((entry) => this._createPendingCard(entry, onOpenEntry)));
-        cards.forEach((card) => this.grid.appendChild(card));
+        const cards = await Promise.all(existingEntries.map((entry) => this._createPendingCard(entry, onOpenEntry)));
+        if (!this._loadGate.isCurrent(token)) return false;
+
+        cards.forEach((card) => {
+            this.grid.appendChild(card.element);
+            this._registerPreview(card.preview, card.buildPreview);
+        });
+        return true;
     }
 
     async _createPendingCard(entry, onOpenEntry) {
@@ -254,6 +356,7 @@ export class Gallery {
 
         const preview = document.createElement('div');
         preview.className = 'card-preview';
+        let buildPreview = null;
 
         if (entry.topicPath && entry.filename) {
             try {
@@ -266,30 +369,11 @@ export class Gallery {
                         div.dataset.stage = stage;
                     }
 
-                    const iframe = document.createElement('iframe');
-                    iframe.sandbox = 'allow-scripts';
-
-                    if (isShaderDocument(documentModel)) {
-                        iframe.srcdoc = renderShaderExampleDocument(documentModel, {
-                            diagnostics: documentModel.diagnostics || [],
-                            renderId: 0,
-                            shaderControls: { paused: true, stillFrame: true },
-                            topicPath: entry.topicPath,
-                        });
-                    } else {
-                        const result = await compileExample({ document: documentModel });
-                        iframe.srcdoc = renderCompiledExampleDocument(
-                            result.compiledDocument,
-                            entry.topicPath,
-                            result.compileDiagnostics || []
-                        );
-                    }
-
-                    preview.appendChild(iframe);
+                    buildPreview = () => buildExamplePreviewSrcdoc(documentModel, entry.topicPath);
                 }
             } catch (error) {
                 console.error(`Failed to load pending preview for ${entry.path}`, error);
-                preview.textContent = 'Preview unavailable';
+                this._renderPreviewUnavailable(preview);
             }
         }
 
@@ -308,7 +392,7 @@ export class Gallery {
 
         const pathTag = document.createElement('span');
         pathTag.className = 'favorite-card-path';
-        pathTag.textContent = entry.topicPath;
+        pathTag.textContent = this.getTopicLabel?.(entry.topicPath) || entry.topicPath;
         pathTag.title = entry.path;
         footer.appendChild(pathTag);
 
@@ -319,7 +403,118 @@ export class Gallery {
             onOpenEntry?.(entry.topicPath, entry.filename);
         });
 
-        return div;
+        return { element: div, preview, buildPreview };
+    }
+
+    // ── Lazy card previews ──────────────────────────────
+    // Card iframes only exist while the card is near the visible part of the
+    // gallery and the gallery itself is visible. This keeps CPU/heat low with
+    // many examples and while the editor covers the gallery.
+
+    setPreviewsSuspended(suspended) {
+        const nextSuspended = Boolean(suspended);
+        if (this._previewsSuspended === nextSuspended) return;
+        this._previewsSuspended = nextSuspended;
+
+        this._previewRecords.forEach((record, preview) => {
+            if (nextSuspended) {
+                this._unmountPreview(record);
+            } else if (record.visible || !this._previewObserver) {
+                this._mountPreview(preview, record);
+            }
+        });
+    }
+
+    _registerPreview(preview, buildPreview) {
+        if (!preview || typeof buildPreview !== 'function') return;
+
+        const record = {
+            build: buildPreview,
+            failed: false,
+            iframe: null,
+            loading: false,
+            srcdoc: null,
+            visible: false,
+        };
+        this._previewRecords.set(preview, record);
+
+        if (this._previewObserver) {
+            this._previewObserver.observe(preview);
+        } else if (!this._previewsSuspended) {
+            record.visible = true;
+            this._mountPreview(preview, record);
+        }
+    }
+
+    _handlePreviewIntersections(entries) {
+        entries.forEach((entry) => {
+            const record = this._previewRecords.get(entry.target);
+            if (!record) return;
+
+            record.visible = entry.isIntersecting;
+            if (record.visible && !this._previewsSuspended) {
+                this._mountPreview(entry.target, record);
+            } else {
+                this._unmountPreview(record);
+            }
+        });
+    }
+
+    async _mountPreview(preview, record) {
+        if (record.iframe || record.failed) return;
+
+        if (record.srcdoc === null) {
+            if (record.loading) return;
+            record.loading = true;
+            try {
+                record.srcdoc = await record.build();
+            } catch (error) {
+                console.error('Failed to build gallery preview.', error);
+                record.failed = true;
+                this._renderPreviewUnavailable(preview);
+                return;
+            } finally {
+                record.loading = false;
+            }
+        }
+
+        if (
+            record.iframe
+            || this._previewsSuspended
+            || (!record.visible && this._previewObserver)
+            || this._previewRecords.get(preview) !== record
+            || !preview.isConnected
+        ) {
+            return;
+        }
+
+        const iframe = document.createElement('iframe');
+        iframe.sandbox = 'allow-scripts';
+        iframe.setAttribute('tabindex', '-1');
+        iframe.srcdoc = record.srcdoc;
+        preview.insertBefore(iframe, preview.firstChild);
+        record.iframe = iframe;
+    }
+
+    _unmountPreview(record) {
+        if (!record?.iframe) return;
+        record.iframe.remove();
+        record.iframe = null;
+    }
+
+    _resetPreviews() {
+        this._previewObserver?.disconnect();
+        this._previewRecords.forEach((record) => this._unmountPreview(record));
+        this._previewRecords = new Map();
+    }
+
+    _renderPreviewUnavailable(preview) {
+        if (!preview) return;
+        const message = document.createElement('div');
+        message.className = 'card-preview-unavailable';
+        message.textContent = 'Preview unavailable';
+        preview.querySelector('.card-preview-unavailable')?.remove();
+        preview.insertBefore(message, preview.firstChild);
     }
 
     _getExampleType(documentModel) {
@@ -330,6 +525,8 @@ export class Gallery {
         const files = documentModel?.files || [];
         const blocks = documentModel?.blocks || [];
         if (files.some((f) => f.language === 'svg') || blocks.some((b) => b.type === 'svg')) return 'svg';
+        const scriptOnlyBlock = getScriptOnlyBlock(documentModel);
+        if (scriptOnlyBlock) return scriptOnlyBlock.type === 'typescript' ? 'ts' : 'js';
         return 'html';
     }
 
@@ -379,15 +576,19 @@ export class Gallery {
         });
     }
 
-    async _deleteExample(filename) {
-        if (!this.currentTopicPath) return;
+    async _deleteExample(filename, topicPath = this.currentTopicPath) {
+        if (!topicPath) return;
         if (!window.confirm(`Delete "${filename}"?`)) return;
 
         try {
-            await removeExample(this.currentTopicPath, filename);
-            await this.load(this.currentTopicPath);
+            await removeExample(topicPath, filename);
+            if (topicPath === this.currentTopicPath) {
+                await this.load(topicPath, { preserveScroll: true });
+            }
+            this.onExampleDeleted?.(topicPath, filename);
         } catch (err) {
             console.error('Failed to delete example:', err);
+            showToast(`Delete failed: ${err.message}`, 'error');
         }
     }
 

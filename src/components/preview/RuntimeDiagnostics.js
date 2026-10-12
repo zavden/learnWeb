@@ -1,6 +1,9 @@
+const MAX_RUNTIME_DIAGNOSTICS = 50;
+
 export const runtimeDiagnosticsMixin = {
     _clearRuntimeDiagnostics() {
         this._runtimeDiagnostics = [];
+        this._runtimeDiagnosticSignatures = new Set();
         this._renderRuntimeDiagnostics();
         this._emitRuntimeDiagnostics();
     },
@@ -28,14 +31,13 @@ export const runtimeDiagnosticsMixin = {
             column: nextDiagnostic.column,
             message: nextDiagnostic.message,
         });
-        const alreadyExists = this._runtimeDiagnostics.some((entry) => JSON.stringify({
-            code: entry.code,
-            file: entry.file,
-            line: entry.line,
-            column: entry.column,
-            message: entry.message,
-        }) === signature);
-        if (alreadyExists) return;
+        if (!(this._runtimeDiagnosticSignatures instanceof Set)) {
+            this._runtimeDiagnosticSignatures = new Set();
+        }
+        if (this._runtimeDiagnosticSignatures.has(signature)) return;
+        // Bounded: a loop logging unique errors must not grow this list (and editor redraws) forever.
+        if (this._runtimeDiagnostics.length >= MAX_RUNTIME_DIAGNOSTICS) return;
+        this._runtimeDiagnosticSignatures.add(signature);
 
         this._runtimeDiagnostics.push(nextDiagnostic);
         this._renderRuntimeDiagnostics();
@@ -72,6 +74,7 @@ export const runtimeDiagnosticsMixin = {
 
             const message = document.createElement('div');
             message.className = 'preview-runtime-status-message';
+            message.style.whiteSpace = 'pre-wrap';
             message.textContent = diagnostic.message;
             item.appendChild(message);
 
@@ -113,6 +116,7 @@ export const runtimeDiagnosticsMixin = {
                 column: Number.isFinite(frame?.column) ? frame.column : Number.parseInt(frame?.column, 10) || null,
                 functionName: typeof frame?.functionName === 'string' ? frame.functionName : '',
                 line: Number.isFinite(frame?.line) ? frame.line : Number.parseInt(frame?.line, 10) || null,
+                mapped: Boolean(frame?.mapped),
                 path: typeof frame?.path === 'string' ? frame.path : '',
                 raw: typeof frame?.raw === 'string' ? frame.raw : '',
             }))
@@ -120,10 +124,12 @@ export const runtimeDiagnosticsMixin = {
     },
 
     _formatRuntimeLocation(data = {}, stackFrames = []) {
+        // `data.location` is already mapped to the learner's file/line by the preview runtime.
+        const mapped = data.location && typeof data.location === 'object' ? data.location : null;
         const primaryFrame = Array.isArray(stackFrames) ? stackFrames[0] : null;
-        const path = data.path || primaryFrame?.path || '';
-        const line = data.line || primaryFrame?.line || null;
-        const column = data.column || primaryFrame?.column || null;
+        const path = mapped?.path || primaryFrame?.path || data.path || '';
+        const line = mapped?.line || primaryFrame?.line || data.line || null;
+        const column = mapped?.line ? (mapped.column || null) : (primaryFrame?.column || data.column || null);
 
         if (!path && !line) return '';
 

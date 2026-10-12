@@ -2,6 +2,20 @@
 
 const BASE = '/api';
 
+// Encodes every segment of "ch/sec/top" so folder names with spaces, accents, "#", "?" or
+// "%" still produce a valid URL.
+export function encodeTopicPath(topicPath = '') {
+    return String(topicPath || '')
+        .split('/')
+        .filter(Boolean)
+        .map((segment) => encodeURIComponent(segment))
+        .join('/');
+}
+
+function topicUrl(topicPath, suffix = '') {
+    return `${BASE}/topic/${encodeTopicPath(topicPath)}${suffix}`;
+}
+
 async function handleResponse(res) {
     if (!res.ok) {
         let message = res.statusText;
@@ -114,13 +128,13 @@ export async function removePending(path) {
 }
 
 export async function fetchTopicMain(topicPath) {
-    const res = await fetch(`${BASE}/topic/${topicPath}/main`);
+    const res = await fetch(topicUrl(topicPath, '/main'));
     if (!res.ok) return { content: '' };
     return res.json();
 }
 
 export async function modifyTopicMain(topicPath, content) {
-    const res = await fetch(`${BASE}/topic/${topicPath}/main`, {
+    const res = await fetch(topicUrl(topicPath, '/main'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content }),
@@ -129,22 +143,22 @@ export async function modifyTopicMain(topicPath, content) {
 }
 
 export async function fetchExamples(topicPath) {
-    const res = await fetch(`${BASE}/topic/${topicPath}/examples`);
+    const res = await fetch(topicUrl(topicPath, '/examples'));
     return handleResponse(res);
 }
 
 export async function fetchTopicAssets(topicPath) {
-    const res = await fetch(`${BASE}/topic/${topicPath}/assets`);
+    const res = await fetch(topicUrl(topicPath, '/assets'));
     return handleResponse(res);
 }
 
 export async function fetchExample(topicPath, filename) {
-    const res = await fetch(`${BASE}/topic/${topicPath}/examples/${encodeURIComponent(filename)}`);
+    const res = await fetch(topicUrl(topicPath, `/examples/${encodeURIComponent(filename)}`));
     return handleResponse(res);
 }
 
 export async function saveExample(topicPath, content) {
-    const res = await fetch(`${BASE}/topic/${topicPath}/examples`, {
+    const res = await fetch(topicUrl(topicPath, '/examples'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content }),
@@ -162,7 +176,7 @@ export async function createItem(type, name, parentPath = '', options = {}) {
 }
 
 export async function modifyExample(topicPath, filename, content) {
-    const res = await fetch(`${BASE}/topic/${topicPath}/examples/${encodeURIComponent(filename)}`, {
+    const res = await fetch(topicUrl(topicPath, `/examples/${encodeURIComponent(filename)}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content }),
@@ -171,14 +185,14 @@ export async function modifyExample(topicPath, filename, content) {
 }
 
 export async function removeExample(topicPath, filename) {
-    const res = await fetch(`${BASE}/topic/${topicPath}/examples/${encodeURIComponent(filename)}`, {
+    const res = await fetch(topicUrl(topicPath, `/examples/${encodeURIComponent(filename)}`), {
         method: 'DELETE',
     });
     return handleResponse(res);
 }
 
 export async function renameExample(topicPath, oldFilename, newFilename) {
-    const res = await fetch(`${BASE}/topic/${topicPath}/examples/${encodeURIComponent(oldFilename)}`, {
+    const res = await fetch(topicUrl(topicPath, `/examples/${encodeURIComponent(oldFilename)}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ newFilename }),

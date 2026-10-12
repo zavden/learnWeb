@@ -32,28 +32,6 @@ export function isSystemClipboardApiAvailable() {
     return Boolean(getClipboardObject());
 }
 
-function setClipboardMethod(target, key, value) {
-    try {
-        target[key] = value;
-        if (target[key] === value) {
-            return true;
-        }
-    } catch {
-        // Fallback below.
-    }
-
-    try {
-        Object.defineProperty(target, key, {
-            configurable: true,
-            writable: true,
-            value,
-        });
-        return target[key] === value;
-    } catch {
-        return false;
-    }
-}
-
 async function writeSystemClipboard(text) {
     clipboardBridgeState.shadowText = normalizeClipboardText(text);
 
@@ -182,24 +160,15 @@ export function installSystemClipboardBridge() {
         return true;
     }
 
+    // Keep references to the native clipboard methods, but never replace the
+    // global navigator.clipboard API: other parts of the app (copy buttons,
+    // explicit `"+y`) must keep working even when the Vim bridge is disabled.
     clipboardBridgeState.originalReadText = clipboard.readText.bind(clipboard);
     clipboardBridgeState.originalWriteText = clipboard.writeText.bind(clipboard);
 
-    const patchedWriteText = async (value) => {
-        await writeSystemClipboard(value);
-    };
-
-    const patchedReadText = async () => {
-        const snapshot = await readSystemClipboardSnapshot();
-        return snapshot.text;
-    };
-
-    const writePatched = setClipboardMethod(clipboard, 'writeText', patchedWriteText);
-    const readPatched = setClipboardMethod(clipboard, 'readText', patchedReadText);
-
-    clipboardBridgeInstalled = writePatched && readPatched;
-    clipboardBridgeState.patchedClipboard = clipboardBridgeInstalled ? clipboard : null;
-    return clipboardBridgeInstalled;
+    clipboardBridgeInstalled = true;
+    clipboardBridgeState.patchedClipboard = clipboard;
+    return true;
 }
 
 export function setSystemClipboardEnabled(enabled) {

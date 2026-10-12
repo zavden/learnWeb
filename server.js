@@ -9,7 +9,7 @@ import {
     parseExampleDocument,
 } from './src/utils/markdown.js';
 import { cloneSerializable, createCompileCacheKey } from './src/utils/compileCache.js';
-import { compileExampleDocument } from './src/utils/exampleCompiler.js';
+import { compileExampleDocumentIsolated, warmUpIsolatedCompiler } from './src/utils/compiler/isolatedCompiler.js';
 import {
     readClipboardDefaultState,
     readVimDefaultState,
@@ -42,8 +42,31 @@ const PENDING_FILE = path.join(__dirname, '.pending');
 const VIM_SHORTCUTS_FILE = path.join(__dirname, 'vim-shortcuts.yaml');
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+
+// The API is only meant to be used by the local Vite app (same origin through the proxy).
+// Topic assets are the exception: sandboxed preview iframes have an opaque ("null") origin
+// and need CORS to fetch() them, so only read-only asset GETs are opened to any origin.
+const ASSET_ROUTE_PATTERN = /^\/api\/topic\/[^/]+\/[^/]+\/[^/]+\/assets(\/|$)/;
+const LOCAL_APP_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+const assetCors = cors({ origin: '*', methods: ['GET', 'HEAD'] });
+const appCors = cors({
+    origin(origin, callback) {
+        callback(null, !origin || LOCAL_APP_ORIGIN_PATTERN.test(origin));
+    },
+});
+app.use((req, res, next) => {
+    if ((req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') && ASSET_ROUTE_PATTERN.test(req.path)) {
+        return assetCors(req, res, next);
+    }
+
+    const origin = req.headers.origin;
+    if (origin && !LOCAL_APP_ORIGIN_PATTERN.test(origin)) {
+        return res.status(403).json({ error: 'Origin not allowed' });
+    }
+
+    return appCors(req, res, next);
+});
+app.use(express.json({ limit: '20mb' }));
 
 const COMPILE_CACHE_MAX_ENTRIES = 120;
 const compileCache = new Map();
@@ -51,10 +74,82 @@ const compileCache = new Map();
 // ─── Helpers ────────────────────────────────────────────
 
 function slugify(name) {
-    return name
+    return String(name || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)/g, '');
+}
+
+class PathError extends Error {
+    constructor(message, status = 400) {
+        super(message);
+        this.status = status;
+    }
+}
+
+// Resolve `segments` under `baseDir` and refuse anything that escapes it (`..`, absolute paths,
+// encoded separators decoded by Express, etc.).
+function resolveInside(baseDir, ...segments) {
+    const base = path.resolve(baseDir);
+    const target = path.resolve(base, ...segments.map((segment) => String(segment ?? '')));
+    if (target !== base && !target.startsWith(base + path.sep)) {
+        throw new PathError('Invalid path');
+    }
+    return target;
+}
+
+function assertPlainSegment(value, label = 'segment') {
+    const segment = String(value ?? '');
+    if (!segment || segment === '.' || segment === '..' || /[\\/\0]/.test(segment)) {
+        throw new PathError(`Invalid ${label}`);
+    }
+    return segment;
+}
+
+function resolveTopicDir(params = {}) {
+    return resolveInside(
+        MATERIAL_DIR,
+        assertPlainSegment(params.ch, 'chapter'),
+        assertPlainSegment(params.sec, 'section'),
+        assertPlainSegment(params.top, 'topic'),
+    );
+}
+
+function resolveExampleFile(params = {}, filename = '') {
+    const name = assertPlainSegment(filename, 'filename');
+    if (!name.toLowerCase().endsWith('.md')) {
+        throw new PathError('Examples must be .md files');
+    }
+    return resolveInside(resolveTopicDir(params), 'examples', name);
+}
+
+function sendRouteError(res, err) {
+    const status = err instanceof PathError ? err.status : 500;
+    res.status(status).json({ error: err?.message || 'Unexpected error' });
+}
+
+function toMaterialRelativePath(absolutePath) {
+    return path.relative(path.dirname(MATERIAL_DIR), absolutePath).split(path.sep).join('/');
+}
+
+function forgetExampleReferences(absolutePath, replacementPath = '') {
+    const relativePath = toMaterialRelativePath(absolutePath);
+    const replacement = replacementPath ? toMaterialRelativePath(replacementPath) : '';
+
+    for (const [stateFile, readState, removeEntry, addEntry] of [
+        [FAVORITES_FILE, readFavoritesState, removeFavorite, addFavorite],
+        [PENDING_FILE, readPendingState, removePending, addPending],
+    ]) {
+        try {
+            if (!readState(stateFile).items.includes(relativePath)) continue;
+            removeEntry(stateFile, relativePath);
+            if (replacement) addEntry(stateFile, replacement);
+        } catch (err) {
+            console.warn(`Could not update ${path.basename(stateFile)}:`, err.message);
+        }
+    }
 }
 
 function getNextNumber(entries, prefix) {
@@ -122,11 +217,12 @@ app.patch('/api/tree/chapters/:chapterId/hidden', (req, res) => {
     try {
         const chapterId = String(req.params.chapterId || '').trim();
         const hidden = req.body?.hidden !== false;
-        const chapterPath = path.join(MATERIAL_DIR, chapterId);
 
-        if (!chapterId || !/^ch\d+-.+/.test(chapterId)) {
+        if (!chapterId || !/^ch\d+-[^/\\]+$/.test(chapterId) || chapterId.includes('..')) {
             return res.status(400).json({ error: 'Invalid chapter id' });
         }
+
+        const chapterPath = resolveInside(MATERIAL_DIR, chapterId);
 
         if (!fs.existsSync(chapterPath) || !fs.statSync(chapterPath).isDirectory()) {
             return res.status(404).json({ error: 'Chapter not found' });
@@ -289,104 +385,133 @@ app.delete('/api/pending', (req, res) => {
 // ─── GET /api/topic/:ch/:sec/:top/main ──────────────────
 
 app.get('/api/topic/:ch/:sec/:top/main', (req, res) => {
-    const { ch, sec, top } = req.params;
-    const filePath = path.join(MATERIAL_DIR, ch, sec, top, 'main.md');
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'main.md not found' });
-    res.json({ content: fs.readFileSync(filePath, 'utf-8') });
+    try {
+        const filePath = resolveInside(resolveTopicDir(req.params), 'main.md');
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'main.md not found' });
+        res.json({ content: fs.readFileSync(filePath, 'utf-8') });
+    } catch (err) {
+        sendRouteError(res, err);
+    }
 });
 
 app.patch('/api/topic/:ch/:sec/:top/main', (req, res) => {
-    const { ch, sec, top } = req.params;
-    const { content } = req.body || {};
-    const dirPath = path.join(MATERIAL_DIR, ch, sec, top);
-    const filePath = path.join(dirPath, 'main.md');
+    try {
+        const { content } = req.body || {};
+        const dirPath = resolveTopicDir(req.params);
+        const filePath = resolveInside(dirPath, 'main.md');
 
-    ensureDir(dirPath);
-    fs.writeFileSync(filePath, typeof content === 'string' ? content : String(content ?? ''), 'utf-8');
-    res.json({ filename: 'main.md' });
+        ensureDir(dirPath);
+        fs.writeFileSync(filePath, typeof content === 'string' ? content : String(content ?? ''), 'utf-8');
+        res.json({ filename: 'main.md' });
+    } catch (err) {
+        sendRouteError(res, err);
+    }
 });
 
 // ─── GET /api/topic/:ch/:sec/:top/examples ──────────────
 
+const exampleFilenameCollator = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
+
 app.get('/api/topic/:ch/:sec/:top/examples', (req, res) => {
-    const { ch, sec, top } = req.params;
-    const dirPath = path.join(MATERIAL_DIR, ch, sec, top, 'examples');
-    ensureDir(dirPath);
-    const files = fs
-        .readdirSync(dirPath)
-        .filter((f) => f.endsWith('.md'))
-        .sort();
-    res.json(files);
+    try {
+        const dirPath = resolveInside(resolveTopicDir(req.params), 'examples');
+        if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) return res.json([]);
+        const files = fs
+            .readdirSync(dirPath)
+            .filter((f) => f.toLowerCase().endsWith('.md') && f.toLowerCase() !== 'readme.md')
+            .sort(exampleFilenameCollator.compare);
+        res.json(files);
+    } catch (err) {
+        sendRouteError(res, err);
+    }
 });
 
 // ─── GET /api/topic/:ch/:sec/:top/examples/:file ────────
 
 app.get('/api/topic/:ch/:sec/:top/examples/:file', (req, res) => {
-    const { ch, sec, top, file } = req.params;
-    const filePath = path.join(MATERIAL_DIR, ch, sec, top, 'examples', file);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
-    res.json({ content: fs.readFileSync(filePath, 'utf-8') });
+    try {
+        const filePath = resolveExampleFile(req.params, req.params.file);
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+        res.json({ content: fs.readFileSync(filePath, 'utf-8') });
+    } catch (err) {
+        sendRouteError(res, err);
+    }
 });
 
 // ─── POST /api/topic/:ch/:sec/:top/examples ─────────────
 
 app.post('/api/topic/:ch/:sec/:top/examples', (req, res) => {
-    const { ch, sec, top } = req.params;
-    const { content } = req.body;
-    const dirPath = path.join(MATERIAL_DIR, ch, sec, top, 'examples');
-    ensureDir(dirPath);
+    try {
+        const { content } = req.body || {};
+        const dirPath = resolveInside(resolveTopicDir(req.params), 'examples');
+        ensureDir(dirPath);
 
-    const now = new Date();
-    const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-    const month = months[now.getMonth()];
-    const day = String(now.getDate()).padStart(2, '0');
-    const year = now.getFullYear();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
-    const filename = `${month}-${day}-${year}-${hours}:${minutes}:${seconds}.md`;
+        const now = new Date();
+        const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        const month = months[now.getMonth()];
+        const day = String(now.getDate()).padStart(2, '0');
+        const year = now.getFullYear();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        const filename = `${month}-${day}-${year}-${hours}:${minutes}:${seconds}.md`;
 
-    fs.writeFileSync(path.join(dirPath, filename), content, 'utf-8');
-    res.json({ filename });
+        fs.writeFileSync(resolveInside(dirPath, filename), typeof content === 'string' ? content : '', 'utf-8');
+        res.json({ filename });
+    } catch (err) {
+        sendRouteError(res, err);
+    }
 });
 
 // ─── PATCH /api/topic/:ch/:sec/:top/examples/* ──────
 
 app.patch('/api/topic/:ch/:sec/:top/examples/*', (req, res) => {
-    const { ch, sec, top } = req.params;
-    const file = req.params[0]; // Capture everything after /examples/
-    const { content } = req.body;
-    const filePath = path.join(MATERIAL_DIR, ch, sec, top, 'examples', file);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
-    fs.writeFileSync(filePath, content, 'utf-8');
-    res.json({ filename: file });
+    try {
+        const file = req.params[0]; // Capture everything after /examples/
+        const { content } = req.body || {};
+        const filePath = resolveExampleFile(req.params, file);
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+        if (typeof content !== 'string') return res.status(400).json({ error: 'Missing content' });
+        fs.writeFileSync(filePath, content, 'utf-8');
+        res.json({ filename: file });
+    } catch (err) {
+        sendRouteError(res, err);
+    }
 });
 
 // ─── DELETE /api/topic/:ch/:sec/:top/examples/* ─────
 
 app.delete('/api/topic/:ch/:sec/:top/examples/*', (req, res) => {
-    const { ch, sec, top } = req.params;
-    const file = req.params[0]; // Capture everything after /examples/
-    const filePath = path.join(MATERIAL_DIR, ch, sec, top, 'examples', file);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
-    fs.unlinkSync(filePath);
-    res.json({ deleted: file });
+    try {
+        const file = req.params[0]; // Capture everything after /examples/
+        const filePath = resolveExampleFile(req.params, file);
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+        fs.unlinkSync(filePath);
+        forgetExampleReferences(filePath);
+        res.json({ deleted: file });
+    } catch (err) {
+        sendRouteError(res, err);
+    }
 });
 
 // ─── PUT /api/topic/:ch/:sec/:top/examples/* ────────
 
 app.put('/api/topic/:ch/:sec/:top/examples/*', (req, res) => {
-    const { ch, sec, top } = req.params;
-    const file = req.params[0]; // Capture everything after /examples/
-    const { newFilename } = req.body;
-    const oldPath = path.join(MATERIAL_DIR, ch, sec, top, 'examples', file);
-    const newPath = path.join(MATERIAL_DIR, ch, sec, top, 'examples', newFilename);
+    try {
+        const file = req.params[0]; // Capture everything after /examples/
+        const { newFilename } = req.body || {};
+        const oldPath = resolveExampleFile(req.params, file);
+        const newPath = resolveExampleFile(req.params, newFilename);
 
-    if (!fs.existsSync(oldPath)) return res.status(404).json({ error: 'File not found' });
-    if (fs.existsSync(newPath)) return res.status(409).json({ error: 'Target filename already exists' });
+        if (!fs.existsSync(oldPath)) return res.status(404).json({ error: 'File not found' });
+        if (fs.existsSync(newPath)) return res.status(409).json({ error: 'Target filename already exists' });
 
-    fs.renameSync(oldPath, newPath);
-    res.json({ oldFilename: file, newFilename });
+        fs.renameSync(oldPath, newPath);
+        forgetExampleReferences(oldPath, newPath);
+        res.json({ oldFilename: file, newFilename });
+    } catch (err) {
+        sendRouteError(res, err);
+    }
 });
 
 // ─── POST /api/compile ───────────────────────────────────
@@ -410,7 +535,8 @@ app.post('/api/compile', async (req, res) => {
             return;
         }
 
-        const result = await compileExampleDocument(sourceDocument);
+        // Sass/Pug/TypeScript run in a worker thread with memory and time limits (see isolatedCompiler.js).
+        const result = await compileExampleDocumentIsolated(sourceDocument);
         const responsePayload = {
             document: sourceDocument,
             compiledDocument: result.compiledDocument,
@@ -458,20 +584,25 @@ app.post('/api/create', (req, res) => {
             targetDir = MATERIAL_DIR;
             prefix = 'ch';
         } else if (type === 'section') {
-            targetDir = path.join(MATERIAL_DIR, parentPath);
+            targetDir = resolveInside(MATERIAL_DIR, assertPlainSegment(parentPath, 'chapter'));
             prefix = 'sec';
         } else if (type === 'topic') {
-            targetDir = path.join(MATERIAL_DIR, parentPath);
+            const [chapter, section, ...rest] = String(parentPath || '').split('/');
+            if (rest.length) throw new PathError('Invalid section path');
+            targetDir = resolveInside(MATERIAL_DIR, assertPlainSegment(chapter, 'chapter'), assertPlainSegment(section, 'section'));
             prefix = 'top';
         } else if (type === 'example') {
             // parentPath should be "ch/sec/top"
-            targetDir = path.join(MATERIAL_DIR, parentPath, 'examples');
+            const [ch, sec, top, ...rest] = String(parentPath || '').split('/');
+            if (rest.length) throw new PathError('Invalid topic path');
+            targetDir = resolveInside(resolveTopicDir({ ch, sec, top }), 'examples');
             // Check if examples dir exists, if not create it (should exist for topics)
             if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
 
             // For examples, name is the filename
-            const filename = name.endsWith('.md') ? name : `${name}.md`;
-            const filePath = path.join(targetDir, filename);
+            const rawName = String(name || '').trim();
+            const filename = rawName.endsWith('.md') ? rawName : `${rawName}.md`;
+            const filePath = resolveExampleFile({ ch, sec, top }, filename);
 
             if (fs.existsSync(filePath)) return res.status(409).json({ error: 'Example already exists' });
 
@@ -495,7 +626,7 @@ app.post('/api/create', (req, res) => {
 
         const existing = fs.readdirSync(targetDir).filter((d) => d.startsWith(prefix));
         const nextNum = getNextNumber(existing, prefix);
-        const slug = slugify(name);
+        const slug = slugify(name) || 'untitled';
         const folderName = `${prefix}${nextNum}-${slug}`;
         const newPath = path.join(targetDir, folderName);
 
@@ -504,56 +635,160 @@ app.post('/api/create', (req, res) => {
         if (type === 'topic') {
             fs.mkdirSync(path.join(newPath, 'examples'), { recursive: true });
             fs.mkdirSync(path.join(newPath, 'assets'), { recursive: true });
-            const label = name.charAt(0).toUpperCase() + name.slice(1);
+            const label = String(name || '').trim();
+            // The first heading of main.md is the topic label shown in the sidebar.
             fs.writeFileSync(
                 path.join(newPath, 'main.md'),
-                `# Topic ${nextNum} - ${label}\n\nWrite your theory here.\n`,
+                `# ${label.charAt(0).toUpperCase()}${label.slice(1)}\n\nWrite your theory here.\n`,
                 'utf-8'
             );
         }
 
         res.json({ folderName, path: newPath });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        sendRouteError(res, err);
     }
 });
 
 // ─── Serve topic assets ─────────────────────────────────
 
+function listAssetFiles(assetsDir, prefix = '') {
+    return fs.readdirSync(assetsDir, { withFileTypes: true })
+        .filter((entry) => !entry.name.startsWith('.'))
+        .flatMap((entry) => {
+            const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+            if (entry.isDirectory()) return listAssetFiles(path.join(assetsDir, entry.name), relativePath);
+            return entry.isFile() ? [relativePath] : [];
+        });
+}
+
 app.get('/api/topic/:ch/:sec/:top/assets', (req, res) => {
     try {
         const { ch, sec, top } = req.params;
-        const assetsDir = path.join(MATERIAL_DIR, ch, sec, top, 'assets');
+        const assetsDir = resolveInside(resolveTopicDir(req.params), 'assets');
 
         if (!fs.existsSync(assetsDir) || !fs.statSync(assetsDir).isDirectory()) {
             return res.json([]);
         }
 
-        const assets = fs.readdirSync(assetsDir, { withFileTypes: true })
-            .filter((entry) => entry.isFile() && !entry.name.startsWith('.'))
-            .map((entry) => ({
-                filename: entry.name,
-                path: entry.name,
-                url: `/api/topic/${encodeURIComponent(ch)}/${encodeURIComponent(sec)}/${encodeURIComponent(top)}/assets/${encodeURIComponent(entry.name)}`,
+        const assets = listAssetFiles(assetsDir)
+            .map((relativePath) => ({
+                filename: relativePath,
+                path: relativePath,
+                url: `/api/topic/${encodeURIComponent(ch)}/${encodeURIComponent(sec)}/${encodeURIComponent(top)}/assets/${relativePath.split('/').map(encodeURIComponent).join('/')}`,
             }))
             .sort((left, right) => left.filename.localeCompare(right.filename));
 
         res.json(assets);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        sendRouteError(res, err);
     }
 });
 
-app.get('/api/topic/:ch/:sec/:top/assets/:file', (req, res) => {
-    const { ch, sec, top, file } = req.params;
-    const filePath = path.join(MATERIAL_DIR, ch, sec, top, 'assets', file);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Asset not found' });
-    res.sendFile(filePath);
+app.get('/api/topic/:ch/:sec/:top/assets/*', (req, res) => {
+    try {
+        const assetsDir = resolveInside(resolveTopicDir(req.params), 'assets');
+        const relativePath = String(req.params[0] || '');
+        const segments = relativePath.split('/').filter(Boolean).map((segment) => assertPlainSegment(segment, 'asset path'));
+        if (segments.length === 0) {
+            return res.redirect(307, req.originalUrl.replace(/\/+$/, '').replace(/\?.*$/, ''));
+        }
+        const filePath = resolveInside(assetsDir, ...segments);
+        if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return res.status(404).json({ error: 'Asset not found' });
+        res.sendFile(filePath);
+    } catch (err) {
+        sendRouteError(res, err);
+    }
+});
+
+// ─── Preview hosting ────────────────────────────────────
+// Rendered example documents are served from this API origin (http://127.0.0.1:3001), which is
+// cross-origin to the Vite app (localhost:5174). The preview iframe can therefore use
+// `allow-same-origin` without being able to reach the app, and learner code gets a real web origin:
+// localStorage/sessionStorage/IndexedDB/cookies, #fragment links, history.pushState, Workers, and
+// relative URLs that resolve into the topic's assets/ folder (the document "lives" next to them).
+// Documents are kept in memory only (last PREVIEW_DOCUMENT_LIMIT renders).
+
+const PREVIEW_DOCUMENT_LIMIT = 24;
+const PREVIEW_PLACEHOLDER_SEGMENT = '_';
+const previewDocuments = new Map();
+let previewDocumentCounter = 0;
+
+function getPreviewOrigin() {
+    const host = !HOST || HOST === '0.0.0.0' || HOST === '::' ? '127.0.0.1' : HOST;
+    return `http://${host.includes(':') ? `[${host}]` : host}:${PORT}`;
+}
+
+function parsePreviewTopic(topicPath = '') {
+    const segments = String(topicPath || '').split('/').filter(Boolean);
+    if (segments.length !== 3) {
+        return { ch: PREVIEW_PLACEHOLDER_SEGMENT, sec: PREVIEW_PLACEHOLDER_SEGMENT, top: PREVIEW_PLACEHOLDER_SEGMENT };
+    }
+    const [ch, sec, top] = segments;
+    resolveTopicDir({ ch, sec, top });
+    return { ch, sec, top };
+}
+
+app.post('/api/preview-documents', (req, res) => {
+    try {
+        const html = req.body?.html;
+        if (typeof html !== 'string') throw new PathError('Missing preview html');
+
+        const topic = parsePreviewTopic(req.body?.topicPath);
+        previewDocumentCounter += 1;
+        const id = `${Date.now().toString(36)}-${previewDocumentCounter.toString(36)}`;
+        previewDocuments.set(id, { html, ...topic });
+        while (previewDocuments.size > PREVIEW_DOCUMENT_LIMIT) {
+            previewDocuments.delete(previewDocuments.keys().next().value);
+        }
+
+        const encodedTopic = [topic.ch, topic.sec, topic.top].map(encodeURIComponent).join('/');
+        res.json({
+            id,
+            origin: getPreviewOrigin(),
+            port: PORT,
+            url: `/preview/${encodedTopic}/${id}/index.html`,
+        });
+    } catch (err) {
+        sendRouteError(res, err);
+    }
+});
+
+app.get('/preview/:ch/:sec/:top/:id/*', (req, res) => {
+    try {
+        const relativePath = String(req.params[0] || '');
+        if (relativePath === '' || relativePath === 'index.html') {
+            const previewDocument = previewDocuments.get(req.params.id);
+            res.set('Cache-Control', 'no-store');
+            if (!previewDocument) {
+                return res.status(410).type('html').send('<!DOCTYPE html><meta charset="utf-8"><p style="font:13px system-ui;color:#666">This preview has expired. Press Refresh in the preview toolbar.</p>');
+            }
+            return res.type('html').send(previewDocument.html);
+        }
+
+        if (req.params.ch === PREVIEW_PLACEHOLDER_SEGMENT) {
+            return res.status(404).json({ error: 'Asset not found (example is not inside a topic)' });
+        }
+
+        const assetsDir = resolveInside(resolveTopicDir(req.params), 'assets');
+        const segments = relativePath.split('/').filter(Boolean).map((segment) => assertPlainSegment(segment, 'asset path'));
+        const filePath = resolveInside(assetsDir, ...segments);
+        if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+            return res.status(404).json({ error: 'Asset not found' });
+        }
+        res.set('Cache-Control', 'no-cache');
+        return res.sendFile(filePath);
+    } catch (err) {
+        return sendRouteError(res, err);
+    }
 });
 
 // ─── Start ──────────────────────────────────────────────
 
 const PORT = 3001;
-app.listen(PORT, () => {
-    console.log(`📚 Learning API running on http://localhost:${PORT}`);
+// Bind to loopback only: this API reads and writes files in the repository.
+const HOST = process.env.LEARNWEB_API_HOST || '127.0.0.1';
+app.listen(PORT, HOST, () => {
+    console.log(`📚 Learning API running on http://${HOST}:${PORT}`);
+    warmUpIsolatedCompiler().catch((err) => console.warn('Compile worker warm-up failed:', err.message));
 });

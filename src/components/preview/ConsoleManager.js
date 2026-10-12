@@ -5,6 +5,9 @@ import {
     resetConsoleHistoryNavigation,
 } from '../../utils/consoleHistory.js';
 
+// Keep the panel bounded: older entries are dropped (and counted) beyond this.
+export const MAX_CONSOLE_ENTRIES = 1000;
+
 export const consoleManagerMixin = {
     _prepareConsoleSession({ consoleEnabled, sessionKey, shaderEnabled = false, shaderResolution = null, shaderConfig = null }) {
         const normalizedSessionKey = String(sessionKey || '').trim() || '__draft__';
@@ -72,7 +75,10 @@ export const consoleManagerMixin = {
 
     _clearConsoleEntries() {
         this._consoleEntries = [];
+        this._consoleQueue = [];
         this._consoleSequence = 0;
+        this._consoleDroppedCount = 0;
+        this._consoleCollapsedGroups = new Set();
         this._renderConsoleEntries();
     },
 
@@ -150,7 +156,10 @@ export const consoleManagerMixin = {
             return;
         }
 
-        this._renderConsoleEntries();
+        // Only rebuild when the console switched between enabled/disabled; this runs on every keystroke.
+        if (this._consoleRenderedEnabled !== this._consoleEnabled) {
+            this._renderConsoleEntries();
+        }
     },
 
     _syncConsoleOverrideButton() {
@@ -214,51 +223,135 @@ export const consoleManagerMixin = {
         }
     },
 
-    _appendConsoleEntry(entry) {
+    _getConsoleFilterLevel(entry = {}) {
+        if (entry.level === 'warn' || entry.level === 'error' || entry.level === 'info') return entry.level;
+        return 'log';
+    },
+
+    _appendConsoleEntry(entry = {}) {
         const nextEntry = {
+            collapsed: Boolean(entry.collapsed),
+            element: null,
+            groupId: entry.groupId || null,
+            groups: Array.isArray(entry.groups) ? entry.groups : [],
             id: ++this._consoleSequence,
             kind: entry.kind || 'console',
             level: entry.level || 'log',
             location: entry.location || '',
-            message: entry.message || '(empty)',
+            message: entry.message || '',
+            method: entry.method || '',
+            parts: Array.isArray(entry.parts) && entry.parts.length > 0 ? entry.parts : null,
             repeatedCount: 1,
             stackFrames: Array.isArray(entry.stackFrames) ? entry.stackFrames : [],
             stackText: entry.stackText || '',
+            table: entry.table || null,
         };
+        nextEntry.filterLevel = this._getConsoleFilterLevel(nextEntry);
+        if (!nextEntry.parts && !nextEntry.message) nextEntry.message = '(empty)';
 
         const previousEntry = this._consoleEntries.at(-1);
         if (this._canMergeConsoleEntries(previousEntry, nextEntry)) {
             previousEntry.repeatedCount += 1;
+            previousEntry.badgeDirty = true;
+            this._consoleQueue.push(previousEntry);
+            this._scheduleConsoleFlush();
             return;
         }
 
+        if (nextEntry.groupId && nextEntry.collapsed) {
+            this._consoleCollapsedGroups.add(nextEntry.groupId);
+        }
+
         this._consoleEntries.push(nextEntry);
+        this._consoleQueue.push(nextEntry);
+
+        while (this._consoleEntries.length > MAX_CONSOLE_ENTRIES) {
+            const removed = this._consoleEntries.shift();
+            removed.removed = true;
+            removed.element?.remove();
+            removed.element = null;
+            this._consoleDroppedCount += 1;
+        }
+
+        this._scheduleConsoleFlush();
     },
 
     _canMergeConsoleEntries(previousEntry, nextEntry) {
         if (!previousEntry || !nextEntry) return false;
-        if (!['runtime-error', 'unhandled-rejection', 'command-error'].includes(nextEntry.kind)) return false;
+        if (previousEntry.table || nextEntry.table || previousEntry.groupId || nextEntry.groupId) return false;
+        if (nextEntry.kind === 'command' || nextEntry.kind === 'command-result') return false;
+        // Expandable objects may differ even when their previews match.
+        if (this._consoleEntryHasHandles(previousEntry) || this._consoleEntryHasHandles(nextEntry)) return false;
 
-        const previousSignature = JSON.stringify({
-            kind: previousEntry.kind,
-            level: previousEntry.level,
-            location: previousEntry.location,
-            message: previousEntry.message,
-            stack: previousEntry.stackFrames.slice(0, 3),
-        });
-        const nextSignature = JSON.stringify({
-            kind: nextEntry.kind,
-            level: nextEntry.level,
-            location: nextEntry.location,
-            message: nextEntry.message,
-            stack: nextEntry.stackFrames.slice(0, 3),
+        return previousEntry.kind === nextEntry.kind
+            && previousEntry.level === nextEntry.level
+            && previousEntry.location === nextEntry.location
+            && this._consoleEntryText(previousEntry) === this._consoleEntryText(nextEntry)
+            && previousEntry.groups.join(',') === nextEntry.groups.join(',');
+    },
+
+    _consoleEntryHasHandles(entry) {
+        return Boolean(entry?.parts?.some((part) => part.kind === 'value' && part.value?.handle));
+    },
+
+    _consoleEntryText(entry) {
+        if (!entry?.parts) return entry?.message || '';
+        return entry.parts.map((part) => (part.kind === 'text' ? part.text : part.value?.preview || '')).join('');
+    },
+
+    _scheduleConsoleFlush() {
+        if (this._consoleFlushScheduled) return;
+        this._consoleFlushScheduled = true;
+        const flush = () => this._flushConsoleQueue();
+        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function' && document.visibilityState !== 'hidden') {
+            window.requestAnimationFrame(flush);
+        } else {
+            setTimeout(flush, 32);
+        }
+    },
+
+    // Batched, incremental DOM updates: at most one pass per frame regardless of how many messages
+    // arrived, and only new entries are created.
+    _flushConsoleQueue() {
+        this._consoleFlushScheduled = false;
+        const queue = this._consoleQueue;
+        this._consoleQueue = [];
+        if (!this.consoleOutput || !this._consoleEnabled) return;
+        if (this._consoleRenderedEnabled !== true) {
+            this._renderConsoleEntries();
+            return;
+        }
+
+        const output = this.consoleOutput;
+        const stickToBottom = output.scrollHeight - output.scrollTop - output.clientHeight < 40;
+        const fragment = document.createDocumentFragment();
+
+        queue.forEach((entry) => {
+            if (entry.removed) return;
+            if (entry.element) {
+                if (entry.badgeDirty) this._updateConsoleEntryBadge(entry);
+                return;
+            }
+            fragment.appendChild(this._createConsoleEntryElement(entry));
         });
 
-        return previousSignature === nextSignature;
+        if (fragment.childNodes.length > 0) {
+            if (this.consoleEmpty?.parentNode === output) this.consoleEmpty.remove();
+            output.appendChild(fragment);
+        }
+
+        this._updateConsoleSummary();
+        if (stickToBottom) output.scrollTop = output.scrollHeight;
+    },
+
+    _isConsoleEntryVisible(entry) {
+        if (!this._consoleFilters.has(entry.filterLevel)) return false;
+        return !entry.groups.some((groupId) => this._consoleCollapsedGroups.has(groupId));
     },
 
     _toggleConsoleCollapsed() {
         if (this._runtimeMode === 'none') return;
+
         this._consoleCollapsed = !this._consoleCollapsed;
         this._syncConsoleVisibility();
     },
@@ -284,6 +377,22 @@ export const consoleManagerMixin = {
         this._renderConsoleEntries();
     },
 
+    _toggleConsoleGroup(entry) {
+        if (!entry?.groupId) return;
+        if (this._consoleCollapsedGroups.has(entry.groupId)) {
+            this._consoleCollapsedGroups.delete(entry.groupId);
+        } else {
+            this._consoleCollapsedGroups.add(entry.groupId);
+        }
+        this._consoleEntries.forEach((item) => {
+            if (item.element) item.element.hidden = !this._isConsoleEntryVisible(item);
+            if (item.groupId && item.element) {
+                item.element.classList.toggle('is-group-collapsed', this._consoleCollapsedGroups.has(item.groupId));
+            }
+        });
+        this._updateConsoleSummary();
+    },
+
     _applyConsoleFontSize() {
         if (!this.consolePanel) return;
         this.consolePanel.style.setProperty('--preview-console-font-size', `${this._consoleFontSize}px`);
@@ -292,6 +401,7 @@ export const consoleManagerMixin = {
     _updateConsoleFontSize(delta) {
         const nextSize = Math.max(11, Math.min(18, this._consoleFontSize + delta));
         if (nextSize === this._consoleFontSize) return;
+
         this._consoleFontSize = nextSize;
         this._applyConsoleFontSize();
     },
@@ -312,7 +422,6 @@ export const consoleManagerMixin = {
             location: '',
             message: `> ${command}`,
         });
-        this._renderConsoleEntries();
 
         if (!this.iframe?.contentWindow) {
             this._appendConsoleEntry({
@@ -321,11 +430,11 @@ export const consoleManagerMixin = {
                 location: '',
                 message: 'Preview frame is not ready yet.',
             });
-            this._renderConsoleEntries();
             return;
         }
 
         this.iframe.contentWindow.postMessage({
+            action: 'eval',
             source: 'learncode-console-command',
             renderId: this._renderToken,
             command,
@@ -335,9 +444,55 @@ export const consoleManagerMixin = {
         this._setConsoleInputValue('');
     },
 
+    // ─── Inspector protocol (parent side) ─────────────────
+
+    _requestConsoleInspect(payload = {}) {
+        const requestId = ++this._consoleInspectSequence;
+        return new Promise((resolve) => {
+            const timer = setTimeout(() => {
+                this._consoleInspectRequests.delete(requestId);
+                resolve({ ok: false, error: 'The preview did not answer (it may be busy or was re-rendered).' });
+            }, 4000);
+            this._consoleInspectRequests.set(requestId, { resolve, timer });
+
+            try {
+                this.iframe.contentWindow.postMessage({
+                    ...payload,
+                    requestId,
+                    renderId: this._renderToken,
+                    source: 'learncode-console-command',
+                }, '*');
+            } catch (error) {
+                clearTimeout(timer);
+                this._consoleInspectRequests.delete(requestId);
+                resolve({ ok: false, error: error?.message || 'Preview frame is not available.' });
+            }
+        });
+    },
+
+    _resolveConsoleInspect(data = {}) {
+        const request = this._consoleInspectRequests.get(data.requestId);
+        if (!request) return;
+        clearTimeout(request.timer);
+        this._consoleInspectRequests.delete(data.requestId);
+        request.resolve(data);
+    },
+
+    _rejectPendingConsoleInspects() {
+        if (!(this._consoleInspectRequests instanceof Map)) return;
+        this._consoleInspectRequests.forEach((request) => {
+            clearTimeout(request.timer);
+            request.resolve({ ok: false, error: 'The preview was re-rendered.' });
+        });
+        this._consoleInspectRequests.clear();
+    },
+
+    // ─── Rendering ────────────────────────────────────────
+
     _renderConsoleEntries() {
         if (!this.consoleOutput || !this.consoleEmpty || !this.consoleCount || !this.btnClearConsole) return;
 
+        this._consoleQueue = [];
         this.consoleOutput.innerHTML = '';
         this.consoleFilterButtons.forEach((button) => {
             const level = button.dataset.level || '';
@@ -347,6 +502,11 @@ export const consoleManagerMixin = {
             button.classList.toggle('active', active);
         });
 
+        this._consoleEntries.forEach((entry) => {
+            entry.element = null;
+        });
+        this._consoleRenderedEnabled = this._consoleEnabled;
+
         if (!this._consoleEnabled) {
             this.consoleEmpty.textContent = 'Console disabled for this example.';
             this.consoleOutput.appendChild(this.consoleEmpty);
@@ -355,88 +515,359 @@ export const consoleManagerMixin = {
             return;
         }
 
-        if (this._consoleEntries.length === 0) {
-            this.consoleEmpty.textContent = 'No runtime messages yet.';
-            this.consoleOutput.appendChild(this.consoleEmpty);
-            this.consoleCount.textContent = '0 entries';
-            this.btnClearConsole.disabled = true;
-            return;
+        const fragment = document.createDocumentFragment();
+        this._consoleEntries.forEach((entry) => fragment.appendChild(this._createConsoleEntryElement(entry)));
+        this.consoleOutput.appendChild(fragment);
+        this._updateConsoleSummary();
+        this.consoleOutput.scrollTop = this.consoleOutput.scrollHeight;
+    },
+
+    _updateConsoleSummary() {
+        if (!this.consoleCount || !this.btnClearConsole || !this.consoleEmpty || !this.consoleOutput) return;
+
+        const total = this._consoleEntries.length;
+        const visible = this._consoleEntries.filter((entry) => this._isConsoleEntryVisible(entry)).length;
+        const dropped = this._consoleDroppedCount
+            ? ` (+${this._consoleDroppedCount} older dropped)`
+            : '';
+
+        if (total === 0 || visible === 0) {
+            this.consoleEmpty.textContent = total === 0 ? 'No runtime messages yet.' : 'No messages for the current filters.';
+            if (this.consoleEmpty.parentNode !== this.consoleOutput) this.consoleOutput.prepend(this.consoleEmpty);
+        } else if (this.consoleEmpty.parentNode === this.consoleOutput) {
+            this.consoleEmpty.remove();
         }
 
-        const visibleEntries = this._consoleEntries.filter((entry) => this._consoleFilters.has(entry.level));
+        this.consoleCount.textContent = visible === total
+            ? `${total} entr${total === 1 ? 'y' : 'ies'}${dropped}`
+            : `${visible}/${total} visible${dropped}`;
+        this.btnClearConsole.disabled = total === 0;
+    },
 
-        if (visibleEntries.length === 0) {
-            this.consoleEmpty.textContent = this._consoleEntries.length === 0
-                ? 'No runtime messages yet.'
-                : 'No messages for the current filters.';
-            this.consoleOutput.appendChild(this.consoleEmpty);
-            this.consoleCount.textContent = `${this._consoleEntries.length} total`;
-            this.btnClearConsole.disabled = this._consoleEntries.length === 0;
-            return;
+    _updateConsoleEntryBadge(entry) {
+        entry.badgeDirty = false;
+        const badge = entry.element?.querySelector('.preview-console-entry-badge');
+        if (!badge) return;
+        badge.textContent = String(entry.repeatedCount);
+        badge.hidden = entry.repeatedCount < 2;
+    },
+
+    _createConsoleEntryElement(entry) {
+        const item = document.createElement('div');
+        item.className = `preview-console-entry ${entry.level} kind-${entry.kind}${entry.method ? ` method-${entry.method}` : ''}`;
+        item.style.setProperty('--console-indent', String(entry.groups.length));
+        item.hidden = !this._isConsoleEntryVisible(entry);
+
+        const row = document.createElement('div');
+        row.className = 'preview-console-entry-row';
+
+        if (entry.groupId) {
+            item.classList.add('is-group-header');
+            item.classList.toggle('is-group-collapsed', this._consoleCollapsedGroups.has(entry.groupId));
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'preview-console-group-toggle';
+            toggle.setAttribute('aria-label', 'Toggle group');
+            toggle.addEventListener('click', () => this._toggleConsoleGroup(entry));
+            row.appendChild(toggle);
         }
 
-        visibleEntries.forEach((entry) => {
-            const item = document.createElement('div');
-            item.className = `preview-console-entry ${entry.level} kind-${entry.kind}`;
-
-            const meta = document.createElement('div');
-            meta.className = 'preview-console-entry-meta';
-            const metaParts = [`#${entry.id}`, entry.kind === 'command' ? 'COMMAND' : entry.level.toUpperCase()];
-            if (entry.location) {
-                metaParts.push(entry.location);
-            }
-            if (entry.repeatedCount > 1) {
-                metaParts.push(`x${entry.repeatedCount}`);
-            }
-            meta.textContent = metaParts.join(' • ');
-
-            const message = document.createElement('pre');
-            message.className = 'preview-console-entry-message';
+        const message = document.createElement('div');
+        message.className = 'preview-console-entry-message';
+        if (entry.parts) {
+            this._renderConsoleParts(message, entry.parts);
+        } else {
             message.textContent = entry.message;
+        }
+        row.appendChild(message);
 
-            item.appendChild(meta);
-            item.appendChild(message);
+        const badge = document.createElement('span');
+        badge.className = 'preview-console-entry-badge';
+        badge.textContent = String(entry.repeatedCount);
+        badge.hidden = entry.repeatedCount < 2;
+        row.appendChild(badge);
 
-            if (Array.isArray(entry.stackFrames) && entry.stackFrames.length > 0) {
-                const stack = document.createElement('div');
-                stack.className = 'preview-console-entry-stack';
+        if (entry.location) {
+            const location = document.createElement('span');
+            location.className = 'preview-console-entry-location';
+            location.textContent = entry.location;
+            location.title = entry.location;
+            row.appendChild(location);
+        }
 
-                entry.stackFrames.slice(0, 6).forEach((frame) => {
-                    const row = document.createElement('div');
-                    row.className = 'preview-console-entry-stack-frame';
-                    const parts = [];
+        item.appendChild(row);
 
-                    if (frame.functionName) {
-                        parts.push(frame.functionName);
+        if (entry.table) {
+            item.appendChild(this._renderConsoleTable(entry.table));
+        }
+
+        if (entry.stackFrames.length > 0) {
+            const stack = document.createElement('div');
+            stack.className = 'preview-console-entry-stack';
+            const limit = entry.method === 'trace' ? 12 : 6;
+
+            entry.stackFrames.slice(0, limit).forEach((frame) => {
+                const frameRow = document.createElement('div');
+                frameRow.className = 'preview-console-entry-stack-frame';
+                const parts = [];
+                if (frame.functionName) parts.push(frame.functionName);
+                if (frame.path) {
+                    let location = frame.path;
+                    if (frame.line) {
+                        location += `:${frame.line}`;
+                        if (frame.column) location += `:${frame.column}`;
                     }
+                    parts.push(location);
+                } else if (frame.raw) {
+                    parts.push(frame.raw);
+                }
+                frameRow.textContent = `at ${parts.join(' • ')}`;
+                stack.appendChild(frameRow);
+            });
 
-                    if (frame.path) {
-                        let location = frame.path;
-                        if (frame.line) {
-                            location += `:${frame.line}`;
-                            if (frame.column) {
-                                location += `:${frame.column}`;
-                            }
-                        }
-                        parts.push(location);
-                    } else if (frame.raw) {
-                        parts.push(frame.raw);
-                    }
+            item.appendChild(stack);
+        }
 
-                    row.textContent = parts.join(' • ');
-                    stack.appendChild(row);
-                });
+        entry.element = item;
+        entry.badgeDirty = false;
+        return item;
+    },
 
-                item.appendChild(stack);
+    _renderConsoleParts(container, parts = []) {
+        parts.forEach((part) => {
+            if (part.kind === 'text') {
+                const span = document.createElement('span');
+                span.className = 'console-text';
+                span.textContent = part.text;
+                if (part.style) {
+                    const style = this._sanitizeConsoleStyle(part.style);
+                    if (style) span.style.cssText = style;
+                }
+                container.appendChild(span);
+                return;
             }
 
-            this.consoleOutput.appendChild(item);
+            if (part.kind === 'value' && part.value) {
+                container.appendChild(this._renderConsoleValue(part.value, {}));
+            }
+        });
+    },
+
+    _sanitizeConsoleStyle(style = '') {
+        const allowed = /^(color|background|background-color|font-weight|font-style|font-size|font-family|text-decoration|text-transform|letter-spacing|line-height|text-shadow|opacity|border-radius|border(-(top|right|bottom|left))?(-(color|width|style))?|padding(-(top|right|bottom|left))?|margin(-(top|right|bottom|left))?|display)$/i;
+        return String(style)
+            .split(';')
+            .map((declaration) => declaration.trim())
+            .filter(Boolean)
+            .filter((declaration) => {
+                const separator = declaration.indexOf(':');
+                if (separator <= 0) return false;
+                const property = declaration.slice(0, separator).trim();
+                const value = declaration.slice(separator + 1);
+                if (!allowed.test(property)) return false;
+                if (/url\s*\(|expression|@import|javascript:/i.test(value)) return false;
+                if (/^display$/i.test(property) && !/^\s*(inline|inline-block|block)\s*$/i.test(value)) return false;
+                return true;
+            })
+            .join('; ');
+    },
+
+    _createConsoleValueSpan(value = {}) {
+        const span = document.createElement('span');
+        const type = value.subtype || value.type || 'object';
+        span.className = `console-value console-${type}`;
+        span.textContent = value.preview ?? '';
+        return span;
+    },
+
+    // An expandable remote object. Children are fetched from the iframe on first expansion.
+    _renderConsoleValue(value = {}, { keyName = null, internal = false, dimmed = false, receiver = null } = {}) {
+        const keyMarkup = () => {
+            if (keyName === null) return null;
+            const key = document.createElement('span');
+            key.className = `console-key${internal ? ' is-internal' : ''}${dimmed ? ' is-dimmed' : ''}`;
+            key.textContent = keyName;
+            const fragment = document.createDocumentFragment();
+            fragment.appendChild(key);
+            fragment.appendChild(document.createTextNode(': '));
+            return fragment;
+        };
+
+        if (!value.handle) {
+            const plain = document.createElement('span');
+            plain.className = 'console-tree-leaf';
+            const key = keyMarkup();
+            if (key) plain.appendChild(key);
+            plain.appendChild(this._createConsoleValueSpan(value));
+            return plain;
+        }
+
+        const node = document.createElement('span');
+        node.className = 'console-tree';
+
+        const label = document.createElement('span');
+        label.className = 'console-tree-label';
+        label.setAttribute('role', 'button');
+        label.tabIndex = 0;
+        label.setAttribute('aria-expanded', 'false');
+
+        const arrow = document.createElement('span');
+        arrow.className = 'console-tree-arrow';
+        label.appendChild(arrow);
+        const key = keyMarkup();
+        if (key) label.appendChild(key);
+        label.appendChild(this._createConsoleValueSpan(value));
+
+        const children = document.createElement('div');
+        children.className = 'console-tree-children';
+        children.hidden = true;
+
+        let loaded = false;
+        const toggle = async () => {
+            const expanding = children.hidden;
+            children.hidden = !expanding;
+            node.classList.toggle('is-open', expanding);
+            label.setAttribute('aria-expanded', String(expanding));
+            if (!expanding || loaded) return;
+            loaded = true;
+            children.textContent = '…';
+            const response = await this._requestConsoleInspect({
+                action: 'inspect',
+                handle: value.handle,
+                receiver: receiver || value.handle,
+            });
+            children.textContent = '';
+            if (!response?.ok) {
+                loaded = false;
+                const error = document.createElement('div');
+                error.className = 'console-tree-row console-tree-error';
+                error.textContent = response?.error || 'Unable to inspect this value.';
+                children.appendChild(error);
+                return;
+            }
+            (response.properties || []).forEach((property) => children.appendChild(this._renderConsoleProperty(property)));
+            if (!response.properties?.length) {
+                const empty = document.createElement('div');
+                empty.className = 'console-tree-row console-tree-empty';
+                empty.textContent = 'No properties';
+                children.appendChild(empty);
+            }
+        };
+
+        label.addEventListener('click', (event) => {
+            event.stopPropagation();
+            toggle();
+        });
+        label.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                toggle();
+            }
         });
 
-        this.consoleCount.textContent = visibleEntries.length === this._consoleEntries.length
-            ? `${this._consoleEntries.length} entr${this._consoleEntries.length === 1 ? 'y' : 'ies'}`
-            : `${visibleEntries.length}/${this._consoleEntries.length} visible`;
-        this.btnClearConsole.disabled = false;
-        this.consoleOutput.scrollTop = this.consoleOutput.scrollHeight;
+        node.appendChild(label);
+        node.appendChild(children);
+        return node;
+    },
+
+    _renderConsoleProperty(property = {}) {
+        const row = document.createElement('div');
+        row.className = `console-tree-row${property.internal ? ' is-internal' : ''}${property.enumerable === false && !property.internal ? ' is-dimmed' : ''}`;
+
+        if (property.more) {
+            row.classList.add('console-tree-more');
+            row.textContent = property.preview ? `… ${property.preview}` : '…';
+            return row;
+        }
+
+        if (property.accessor) {
+            const key = document.createElement('span');
+            key.className = `console-key${property.enumerable === false ? ' is-dimmed' : ''}`;
+            key.textContent = property.name;
+            row.appendChild(key);
+            row.appendChild(document.createTextNode(': '));
+
+            if (!property.hasGetter) {
+                const setterOnly = document.createElement('span');
+                setterOnly.className = 'console-value console-undefined';
+                setterOnly.textContent = 'undefined';
+                row.appendChild(setterOnly);
+                return row;
+            }
+
+            const invoke = document.createElement('button');
+            invoke.type = 'button';
+            invoke.className = 'console-getter';
+            invoke.textContent = '(...)';
+            invoke.title = 'Invoke property getter';
+            invoke.addEventListener('click', async (event) => {
+                event.stopPropagation();
+                invoke.disabled = true;
+                const response = await this._requestConsoleInspect({
+                    action: 'get-property',
+                    key: property.key,
+                    owner: property.owner,
+                    receiver: property.receiver,
+                });
+                if (!response?.ok) {
+                    invoke.disabled = false;
+                    invoke.title = response?.error || 'Unable to read this property.';
+                    return;
+                }
+                row.replaceChildren(this._renderConsoleValue(response.value || {}, {
+                    dimmed: property.enumerable === false,
+                    keyName: property.name,
+                }));
+            });
+            row.appendChild(invoke);
+            return row;
+        }
+
+        row.appendChild(this._renderConsoleValue(property.value || {}, {
+            dimmed: property.enumerable === false && !property.internal,
+            internal: Boolean(property.internal),
+            keyName: property.name,
+            receiver: property.name === '[[Prototype]]' ? property.receiver : null,
+        }));
+        return row;
+    },
+
+    _renderConsoleTable(table = {}) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'preview-console-table-wrapper';
+        const element = document.createElement('table');
+        element.className = 'preview-console-table';
+
+        const head = document.createElement('thead');
+        const headRow = document.createElement('tr');
+        (table.header || []).forEach((cell) => {
+            const th = document.createElement('th');
+            th.textContent = cell;
+            headRow.appendChild(th);
+        });
+        head.appendChild(headRow);
+        element.appendChild(head);
+
+        const body = document.createElement('tbody');
+        (table.rows || []).forEach((cells) => {
+            const tr = document.createElement('tr');
+            cells.forEach((cell) => {
+                const td = document.createElement('td');
+                td.textContent = cell;
+                tr.appendChild(td);
+            });
+            body.appendChild(tr);
+        });
+        element.appendChild(body);
+        wrapper.appendChild(element);
+
+        if (table.truncated) {
+            const note = document.createElement('div');
+            note.className = 'preview-console-table-note';
+            note.textContent = 'Only the first 1000 rows are shown.';
+            wrapper.appendChild(note);
+        }
+
+        return wrapper;
     },
 };

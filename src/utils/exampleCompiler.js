@@ -5,6 +5,10 @@ import { compileScript } from './compiler/scriptCompiler.js';
 import { compileReactSingleFileDocument, compileReactMultiFileDocument } from './compiler/reactCompiler.js';
 import { compileVueSingleFileDocument, compileVueMultiFileDocument } from './compiler/vueCompiler.js';
 
+function isDisabledFlag(value) {
+    return value === false || String(value ?? '').trim().toLowerCase() === 'false';
+}
+
 export async function compileExampleDocument(sourceDocument) {
     if (sourceDocument?.metadata?.framework === 'react' && sourceDocument?.sourceFormat === 'virtual-files') {
         return compileReactMultiFileDocument(sourceDocument);
@@ -27,9 +31,14 @@ export async function compileExampleDocument(sourceDocument) {
     const scriptBlock = getBlockBySlot(sourceDocument, 'script');
     const scriptFile = getFileBySlot(sourceDocument, 'script');
 
-    const markupResult = compileMarkup(markupBlock);
+    const metadata = sourceDocument?.metadata || {};
+    const markupResult = compileMarkup(markupBlock, { loopProtect: !isDisabledFlag(metadata.loop_protect) });
     const styleResult = compileStyle(styleBlock);
-    const scriptResult = compileScript(scriptBlock, { sourcePath: scriptFile?.path || '' });
+    const scriptResult = compileScript(scriptBlock, {
+        loopProtect: !isDisabledFlag(metadata.loop_protect),
+        sourcePath: scriptFile?.path || '',
+        typeCheck: !isDisabledFlag(metadata.typecheck),
+    });
 
     if (markupBlock?.type === 'html-full') {
         return {
@@ -50,6 +59,7 @@ export async function compileExampleDocument(sourceDocument) {
             html: markupResult.html,
             css: styleResult.css,
             js: scriptResult.js,
+            lang: String(metadata.lang ?? '').trim(),
             markupType: markupBlock?.type || '',
             runtimeScriptPath: scriptFile?.path || '',
         },

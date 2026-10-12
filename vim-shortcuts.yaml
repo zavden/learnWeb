@@ -6,8 +6,10 @@
 #   - shift   -> Shift+<key>
 #   - leader  -> Space, <key>
 #   - leader2 -> Space, Space, <key>
-# - values must be a single character
+# - values must be a single character; shift values must be letters (A-Z)
+# - inline comments are allowed ("key: v  # note"); quote "#" if you want it as a key
 # - if this file is missing or invalid, the app falls back to the built-in defaults
+#   and shows a warning toast with the reason
 
 global:
   shift:

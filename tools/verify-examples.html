@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verify Examples</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; padding: 16px; background: #0d1117; color: #e6edf3; font: 13px/1.45 -apple-system, BlinkMacSystemFont, sans-serif; }
+    header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 12px; }
+    h1 { margin: 0; font-size: 16px; }
+    #verify-status { color: #8b949e; }
+    #verify-summary { font-weight: 600; }
+    button { padding: 4px 10px; border: 1px solid #30363d; border-radius: 6px; background: #21262d; color: #e6edf3; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: default; }
+    #verify-frame-host { width: 480px; max-width: 100%; height: 270px; margin-bottom: 12px; border: 1px solid #30363d; background: #fff; }
+    .verify-frame { width: 100%; height: 100%; border: 0; }
+    table { width: 100%; border-collapse: collapse; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    th, td { padding: 4px 8px; border-bottom: 1px solid #21262d; text-align: left; vertical-align: top; }
+    td:last-child { white-space: pre-wrap; word-break: break-word; }
+    .status-cell { font-weight: 700; }
+    .status-ok .status-cell { color: #3fb950; }
+    .status-warn .status-cell { color: #d29922; }
+    .status-error .status-cell { color: #f85149; }
+    .status-expected .status-cell { color: #58a6ff; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Verify examples</h1>
+    <span id="verify-summary"></span>
+    <button id="verify-copy" type="button">Copy JSON</button>
+    <button id="verify-stop" type="button">Stop</button>
+    <span id="verify-status">Starting…</span>
+  </header>
+  <div id="verify-frame-host"></div>
+  <table>
+    <thead><tr><th>Example</th><th>Stage</th><th>Status</th><th>Problems (first 3)</th></tr></thead>
+    <tbody id="verify-rows"></tbody>
+  </table>
+  <script type="module" src="./verify-examples.js"></script>
+</body>
+</html>

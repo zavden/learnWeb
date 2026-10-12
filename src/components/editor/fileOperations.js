@@ -1,8 +1,9 @@
 import { buildFrameworkFileTemplate, getFrameworkFileTemplateOptions } from '../../config/fileTemplates.js';
-import { getBlockDefinition } from '../../config/exampleBlocks.js';
+import { getBlockDefinition, normalizeBlockType } from '../../config/exampleBlocks.js';
 import { fetchExample, modifyExample, removeExample, renameExample, saveExample } from '../../utils/api.js';
-import { buildExampleDocument, cloneExampleDocument, createDocumentFile, createEmptyExampleDocument, duplicateDocumentFile, getDocumentEntryCandidates, hasBlockingDiagnostics, isShaderDocument, parseExampleDocument, removeDocumentFile, setDocumentEntryPath, synchronizeDocument, updateDocumentFileDetails, updateDocumentFileContent, VIRTUAL_FILE_ROLE_OPTIONS } from '../../utils/markdown.js';
+import { buildExampleDocument, cloneExampleDocument, createDocumentFile, createEmptyExampleDocument, duplicateDocumentFile, getDocumentEntryCandidates, getDocumentLanguageOptions, hasBlockingDiagnostics, isShaderDocument, parseExampleDocument, removeDocumentFile, setDocumentEntryPath, synchronizeDocument, updateDocumentFileDetails, updateDocumentFileContent, VIRTUAL_FILE_ROLE_OPTIONS } from '../../utils/markdown.js';
 import { createTheoryDocument } from '../../utils/theoryDocument.js';
+import { parseHighlights, serializeHighlights } from '../../utils/highlights.js';
 
 export const fileOperationsMixin = {
     _getDocumentFramework() {
@@ -652,18 +653,32 @@ const title = ref('${componentName}');
             return;
         }
 
+        const documentBeforeSave = this.currentDocument;
         const documentToPersist = this._getPersistableDocument();
         const content = buildExampleDocument(documentToPersist);
+        const previousFilename = this.currentFilename;
+        const topicPath = this.currentTopicPath;
 
         try {
-            const result = await saveExample(this.currentTopicPath, content);
+            const result = await saveExample(topicPath, content);
+            if (topicPath !== this.currentTopicPath) {
+                this._showToast(`Saved: ${result.filename}`, 'success');
+                return;
+            }
+
             this.currentFilename = result.filename;
-            this.currentDocument = documentToPersist;
+            this._commitPersistedDocument(documentBeforeSave, documentToPersist);
             this._updateButtonStates();
             this._updateFilenameDisplay();
             this._triggerChange();
             this._emitSessionStateChange();
             this._showToast(`Saved: ${result.filename}`, 'success');
+            this.onExampleListChanged?.({
+                reason: 'created',
+                filename: result.filename,
+                previousFilename,
+                topicPath,
+            });
         } catch (error) {
             console.error(error);
             this._showToast(`Failed to save: ${error.message}`, 'error');
@@ -700,13 +715,16 @@ const title = ref('${componentName}');
             if (!confirmDelete) return;
 
             try {
-                await removeExample(this.currentTopicPath, this.currentFilename);
-                this.currentFilename = null;
-                this._applyDocument(createEmptyExampleDocument());
-                this._updateButtonStates();
-                this._updateFilenameDisplay();
-                this._emitSessionStateChange();
+                const topicPath = this.currentTopicPath;
+                const deletedFilename = this.currentFilename;
+                await removeExample(topicPath, deletedFilename);
+                this.clearCurrentExample();
                 this._showToast('Example deleted', 'success');
+                this.onExampleListChanged?.({
+                    reason: 'deleted',
+                    filename: deletedFilename,
+                    topicPath,
+                });
             } catch (error) {
                 console.error(error);
                 this._showToast(`Delete failed: ${error.message}`, 'error');
@@ -733,19 +751,32 @@ const title = ref('${componentName}');
 
     async _handleRenameCurrentFile() {
         if (!this.currentTopicPath || !this.currentFilename || this._isTheoryDocumentTarget()) return;
-        const newName = prompt('Enter new filename:', this.currentFilename);
+        const newName = String(prompt('Enter new filename:', this.currentFilename) || '').trim();
         if (!newName || newName === this.currentFilename) return;
 
+        if (/[\\/]/.test(newName) || newName.startsWith('.')) {
+            this._showToast('Filenames cannot contain "/" or "\\" or start with ".".', 'error');
+            return;
+        }
+
         const newFilename = newName.endsWith('.md') ? newName : `${newName}.md`;
+        if (newFilename === this.currentFilename) return;
 
         try {
-            await renameExample(this.currentTopicPath, this.currentFilename, newFilename);
+            const topicPath = this.currentTopicPath;
+            await renameExample(topicPath, this.currentFilename, newFilename);
             const oldFilename = this.currentFilename;
             this.currentFilename = newFilename;
             this._updateFilenameDisplay();
             this._emitSessionStateChange();
             this._showToast(`Renamed to: ${newFilename}`, 'success');
             if (this.onRename) this.onRename(newFilename, oldFilename);
+            this.onExampleListChanged?.({
+                reason: 'renamed',
+                filename: newFilename,
+                previousFilename: oldFilename,
+                topicPath,
+            });
         } catch (error) {
             console.error(error);
             this._showToast(`Rename failed: ${error.message}`, 'error');
@@ -753,13 +784,20 @@ const title = ref('${componentName}');
     },
 
     async loadExample(filename) {
-        const data = await fetchExample(this.currentTopicPath, filename);
-        if (!data?.content) return;
+        // Latest request wins: a slower response for an older click is ignored.
+        const requestId = ++this._exampleLoadRequestId;
+        const topicPath = this.currentTopicPath;
+        const data = await fetchExample(topicPath, filename);
+        if (requestId !== this._exampleLoadRequestId || topicPath !== this.currentTopicPath) return false;
+        if (!data?.content) return false;
 
         const documentModel = parseExampleDocument(data.content);
+        this._restoreLayoutAfterTheory();
         this.currentFilename = filename;
-        this._applyDocument(documentModel);
+        this._applyDocument(documentModel, { reset: true });
+        this._markDocumentSaved();
         await this._loadExerciseComparisonSource();
+        if (requestId !== this._exampleLoadRequestId) return false;
         this._updateButtonStates();
         this._updateFilenameDisplay();
         this._emitSessionStateChange();
@@ -769,15 +807,46 @@ const title = ref('${componentName}');
         } else {
             this._showToast(`Loaded: ${filename}`, 'success');
         }
+
+        return true;
+    },
+
+    // Drops the current example from the editor (e.g. after it was deleted on disk).
+    clearCurrentExample() {
+        this._exampleLoadRequestId += 1;
+        this.currentFilename = null;
+        this.compileDiagnostics = [];
+        this.runtimeDiagnostics = [];
+        this._resetExerciseComparisonSource();
+        this._applyDocument(createEmptyExampleDocument(), { reset: true });
+        this._markDocumentSaved();
+        this._updateButtonStates();
+        this._updateFilenameDisplay();
+        this._emitSessionStateChange();
+    },
+
+    _commitPersistedDocument(documentBeforeSave, documentToPersist) {
+        // Keep edits typed while the save request was in flight.
+        if (this.currentDocument === documentBeforeSave) {
+            this.currentDocument = documentToPersist;
+        }
+
+        this._markDocumentSaved(documentToPersist, { recheck: true });
     },
 
     loadTheoryDocument(content = '') {
+        this._exampleLoadRequestId += 1;
+        if (!this._isTheoryDocumentTarget()) {
+            // Theory edits in Tabs, but the user's layout preference is restored afterwards.
+            this._layoutModeBeforeTheory = this.layoutMode;
+        }
         this.currentFilename = 'main.md';
         this.compileDiagnostics = [];
         this.runtimeDiagnostics = [];
         this._resetExerciseComparisonSource();
-        this._setLayoutMode('tabs', { persist: true, rerender: false, emit: false });
-        this._applyDocument(createTheoryDocument(content));
+        this._setLayoutMode('tabs', { persist: false, rerender: false, emit: false });
+        this._applyDocument(createTheoryDocument(content), { reset: true });
+        this._markDocumentSaved();
         this._updateButtonStates();
         this._updateFilenameDisplay();
         this._emitSessionStateChange();
@@ -785,19 +854,43 @@ const title = ref('${componentName}');
     },
 
     setTopicPath(path) {
+        this._exampleLoadRequestId += 1;
+        this._restoreLayoutAfterTheory();
         this.currentTopicPath = path;
         this.currentFilename = null;
         this.compileDiagnostics = [];
         this.runtimeDiagnostics = [];
         this._resetExerciseComparisonSource();
-        this._applyDocument(createEmptyExampleDocument(), { notify: false });
+        this._applyDocument(createEmptyExampleDocument(), { notify: false, reset: true });
+        this._markDocumentSaved();
         this._updateButtonStates();
         this._updateFilenameDisplay();
         this._emitSessionStateChange();
     },
 
-    _applyDocument(documentModel, { notify = true } = {}) {
+    // `reset: true` means a different document is being loaded (example, theory,
+    // empty state): cached editor states are dropped and highlights come from the
+    // document metadata. Otherwise this is an in-place mutation of the current
+    // document and live (unsaved) highlights / editor states are carried over.
+    _applyDocument(documentModel, { notify = true, reset = false, editorStates = null } = {}) {
+        let carriedHighlights = '';
+
+        if (!reset) {
+            this._captureEditorStates();
+            this._captureHighlightsFromViews();
+            carriedHighlights = serializeHighlights(this.lineHighlights, this.currentDocument?.files || []);
+        }
+
+        this._destroyEditors();
         this.currentDocument = synchronizeDocument(cloneExampleDocument(documentModel));
+
+        if (reset) {
+            this._resetEditorStateCache(editorStates);
+            this._loadHighlightsFromDocument(this.currentDocument);
+        } else {
+            this.lineHighlights = parseHighlights(carriedHighlights, this.currentDocument.files || []);
+        }
+
         this.compileDiagnostics = [];
         this.runtimeDiagnostics = [];
         this._syncExerciseConfig();
@@ -807,12 +900,15 @@ const title = ref('${componentName}');
         this._renderContextHints();
         this._updateButtonStates();
         this._syncAllEditorDiagnostics();
-        this._loadHighlightsFromDocument(this.currentDocument);
         this._syncAllEditorHighlights();
         this._emitExerciseStateChange();
 
         if (notify) {
             this._triggerChange();
+        }
+
+        if (!reset) {
+            this._scheduleDirtyCheck();
         }
     },
 
@@ -839,9 +935,19 @@ const title = ref('${componentName}');
         const documentToPersist = this._getPersistableDocument();
         const content = buildExampleDocument(documentToPersist);
 
+        const documentBeforeSave = this.currentDocument;
+        const filename = this.currentFilename;
+        const topicPath = this.currentTopicPath;
+
         try {
-            await modifyExample(this.currentTopicPath, this.currentFilename, content);
-            this.currentDocument = documentToPersist;
+            await modifyExample(topicPath, filename, content);
+            if (topicPath !== this.currentTopicPath || filename !== this.currentFilename) {
+                // The user already moved to another document; the save itself succeeded.
+                this._showToast(`Modified: ${filename}`, 'success');
+                return;
+            }
+
+            this._commitPersistedDocument(documentBeforeSave, documentToPersist);
             this._triggerChange();
             this._emitSessionStateChange();
             this._showToast(`Modified: ${this.currentFilename}`, 'success');

@@ -132,16 +132,57 @@
   background: rgba(2, 6, 23, 0.92);
   border: 1px solid rgba(148, 163, 184, 0.14);
   display: flex;
+  flex-direction: column;
   align-items: stretch;
   justify-content: center;
 }
 
 .theory-exercise-dialog-stage iframe {
+  flex: 1 1 auto;
   width: 100%;
-  height: 100%;
   min-height: 0;
   border: none;
   background: #fff;
+}
+
+/* Console output of the previewed example. */
+.theory-exercise-dialog-console {
+  flex: 0 1 auto;
+  max-height: 38%;
+  margin: 0;
+  padding: 6px 0;
+  overflow: auto;
+  list-style: none;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  background: #0b1120;
+  font: 12px/1.5 "JetBrains Mono", ui-monospace, monospace;
+}
+
+.theory-exercise-dialog-console.hidden {
+  display: none;
+}
+
+.theory-exercise-dialog-console-entry {
+  padding: 2px 10px;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.theory-exercise-dialog-console-entry.is-info,
+.theory-exercise-dialog-console-entry.is-debug {
+  color: #93c5fd;
+}
+
+.theory-exercise-dialog-console-entry.is-warn {
+  color: #fde68a;
+  background: rgba(250, 204, 21, 0.06);
+}
+
+.theory-exercise-dialog-console-entry.is-error {
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.08);
 }
 
 .theory-exercise-dialog-empty {
@@ -241,3 +282,126 @@
   background: var(--accent-blue);
   opacity: 0.7;
 }
+
+/* Console-only examples: the (empty) page shrinks to nothing and the console fills the dialog. */
+.theory-exercise-dialog-stage.is-console-only iframe {
+  flex: 0 0 0;
+  height: 0;
+}
+
+.theory-exercise-dialog-stage.is-console-only .theory-exercise-dialog-console {
+  flex: 1 1 auto;
+  max-height: none;
+  border-top: none;
+}
+
+.theory-exercise-dialog-console-table {
+  display: block;
+  margin: 4px 0 2px;
+  border-collapse: collapse;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.theory-exercise-dialog-console-table th,
+.theory-exercise-dialog-console-table td {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  padding: 1px 8px;
+  text-align: left;
+}
+
+.theory-exercise-dialog-console-table th {
+  color: #94a3b8;
+  font-weight: 600;
+  background: rgba(148, 163, 184, 0.08);
+}
+
+/* Topic assets browser */
+.assets-dialog-form {
+  width: min(1100px, 94vw);
+  height: 82vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.assets-dialog-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(160px, 240px) 1fr;
+  gap: 12px;
+}
+
+.assets-dialog-list {
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 4px;
+}
+
+.assets-dialog-item {
+  appearance: none;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary, #cbd5e1);
+  padding: 6px 10px;
+  font: 12px/1.4 "JetBrains Mono", ui-monospace, monospace;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assets-dialog-item:hover { background: rgba(148, 163, 184, 0.1); }
+.assets-dialog-item.is-active { border-color: rgba(96, 165, 250, 0.5); background: rgba(96, 165, 250, 0.12); color: #e2e8f0; }
+
+.assets-dialog-viewer {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  background: #0b1120;
+}
+
+.assets-dialog-viewer-header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #111827;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  font-size: 12px;
+}
+
+.assets-dialog-viewer-header a { color: #93c5fd; }
+.assets-dialog-message { padding: 12px; }
+
+.assets-dialog-image {
+  display: block;
+  max-width: 100%;
+  margin: 16px auto;
+  background: repeating-conic-gradient(#e5e7eb 0 25%, #fff 0 50%) 0 0 / 16px 16px;
+}
+
+.assets-dialog-code {
+  margin: 0;
+  padding: 12px 14px;
+  font: 12.5px/1.6 "JetBrains Mono", ui-monospace, monospace;
+  color: #abb2bf;
+  white-space: pre;
+}
+
+.assets-dialog-code .hljs-comment, .assets-dialog-code .hljs-quote { color: #5c6370; font-style: italic; }
+.assets-dialog-code .hljs-keyword, .assets-dialog-code .hljs-doctag { color: #c678dd; }
+.assets-dialog-code .hljs-literal { color: #56b6c2; }
+.assets-dialog-code .hljs-string, .assets-dialog-code .hljs-regexp, .assets-dialog-code .hljs-attribute { color: #98c379; }
+.assets-dialog-code .hljs-number, .assets-dialog-code .hljs-attr, .assets-dialog-code .hljs-variable, .assets-dialog-code .hljs-type, .assets-dialog-code .hljs-selector-class { color: #d19a66; }
+.assets-dialog-code .hljs-title, .assets-dialog-code .hljs-symbol, .assets-dialog-code .hljs-meta, .assets-dialog-code .hljs-selector-id { color: #61aeee; }
+.assets-dialog-code .hljs-built_in, .assets-dialog-code .hljs-title.class_ { color: #e6c07b; }
+.assets-dialog-code .hljs-name, .assets-dialog-code .hljs-selector-tag, .assets-dialog-code .hljs-subst { color: #e06c75; }

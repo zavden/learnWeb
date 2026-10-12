@@ -1,6 +1,14 @@
 import { compileExample } from '../utils/compileClient.js';
 import { createConsoleHistorySession } from '../utils/consoleHistory.js';
 import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../utils/exampleRenderer.js';
+import {
+    HOSTED_PREVIEW_SANDBOX,
+    SRCDOC_PREVIEW_SANDBOX,
+    markHostedPreviewUnavailable,
+    publishPreviewDocument,
+} from '../utils/renderer/previewHost.js';
+
+const HOSTED_READY_TIMEOUT_MS = 4000;
 import { getShaderConfig, isShaderDocument } from '../utils/markdown.js';
 import { validateShaderPreviewDocument } from '../utils/shaderPreviewDiagnostics.js';
 import { getTheoryDocumentContent, isTheoryDocument } from '../utils/theoryDocument.js';
@@ -21,6 +29,12 @@ export class Preview {
         this.iframe = document.getElementById('preview-frame');
         this.btnAutoRenderToggle = document.getElementById('btn-auto-render-toggle');
         this.btnRefresh = document.getElementById('btn-refresh');
+        this.btnOpenPreviewTab = document.getElementById('btn-open-preview-tab');
+        this._hostedUrl = '';
+        this.btnOpenPreviewTab?.addEventListener('click', () => {
+            // The hosted page is a normal page on the preview origin, so it also works on its own tab.
+            if (this._frameMode === 'hosted' && this._hostedUrl) window.open(this._hostedUrl, '_blank', 'noopener');
+        });
         this.btnConsoleOverride = document.getElementById('btn-console-override');
         this.runtimeStatus = document.getElementById('preview-runtime-status');
         this.consoleResizer = document.getElementById('preview-console-resizer');
@@ -82,6 +96,11 @@ export class Preview {
         this._consoleMetadataEnabled = false;
         this._consoleManualOverride = false;
         this._consoleEntries = [];
+        this._consoleQueue = [];
+        this._consoleFlushScheduled = false;
+        this._consoleDroppedCount = 0;
+        this._consoleCollapsedGroups = new Set();
+        this._consoleRenderedEnabled = null;
         this._consoleSequence = 0;
         this._consoleSessionKey = '';
         this._consoleHistoryBySession = new Map();
@@ -104,6 +123,13 @@ export class Preview {
         this._activeShaderTextureName = '';
         this._shaderStats = this._createEmptyShaderStats();
         this._runtimeDiagnostics = [];
+        this._runtimeDiagnosticSignatures = new Set();
+        this._lastCompileDiagnostics = [];
+        this._lastRenderedSessionKey = null;
+        this._frameMode = 'srcdoc';
+        this._hostedWatchdog = null;
+        this._consoleInspectRequests = new Map();
+        this._consoleInspectSequence = 0;
 
         this.btnAutoRenderToggle?.addEventListener('click', () => this.toggleAutoRender());
         this.btnRefresh.addEventListener('click', () => this.renderNow());
@@ -190,7 +216,7 @@ export class Preview {
         const shaderResolution = shaderConfig?.resolution || null;
 
         this._prepareConsoleSession({
-            consoleEnabled: Boolean(documentModel?.metadata?.console) && !shaderEnabled,
+            consoleEnabled: (Boolean(documentModel?.metadata?.console) || this._isScriptOnlyDocument(documentModel)) && !shaderEnabled,
             sessionKey: this._lastSessionKey,
             shaderConfig,
             shaderEnabled,
@@ -204,13 +230,86 @@ export class Preview {
         }
 
         if (forceRender) {
-            this._render(documentModel);
+            this._render(documentModel, { explicit: true });
             return;
         }
 
+        // Typing re-renders are "live" runs: alert/confirm/prompt are replaced by console notices so a
+        // modal dialog does not pop up on every pause. Opening an example or pressing Refresh runs it
+        // for real.
+        const explicit = this._lastRenderedSessionKey !== this._lastSessionKey;
         this._debounceTimer = setTimeout(() => {
-            this._render(documentModel);
+            this._render(documentModel, { explicit });
         }, 300);
+    }
+
+    _isScriptOnlyDocument(documentModel) {
+        if (!documentModel || documentModel.sourceFormat === 'virtual-files' || documentModel.metadata?.framework) return false;
+        const blocks = Array.isArray(documentModel.blocks) ? documentModel.blocks : [];
+        return blocks.some((block) => block.slot === 'script') && !blocks.some((block) => block.slot === 'markup');
+    }
+
+    _getMarkupPath(documentModel) {
+        const files = Array.isArray(documentModel?.files) ? documentModel.files : [];
+        return files.find((file) => file.slot === 'markup')?.path || 'index.html';
+    }
+
+    _applyFrameSandbox(mode) {
+        if (!this.iframe) return;
+        const value = mode === 'hosted' ? HOSTED_PREVIEW_SANDBOX : SRCDOC_PREVIEW_SANDBOX;
+        if (this.iframe.getAttribute('sandbox') !== value) {
+            this.iframe.setAttribute('sandbox', value);
+        }
+    }
+
+    // srcdoc documents: theory, shaders, and the fallback when the preview host is unavailable.
+    _showSrcdoc(html) {
+        if (!this.iframe) return;
+        clearTimeout(this._hostedWatchdog);
+        // Order matters: drop `allow-same-origin` before navigating, otherwise a srcdoc document would
+        // run with the app's own origin.
+        this._applyFrameSandbox('srcdoc');
+        this.iframe.srcdoc = html;
+        this._frameMode = 'srcdoc';
+        this._setOpenInTabUrl('');
+    }
+
+    _setOpenInTabUrl(url = '') {
+        this._hostedUrl = url;
+        if (this.btnOpenPreviewTab) this.btnOpenPreviewTab.disabled = !url;
+    }
+
+    // Hosted documents live on the preview origin (cross-origin to the app).
+    _showHosted(url, { renderToken = this._renderToken, fallbackHtml = null } = {}) {
+        if (!this.iframe) return;
+        this._applyFrameSandbox('hosted');
+        this._setOpenInTabUrl(url);
+
+        // Safety net: if the hosted document never boots (server not restarted, blocked port…), switch
+        // to srcdoc so the learner still sees the example.
+        clearTimeout(this._hostedWatchdog);
+        this._hostedWatchdog = setTimeout(() => {
+            if (renderToken !== this._renderToken || this._frameMode !== 'hosted') return;
+            markHostedPreviewUnavailable();
+            if (typeof fallbackHtml === 'function') this._showSrcdoc(fallbackHtml());
+        }, HOSTED_READY_TIMEOUT_MS);
+
+        if (this._frameMode === 'hosted' && this.iframe.contentWindow) {
+            try {
+                // Replace instead of push so re-renders do not pile up in the tab's history.
+                this.iframe.contentWindow.location.replace(url);
+                return;
+            } catch {
+                // Fall through to a regular navigation.
+            }
+        }
+
+        this.iframe.src = url;
+        if (this.iframe.hasAttribute('srcdoc')) {
+            // Removing srcdoc makes the iframe navigate to its src.
+            this.iframe.removeAttribute('srcdoc');
+        }
+        this._frameMode = 'hosted';
     }
 
     setTopicPath(topicPath) {
@@ -255,7 +354,7 @@ export class Preview {
 
             if (this._lastDocument) {
                 clearTimeout(this._debounceTimer);
-                this._render(this._lastDocument);
+                this._render(this._lastDocument, { explicit: true });
             }
             return true;
         }
@@ -330,27 +429,31 @@ export class Preview {
         this._clearRuntimeDiagnostics();
         this._resetConsoleSession();
         this._setFrameDisplayMode('default');
-        this.iframe.srcdoc = renderCompiledExampleDocument({}, this._currentTopicPath, [], {
+        this._showSrcdoc(renderCompiledExampleDocument({}, this._currentTopicPath, [], {
             consoleEnabled: false,
             renderId: this._renderToken,
-        });
+        }));
         this._emitCompileState([]);
     }
 
-    async _render(documentModel) {
+    async _render(documentModel, { explicit = true } = {}) {
         const renderToken = ++this._renderToken;
+        this._lastRenderedSessionKey = this._lastSessionKey;
         this._clearRuntimeDiagnostics();
+        // Each run starts with a clean console (REPL history is kept).
+        this._clearConsoleEntries();
+        this._rejectPendingConsoleInspects();
 
         if (isTheoryDocument(documentModel)) {
             this._setFrameDisplayMode('default');
             const content = getTheoryDocumentContent(documentModel);
             const exerciseEmbeds = await loadTheoryExerciseEmbeds(this._currentTopicPath, content);
             if (renderToken !== this._renderToken) return;
-            this.iframe.srcdoc = renderTheoryPreviewDocument(content, {
+            this._showSrcdoc(renderTheoryPreviewDocument(content, {
                 exerciseEmbeds,
                 renderId: renderToken,
                 topicPath: this._currentTopicPath,
-            });
+            }));
             this._emitCompileState([]);
             return;
         }
@@ -364,13 +467,13 @@ export class Preview {
             const compileDiagnostics = structuralDiagnostics.some((diagnostic) => diagnostic.level === 'error')
                 ? []
                 : validateShaderPreviewDocument(documentModel);
-            this.iframe.srcdoc = renderShaderExampleDocument(documentModel, {
+            this._showSrcdoc(renderShaderExampleDocument(documentModel, {
                 consoleEnabled: false,
                 diagnostics: [...structuralDiagnostics, ...compileDiagnostics],
                 renderId: renderToken,
                 shaderControls: this._shaderControls,
                 topicPath: this._currentTopicPath,
-            });
+            }));
             this._emitCompileState(compileDiagnostics);
             return;
         }
@@ -380,17 +483,32 @@ export class Preview {
             if (renderToken !== this._renderToken) return;
 
             const diagnostics = result.compileDiagnostics || [];
+            const renderOptions = {
+                consoleEnabled: this._consoleEnabled,
+                markupPath: this._getMarkupPath(documentModel),
+                renderId: renderToken,
+                suppressDialogs: !explicit,
+            };
             this._setFrameDisplayMode(result.compiledDocument?.markupType === 'svg' && !result.compiledDocument?.framework ? 'svg' : 'default');
-            this.iframe.srcdoc = renderCompiledExampleDocument(
-                result.compiledDocument,
-                this._currentTopicPath,
-                diagnostics,
-                {
-                    consoleEnabled: this._consoleEnabled,
-                    renderId: renderToken,
-                }
-            );
             this._emitCompileState(diagnostics);
+
+            const hostedHtml = renderCompiledExampleDocument(result.compiledDocument, this._currentTopicPath, diagnostics, {
+                ...renderOptions,
+                hosted: true,
+            });
+            const hostedUrl = await publishPreviewDocument({
+                html: hostedHtml,
+                renderId: renderToken,
+                topicPath: this._currentTopicPath || '',
+            });
+            if (renderToken !== this._renderToken) return;
+
+            const renderSrcdoc = () => renderCompiledExampleDocument(result.compiledDocument, this._currentTopicPath, diagnostics, renderOptions);
+            if (hostedUrl) {
+                this._showHosted(hostedUrl, { fallbackHtml: renderSrcdoc, renderToken });
+            } else {
+                this._showSrcdoc(renderSrcdoc());
+            }
         } catch (err) {
             if (renderToken !== this._renderToken) return;
 
@@ -403,10 +521,10 @@ export class Preview {
             ];
 
             this._setFrameDisplayMode('default');
-            this.iframe.srcdoc = renderCompiledExampleDocument({}, this._currentTopicPath, diagnostics, {
+            this._showSrcdoc(renderCompiledExampleDocument({}, this._currentTopicPath, diagnostics, {
                 consoleEnabled: this._consoleEnabled,
                 renderId: renderToken,
-            });
+            }));
             this._emitCompileState(diagnostics);
         }
     }
@@ -432,6 +550,10 @@ export class Preview {
         if (!event?.data || event.data.source !== 'learncode-preview') return;
         if (event.source !== this.iframe?.contentWindow) return;
         if (event.data.renderId !== this._renderToken) return;
+        if (event.data.kind === 'runtime-ready') {
+            clearTimeout(this._hostedWatchdog);
+            return;
+        }
         if (event.data.kind === 'shader-stats') {
             if (this._runtimeMode !== 'shader') return;
             this._updateShaderStats(event.data);
@@ -444,25 +566,41 @@ export class Preview {
             return;
         }
 
-        const values = Array.isArray(event.data.values)
-            ? event.data.values.map((value) => String(value))
-            : [];
-        const message = values.join(' ').trim();
-        const stackFrames = this._normalizeStackFrames(event.data.stackFrames);
-        const location = this._formatRuntimeLocation(event.data, stackFrames);
-        const isRuntimeDiagnostic = event.data.kind === 'runtime-error' || event.data.kind === 'unhandled-rejection';
-        const isConsoleError = event.data.kind === 'console' && event.data.level === 'error';
+        const data = event.data;
+        if (data.kind === 'inspect-result') {
+            this._resolveConsoleInspect(data);
+            return;
+        }
 
-        if (isRuntimeDiagnostic || isConsoleError) {
-            const primaryFrame = stackFrames.find((f) => {
-                const p = f?.path || '';
-                return p && !p.includes('node_modules') && !p.startsWith('/');
-            }) || stackFrames[0];
+        if (data.kind === 'console-clear') {
+            if (!this._consoleEnabled) return;
+            this._clearConsoleEntries();
+            this._appendConsoleEntry({ kind: 'console-clear', level: 'log', message: 'Console was cleared' });
+            return;
+        }
+
+        const values = Array.isArray(data.values) ? data.values.map((value) => String(value)) : [];
+        const message = (typeof data.text === 'string' ? data.text : values.join(' ')).trim();
+        const stackFrames = this._normalizeStackFrames(data.stackFrames);
+        const location = this._formatRuntimeLocation(data, stackFrames);
+        const isRuntimeDiagnostic = data.kind === 'runtime-error' || data.kind === 'unhandled-rejection';
+        const isConsoleError = data.kind === 'console' && data.level === 'error';
+
+        if (data.kind === 'dialog-suppressed') {
+            this._registerRuntimeDiagnostic({
+                code: 'dialog-skipped',
+                level: 'warning',
+                message: message || 'Dialog skipped while editing.',
+            });
+        }
+
+        if ((isRuntimeDiagnostic || isConsoleError) && !this._isDuplicateOfCompileDiagnostic(data)) {
+            const primaryFrame = this._getPrimaryRuntimeFrame(data, stackFrames);
 
             this._registerRuntimeDiagnostic({
-                code: event.data.kind === 'console' ? 'console-error' : event.data.kind,
+                code: data.kind === 'console' ? 'console-error' : data.kind,
                 column: primaryFrame?.column || null,
-                file: primaryFrame?.path || event.data.path || '',
+                file: primaryFrame?.path || '',
                 level: 'error',
                 line: primaryFrame?.line || null,
                 location,
@@ -473,14 +611,44 @@ export class Preview {
         if (!this._consoleEnabled) return;
 
         this._appendConsoleEntry({
-            kind: event.data.kind || 'console',
-            level: event.data.level || 'log',
+            collapsed: Boolean(data.collapsed),
+            groupId: data.groupId || null,
+            groups: Array.isArray(data.groups) ? data.groups : [],
+            kind: data.kind || 'console',
+            level: data.level || 'log',
             location,
-            message: message || '(empty)',
+            message: message || (Array.isArray(data.parts) && data.parts.length ? '' : '(empty)'),
+            method: data.method || '',
+            parts: Array.isArray(data.parts) ? data.parts : null,
             stackFrames,
-            stackText: typeof event.data.stackText === 'string' ? event.data.stackText : '',
+            stackText: typeof data.stackText === 'string' ? data.stackText : '',
+            table: data.table && Array.isArray(data.table.header) ? data.table : null,
         });
-        this._renderConsoleEntries();
+    }
+
+    _getPrimaryRuntimeFrame(data = {}, stackFrames = []) {
+        // Frames the runtime mapped back to a learner file win (e.g. user code calling a CDN library).
+        const mappedFrame = stackFrames.find((frame) => frame?.mapped && frame.path && frame.line);
+        if (mappedFrame) return mappedFrame;
+        const fromStack = stackFrames.find((frame) => {
+            const path = frame?.path || '';
+            return path && frame.line && !path.includes('node_modules') && !path.startsWith('/') && !/^https?:/i.test(path);
+        });
+        if (fromStack) return fromStack;
+        const location = data.location;
+        if (location && location.path && location.line) {
+            return { path: location.path, line: location.line, column: location.column || null };
+        }
+        return stackFrames[0] || null;
+    }
+
+    // The compiler already reports JS/TS syntax errors with exact positions; skip the runtime copy.
+    _isDuplicateOfCompileDiagnostic(data = {}) {
+        if (data.errorName !== 'SyntaxError') return false;
+        return (this._lastCompileDiagnostics || []).some((diagnostic) => (
+            diagnostic?.level === 'error'
+            && ['javascript-syntax', 'typescript-transpile'].includes(diagnostic?.code)
+        ));
     }
 
     resetLayoutState() {
@@ -493,6 +661,7 @@ export class Preview {
     }
 
     _emitCompileState(diagnostics) {
+        this._lastCompileDiagnostics = Array.isArray(diagnostics) ? diagnostics : [];
         if (this._onCompileStateChange) {
             this._onCompileStateChange(diagnostics);
         }

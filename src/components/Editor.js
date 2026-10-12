@@ -1,6 +1,6 @@
 import { EditorView, drawSelection, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
-import { defaultKeymap, indentWithTab, history, historyKeymap } from '@codemirror/commands';
+import { defaultKeymap, indentWithTab, history, historyField, historyKeymap } from '@codemirror/commands';
 import { html } from '@codemirror/lang-html';
 import { css, cssLanguage } from '@codemirror/lang-css';
 import { javascript } from '@codemirror/lang-javascript';
@@ -38,6 +38,8 @@ import {
     updateDocumentFileContent,
 } from '../utils/markdown.js';
 import { isTheoryDocument } from '../utils/theoryDocument.js';
+import { showToast } from './editor/toast.js';
+import { createDirtyTracker } from './editor/dirtyTracker.js';
 
 import {
     setEditorDiagnosticsEffect,
@@ -45,7 +47,12 @@ import {
     editorDiagnosticsField,
     diagnosticsMixin,
 } from './editor/diagnostics.js';
-import { lineHighlightField, lineHighlightTheme } from './editor/lineHighlightExtension.js';
+import {
+    addLineHighlightEffect,
+    lineHighlightField,
+    lineHighlightTheme,
+    removeLineHighlightEffect,
+} from './editor/lineHighlightExtension.js';
 import { lineHighlightsMixin } from './editor/lineHighlightsMixin.js';
 
 import { sessionManagerMixin } from './editor/sessionManager.js';
@@ -96,6 +103,8 @@ export class Editor {
         onTogglePendingCurrentExample,
         onToggleSidebar,
         onCenterWorkspace,
+        onExampleListChanged,
+        onDirtyStateChange,
     }) {
         this.getShaderPersistedState = getShaderPersistedState;
         this.onCodeChange = onCodeChange;
@@ -115,6 +124,8 @@ export class Editor {
         this.onTogglePendingCurrentExample = onTogglePendingCurrentExample;
         this.onToggleSidebar = onToggleSidebar;
         this.onCenterWorkspace = onCenterWorkspace;
+        this.onExampleListChanged = onExampleListChanged;
+        this.onDirtyStateChange = onDirtyStateChange;
 
         this.currentTopicPath = null;
         this.currentFilename = null;
@@ -147,7 +158,14 @@ export class Editor {
         this.exerciseComparisonSourceStatus = 'idle';
         this.exerciseComparisonRequestId = 0;
         this.pendingNavigationTarget = null;
+        this.dirtyTracker = createDirtyTracker();
+        this._dirtyCheckTimer = 0;
+        this._baseDocumentTitle = document.title;
+        this._editorStateCache = new Map();
+        this._layoutModeBeforeTheory = null;
+        this._exampleLoadRequestId = 0;
         this.workspace = document.querySelector('.editor-panels');
+        this.dragShield = document.getElementById('drag-shield');
         this.btnSave = document.getElementById('btn-save');
         this.btnModify = document.getElementById('btn-modify');
         this.btnRemove = document.getElementById('btn-remove');
@@ -335,7 +353,8 @@ export class Editor {
         this._initShortcutsDialog();
         this._initExerciseEmbedDialog();
         this._updateFontSize(0);
-        this._applyDocument(createEmptyExampleDocument(), { notify: false });
+        this._applyDocument(createEmptyExampleDocument(), { notify: false, reset: true });
+        this._markDocumentSaved();
     }
 
     _initShortcuts() {
@@ -578,6 +597,8 @@ export class Editor {
 
     _toggleLayoutMode({ preserveFocus = false } = {}) {
         const nextMode = this.layoutMode === 'panels' ? 'tabs' : 'panels';
+        // An explicit layout choice wins over the layout remembered before theory editing.
+        this._layoutModeBeforeTheory = null;
         const activeFile = preserveFocus ? this._getActiveFile() : null;
         if (activeFile) {
             this.pendingNavigationTarget = { file: activeFile };
@@ -753,6 +774,8 @@ export class Editor {
 
     _renderWorkspace() {
         this._closeFileContextMenu();
+        document.querySelector('.highlight-color-picker')?._close?.();
+        this._captureEditorStates();
         this._captureHighlightsFromViews();
         this._destroyEditors();
         this.workspace.innerHTML = '';
@@ -767,7 +790,9 @@ export class Editor {
                 ? 'All exercise files are hidden. Reveal reference or solution files from the exercise panel.'
                 : (this.currentDocument.files || []).length > 0
                     ? 'All files are hidden. Use Visibility to reveal one again.'
-                    : 'Select an example from the gallery to begin.';
+                    : this.currentTopicPath
+                        ? 'Select an example from the gallery to begin.'
+                        : 'Select a topic in the sidebar, then pick an example from its gallery.';
             this.workspace.appendChild(empty);
             this._updatePanelControlStates();
             this._updateFileControls();
@@ -1126,55 +1151,84 @@ export class Editor {
             : [];
         const vimExtensions = this.vimEnabled ? createVimExtension() : [];
         const updateListener = EditorView.updateListener.of((update) => {
-            if (!update.docChanged) return;
+            if (!update.docChanged) {
+                const touchedHighlights = update.transactions.some((transaction) => transaction.effects.some((effect) => (
+                    effect.is(addLineHighlightEffect) || effect.is(removeLineHighlightEffect)
+                )));
+                if (touchedHighlights) {
+                    this._scheduleDirtyCheck();
+                }
+                return;
+            }
             this._setFileContent(file.id, update.state.doc.toString());
             this._updateStatus();
             this._updateButtonStates();
             this._syncAllEditorDiagnostics();
             this._triggerChange();
+            this._scheduleDirtyCheck();
         });
 
-        const state = EditorState.create({
-            doc: file.content || '',
-            extensions: [
-                EditorState.allowMultipleSelections.of(true),
-                editorDiagnosticsField,
-                lineHighlightField,
-                lineHighlightTheme,
-                lineNumbers(),
-                drawSelection(),
-                highlightActiveLine(),
-                highlightActiveLineGutter(),
-                history(),
-                indentOnInput(),
-                bracketMatching(),
-                closeBrackets(),
-                highlightSelectionMatches(),
-                ...vimExtensions,
-                keymap.of([
-                    ...languageKeymap,
-                    ...defaultKeymap,
-                    ...historyKeymap,
-                    ...closeBracketsKeymap,
-                    ...completionKeymap,
-                    ...searchKeymap,
-                    indentWithTab,
-                ]),
-                ...langExtensions,
-                oneDark,
-                autocompletion(),
-                ...(this.columnGuideEnabled ? [createColumnGuideExtension()] : []),
-                EditorState.readOnly.of(isLocked),
-                updateListener,
-                EditorView.theme({
-                    '&': { height: '100%' },
-                    '&.cm-editor': isLocked ? { opacity: 0.78 } : {},
-                    '.cm-scroller': { overflow: 'auto' },
-                }),
-            ],
-        });
+        const extensions = [
+            EditorState.allowMultipleSelections.of(true),
+            editorDiagnosticsField,
+            lineHighlightField,
+            lineHighlightTheme,
+            lineNumbers(),
+            drawSelection(),
+            highlightActiveLine(),
+            highlightActiveLineGutter(),
+            history(),
+            indentOnInput(),
+            bracketMatching(),
+            closeBrackets(),
+            highlightSelectionMatches(),
+            ...vimExtensions,
+            keymap.of([
+                ...languageKeymap,
+                ...defaultKeymap,
+                ...historyKeymap,
+                ...closeBracketsKeymap,
+                ...completionKeymap,
+                ...searchKeymap,
+                indentWithTab,
+            ]),
+            ...langExtensions,
+            oneDark,
+            autocompletion(),
+            ...(this.columnGuideEnabled ? [createColumnGuideExtension()] : []),
+            EditorState.readOnly.of(isLocked),
+            updateListener,
+            EditorView.theme({
+                '&': { height: '100%' },
+                '&.cm-editor': isLocked ? { opacity: 0.78 } : {},
+                '.cm-scroller': { overflow: 'auto' },
+            }),
+        ];
 
-        const view = new EditorView({ state, parent: container });
+        // Reuse the previous EditorState (cursor, selection, undo history) and
+        // scroll position when the same file is re-rendered (tab switch, layout
+        // toggle, metadata change...). Extensions are always rebuilt fresh.
+        const cachedState = this._getCachedEditorState(file);
+        let state = null;
+        if (cachedState?.json) {
+            try {
+                state = EditorState.fromJSON(cachedState.json, { extensions }, { history: historyField });
+            } catch {
+                state = null;
+            }
+        }
+        if (!state) {
+            state = EditorState.create({
+                doc: file.content || '',
+                extensions,
+            });
+        }
+
+        const viewConfig = { state, parent: container };
+        if (state && cachedState?.scroll) {
+            viewConfig.scrollTo = cachedState.scroll;
+        }
+        const view = new EditorView(viewConfig);
         this._applyDiagnosticsToView(view, file);
         this._applyHighlightsToView(view, file);
 
@@ -1261,8 +1315,7 @@ export class Editor {
                     this.onTogglePreviewHeader?.();
                 },
                 onQuickSave: () => {
-                    if (!this._isTheoryDocumentTarget()) return false;
-                    this._handleModify();
+                    this._handleVimWrite();
                     return true;
                 },
                 onWrite: () => {
@@ -1669,20 +1722,37 @@ export class Editor {
 
     _startResize(prevPanel, currentPanel, event) {
         if (!prevPanel || !currentPanel) return;
+        if (typeof event.button === 'number' && event.button !== 0) return;
 
         event.preventDefault();
 
-        const panels = this._getPanels();
-        panels.forEach((panel) => panel.classList.remove('collapsed'));
-
-        const containerHeight = this.workspace.getBoundingClientRect().height;
         const startY = event.clientY;
-        const startPrevHeight = prevPanel.getBoundingClientRect().height;
-        const startCurrentHeight = currentPanel.getBoundingClientRect().height;
         const minHeight = 32;
+        const dragThreshold = 3;
+        let dragging = false;
+        let containerHeight = 0;
+        let startPrevHeight = 0;
+        let startCurrentHeight = 0;
+
+        // Collapsed panels are only expanded once a real drag starts, so a
+        // plain click on a header (to focus that panel) keeps maximize/collapse state.
+        const beginDrag = () => {
+            dragging = true;
+            this._getPanels().forEach((panel) => panel.classList.remove('collapsed'));
+            containerHeight = this.workspace.getBoundingClientRect().height || 1;
+            startPrevHeight = prevPanel.getBoundingClientRect().height;
+            startCurrentHeight = currentPanel.getBoundingClientRect().height;
+            this._setPanelDragShieldVisible(true);
+        };
 
         const onMouseMove = (moveEvent) => {
             const delta = moveEvent.clientY - startY;
+
+            if (!dragging) {
+                if (Math.abs(delta) < dragThreshold) return;
+                beginDrag();
+            }
+
             let newPrevHeight = startPrevHeight + delta;
             let newCurrentHeight = startCurrentHeight - delta;
 
@@ -1705,12 +1775,29 @@ export class Editor {
         const onMouseUp = () => {
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
+            window.removeEventListener('blur', onMouseUp);
+            this._setPanelDragShieldVisible(false);
+
+            if (!dragging) return;
             this._syncPanelStateFromDom();
             this._emitSessionStateChange();
         };
 
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
+        window.addEventListener('blur', onMouseUp);
+    }
+
+    _setPanelDragShieldVisible(visible) {
+        document.body.classList.toggle('is-resizing-editor-panels', Boolean(visible));
+        if (!this.dragShield) return;
+
+        // The shield covers the preview iframe so mouseup is never lost inside it.
+        this.dragShield.classList.toggle('hidden', !visible);
+        this.dragShield.classList.toggle('is-ns-resize', Boolean(visible));
+        if (!visible) {
+            this.dragShield.classList.remove('is-ew-resize');
+        }
     }
 
     _handleAutoFit() {
@@ -1816,6 +1903,7 @@ export class Editor {
                     ? this.currentFilename
                     : `Rename ${this.currentFilename}`;
             }
+            this._updateDirtyIndicator();
             return;
         }
 
@@ -1823,6 +1911,7 @@ export class Editor {
             this.previewFilenameDisplay.textContent = 'Preview';
             this.previewFilenameDisplay.title = 'Preview';
         }
+        this._updateDirtyIndicator();
     }
 
     _updateStatus() {
@@ -1870,11 +1959,7 @@ export class Editor {
     }
 
     _showToast(message, type = 'success') {
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-        toast.textContent = message;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 3000);
+        showToast(message, type);
     }
 }
 

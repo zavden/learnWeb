@@ -20,30 +20,83 @@ function buildState(items = []) {
     };
 }
 
-export function readFavoritesState(filePath) {
-    if (!fs.existsSync(filePath)) {
-        return buildState([]);
+// ─── Shared helpers for the JSON dotfiles (.favorites, .pending, .hiddens) ──────
+
+// Reads a JSON state file without ever throwing. Hand-edited files with trailing commas are
+// recovered; anything else unparseable is reported as "invalid" with its raw text so the
+// caller can salvage entries instead of silently starting from an empty state.
+export function readJsonStateFile(filePath) {
+    if (!filePath || !fs.existsSync(filePath)) {
+        return { raw: '', status: 'missing', value: null };
+    }
+
+    let raw = '';
+    try {
+        raw = fs.readFileSync(filePath, 'utf-8');
+    } catch {
+        return { raw: '', status: 'invalid', value: null };
+    }
+
+    const text = raw.replace(/^\uFEFF/, '');
+    if (!text.trim()) {
+        return { raw, status: 'empty', value: null };
     }
 
     try {
-        const raw = fs.readFileSync(filePath, 'utf-8');
-        const parsed = JSON.parse(raw);
-        const inputItems = Array.isArray(parsed)
-            ? parsed
-            : Array.isArray(parsed?.items)
-                ? parsed.items
-                : [];
+        return { raw, status: 'ok', value: JSON.parse(text) };
+    } catch { /* try a lenient parse */ }
 
-        const items = Array.from(new Set(
-            inputItems
-                .map((entry) => normalizeFavoritePath(entry))
-                .filter((entry) => entry && isExampleMarkdownPath(entry))
-        ));
-
-        return buildState(items);
+    try {
+        const lenient = text
+            .replace(/^\s*\/\/.*$/gm, '')
+            .replace(/,(\s*[\]}])/g, '$1');
+        return { raw, status: 'recovered', value: JSON.parse(lenient) };
     } catch {
-        return buildState([]);
+        return { raw, status: 'invalid', value: null };
     }
+}
+
+// Before overwriting a state file that was not valid JSON, keep a copy of it next to the
+// original (".bak", or ".bak-<timestamp>" when a backup already exists).
+export function backupUnreadableStateFile(filePath) {
+    const current = readJsonStateFile(filePath);
+    if (current.status !== 'recovered' && current.status !== 'invalid') {
+        return '';
+    }
+
+    const backupPath = fs.existsSync(`${filePath}.bak`)
+        ? `${filePath}.bak-${Date.now()}`
+        : `${filePath}.bak`;
+    fs.writeFileSync(backupPath, current.raw, 'utf-8');
+    return backupPath;
+}
+
+export function salvageQuotedStrings(raw = '', pattern = /"([^"\n]+)"/g) {
+    return Array.from(String(raw || '').matchAll(pattern), (match) => match[1]);
+}
+
+function getStateItems(fileState) {
+    if (fileState.status === 'invalid') {
+        return salvageQuotedStrings(fileState.raw);
+    }
+
+    const parsed = fileState.value;
+    return Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.items)
+            ? parsed.items
+            : [];
+}
+
+export function readFavoritesState(filePath) {
+    const inputItems = getStateItems(readJsonStateFile(filePath));
+    const items = Array.from(new Set(
+        inputItems
+            .map((entry) => normalizeFavoritePath(entry))
+            .filter((entry) => entry && isExampleMarkdownPath(entry))
+    ));
+
+    return buildState(items);
 }
 
 export function writeFavoritesState(filePath, items = []) {
@@ -53,6 +106,7 @@ export function writeFavoritesState(filePath, items = []) {
             .filter((entry) => entry && isExampleMarkdownPath(entry))
     )));
 
+    backupUnreadableStateFile(filePath);
     fs.writeFileSync(filePath, `${JSON.stringify(state, null, 2)}\n`, 'utf-8');
     return state;
 }

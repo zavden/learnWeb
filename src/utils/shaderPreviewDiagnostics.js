@@ -118,6 +118,40 @@ function compileShaderStage(gl, type, source, { file = '', stage = 'fragment' } 
     };
 }
 
+// One shared, never-displayed WebGL context is reused for every validation. Creating a fresh context
+// per render leaked GPU contexts until GC (Chrome caps them at ~16 and then kills the oldest one).
+let validationCanvas = null;
+let validationContext = null;
+
+function getValidationContext() {
+    if (validationContext && !validationContext.isContextLost()) {
+        return validationContext;
+    }
+
+    if (validationContext) {
+        validationContext = null;
+        validationCanvas = null;
+    }
+
+    validationCanvas = document.createElement('canvas');
+    validationCanvas.width = 1;
+    validationCanvas.height = 1;
+    validationCanvas.addEventListener('webglcontextlost', (event) => {
+        event.preventDefault();
+        validationContext = null;
+        validationCanvas = null;
+    });
+    validationContext = validationCanvas.getContext('webgl', {
+        alpha: false,
+        antialias: false,
+        depth: false,
+        preserveDrawingBuffer: false,
+        stencil: false,
+    }) || validationCanvas.getContext('experimental-webgl');
+
+    return validationContext;
+}
+
 export function validateShaderPreviewDocument(documentModel) {
     const shaderConfig = getShaderConfig(documentModel);
     if (!shaderConfig.enabled) return [];
@@ -135,14 +169,7 @@ export function validateShaderPreviewDocument(documentModel) {
 
     if (!vertexBlock || !fragmentBlock) return [];
 
-    const canvas = document.createElement('canvas');
-    const gl = canvas.getContext('webgl', {
-        alpha: false,
-        antialias: false,
-        depth: false,
-        preserveDrawingBuffer: false,
-        stencil: false,
-    }) || canvas.getContext('experimental-webgl');
+    const gl = getValidationContext();
 
     if (!gl) {
         return [

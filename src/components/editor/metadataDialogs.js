@@ -1,6 +1,6 @@
 import { getBlockDefinition, normalizeBlockType } from '../../config/exampleBlocks.js';
 import { getVimShortcutSections, getDefaultVimShortcutConfig } from '../../editor/vimSupport.js';
-import { evaluateDocumentFileTypeChange, getDocumentFileTypeChangeOptions, getDocumentLanguageOptions, getExampleEditorialMetadata, updateDocumentFileType, updateExampleEditorialMetadata, updateDocumentHiddenFiles } from '../../utils/markdown.js';
+import { evaluateDocumentFileTypeChange, getDocumentFileTypeChangeOptions, getDocumentFileVisibilityEntries, getDocumentLanguageOptions, getExampleEditorialMetadata, hasBlockingDiagnostics, isShaderDocument, updateDocumentFileType, updateExampleEditorialMetadata, updateDocumentHiddenFiles } from '../../utils/markdown.js';
 import { findDirectionalPanelTargetIndex } from '../../utils/panelNavigation.js';
 
 export const EXAMPLE_IMPORTANCE_OPTIONS = [
@@ -31,6 +31,12 @@ export const metadataDialogsMixin = {
         this.exampleImportanceSelect?.addEventListener('change', () => this._syncExampleMetadataImportancePreview());
         this.btnExampleMetadataCancel?.addEventListener('click', () => this.exampleMetadataDialog?.close());
         this.btnExampleMetadataApply?.addEventListener('click', async () => this._applyExampleMetadataDialog());
+        // Enter in the Tags input implicitly submits the <form method="dialog">;
+        // treat that as Apply instead of silently closing and discarding edits.
+        this.exampleMetadataDialog?.querySelector('form')?.addEventListener('submit', (event) => {
+            event.preventDefault();
+            this._applyExampleMetadataDialog();
+        });
         this.exampleMetadataDialog?.addEventListener('close', () => this._scheduleEditorFocusRestore());
         this._renderExampleMetadataRatingStars();
     },

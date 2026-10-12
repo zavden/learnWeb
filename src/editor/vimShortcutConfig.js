@@ -161,7 +161,15 @@ function normalizeShortcutToken(value, bucket) {
         throw new Error(`Shortcut token "${raw}" must be a single character`);
     }
 
-    return bucket === 'shift' ? raw.toUpperCase() : raw;
+    if (bucket === 'shift') {
+        const upper = raw.toUpperCase();
+        if (!/^[A-Z]$/.test(upper)) {
+            throw new Error(`Shift shortcut "${raw}" must be a letter (Shift+digit/symbol never reaches the editor as "${raw}")`);
+        }
+        return upper;
+    }
+
+    return raw;
 }
 
 function validateRawShape(rawConfig) {

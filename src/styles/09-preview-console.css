@@ -110,8 +110,9 @@
   flex: 1;
   overflow: auto;
   display: grid;
-  gap: 8px;
-  padding: 10px 12px 12px;
+  align-content: start;
+  gap: 0;
+  padding: 4px 6px 8px;
   font-family: var(--font-mono);
 }
 
@@ -246,26 +247,52 @@
 }
 
 .preview-console-entry {
+  --console-indent: 0;
   display: grid;
-  gap: 4px;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-left-width: 3px;
+  gap: 2px;
+  padding: 3px 8px 3px calc(8px + var(--console-indent) * 16px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-left: 3px solid transparent;
+  background: transparent;
+}
+
+.preview-console-entry[hidden] {
+  display: none;
 }
 
 .preview-console-entry.log,
+.preview-console-entry.debug {
+  border-left-color: rgba(88, 166, 255, 0.35);
+}
+
 .preview-console-entry.info {
   border-left-color: rgba(88, 166, 255, 0.72);
 }
 
 .preview-console-entry.warn {
-  border-left-color: rgba(240, 136, 62, 0.72);
+  border-left-color: rgba(240, 136, 62, 0.8);
+  background: rgba(240, 136, 62, 0.06);
 }
 
 .preview-console-entry.error {
-  border-left-color: rgba(248, 81, 73, 0.8);
+  border-left-color: rgba(248, 81, 73, 0.85);
+  background: rgba(248, 81, 73, 0.07);
+}
+
+.preview-console-entry.kind-command {
+  color: var(--text-secondary);
+}
+
+.preview-console-entry.kind-console-clear .preview-console-entry-message {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.preview-console-entry-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
 }
 
 .preview-console-entry-meta {
@@ -276,6 +303,8 @@
 }
 
 .preview-console-entry-message {
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
@@ -283,10 +312,43 @@
   color: var(--text-primary);
 }
 
+.preview-console-entry.warn .preview-console-entry-message {
+  color: #fcd9b6;
+}
+
+.preview-console-entry.error .preview-console-entry-message {
+  color: #ffc9c4;
+}
+
+.preview-console-entry-badge {
+  flex: 0 0 auto;
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(88, 166, 255, 0.22);
+  color: #cfe5ff;
+  font: 600 10px/16px var(--font-mono);
+  text-align: center;
+}
+
+.preview-console-entry-badge[hidden] {
+  display: none;
+}
+
+.preview-console-entry-location {
+  flex: 0 1 auto;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font: calc(var(--preview-console-font-size) - 1px)/1.5 var(--font-mono);
+}
+
 .preview-console-entry-stack {
   display: grid;
-  gap: 2px;
-  padding-top: 2px;
+  gap: 1px;
+  padding: 2px 0 2px 14px;
 }
 
 .preview-console-entry-stack-frame {
@@ -294,6 +356,173 @@
   font: calc(var(--preview-console-font-size) - 1px)/1.45 var(--font-mono);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.preview-console-group-toggle {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: 10px/18px var(--font-mono);
+}
+
+.preview-console-group-toggle::before {
+  content: '▼';
+}
+
+.preview-console-entry.is-group-collapsed .preview-console-group-toggle::before {
+  content: '▶';
+}
+
+.preview-console-entry.is-group-header .preview-console-entry-message {
+  font-weight: 600;
+}
+
+/* Values (Chrome-like colours) */
+.console-value {
+  white-space: pre-wrap;
+}
+
+.console-string { color: #f0a46c; }
+.console-number,
+.console-bigint { color: #9fb8ff; }
+.console-boolean,
+.console-null,
+.console-undefined { color: #c39bff; }
+.console-symbol { color: #7ee0d1; }
+.console-function,
+.console-class { color: #e8d48b; font-style: italic; }
+.console-error { color: #ffb4ad; }
+.console-node { color: #8fd3ff; }
+.console-exception { color: #ff9b94; }
+
+.console-key {
+  color: #c49cf2;
+}
+
+.console-key.is-internal {
+  color: #8b949e;
+}
+
+.console-key.is-dimmed,
+.console-tree-row.is-dimmed > .console-tree-leaf > .console-key {
+  opacity: 0.65;
+}
+
+.console-tree {
+  display: inline;
+}
+
+.console-tree.is-open {
+  display: inline-block;
+  vertical-align: top;
+  width: 100%;
+}
+
+.console-tree-label {
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.console-tree-label:hover,
+.console-tree-label:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+
+.console-tree-arrow {
+  display: inline-block;
+  width: 12px;
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+.console-tree-arrow::before {
+  content: '▶';
+}
+
+.console-tree.is-open > .console-tree-label > .console-tree-arrow::before {
+  content: '▼';
+}
+
+.console-tree-children {
+  display: grid;
+  gap: 1px;
+  padding-left: 14px;
+  border-left: 1px solid rgba(255, 255, 255, 0.07);
+  margin-left: 5px;
+}
+
+.console-tree-children[hidden] {
+  display: none;
+}
+
+.console-tree-row {
+  min-width: 0;
+  padding-left: 12px;
+}
+
+.console-tree-row > .console-tree {
+  margin-left: -12px;
+}
+
+.console-tree-more,
+.console-tree-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.console-tree-error {
+  color: #ffb4ad;
+}
+
+.console-getter {
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+}
+
+.console-getter:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+.preview-console-table-wrapper {
+  overflow: auto;
+  max-height: 320px;
+  margin: 2px 0;
+}
+
+.preview-console-table {
+  border-collapse: collapse;
+  font: calc(var(--preview-console-font-size) - 1px)/1.4 var(--font-mono);
+  color: var(--text-primary);
+}
+
+.preview-console-table th,
+.preview-console-table td {
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.preview-console-table th {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.preview-console-table-note {
+  color: var(--text-muted);
+  font: 11px/1.4 var(--font-mono);
 }
 
 .preview-console-form {

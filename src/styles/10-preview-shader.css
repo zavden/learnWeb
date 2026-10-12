@@ -10,7 +10,7 @@
 .preview-shader-summary {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
 
 .preview-shader-metric {
@@ -65,9 +65,10 @@
 
 .preview-shader-uniforms-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 4px 12px;
   padding: 10px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.02);
@@ -76,12 +77,20 @@
 }
 
 .preview-shader-updated {
+  min-width: 0;
   color: var(--text-muted);
   font: 11px/1.3 var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.preview-shader-uniforms-header > strong {
+  flex: 0 0 auto;
 }
 
 .preview-shader-uniforms-header-meta {
   display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
@@ -151,6 +160,11 @@
   outline: none;
 }
 
+.preview-shader-summary .preview-shader-select {
+  min-width: 0;
+  width: 100%;
+}
+
 .preview-shader-select:focus {
   border-color: rgba(63, 185, 80, 0.4);
 }
@@ -158,7 +172,7 @@
 .preview-shader-summary-preset {
   display: grid;
   gap: 6px;
-  min-width: 220px;
+  min-width: 0;
   align-content: start;
   padding: 10px 12px;
   border: 1px solid rgba(63, 185, 80, 0.16);

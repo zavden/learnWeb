@@ -11,6 +11,8 @@ Este repositorio incluye guias para que cualquier agente de IA pueda trabajar co
 
 ### Creacion de contenido para material/
 
+- [skills/learnweb-course-authoring/SKILL.md](skills/learnweb-course-authoring/SKILL.md) — curso «Web a fondo» (ch02+): plan, estructura por modulos, convenciones, verificacion; capacidades del runtime en `references/runtime.md`
+
 - [skills/learnweb-example-authoring/SKILL.md](skills/learnweb-example-authoring/SKILL.md) — referencia completa de todos los formatos de ejemplo (vanilla, React, Vue, SVG, HTML-FULL, shader, ejercicio), frontmatter, virtual files
 - [skills/learnweb-theory-authoring/SKILL.md](skills/learnweb-theory-authoring/SKILL.md) — como escribir y editar archivos main.md de teoria
 - [skills/learnweb-shader-authoring/SKILL.md](skills/learnweb-shader-authoring/SKILL.md) — referencia completa de shaders WebGL, uniforms, texturas
@@ -34,6 +36,7 @@ Antes de editar, identifica el tipo de tarea:
 | Crear/editar ejemplos | `skills/learnweb-example-authoring/SKILL.md` |
 | Crear/editar teoria | `skills/learnweb-theory-authoring/SKILL.md` |
 | Crear/editar shaders | `skills/learnweb-shader-authoring/SKILL.md` |
+| Escribir el curso (ch02+) | `skills/learnweb-course-authoring/SKILL.md` |
 | Editor UI | `src/components/Editor.js` + `src/components/editor/` |
 | Preview/runtime | `src/components/Preview.js` + `src/utils/renderer/` |
 | Parsing/serializacion | `src/utils/markdown/` |
@@ -58,7 +61,8 @@ Para el mapa detallado: [hotspots.md](skills/learnweb-repo-editing/references/ho
 | Tipo de cambio | Comando |
 |----------------|---------|
 | Contenido puro (material/) | Verificacion de formato o ninguno |
-| Parser, metadata, editor, preview, backend | `npm test` (143 tests) |
+| Parser, metadata, editor, preview, backend | `npm test` (223 tests) |
+| Course content (material/ch02+) | `node scripts/check-material.mjs material/<capitulo>/<seccion>` |
 | UI/runtime | `npm run build` |
 
 ## Al Terminar

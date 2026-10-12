@@ -189,6 +189,11 @@ export const diagnosticsMixin = {
         const message = document.createElement('div');
         message.className = 'diagnostic-item-message';
         message.textContent = diagnostic.message;
+        if (String(diagnostic.message || '').includes('\n')) {
+            // Compiler messages (Sass, Pug, TypeScript) can be multi-line code frames.
+            message.style.whiteSpace = 'pre-wrap';
+            message.style.fontFamily = 'var(--font-mono, monospace)';
+        }
 
         const meta = document.createElement('div');
         meta.className = 'diagnostic-item-meta';

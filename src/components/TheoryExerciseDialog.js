@@ -3,6 +3,25 @@ import { compileExample } from '../utils/compileClient.js';
 import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../utils/exampleRenderer.js';
 import { getExampleEditorialMetadata, isShaderDocument, parseExampleDocument } from '../utils/markdown.js';
 
+function buildConsoleTable({ header, rows }) {
+    const table = document.createElement('table');
+    table.className = 'theory-exercise-dialog-console-table';
+    const headRow = table.createTHead().insertRow();
+    header.forEach((label) => {
+        const cell = document.createElement('th');
+        cell.textContent = String(label);
+        headRow.appendChild(cell);
+    });
+    const body = table.createTBody();
+    rows.slice(0, 200).forEach((cells) => {
+        const row = body.insertRow();
+        cells.forEach((value) => {
+            row.insertCell().textContent = String(value ?? '');
+        });
+    });
+    return table;
+}
+
 export class TheoryExerciseDialog {
     constructor({ onOpenExample } = {}) {
         this.onOpenExample = onOpenExample;
@@ -17,9 +36,25 @@ export class TheoryExerciseDialog {
         this.currentRequest = null;
         this.currentTopicPath = '';
         this.currentFilename = '';
+        this.currentFrame = null;
+        this.consoleList = null;
+        this.consoleCount = 0;
+        this.renderCount = 0;
+
+        // Console output of the previewed example (theory pages have no console of their own).
+        window.addEventListener('message', (event) => this._handleFrameMessage(event));
 
         this.btnClose?.addEventListener('click', () => this.dialog?.close());
         this.btnCloseIcon?.addEventListener('click', () => this.dialog?.close());
+        // Remove the live preview on close so it stops running in the background.
+        this.dialog?.addEventListener('close', () => {
+            this.currentRequest = null;
+            this.currentFrame = null;
+            this.consoleList = null;
+            if (this.stage) {
+                this.stage.innerHTML = '';
+            }
+        });
         this.btnOpen?.addEventListener('click', async () => {
             if (!this.currentTopicPath || !this.currentFilename) return;
             this.dialog?.close();
@@ -51,6 +86,8 @@ export class TheoryExerciseDialog {
             const editorial = getExampleEditorialMetadata(documentModel);
             const iframe = document.createElement('iframe');
             iframe.sandbox = 'allow-scripts';
+            this.renderCount += 1;
+            const renderId = this.renderCount;
 
             if (isShaderDocument(documentModel)) {
                 iframe.srcdoc = renderShaderExampleDocument(documentModel, {
@@ -68,11 +105,17 @@ export class TheoryExerciseDialog {
                 iframe.srcdoc = renderCompiledExampleDocument(
                     result.compiledDocument,
                     this.currentTopicPath,
-                    result.compileDiagnostics || []
+                    result.compileDiagnostics || [],
+                    { consoleEnabled: true, renderId }
                 );
             }
 
+            // Script-only examples have nothing to show on the page: give the space to the console.
+            const consoleOnly = !isShaderDocument(documentModel)
+                && !(documentModel.blocks || []).some((block) => block.slot === 'markup' && String(block.content || '').trim());
+
             this._renderPreview({
+                consoleOnly,
                 description: editorial.description || '',
                 iframe,
                 path: `/${this.currentTopicPath}/examples/${this.currentFilename}`,
@@ -105,13 +148,57 @@ export class TheoryExerciseDialog {
         this.btnOpen.disabled = true;
     }
 
-    _renderPreview({ iframe, title, description, path }) {
+    _renderPreview({ iframe, title, description, path, consoleOnly = false }) {
         if (!this.stage || !this.empty || !this.title || !this.note || !this.btnOpen) return;
         this.stage.innerHTML = '';
+        this.stage.classList.toggle('is-console-only', consoleOnly);
+        this.currentFrame = iframe;
+        this.consoleCount = 0;
+        this.consoleList = document.createElement('ol');
+        this.consoleList.className = 'theory-exercise-dialog-console hidden';
+        this.consoleList.setAttribute('aria-label', 'Console output');
         this.stage.appendChild(iframe);
+        this.stage.appendChild(this.consoleList);
         this.empty.classList.add('hidden');
         this.title.textContent = title || this.currentFilename || 'Exercise Preview';
         this.note.textContent = description || path || 'Interactive preview of the referenced exercise.';
         this.btnOpen.disabled = false;
+    }
+
+    _handleFrameMessage(event) {
+        const data = event?.data;
+        if (!data || data.source !== 'learncode-preview' || !this.currentFrame || !this.consoleList) return;
+        if (event.source !== this.currentFrame.contentWindow) return;
+
+        if (data.kind === 'console-clear') {
+            this.consoleList.replaceChildren();
+            this.consoleCount = 0;
+            this.consoleList.classList.add('hidden');
+            return;
+        }
+        if (!['console', 'runtime-error', 'unhandled-rejection'].includes(data.kind)) return;
+        if (this.consoleCount >= 500) return;
+
+        const level = ['error', 'warn', 'info', 'debug'].includes(data.level) ? data.level : 'log';
+        const item = document.createElement('li');
+        item.className = `theory-exercise-dialog-console-entry is-${level}`;
+        const depth = Array.isArray(data.groups) ? data.groups.length : 0;
+        if (depth > 0) item.style.paddingInlineStart = `${10 + depth * 14}px`;
+        let text = String(data.text ?? (Array.isArray(data.values) ? data.values.join(' ') : ''));
+        if (data.kind === 'runtime-error' && data.line) text += `  (line ${data.line})`;
+        item.textContent = text;
+        if (data.table && Array.isArray(data.table.header) && Array.isArray(data.table.rows)) {
+            item.appendChild(buildConsoleTable(data.table));
+        }
+        this.consoleList.appendChild(item);
+        this.consoleCount += 1;
+        this.consoleList.classList.remove('hidden');
+        if (this.consoleCount === 500) {
+            const note = document.createElement('li');
+            note.className = 'theory-exercise-dialog-console-entry is-info';
+            note.textContent = '… more output in the editor (Open Exercise).';
+            this.consoleList.appendChild(note);
+        }
+        this.consoleList.scrollTop = this.consoleList.scrollHeight;
     }
 }

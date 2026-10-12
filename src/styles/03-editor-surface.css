@@ -586,6 +586,21 @@
   outline: none;
 }
 
+/* Unsaved-changes indicator (dot before the filename + accent on Modify). */
+.editor-preview-filename-display.is-dirty::before {
+  content: '\25CF';
+  display: inline-block;
+  margin-right: 5px;
+  color: #f0883e;
+  font-size: 9px;
+  vertical-align: 1px;
+}
+
+#btn-modify.is-dirty:not(:disabled) {
+  border-color: rgba(240, 136, 62, 0.65);
+  box-shadow: inset 0 0 0 1px rgba(240, 136, 62, 0.25);
+}
+
 .font-controls .btn-layout-toggle {
   padding-inline: 8px;
 }

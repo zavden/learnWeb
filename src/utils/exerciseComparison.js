@@ -38,33 +38,132 @@ function summarizeRows(rows = []) {
     });
 }
 
+// Above this many DP cells the middle section falls back to a positional comparison.
+const MAX_LINE_DIFF_CELLS = 2_000_000;
+
+// Line diff based on the longest common subsequence. Returns edit operations in order:
+// { type: 'same' | 'removed' | 'added', attemptIndex, solutionIndex }.
+function diffLines(attemptLines = [], solutionLines = []) {
+    const operations = [];
+    let prefix = 0;
+
+    while (
+        prefix < attemptLines.length
+        && prefix < solutionLines.length
+        && attemptLines[prefix] === solutionLines[prefix]
+    ) {
+        operations.push({ type: 'same', attemptIndex: prefix, solutionIndex: prefix });
+        prefix += 1;
+    }
+
+    let attemptEnd = attemptLines.length;
+    let solutionEnd = solutionLines.length;
+    const suffix = [];
+
+    while (
+        attemptEnd > prefix
+        && solutionEnd > prefix
+        && attemptLines[attemptEnd - 1] === solutionLines[solutionEnd - 1]
+    ) {
+        attemptEnd -= 1;
+        solutionEnd -= 1;
+        suffix.unshift({ type: 'same', attemptIndex: attemptEnd, solutionIndex: solutionEnd });
+    }
+
+    const attemptCount = attemptEnd - prefix;
+    const solutionCount = solutionEnd - prefix;
+
+    if (attemptCount > 0 || solutionCount > 0) {
+        if (attemptCount === 0 || solutionCount === 0 || (attemptCount + 1) * (solutionCount + 1) > MAX_LINE_DIFF_CELLS) {
+            for (let index = 0; index < attemptCount; index += 1) {
+                operations.push({ type: 'removed', attemptIndex: prefix + index, solutionIndex: null });
+            }
+            for (let index = 0; index < solutionCount; index += 1) {
+                operations.push({ type: 'added', attemptIndex: null, solutionIndex: prefix + index });
+            }
+        } else {
+            const width = solutionCount + 1;
+            const lengths = new Uint32Array((attemptCount + 1) * width);
+
+            for (let i = attemptCount - 1; i >= 0; i -= 1) {
+                for (let j = solutionCount - 1; j >= 0; j -= 1) {
+                    lengths[i * width + j] = attemptLines[prefix + i] === solutionLines[prefix + j]
+                        ? lengths[(i + 1) * width + j + 1] + 1
+                        : Math.max(lengths[(i + 1) * width + j], lengths[i * width + j + 1]);
+                }
+            }
+
+            let i = 0;
+            let j = 0;
+            while (i < attemptCount && j < solutionCount) {
+                if (attemptLines[prefix + i] === solutionLines[prefix + j]) {
+                    operations.push({ type: 'same', attemptIndex: prefix + i, solutionIndex: prefix + j });
+                    i += 1;
+                    j += 1;
+                } else if (lengths[(i + 1) * width + j] >= lengths[i * width + j + 1]) {
+                    operations.push({ type: 'removed', attemptIndex: prefix + i, solutionIndex: null });
+                    i += 1;
+                } else {
+                    operations.push({ type: 'added', attemptIndex: null, solutionIndex: prefix + j });
+                    j += 1;
+                }
+            }
+            for (; i < attemptCount; i += 1) {
+                operations.push({ type: 'removed', attemptIndex: prefix + i, solutionIndex: null });
+            }
+            for (; j < solutionCount; j += 1) {
+                operations.push({ type: 'added', attemptIndex: null, solutionIndex: prefix + j });
+            }
+        }
+    }
+
+    return operations.concat(suffix);
+}
+
 function buildComparisonRows(attemptContent = '', solutionContent = '') {
     const attemptLines = splitLines(attemptContent);
     const solutionLines = splitLines(solutionContent);
-    const length = Math.max(attemptLines.length, solutionLines.length, 1);
+    const operations = diffLines(attemptLines, solutionLines);
     const rows = [];
+    let removedRun = [];
+    let addedRun = [];
 
-    for (let index = 0; index < length; index += 1) {
-        const attemptText = attemptLines[index] ?? '';
-        const solutionText = solutionLines[index] ?? '';
+    const createRow = (attemptIndex, solutionIndex, state) => ({
+        attemptLineNumber: attemptIndex == null ? null : attemptIndex + 1,
+        attemptText: attemptIndex == null ? '' : attemptLines[attemptIndex],
+        solutionLineNumber: solutionIndex == null ? null : solutionIndex + 1,
+        solutionText: solutionIndex == null ? '' : solutionLines[solutionIndex],
+        state,
+    });
 
-        let state = 'same';
-        if (index >= attemptLines.length) {
-            state = 'added';
-        } else if (index >= solutionLines.length) {
-            state = 'removed';
-        } else if (attemptText !== solutionText) {
-            state = 'changed';
+    // Within a run of edits, pair removed and added lines side by side as "changed" rows,
+    // then list whatever is left over.
+    const flushRuns = () => {
+        const pairedCount = Math.min(removedRun.length, addedRun.length);
+        for (let index = 0; index < pairedCount; index += 1) {
+            rows.push(createRow(removedRun[index], addedRun[index], 'changed'));
+        }
+        removedRun.slice(pairedCount).forEach((attemptIndex) => rows.push(createRow(attemptIndex, null, 'removed')));
+        addedRun.slice(pairedCount).forEach((solutionIndex) => rows.push(createRow(null, solutionIndex, 'added')));
+        removedRun = [];
+        addedRun = [];
+    };
+
+    operations.forEach((operation) => {
+        if (operation.type === 'removed') {
+            removedRun.push(operation.attemptIndex);
+            return;
         }
 
-        rows.push({
-            attemptLineNumber: index < attemptLines.length ? index + 1 : null,
-            attemptText,
-            solutionLineNumber: index < solutionLines.length ? index + 1 : null,
-            solutionText,
-            state,
-        });
-    }
+        if (operation.type === 'added') {
+            addedRun.push(operation.solutionIndex);
+            return;
+        }
+
+        flushRuns();
+        rows.push(createRow(operation.attemptIndex, operation.solutionIndex, 'same'));
+    });
+    flushRuns();
 
     return {
         rows,

@@ -83,6 +83,32 @@ export function getVimModeLabelFromEvent(event = {}) {
     return 'NORMAL';
 }
 
+// True while Vim is collecting a multi-key command (e.g. `f`, `r`, `t`, `m`,
+// a register prefix, a count, or an operator waiting for its motion). In that
+// state the next key belongs to Vim, so app shortcuts must not intercept it.
+export function isVimAwaitingInput(vimState = null) {
+    if (!vimState || vimState.insertMode) return false;
+
+    const inputState = vimState.inputState || null;
+    if (!inputState) return false;
+
+    const keyBuffer = inputState.keyBuffer;
+    const hasBufferedKeys = Array.isArray(keyBuffer)
+        ? keyBuffer.length > 0
+        : Boolean(keyBuffer && String(keyBuffer).length > 0);
+
+    return hasBufferedKeys || Boolean(inputState.operator);
+}
+
+export function resolvePanelFocusDirection(key = '', config = null) {
+    const panelShift = config?.panels?.shift || {};
+    const normalizedKey = String(key || '');
+    if (!normalizedKey) return '';
+    if (normalizedKey === String(panelShift.movePanelDown || '')) return 'down';
+    if (normalizedKey === String(panelShift.movePanelUp || '')) return 'up';
+    return '';
+}
+
 export function createVimExtension() {
     ensureVimExCommandsRegistered();
     installRegisterControllerBridge();
@@ -165,6 +191,7 @@ export function bindVimView(view, {
     const handleKeydown = (event) => {
         if (leaderStage !== 0) return;
         if (cm.state?.vim?.insertMode) return;
+        if (isVimAwaitingInput(cm.state?.vim)) return;
         if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
 
         const panelsLayout = typeof isPanelsLayout === 'function' ? Boolean(isPanelsLayout()) : false;
@@ -180,17 +207,15 @@ export function bindVimView(view, {
             && !event.altKey
             && typeof onMovePanelFocus === 'function'
         ) {
-            let direction = '';
-            if (event.key === 'J') direction = 'down';
-            if (event.key === 'K') direction = 'up';
+            const direction = resolvePanelFocusDirection(event.key, shortcutConfig);
 
             if (direction) {
-                const consumed = onMovePanelFocus(direction);
-                if (consumed) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    return;
-                }
+                // Always consume the configured panel-navigation key so Vim's
+                // native command for it (e.g. `J` = join lines) never runs by surprise.
+                event.preventDefault();
+                event.stopPropagation();
+                onMovePanelFocus(direction);
+                return;
             }
         }
 
@@ -262,6 +287,11 @@ export function bindVimView(view, {
     const handleLeaderKeydown = (event) => {
         if (cm.state?.vim?.insertMode) {
             clearLeaderPending();
+            return;
+        }
+
+        if (leaderStage === 0 && isVimAwaitingInput(cm.state?.vim)) {
+            // e.g. `f<Space>`, `r<Space>`: the space is Vim's argument, not the leader.
             return;
         }
 

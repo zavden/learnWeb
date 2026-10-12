@@ -11,7 +11,10 @@ import { FavoritesDialog } from './components/FavoritesDialog.js';
 import { PendingDialog } from './components/PendingDialog.js';
 import { Gallery } from './components/Gallery.js';
 import { TheoryExerciseDialog } from './components/TheoryExerciseDialog.js';
+import { AssetsDialog } from './components/AssetsDialog.js';
 import { formatExampleRatingStars, getExampleImportanceMeta } from './utils/exampleEditorial.js';
+import { showToast } from './components/editor/toast.js';
+import { buildDiscardChangesMessage } from './components/editor/dirtyTracker.js';
 import {
     addFavorite,
     addPending,
@@ -55,6 +58,12 @@ class App {
         this.favoriteEntries = [];
         this.pendingPaths = new Set();
         this.pendingEntries = [];
+        // Session persistence stays off until the saved session has been restored,
+        // otherwise bootstrap side effects overwrite it before it is read.
+        this._sessionPersistenceReady = false;
+        this._theoryViewerRenderTimer = 0;
+        this._theoryViewerStale = false;
+        this.theoryViewerRenderDelayMs = 700;
 
         // UI Elements for View Switching
         this.appShell = document.getElementById('app');
@@ -127,7 +136,7 @@ class App {
             onCodeChange: (documentModel) => {
                 this.exercisePanel.render(this.editor.getExercisePresentation());
                 if (this.editor.isEditingTheoryDocument()) {
-                    this.theoryViewer.renderContent(this.editor.getTheoryContent());
+                    this._scheduleTheoryViewerRender();
                 }
                 this._syncPreviewEditorialSummary();
                 this.preview.update(documentModel, {
@@ -156,7 +165,13 @@ class App {
             onToggleShaderPause: () => {
                 this.preview?.toggleShaderPause?.();
             },
-            onTogglePreviewAutoRender: () => this.preview.toggleAutoRender(),
+            onTogglePreviewAutoRender: () => {
+                const enabled = this.preview.toggleAutoRender();
+                if (enabled) {
+                    this._flushTheoryViewerRender({ onlyIfStale: true });
+                }
+                return enabled;
+            },
             onToggleConsole: () => this.preview.toggleConsole(),
             onOpenShaderTextures: () => {
                 this.editor?.openShaderTextureDialog?.();
@@ -171,29 +186,43 @@ class App {
                 this._setSidebarCollapsed(nextState);
             },
             onCenterWorkspace: () => this._centerWorkspaceSplit(),
-            onRename: () => {
-                if (this.currentTopicPath) {
-                    this.gallery.load(this.currentTopicPath);
-                }
-            }
+            onExampleListChanged: (change) => this._handleExampleListChanged(change),
         });
 
         this.gallery = new Gallery({
-            onExampleSelect: (filename) => this.loadExample(filename),
+            getTopicLabel: (topicPath) => this.sidebar?.describeTopic?.(topicPath) || '',
+            onExampleSelect: (filename) => this._openExampleFromGallery(filename),
+            onExampleDeleted: (topicPath, filename) => this._handleExampleListChanged({
+                reason: 'deleted',
+                filename,
+                topicPath,
+                source: 'gallery',
+            }),
         });
 
         this.favoritesDialog = new FavoritesDialog({
+            getTopicLabel: (topicPath) => this.sidebar?.describeTopic?.(topicPath) || '',
             onExampleSelect: (topicPath, filename) => this._openFavoriteExample(topicPath, filename),
             onRemoveFavorite: (favoritePath) => this._removeFavoritePath(favoritePath),
         });
 
         this.pendingDialog = new PendingDialog({
+            getTopicLabel: (topicPath) => this.sidebar?.describeTopic?.(topicPath) || '',
             onExampleSelect: (topicPath, filename) => this._openPendingExample(topicPath, filename),
             onRemovePending: (pendingPath) => this._removePendingPath(pendingPath),
         });
 
         this.theoryExerciseDialog = new TheoryExerciseDialog({
             onOpenExample: (topicPath, filename) => this._openTheoryExercise(topicPath, filename),
+        });
+
+        this.assetsDialog = new AssetsDialog();
+        this.btnGalleryAssets = document.getElementById('btn-gallery-assets');
+        this.btnGalleryAssets?.addEventListener('click', () => {
+            if (!this.currentTopicPath) return;
+            this.assetsDialog.open(this.currentTopicPath, {
+                topicLabel: this.sidebar.findTopic(this.currentTopicPath)?.label || '',
+            });
         });
 
         this.theoryViewer = new TheoryViewer({
@@ -212,6 +241,17 @@ class App {
             onVimDefaultToggle: (enabled) => this._handleVimDefaultToggle(enabled),
         });
         this.sidebar.setPreviewInfoVisible(this.previewEditorialSummaryVisible);
+
+        window.addEventListener('beforeunload', (event) => {
+            if (!this._hasUnsavedWork()) return;
+            event.preventDefault();
+            event.returnValue = '';
+        });
+
+        // Re-render a stale theory panel as soon as it becomes visible.
+        this.theoryViewer.btnTheory?.addEventListener('click', () => {
+            window.requestAnimationFrame(() => this._flushTheoryViewerRender({ onlyIfStale: true }));
+        });
 
         // Gallery Button
         const btnGallery = document.getElementById('btn-gallery');
@@ -252,24 +292,123 @@ class App {
     }
 
     async _bootstrap() {
-        await this.sidebar.load();
-        await this._loadClipboardDefaultState();
-        await this._loadVimDefaultState({ persist: false });
-        await this._loadVimShortcutConfig();
-        await this._loadFavorites();
-        await this._loadPending();
-        await this._restoreSessionState();
+        // Read the saved session before anything below can persist a fresh one.
+        const sessionState = this._readSessionState();
+        this._sessionPersistenceReady = false;
+
+        try {
+            await this.sidebar.load();
+            await this._loadClipboardDefaultState();
+            await this._loadVimDefaultState({ persist: false });
+            await this._loadVimShortcutConfig();
+            await this._loadFavorites();
+            await this._loadPending();
+            await this._restoreSessionState(sessionState);
+        } finally {
+            this._sessionPersistenceReady = true;
+        }
+
+        this._persistSessionState();
         this._showPendingOnStartup();
     }
 
     _showPendingOnStartup() {
-        if (this.pendingEntries.length === 0) return;
         if (this.currentTopicPath) return;
 
+        const existingEntries = this.pendingEntries.filter((entry) => entry?.exists);
+        if (existingEntries.length === 0) return;
+
         this.showGallery();
-        this.gallery.renderPendingEntries(this.pendingEntries, {
+        this.gallery.renderPendingEntries(existingEntries, {
             onOpenEntry: (topicPath, filename) => this._openPendingExample(topicPath, filename),
         });
+    }
+
+    // ── Unsaved changes guard ──
+
+    _hasUnsavedWork() {
+        if (this.editor?.hasUnsavedChanges?.()) return true;
+        return this.theoryReturnState?.snapshot?.dirty === true;
+    }
+
+    _confirmDiscardUnsavedChanges(actionLabel = 'continue') {
+        if (!this._hasUnsavedWork()) return true;
+
+        const label = this.editor?.hasUnsavedChanges?.()
+            ? this.editor.getDocumentLabel()
+            : 'The example you were editing before opening the theory';
+        return window.confirm(buildDiscardChangesMessage(label, actionLabel));
+    }
+
+    async _openExampleFromGallery(filename) {
+        if (!this._confirmDiscardUnsavedChanges(`open "${filename}"`)) return;
+        this.theoryReturnState = null;
+        await this.loadExample(filename, { skipGuard: true });
+    }
+
+    async _handleExampleListChanged({ reason = '', filename = '', topicPath = '', source = 'editor' } = {}) {
+        const affectsCurrentTopic = Boolean(topicPath) && topicPath === this.currentTopicPath;
+
+        if (
+            reason === 'deleted'
+            && source === 'gallery'
+            && affectsCurrentTopic
+            && this.editor?.currentFilename === filename
+            && !this.editor?.isEditingTheoryDocument?.()
+        ) {
+            // The example open in the editor no longer exists on disk.
+            this.editor.clearCurrentExample();
+        }
+
+        await Promise.all([this._loadFavorites(), this._loadPending()]);
+
+        if (affectsCurrentTopic && source !== 'gallery') {
+            if (reason === 'deleted') {
+                // The deleted example was open in the editor: go back to the topic gallery.
+                this.showGallery();
+            }
+            await this.gallery.load(this.currentTopicPath, { preserveScroll: true });
+        }
+
+        this._syncCurrentExampleFavoriteState();
+        this._syncCurrentExamplePendingState();
+        this._persistSessionState();
+    }
+
+    // ── Theory viewer live render (debounced while editing main.md) ──
+
+    _isTheoryPanelVisible() {
+        return Boolean(this.theoryViewer?.panel) && !this.theoryViewer.panel.classList.contains('hidden');
+    }
+
+    _scheduleTheoryViewerRender() {
+        this._theoryViewerStale = true;
+        window.clearTimeout(this._theoryViewerRenderTimer);
+        this._theoryViewerRenderTimer = 0;
+
+        // Respect the preview auto-render toggle and skip work while the panel is hidden;
+        // stale content is rendered when the panel is shown or theory editing ends.
+        if (this.preview?.isAutoRenderEnabled?.() === false) return;
+        if (!this._isTheoryPanelVisible()) return;
+
+        this._theoryViewerRenderTimer = window.setTimeout(() => {
+            this._theoryViewerRenderTimer = 0;
+            this._flushTheoryViewerRender();
+        }, this.theoryViewerRenderDelayMs);
+    }
+
+    _flushTheoryViewerRender({ onlyIfStale = false } = {}) {
+        if (onlyIfStale && !this._theoryViewerStale) return;
+        if (onlyIfStale && !this._isTheoryPanelVisible()) return;
+        if (!this.editor?.isEditingTheoryDocument?.()) {
+            this._theoryViewerStale = false;
+            return;
+        }
+
+        window.clearTimeout(this._theoryViewerRenderTimer);
+        this._theoryViewerRenderTimer = 0;
+        this._theoryViewerStale = false;
+        this.theoryViewer.renderContent(this.editor.getTheoryContent());
     }
 
     async _loadVimShortcutConfig() {
@@ -279,6 +418,7 @@ class App {
 
             if (Array.isArray(state?.warnings) && state.warnings.length > 0) {
                 console.warn('Falling back to default Vim shortcuts.', state.warnings.join(' | '));
+                showToast(`vim-shortcuts.yaml ignored (using defaults): ${state.warnings[0]}`, 'warning');
             }
         } catch (error) {
             console.error('Failed to load vim-shortcuts.yaml.', error);
@@ -304,17 +444,28 @@ class App {
         if (this.editor?.isEditingTheoryDocument?.()) {
             const saved = await this.editor.saveTheoryDocument();
             if (!saved) return;
+            if (
+                this.theoryReturnState?.snapshot?.dirty
+                && !window.confirm(buildDiscardChangesMessage(
+                    'The example you were editing before opening the theory',
+                    `open "${normalizedFilename}"`,
+                ))
+            ) {
+                return;
+            }
             this.theoryReturnState = null;
             this._syncTheoryEditorUi();
+        } else if (!this._confirmDiscardUnsavedChanges(`open "${normalizedFilename}"`)) {
+            return;
         }
 
         this.theoryViewer?.hide?.();
 
         if (normalizedTopicPath !== this.currentTopicPath) {
-            await this.selectTopic(normalizedTopicPath, normalizedTopicPath, { persist: false });
+            await this.selectTopic(normalizedTopicPath, normalizedTopicPath, { persist: false, skipGuard: true });
         }
 
-        await this.loadExample(normalizedFilename);
+        await this.loadExample(normalizedFilename, { skipGuard: true });
     }
 
     async _openTheoryExercisePreview(topicPath, filename) {
@@ -371,7 +522,16 @@ class App {
         }
     }
 
-    async selectTopic(topicPath, label, { persist = true } = {}) {
+    async selectTopic(topicPath, label, { persist = true, skipGuard = false } = {}) {
+        if (!skipGuard && !this._confirmDiscardUnsavedChanges('switch topic')) {
+            // Keep the sidebar highlight on the topic that is still open.
+            this.sidebar.setActive(this.currentTopicPath);
+            return false;
+        }
+
+        this.theoryReturnState = null;
+        window.clearTimeout(this._theoryViewerRenderTimer);
+        this._theoryViewerStale = false;
         this.sidebar.setActive(topicPath);
         this.currentTopicPath = topicPath;
 
@@ -379,24 +539,46 @@ class App {
         this.editor.setTopicPath(topicPath);
         this.preview.setTopicPath(topicPath);
         this.gallery.currentTopicPath = topicPath;
+        if (this.btnGalleryAssets) this.btnGalleryAssets.disabled = !topicPath;
+        const topicLabel = this.sidebar.findTopic(topicPath)?.label || label || '';
+        this.gallery.setHeading(topicLabel ? `Examples · ${topicLabel}` : 'Examples');
 
         // Load theory content
         this.theoryViewer.load(topicPath);
         this.exercisePanel.clear();
 
-        await this.gallery.load(topicPath);
         this.showGallery();
+        await this.gallery.load(topicPath);
+        if (this.currentTopicPath !== topicPath) return false;
         this._syncCurrentExampleFavoriteState();
         this._syncCurrentExamplePendingState();
 
         if (persist) {
             this._persistSessionState();
         }
+
+        return true;
     }
 
-    async loadExample(filename, { persist = true } = {}) {
+    async loadExample(filename, { persist = true, skipGuard = false } = {}) {
+        if (!skipGuard && !this._confirmDiscardUnsavedChanges(`open "${filename}"`)) return false;
+
         this.showEditor();
-        await this.editor.loadExample(filename);
+        let loaded = false;
+        try {
+            loaded = await this.editor.loadExample(filename);
+        } catch (error) {
+            console.error(`Failed to load example "${filename}".`, error);
+            showToast(`Could not open ${filename}: ${error.message}`, 'error');
+            if (this.currentTopicPath) {
+                this.showGallery();
+            }
+            return false;
+        }
+        if (loaded && !this.editor.isEditingTheoryDocument()) {
+            // A different example replaced whatever the theory editor would return to.
+            this.theoryReturnState = null;
+        }
         this._syncTheoryEditorUi();
         this._syncCurrentExampleFavoriteState();
         this._syncCurrentExamplePendingState();
@@ -404,6 +586,8 @@ class App {
         if (persist) {
             this._persistSessionState();
         }
+
+        return loaded;
     }
 
     async openTheoryEditor({ persist = true } = {}) {
@@ -420,6 +604,7 @@ class App {
             }
 
             const data = await fetchTopicMain(this.currentTopicPath);
+            this._theoryViewerStale = false;
             this.showEditor();
             this.theoryViewer.hide();
             this.editor.loadTheoryDocument(data?.content || '');
@@ -442,6 +627,9 @@ class App {
         const saved = await this.editor.saveTheoryDocument();
         if (!saved) return;
 
+        // The theory panel may have skipped live renders (hidden / auto-render off).
+        this._flushTheoryViewerRender();
+
         const returnState = this.theoryReturnState;
         this.theoryReturnState = null;
 
@@ -462,6 +650,7 @@ class App {
 
     showGallery() {
         this.galleryView.classList.remove('hidden');
+        this.gallery.setPreviewsSuspended(false);
         this.editorToolbar.classList.add('hidden');
         this.editorPanels.classList.add('hidden');
         this.exercisePanel.clear();
@@ -474,6 +663,8 @@ class App {
 
     showEditor() {
         this.galleryView.classList.add('hidden');
+        // Gallery card iframes stop running while the editor covers the gallery.
+        this.gallery.setPreviewsSuspended(true);
         this.editorToolbar.classList.remove('hidden');
         this.editorPanels.classList.remove('hidden');
         this._syncTheoryEditorUi();
@@ -544,14 +735,25 @@ class App {
     }
 
     async _openFavoriteExample(topicPath, filename) {
-        const topic = this._findTopicByPath(topicPath);
-        if (!topic) return;
+        await this._openExampleFromTopic(topicPath, filename);
+    }
 
-        if (this.currentTopicPath !== topicPath) {
-            await this.selectTopic(topicPath, topic.label, { persist: false });
+    async _openExampleFromTopic(topicPath, filename) {
+        const topic = this._findTopicByPath(topicPath);
+        if (!topic) {
+            showToast(`Topic not found: ${topicPath}`, 'error');
+            return;
         }
 
-        await this.loadExample(filename);
+        if (!this._confirmDiscardUnsavedChanges(`open "${filename}"`)) return;
+        this.theoryReturnState = null;
+
+        if (this.currentTopicPath !== topicPath) {
+            const selected = await this.selectTopic(topicPath, topic.label, { persist: false, skipGuard: true });
+            if (selected === false) return;
+        }
+
+        await this.loadExample(filename, { skipGuard: true });
     }
 
     async _loadPending() {
@@ -621,14 +823,7 @@ class App {
     }
 
     async _openPendingExample(topicPath, filename) {
-        const topic = this._findTopicByPath(topicPath);
-        if (!topic) return;
-
-        if (this.currentTopicPath !== topicPath) {
-            await this.selectTopic(topicPath, topic.label, { persist: false });
-        }
-
-        await this.loadExample(filename);
+        await this._openExampleFromTopic(topicPath, filename);
     }
 
     _initTheoryEditorControls() {
@@ -1228,6 +1423,8 @@ class App {
     }
 
     _persistSessionState() {
+        if (!this._sessionPersistenceReady) return;
+
         try {
             window.localStorage.setItem(this.sessionStorageKey, JSON.stringify(this._captureSessionState()));
         } catch {
@@ -1236,14 +1433,8 @@ class App {
     }
 
     _findTopicByPath(topicPath) {
-        for (const chapter of this.sidebar.getTree()) {
-            for (const section of chapter.sections || []) {
-                const topic = (section.topics || []).find((entry) => entry.path === topicPath);
-                if (topic) return topic;
-            }
-        }
-
-        return null;
+        // Includes topics inside hidden chapters (hidden only affects the sidebar view).
+        return this.sidebar.findTopic(topicPath);
     }
 
     _restorePreviewState(previewState = {}) {
@@ -1282,8 +1473,7 @@ class App {
         this._applyPreviewZoom(Number.isFinite(zoom) && zoom > 0 ? zoom : 100, { persist: false });
     }
 
-    async _restoreSessionState() {
-        const sessionState = this._readSessionState();
+    async _restoreSessionState(sessionState = this._readSessionState()) {
         if (!sessionState) return;
 
         this._restorePreviewState(sessionState.preview || {});
@@ -1304,7 +1494,7 @@ class App {
             return;
         }
 
-        await this.selectTopic(topic.path, topic.label, { persist: false });
+        await this.selectTopic(topic.path, topic.label, { persist: false, skipGuard: true });
         this.editor.restoreSessionState(sessionState.editor || {});
 
         const documentTarget = sessionState.documentTarget === 'theory' ? 'theory' : 'example';
@@ -1335,7 +1525,8 @@ class App {
         }
 
         try {
-            await this.loadExample(filenameToRestore, { persist: false });
+            const loaded = await this.loadExample(filenameToRestore, { persist: false, skipGuard: true });
+            if (!loaded) throw new Error(`Example "${filenameToRestore}" could not be loaded.`);
             this.editor.restoreSessionState(sessionState.editor || {});
             this.editor.focusActiveEditor();
         } catch (error) {
@@ -1347,7 +1538,10 @@ class App {
     }
 
     openCreateDialog(preselectedTopicPath = null) {
-        const tree = this.sidebar.getTree();
+        // Offer hidden chapters too when the user is looking at them (or created
+        // from a topic inside one), so the preselected parent always exists.
+        const includeHidden = this.sidebar.showHiddenChapters || Boolean(preselectedTopicPath);
+        const tree = this.sidebar.getTree({ includeHidden });
         this.createDialog.open(tree, preselectedTopicPath);
     }
 

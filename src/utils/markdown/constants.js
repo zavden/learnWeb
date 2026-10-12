@@ -29,6 +29,7 @@ export const EXAMPLE_STAGE_VALUES = new Set([
     'common-error',
     'final-solution',
     'exercise',
+    'professional',
 ]);
 export const EXAMPLE_IMPORTANCE_VALUES = new Set([
     'trivial',

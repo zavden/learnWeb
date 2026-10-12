@@ -7,7 +7,7 @@ import {
     VUE_MULTI_FILE_LANGUAGES,
 } from './constants.js';
 import { createDiagnostic, normalizeVirtualPath } from './core.js';
-import { getDocumentFileVisibilityKey, getExerciseConfig, inferRendererMode } from './documentMeta.js';
+import { getDocumentFileVisibilityKey, getExerciseConfig, hasExerciseMetadata, inferRendererMode } from './documentMeta.js';
 import { parseEditorHiddenFilesMetadataValue, parseShaderResolutionValue } from './shader.js';
 import { validateVirtualFileShape } from './validationMetadata.js';
 
@@ -64,7 +64,9 @@ export function validateLegacyDocument(blocks, metadata, diagnostics) {
     }
 
     if (framework !== 'react') {
-        if (markupBlocks.length === 0) diagnostics.push(createDiagnostic('error', 'missing-markup', 'Example must contain exactly one HTML, HTML-FULL, SVG or Pug block.'));
+        // Vanilla examples may be markup-less (JS-only console demos, CSS-only, TS-only).
+        // Only an empty document or a Vue example (which needs its template) is invalid.
+        if (markupBlocks.length === 0 && (framework === 'vue' || blocks.length === 0)) diagnostics.push(createDiagnostic('error', 'missing-markup', framework === 'vue' ? 'Vue single-file examples must contain exactly one HTML block for the template.' : 'Example must contain at least one code block.'));
         if (markupBlocks.length > 1) diagnostics.push(createDiagnostic('error', 'multiple-markup', 'Example cannot contain more than one markup block.'));
     }
 
@@ -74,8 +76,11 @@ export function validateLegacyDocument(blocks, metadata, diagnostics) {
 
     if (htmlFullBlock) {
         if (styleBlocks.length > 0 || scriptBlocks.length > 0 || appBlocks.length > 0) diagnostics.push(createDiagnostic('error', 'html-full-must-stand-alone', 'HTML-FULL must be the only code block in the example. Put styles and scripts inside the document itself.', { type: 'html-full' }));
-        if (!/(<!doctype\s+html|<html\b)/i.test(htmlFullBlock.content || '')) diagnostics.push(createDiagnostic('warning', 'html-full-missing-document-root', 'HTML-FULL should include <!DOCTYPE html> and an <html> root element.', { type: 'html-full' }));
-        if (!/<body\b/i.test(htmlFullBlock.content || '')) diagnostics.push(createDiagnostic('warning', 'html-full-missing-body', 'HTML-FULL should include an explicit <body> element.', { type: 'html-full' }));
+        // Omitting <html>/<body> is valid HTML (the parser creates them), and lessons about the parser
+        // do it on purpose, so these are only hints. Text inside comments doesn't count.
+        const htmlFullSource = String(htmlFullBlock.content || '').replace(/<!--[\s\S]*?(?:-->|$)/g, '');
+        if (!/(<!doctype\s+html|<html\b)/i.test(htmlFullSource)) diagnostics.push(createDiagnostic('info', 'html-full-missing-document-root', 'HTML-FULL usually includes <!DOCTYPE html> and an <html> root element.', { type: 'html-full' }));
+        if (!/<body\b/i.test(htmlFullSource)) diagnostics.push(createDiagnostic('info', 'html-full-missing-body', 'HTML-FULL usually includes an explicit <body> element.', { type: 'html-full' }));
     }
 
     markupBlocks.filter((block) => block.type === 'html').forEach((block) => {
@@ -142,7 +147,12 @@ export function validateVirtualDocument(files, metadata, diagnostics) {
 
 export function validateExerciseDocument(files, metadata, diagnostics) {
     const exercise = getExerciseConfig({ metadata });
-    if (!exercise.enabled) return;
+    if (!exercise.enabled) {
+        if (hasExerciseMetadata(metadata)) {
+            diagnostics.push(createDiagnostic('warning', 'exercise-metadata-without-flag', 'This example has exercise_* metadata but no `exercise: true`, so exercise mode is off. Add `exercise: true` or remove the exercise_* keys.', { exercise: metadata.exercise ?? null }));
+        }
+        return;
+    }
 
     const knownPaths = new Set((files || []).map((file) => file.path));
     const trackedLists = [

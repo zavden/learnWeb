@@ -36,6 +36,8 @@ Use this file as a routing map. Read only the section relevant to the task.
 - `src/components/editor/shaderDialogs.js` — shader uniform and texture dialog UI
 - `src/components/editor/metadataDialogs.js` — example metadata, file type, shortcuts dialogs
 - `src/components/editor/fileOperations.js` — file CRUD, save, modify, rename, delete, templates
+- `src/components/editor/dirtyTracker.js` — unsaved-changes snapshot, dirty indicator and navigation guard helpers
+- `src/components/editor/toast.js` — toasts rendered as top-layer popovers (visible above open dialogs)
 
 All editor/* modules are mixins applied via `Object.assign(Editor.prototype, ...mixins)`.
 
@@ -56,9 +58,14 @@ All editor/* modules are mixins applied via `Object.assign(Editor.prototype, ...
 ### Rendering
 
 - `src/utils/exampleRenderer.js` — facade re-exporting from renderer/
-- `src/utils/renderer/documentRenderer.js` — iframe srcdoc generation
+- `src/utils/renderer/documentRenderer.js` — preview document generation (no injected styles, escaped inline code, script kind)
+- `src/utils/renderer/previewHost.js` — hosted preview: documents are POSTed to `/api/preview-documents` and loaded from `http://<host>:3001/preview/...` (real origin: storage, forms, anchors, workers); falls back to srcdoc
+- `src/utils/renderer/runtimeBridgeRuntime.js` — the in-page runtime (console inspector with expandable `[[Prototype]]` trees, error mapping, form-submit logging, storage shims for srcdoc)
+- `src/utils/renderer/runtimeBridge.js` — builds the bridge script injected in `<head>` on a single line
+- `src/utils/renderer/scriptKind.js` — classic vs module script detection
+- `src/utils/renderer/sourceMap.js` — inline source-map decoding for TypeScript line mapping
+- `src/utils/renderer/paths.js` — per-segment encoding of topic/asset URLs
 - `src/utils/renderer/shaderRenderer.js` — WebGL pipeline setup and rendering
-- `src/utils/renderer/runtimeBridge.js` — console and error bridge for iframe
 - `src/utils/renderer/diagnosticsMarkup.js` — diagnostic overlay HTML
 
 ### Compilation
@@ -66,7 +73,10 @@ All editor/* modules are mixins applied via `Object.assign(Editor.prototype, ...
 - `src/utils/exampleCompiler.js` — facade re-exporting from compiler/
 - `src/utils/compiler/markupCompiler.js` — Pug compilation
 - `src/utils/compiler/styleCompiler.js` — SCSS/SASS compilation
-- `src/utils/compiler/scriptCompiler.js` — TypeScript compilation
+- `src/utils/compiler/scriptCompiler.js` — JavaScript syntax check + TypeScript transpile (ES2022) + loop guards
+- `src/utils/compiler/typeChecker.js` — cached TypeScript language service (`strict`, ES2023 + DOM libs); type errors are non-blocking diagnostics
+- `src/utils/compiler/loopGuard.js` — same-line loop guards that stop endless loops after ~1.2 s
+- `src/utils/compiler/isolatedCompiler.js` + `compileWorkerThread.js` — the server compiles in a worker thread with memory/time limits (endless Sass/Pug loops can't take the API down)
 - `src/utils/compiler/reactCompiler.js` — React single and multi-file via esbuild
 - `src/utils/compiler/vueCompiler.js` — Vue SFC and multi-file compilation
 - `src/utils/compiler/virtualFilesPlugin.js` — esbuild plugin for virtual file resolution
@@ -100,7 +110,8 @@ If a request changes example format or metadata behavior, start here.
 
 ### Gallery
 
-- `src/components/Gallery.js`
+- `src/components/Gallery.js` (console-only examples show a code preview instead of an iframe)
+- `src/components/AssetsDialog.js` — read-only browser for a topic's `assets/` files («Assets» button in the gallery header)
 
 Use for: example cards, hover overlays, stage badges, info visibility toggles, pending badge rendering, pending entries on startup.
 
@@ -121,7 +132,7 @@ Pending mirrors the Favorites architecture exactly: file-based JSON storage, ser
 ## 7. Sidebar And Tree
 
 - `src/components/Sidebar.js`
-- `src/utils/materialTree.js`
+- `src/utils/materialTree.js` — natural sort; display labels: topic = first `# ` heading of `main.md`, chapter/section = first line of `label.txt`
 - `.hiddens`
 
 ## 8. App Wiring
@@ -130,7 +141,7 @@ Pending mirrors the Favorites architecture exactly: file-based JSON storage, ser
 
 ## 9. Backend
 
-- `server.js` — Express API: tree, examples CRUD, compile, theory, favorites, pending, assets, defaults
+- `server.js` — Express API (bound to 127.0.0.1): tree, examples CRUD, compile (isolated worker), theory, favorites, pending, assets (subfolders allowed), preview hosting, defaults. Every route confines paths to `material/` (`resolveInside`).
 - `src/utils/api.js` — frontend API client
 
 ## 10. Vim And Shortcuts
@@ -168,7 +179,17 @@ Pending mirrors the Favorites architecture exactly: file-based JSON storage, ser
 - `tests/shader-parsing.test.mjs`
 - `tests/vue-smart-enter.test.mjs`
 
-Total: 143 tests. Run with `npm test`.
+- `tests/compile-script-safety.test.mjs`, `tests/compile-isolated.test.mjs` — type checking, syntax diagnostics, loop guards, isolated compiler
+- `tests/data-*.test.mjs` — markdown fences/frontmatter, theory sanitizing, state stores, labels
+- `tests/runtime-*.test.mjs` — preview document and in-page runtime (console inspector, errors)
+- `tests/ui-*.test.mjs` — dirty tracking and Vim shortcut config
+
+Total: 223 tests. Run with `npm test`.
+
+## 14. Course Content Checker
+- `tools/verify-examples.html` (+ `verify-examples.js`, `verify-core.js`) — browser harness: `http://localhost:5174/tools/verify-examples.html?path=<ch>/<sec>[&ms=1500][&only=03-]` runs examples through the real hosted preview one at a time and collects runtime problems (`window.__verifyResults`).
+
+- `scripts/check-material.mjs` — validates structure, labels, embeds, frontmatter, exercises and compiles every example of the course chapters (ch02+). Usage: `node scripts/check-material.mjs material/<chapter>/<section>`.
 
 ## 13. Typical Task Routing
 

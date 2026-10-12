@@ -1,5 +1,8 @@
 import ts from 'typescript';
 import { createCompileDiagnostic, normalizeSourcePath } from './helpers.js';
+import { addLoopGuards } from './loopGuard.js';
+import { checkJavaScriptSyntax } from './syntaxCheck.js';
+import { typeCheckTypeScript } from './typeChecker.js';
 
 function formatTsDiagnostic(diagnostic) {
     return ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
@@ -11,7 +14,123 @@ function appendSourceUrl(js = '', sourcePath = '') {
     return `${js}\n//# sourceURL=${sourcePath}`;
 }
 
-export function compileScript(block, { sourcePath = '' } = {}) {
+function guardLoops(source, { enabled, fileName, scriptKind }) {
+    if (!enabled) return source;
+    try {
+        return addLoopGuards(source, { fileName, scriptKind }).code;
+    } catch {
+        // Never block a run because the guard could not be inserted.
+        return source;
+    }
+}
+
+function compileJavaScript(block, { sourcePath, loopProtect }) {
+    const filePath = normalizeSourcePath(sourcePath, 'script.js');
+    const source = block.content || '';
+    const syntaxDiagnostics = checkJavaScriptSyntax(source, { fileName: filePath });
+
+    const diagnostics = syntaxDiagnostics.map((diagnostic) => createCompileDiagnostic(
+        'error',
+        'javascript-syntax',
+        /^SyntaxError\b/.test(diagnostic.message) ? diagnostic.message : `SyntaxError: ${diagnostic.message}`,
+        {
+            column: diagnostic.column,
+            file: filePath,
+            line: diagnostic.line,
+            slot: 'script',
+            type: 'javascript',
+        }
+    ));
+
+    // Inserting guards into code that does not parse could move the real error around.
+    const code = syntaxDiagnostics.length === 0
+        ? guardLoops(source, { enabled: loopProtect, fileName: filePath, scriptKind: ts.ScriptKind.JS })
+        : source;
+
+    return {
+        js: appendSourceUrl(code, filePath),
+        diagnostics,
+    };
+}
+
+function compileTypeScript(block, { sourcePath, loopProtect, typeCheck }) {
+    const filePath = normalizeSourcePath(sourcePath, 'script.ts');
+    const source = block.content || '';
+    const transpileOptions = {
+        compilerOptions: {
+            inlineSourceMap: true,
+            inlineSources: true,
+            module: ts.ModuleKind.ESNext,
+            target: ts.ScriptTarget.ES2022,
+            useDefineForClassFields: true,
+        },
+        fileName: filePath,
+        reportDiagnostics: true,
+    };
+
+    const syntaxCheck = ts.transpileModule(source, transpileOptions);
+    const syntaxDiagnostics = syntaxCheck.diagnostics || [];
+    const guardedSource = syntaxDiagnostics.length === 0
+        ? guardLoops(source, { enabled: loopProtect, fileName: filePath, scriptKind: ts.ScriptKind.TS })
+        : source;
+    const result = guardedSource === source
+        ? syntaxCheck
+        : ts.transpileModule(guardedSource, transpileOptions);
+
+    const diagnostics = syntaxDiagnostics.map((diagnostic) => {
+        const sourceFile = diagnostic.file;
+        const start = typeof diagnostic.start === 'number' ? diagnostic.start : null;
+        const position = sourceFile && start != null ? sourceFile.getLineAndCharacterOfPosition(start) : null;
+
+        return createCompileDiagnostic(
+            diagnostic.category === ts.DiagnosticCategory.Warning ? 'warning' : 'error',
+            'typescript-transpile',
+            formatTsDiagnostic(diagnostic),
+            {
+                column: position ? position.character + 1 : null,
+                file: filePath,
+                line: position ? position.line + 1 : null,
+                slot: 'script',
+                type: 'typescript',
+            }
+        );
+    });
+
+    if (typeCheck && syntaxDiagnostics.length === 0) {
+        try {
+            for (const diagnostic of typeCheckTypeScript(source, { sourcePath: filePath })) {
+                diagnostics.push(createCompileDiagnostic(
+                    diagnostic.warning ? 'warning' : 'error',
+                    'typescript-type',
+                    `TS${diagnostic.code}: ${diagnostic.message}`,
+                    {
+                        // Like `tsc`, type errors are reported but the JavaScript still runs.
+                        blocking: false,
+                        column: diagnostic.column,
+                        file: filePath,
+                        line: diagnostic.line,
+                        slot: 'script',
+                        type: 'typescript',
+                    }
+                ));
+            }
+        } catch (error) {
+            diagnostics.push(createCompileDiagnostic(
+                'warning',
+                'typescript-typecheck-failed',
+                `Type checking failed: ${error?.message || error}`,
+                { blocking: false, slot: 'script', type: 'typescript' }
+            ));
+        }
+    }
+
+    return {
+        js: result.outputText || '',
+        diagnostics,
+    };
+}
+
+export function compileScript(block, { sourcePath = '', loopProtect = true, typeCheck = true } = {}) {
     if (!block) {
         return {
             js: '',
@@ -20,47 +139,11 @@ export function compileScript(block, { sourcePath = '' } = {}) {
     }
 
     if (block.type === 'javascript') {
-        return {
-            js: appendSourceUrl(block.content || '', normalizeSourcePath(sourcePath, 'script.js')),
-            diagnostics: [],
-        };
+        return compileJavaScript(block, { loopProtect, sourcePath });
     }
 
     if (block.type === 'typescript') {
-        const result = ts.transpileModule(block.content || '', {
-            compilerOptions: {
-                inlineSourceMap: true,
-                inlineSources: true,
-                target: ts.ScriptTarget.ES2020,
-                module: ts.ModuleKind.ES2020,
-            },
-            fileName: normalizeSourcePath(sourcePath, 'script.ts'),
-            reportDiagnostics: true,
-        });
-
-        const diagnostics = (result.diagnostics || []).map((diagnostic) => {
-            const sourceFile = diagnostic.file;
-            const start = typeof diagnostic.start === 'number' ? diagnostic.start : null;
-            const position = sourceFile && start != null ? sourceFile.getLineAndCharacterOfPosition(start) : null;
-
-            return createCompileDiagnostic(
-                diagnostic.category === ts.DiagnosticCategory.Warning ? 'warning' : 'error',
-                'typescript-transpile',
-                formatTsDiagnostic(diagnostic),
-                {
-                    column: position ? position.character + 1 : null,
-                    file: normalizeSourcePath(sourcePath, 'script.ts'),
-                    line: position ? position.line + 1 : null,
-                    slot: 'script',
-                    type: 'typescript',
-                }
-            );
-        });
-
-        return {
-            js: result.outputText || '',
-            diagnostics,
-        };
+        return compileTypeScript(block, { loopProtect, sourcePath, typeCheck });
     }
 
     return {

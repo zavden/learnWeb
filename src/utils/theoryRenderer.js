@@ -1,4 +1,4 @@
-import { marked } from 'marked';
+import { Marked } from 'marked';
 import { injectTheoryExerciseEmbeds } from './theoryExerciseEmbeds.js';
 import hljs from 'highlight.js/lib/core';
 import hljsXml from 'highlight.js/lib/languages/xml';
@@ -10,6 +10,7 @@ import hljsScss from 'highlight.js/lib/languages/scss';
 import hljsGlsl from 'highlight.js/lib/languages/glsl';
 import hljsBash from 'highlight.js/lib/languages/bash';
 import hljsMarkdown from 'highlight.js/lib/languages/markdown';
+import hljsPython from 'highlight.js/lib/languages/python';
 
 hljs.registerLanguage('xml', hljsXml);
 hljs.registerLanguage('html', hljsXml);
@@ -32,9 +33,12 @@ hljs.registerLanguage('bash', hljsBash);
 hljs.registerLanguage('shell', hljsBash);
 hljs.registerLanguage('sh', hljsBash);
 hljs.registerLanguage('markdown', hljsMarkdown);
+hljs.registerLanguage('python', hljsPython);
+hljs.registerLanguage('py', hljsPython);
 hljs.registerLanguage('md', hljsMarkdown);
 
-let markedConfigured = false;
+let theoryMarked = null;
+let currentRenderContext = { topicPath: '' };
 
 function serializeInlineScriptValue(value) {
     return JSON.stringify(value)
@@ -44,8 +48,36 @@ function serializeInlineScriptValue(value) {
         .replace(/\u2029/g, '\\u2029');
 }
 
+function escapeHtml(value = '') {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
+const HIGHLIGHT_LANGUAGE_ALIASES = {
+    'html-full': 'html',
+    htmlfull: 'html',
+    html_full: 'html',
+    vue: 'xml',
+    mjs: 'javascript',
+    cjs: 'javascript',
+    mts: 'typescript',
+    cts: 'typescript',
+};
+
+const PLAIN_TEXT_LANGUAGES = new Set(['text', 'txt', 'plain', 'plaintext']);
+
 export function highlightCode(code, lang) {
-    const language = String(lang || '').trim().toLowerCase();
+    const requested = String(lang || '').trim().toLowerCase();
+    const language = HIGHLIGHT_LANGUAGE_ALIASES[requested] || requested;
+
+    if (PLAIN_TEXT_LANGUAGES.has(language)) {
+        return escapeHtml(code);
+    }
+
     if (language && hljs.getLanguage(language)) {
         try {
             return hljs.highlight(code, { language }).value;
@@ -54,25 +86,226 @@ export function highlightCode(code, lang) {
     return hljs.highlightAuto(code).value;
 }
 
-function ensureMarkedConfigured() {
-    if (markedConfigured) return;
+// ─── Raw HTML policy ────────────────────────────────────
+// Theory is about HTML, so tags written in prose (`Array<string>`, `a<b`, `<p>`) must show
+// up as text. Only a small inline/disclosure allowlist is rendered, with attributes reduced
+// to class/title/open. HTML comments are kept (they stay hidden and carry embed placeholders).
 
-    marked.setOptions({
+const THEORY_ALLOWED_TAGS = new Set(['details', 'summary', 'kbd', 'mark', 'sub', 'sup', 'br', 'small', 'abbr']);
+const THEORY_ALLOWED_ATTRIBUTES = new Set(['class', 'title', 'open']);
+const THEORY_VOID_TAGS = new Set(['br']);
+const RAW_HTML_PIECE_PATTERN = /<!--[\s\S]*?-->|<(\/?)([A-Za-z][A-Za-z0-9-]*)((?:\s+[^\s"'<>\/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*)\s*(\/?)>/g;
+const RAW_HTML_ATTRIBUTE_PATTERN = /([^\s"'<>\/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+
+function escapeRawHtmlText(text = '') {
+    return String(text)
+        .replace(/&(?!(?:#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);)/gi, '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;');
+}
+
+function buildAllowedTag(isClosing, tagName, rawAttributes = '') {
+    if (isClosing) {
+        return THEORY_VOID_TAGS.has(tagName) ? '' : `</${tagName}>`;
+    }
+
+    const attributes = [];
+    for (const match of String(rawAttributes).matchAll(RAW_HTML_ATTRIBUTE_PATTERN)) {
+        const name = match[1].toLowerCase();
+        if (!THEORY_ALLOWED_ATTRIBUTES.has(name)) continue;
+        const value = match[2] ?? match[3] ?? match[4];
+        attributes.push(value === undefined ? ` ${name}` : ` ${name}="${escapeHtml(value)}"`);
+    }
+
+    return `<${tagName}${attributes.join('')}>`;
+}
+
+export function sanitizeTheoryRawHtml(html = '') {
+    const source = String(html ?? '');
+    let output = '';
+    let lastIndex = 0;
+
+    for (const match of source.matchAll(RAW_HTML_PIECE_PATTERN)) {
+        output += escapeRawHtmlText(source.slice(lastIndex, match.index));
+        lastIndex = match.index + match[0].length;
+
+        if (match[0].startsWith('<!--')) {
+            output += match[0];
+            continue;
+        }
+
+        const tagName = match[2].toLowerCase();
+        output += THEORY_ALLOWED_TAGS.has(tagName)
+            ? buildAllowedTag(match[1] === '/', tagName, match[3])
+            : escapeRawHtmlText(match[0]);
+    }
+
+    output += escapeRawHtmlText(source.slice(lastIndex));
+    return output;
+}
+
+function isRawHtmlFullyAllowed(html = '') {
+    const source = String(html ?? '');
+
+    for (const match of source.matchAll(RAW_HTML_PIECE_PATTERN)) {
+        if (match[0].startsWith('<!--')) continue;
+        if (!THEORY_ALLOWED_TAGS.has(match[2].toLowerCase())) return false;
+    }
+
+    return !source.replace(RAW_HTML_PIECE_PATTERN, '').includes('<');
+}
+
+// Same encoding marked applies to link/image URLs (keeps the attribute quote-safe).
+function cleanUrl(href = '') {
+    try {
+        return encodeURI(String(href)).replace(/%25/g, '%');
+    } catch {
+        return null;
+    }
+}
+
+function isCommentOnlyHtml(html = '') {
+    return String(html ?? '').replace(/<!--[\s\S]*?-->/g, '').trim() === '';
+}
+
+// ─── Asset URLs ─────────────────────────────────────────
+
+function encodeTopicPath(topicPath = '') {
+    return String(topicPath || '')
+        .split('/')
+        .filter(Boolean)
+        .map((segment) => encodeURIComponent(segment))
+        .join('/');
+}
+
+function isExternalOrAbsoluteUrl(href = '') {
+    const value = String(href || '').trim();
+    return value === ''
+        || value.startsWith('#')
+        || value.startsWith('/')
+        || value.startsWith('?')
+        || /^[a-z][a-z0-9+.-]*:/i.test(value);
+}
+
+// Resolves a relative URL from main.md against the topic's assets/ folder.
+// "diagram.png", "./diagram.png", "assets/diagram.png" and "./assets/img/x.png" all work.
+export function resolveTheoryAssetUrl(href = '', topicPath = '') {
+    const value = String(href || '').trim();
+    const encodedTopicPath = encodeTopicPath(topicPath);
+
+    if (!encodedTopicPath || isExternalOrAbsoluteUrl(value)) {
+        return value;
+    }
+
+    const relativePath = value
+        .replace(/^(\.\/)+/, '')
+        .replace(/^assets\//, '');
+
+    if (!relativePath || relativePath.split(/[/?#]/)[0] === '..' || relativePath.split('/').includes('..')) {
+        return value;
+    }
+
+    return `/api/topic/${encodedTopicPath}/assets/${relativePath}`;
+}
+
+function looksLikeAssetLink(href = '') {
+    const value = String(href || '').trim().replace(/^(\.\/)+/, '');
+    if (value.startsWith('assets/')) return true;
+
+    const pathPart = value.split(/[?#]/)[0];
+    const extension = pathPart.includes('.') ? pathPart.slice(pathPart.lastIndexOf('.') + 1).toLowerCase() : '';
+    return Boolean(extension) && !['md', 'html', 'htm'].includes(extension) && !pathPart.endsWith('/');
+}
+
+function getTheoryMarked() {
+    if (theoryMarked) return theoryMarked;
+
+    const instance = new Marked();
+
+    instance.setOptions({
         breaks: true,
         gfm: true,
     });
 
-    marked.use({
+    instance.use({
+        tokenizer: {
+            // Same as marked's inline tag tokenizer, but never switches into "raw block"
+            // mode: tags are escaped by the renderer, so the text after an escaped
+            // <script>/<pre>/<code>/<kbd> must stay escaped too.
+            tag(src) {
+                const cap = this.rules.inline.tag.exec(src);
+                if (!cap) return false;
+
+                return {
+                    type: 'html',
+                    raw: cap[0],
+                    inLink: this.lexer.state.inLink,
+                    inRawBlock: false,
+                    block: false,
+                    text: cap[0],
+                };
+            },
+        },
         renderer: {
-            code(code, lang) {
+            code(code, infostring) {
+                const lang = String(infostring || '').match(/^\S*/)?.[0] || '';
                 const highlighted = highlightCode(code, lang);
-                const langClass = lang ? ` language-${lang}` : '';
+                const langClass = lang ? ` language-${escapeHtml(lang)}` : '';
                 return `<pre><code class="hljs${langClass}">${highlighted}</code></pre>`;
+            },
+            html(html, block) {
+                if (!block) {
+                    return sanitizeTheoryRawHtml(html);
+                }
+
+                if (isCommentOnlyHtml(html) || isRawHtmlFullyAllowed(html)) {
+                    return sanitizeTheoryRawHtml(html);
+                }
+
+                // A block that starts with a tag (e.g. "<p> is the paragraph element") is
+                // rendered as a normal paragraph with the tags shown as text.
+                return `<p>${instance.parseInline(String(html).trim())}</p>\n`;
+            },
+            image(href, title, text) {
+                // title and text arrive already escaped by marked.
+                const src = cleanUrl(resolveTheoryAssetUrl(href, currentRenderContext.topicPath));
+                if (src === null) return text;
+                const titleAttribute = title ? ` title="${title}"` : '';
+                return `<img src="${src}" alt="${text}"${titleAttribute}>`;
+            },
+            link(href, title, text) {
+                const rawHref = String(href || '').trim();
+                if (/^\s*(javascript|vbscript|data):/i.test(rawHref)) {
+                    return text;
+                }
+
+                // `[texto](04-ejemplo.md)` links to an example of this topic: clicking it opens
+                // the same preview dialog as an embed card.
+                const exampleLink = /^(?:\.\/)?(?:examples\/)?([\w.-]+\.md)$/i.exec(rawHref);
+                if (exampleLink) {
+                    const filename = escapeHtml(exampleLink[1]);
+                    const titleAttribute = title ? ` title="${title}"` : ` title="Abrir ${filename}"`;
+                    return `<a href="#" class="theory-example-link" data-theory-exercise-preview="${filename}"${titleAttribute}>${text}</a>`;
+                }
+
+                const resolvedHref = cleanUrl(looksLikeAssetLink(rawHref)
+                    ? resolveTheoryAssetUrl(rawHref, currentRenderContext.topicPath)
+                    : rawHref);
+                if (resolvedHref === null) return text;
+
+                // title arrives already escaped by marked. External and asset links open in a
+                // new tab so they never navigate the app (or the preview frame) away.
+                const titleAttribute = title ? ` title="${title}"` : '';
+                const targetAttribute = /^https?:\/\//i.test(resolvedHref) || resolvedHref.startsWith('/api/')
+                    ? ' target="_blank" rel="noopener noreferrer"'
+                    : '';
+                return `<a href="${resolvedHref}"${titleAttribute}${targetAttribute}>${text}</a>`;
             },
         },
     });
 
-    markedConfigured = true;
+    theoryMarked = instance;
+    return instance;
 }
 
 export function renderTheoryExportDocument(content = '', options = {}) {
@@ -86,7 +319,7 @@ export function renderTheoryExportDocument(content = '', options = {}) {
     );
     const serializedPreviewPayload = serializeInlineScriptValue(previewPayload);
     const renderedContent = String(content || '').trim()
-        ? renderTheoryHtml(content, { exerciseEmbeds: options.exerciseEmbeds || {} })
+        ? renderTheoryHtml(content, { exerciseEmbeds: options.exerciseEmbeds || {}, topicPath })
         : `<div class="theory-empty-state"><div class="theory-empty-icon">📝</div><p>No theory content for this topic yet</p></div>`;
     const exportedAt = new Date().toISOString();
 
@@ -96,7 +329,7 @@ export function renderTheoryExportDocument(content = '', options = {}) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
+  <title>${escapeHtml(title)}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -422,6 +655,11 @@ export function renderTheoryExportDocument(content = '', options = {}) {
       display: block;
     }
 
+    /* Exported files have no app to run examples in. */
+    .theory-code-embed-actions { display: none !important; }
+    .theory-code-embed-actions { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px solid rgba(148, 163, 184, 0.18); background: rgba(15, 23, 42, 0.6); }
+    .theory-code-embed-source { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-family: "JetBrains Mono", ui-monospace, monospace; color: #64748b; }
+    .theory-code-embed-action { appearance: none; border: 1px solid rgba(96, 165, 250, 0.35); border-radius: 8px; background: rgba(96, 165, 250, 0.12); color: #bfdbfe; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; }
     .theory-code-embed-file-header {
       display: flex;
       align-items: center;
@@ -505,8 +743,8 @@ export function renderTheoryExportDocument(content = '', options = {}) {
 }
 
 export function renderTheoryHtml(content = '', options = {}) {
-    ensureMarkedConfigured();
-    const source = typeof content === 'string' ? content : String(content ?? '');
+    const instance = getTheoryMarked();
+    const source = (typeof content === 'string' ? content : String(content ?? '')).replace(/^\uFEFF/, '');
 
     // Replace exercise shortcodes with HTML-comment placeholders BEFORE marked runs,
     // then swap in the real embed HTML AFTER. This prevents marked from processing
@@ -518,7 +756,14 @@ export function renderTheoryHtml(content = '', options = {}) {
         return `<!--LEARNWEB_EMBED_${index}-->`;
     });
 
-    let html = marked.parse(withPlaceholders);
+    const previousContext = currentRenderContext;
+    currentRenderContext = { topicPath: String(options.topicPath || '').trim() };
+    let html;
+    try {
+        html = instance.parse(withPlaceholders);
+    } finally {
+        currentRenderContext = previousContext;
+    }
 
     for (let i = 0; i < embeds.length; i++) {
         html = html.replace(`<!--LEARNWEB_EMBED_${i}-->`, () => embeds[i]);
@@ -528,7 +773,7 @@ export function renderTheoryHtml(content = '', options = {}) {
 }
 
 export function renderTheoryPreviewDocument(content = '', options = {}) {
-    const assetBase = options.topicPath ? `/api/topic/${options.topicPath}/assets/` : '';
+    const assetBase = options.topicPath ? `/api/topic/${encodeTopicPath(options.topicPath)}/assets/` : '';
     const renderId = Number.isFinite(options.renderId) ? options.renderId : 0;
     const previewPayload = Object.fromEntries(
         Object.entries(options.exerciseEmbeds || {}).map(([filename, embed]) => [
@@ -540,6 +785,7 @@ export function renderTheoryPreviewDocument(content = '', options = {}) {
     const renderedContent = String(content || '').trim()
         ? renderTheoryHtml(content, {
             exerciseEmbeds: options.exerciseEmbeds || {},
+            topicPath: options.topicPath || '',
         })
         : `
         <div class="theory-empty-state">
@@ -901,6 +1147,9 @@ export function renderTheoryPreviewDocument(content = '', options = {}) {
       display: block;
     }
 
+    .theory-code-embed-actions { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px solid rgba(148, 163, 184, 0.18); background: rgba(15, 23, 42, 0.6); }
+    .theory-code-embed-source { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-family: "JetBrains Mono", ui-monospace, monospace; color: #64748b; }
+    .theory-code-embed-action { appearance: none; border: 1px solid rgba(96, 165, 250, 0.35); border-radius: 8px; background: rgba(96, 165, 250, 0.12); color: #bfdbfe; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; }
     .theory-code-embed-file-header {
       display: flex;
       align-items: center;

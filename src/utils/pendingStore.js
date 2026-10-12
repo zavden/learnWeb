@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { backupUnreadableStateFile, readJsonStateFile, salvageQuotedStrings } from './favoritesStore.js';
 
 function normalizePendingPath(value = '') {
     return String(value || '')
@@ -20,30 +21,28 @@ function buildState(items = []) {
     };
 }
 
+function getStateItems(fileState) {
+    if (fileState.status === 'invalid') {
+        return salvageQuotedStrings(fileState.raw);
+    }
+
+    const parsed = fileState.value;
+    return Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.items)
+            ? parsed.items
+            : [];
+}
+
 export function readPendingState(filePath) {
-    if (!fs.existsSync(filePath)) {
-        return buildState([]);
-    }
+    const inputItems = getStateItems(readJsonStateFile(filePath));
+    const items = Array.from(new Set(
+        inputItems
+            .map((entry) => normalizePendingPath(entry))
+            .filter((entry) => entry && isExampleMarkdownPath(entry))
+    ));
 
-    try {
-        const raw = fs.readFileSync(filePath, 'utf-8');
-        const parsed = JSON.parse(raw);
-        const inputItems = Array.isArray(parsed)
-            ? parsed
-            : Array.isArray(parsed?.items)
-                ? parsed.items
-                : [];
-
-        const items = Array.from(new Set(
-            inputItems
-                .map((entry) => normalizePendingPath(entry))
-                .filter((entry) => entry && isExampleMarkdownPath(entry))
-        ));
-
-        return buildState(items);
-    } catch {
-        return buildState([]);
-    }
+    return buildState(items);
 }
 
 export function writePendingState(filePath, items = []) {
@@ -53,6 +52,7 @@ export function writePendingState(filePath, items = []) {
             .filter((entry) => entry && isExampleMarkdownPath(entry))
     )));
 
+    backupUnreadableStateFile(filePath);
     fs.writeFileSync(filePath, `${JSON.stringify(state, null, 2)}\n`, 'utf-8');
     return state;
 }

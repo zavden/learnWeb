@@ -16,6 +16,7 @@ import {
     parseExampleTagsMetadataValue,
     parseExerciseListValue,
     parseExercisePathList,
+    parseExerciseTextListValue,
 } from './core.js';
 import {
     cloneShaderUniformControl,
@@ -27,7 +28,7 @@ import {
 } from './shader.js';
 
 export function hasExerciseMetadata(metadata = {}) {
-    return Array.from(EXERCISE_METADATA_KEYS).some((key) => {
+    return Array.from(EXERCISE_METADATA_KEYS).filter((key) => key !== 'exercise').some((key) => {
         const value = metadata[key];
         if (value === undefined || value === null) return false;
         if (typeof value === 'string') return value.trim() !== '';
@@ -37,8 +38,8 @@ export function hasExerciseMetadata(metadata = {}) {
 
 export function getExerciseConfig(documentModel) {
     const metadata = documentModel?.metadata || {};
-    const instructions = parseExerciseListValue(metadata.exercise_instructions);
-    const hints = parseExerciseListValue(metadata.exercise_hints);
+    const instructions = parseExerciseTextListValue(metadata.exercise_instructions);
+    const hints = parseExerciseTextListValue(metadata.exercise_hints);
     const comparePairs = parseExerciseListValue(metadata.exercise_compare_pairs)
         .map((entry) => {
             const [attemptPath, solutionPath] = entry.split('=>').map((part) => normalizeVirtualPath(part || ''));
@@ -52,8 +53,9 @@ export function getExerciseConfig(documentModel) {
     const referenceFiles = parseExercisePathList(metadata.exercise_reference_files);
     const solutionExample = String(metadata.exercise_solution_example || '').trim();
     const solutionFiles = parseExercisePathList(metadata.exercise_solution_files);
-    const enabled = normalizeBooleanMetadataValue(metadata.exercise) === true
-        || hasExerciseMetadata(metadata);
+    // Only an explicit `exercise: true` turns exercise mode on. Leftover exercise_* keys
+    // (e.g. in a solution copied from the exercise) are reported by validation instead.
+    const enabled = normalizeBooleanMetadataValue(metadata.exercise) === true;
 
     return {
         comparePairs,

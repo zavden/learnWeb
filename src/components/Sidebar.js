@@ -22,11 +22,13 @@ export class Sidebar {
         this.btnExpandTree = document.getElementById('btn-expand-tree');
         this.treeControls = document.getElementById('sidebar-tree-controls');
         this.tree = [];
+        this.fullTree = [];
         this.activeTopicPath = null;
+        this.showHiddenStorageKey = 'learncode.sidebar.showHidden';
         this.clipboardDefaultEnabled = true;
         this.previewInfoVisible = true;
         this.vimDefaultEnabled = true;
-        this.showHiddenChapters = false;
+        this.showHiddenChapters = this._readShowHiddenChapters();
         this.expandedChapterIds = new Set();
         this.expandedSectionIds = new Set();
 
@@ -44,7 +46,12 @@ export class Sidebar {
     }
 
     async load() {
-        this.tree = await fetchTree({ includeHidden: this.showHiddenChapters });
+        // Always fetch hidden chapters too: "hidden" only affects what the tree shows,
+        // topic lookups (session restore, favorites, pending, create) need all of them.
+        this.fullTree = await fetchTree({ includeHidden: true });
+        this.tree = this.showHiddenChapters
+            ? this.fullTree
+            : this.fullTree.filter((chapter) => !chapter.hidden);
         this._syncExpansionState();
         this.render();
         if (this.activeTopicPath) {
@@ -73,7 +80,7 @@ export class Sidebar {
 
             const chapterKey = this._getChapterKey(chapter.id);
             const chapterExpanded = this.expandedChapterIds.has(chapterKey);
-            const chItem = this._createItem(chapter.label, 'chapter-item', true, chapterExpanded);
+            const chItem = this._createItem(chapter.label, 'chapter-item', true, chapterExpanded, chapter.labelSource);
 
             if (chapter.hidden) {
                 chItem.classList.add('is-hidden-entry');
@@ -108,7 +115,7 @@ export class Sidebar {
                 const secDiv = document.createElement('div');
                 secDiv.className = 'tree-section';
 
-                const secItem = this._createItem(section.label, 'section-item', true, sectionExpanded);
+                const secItem = this._createItem(section.label, 'section-item', true, sectionExpanded, section.labelSource);
                 secDiv.appendChild(secItem);
 
                 const topicsDiv = document.createElement('div');
@@ -116,7 +123,7 @@ export class Sidebar {
                 topicsDiv.classList.toggle('collapsed', !sectionExpanded);
 
                 section.topics.forEach((topic) => {
-                    const topItem = this._createItem(topic.label, 'topic-item', false, false);
+                    const topItem = this._createItem(topic.label, 'topic-item', false, false, topic.labelSource);
                     topItem.dataset.path = topic.path;
 
                     const btnAdd = document.createElement('button');
@@ -156,7 +163,7 @@ export class Sidebar {
         });
     }
 
-    _createItem(label, className, hasArrow, isExpanded = false) {
+    _createItem(label, className, hasArrow, isExpanded = false, labelSource = 'slug') {
         const div = document.createElement('div');
         div.className = `tree-item ${className}`;
 
@@ -168,7 +175,9 @@ export class Sidebar {
         }
 
         const labelSpan = document.createElement('span');
-        labelSpan.className = 'label';
+        // Labels written by authors (label.txt / main.md heading) keep their exact casing;
+        // only folder-slug fallbacks are capitalized.
+        labelSpan.className = labelSource === 'custom' ? 'label' : 'label is-slug-label';
         labelSpan.textContent = label;
         div.appendChild(labelSpan);
 
@@ -284,7 +293,20 @@ export class Sidebar {
 
     async toggleHiddenChapters() {
         this.showHiddenChapters = !this.showHiddenChapters;
+        try {
+            window.localStorage.setItem(this.showHiddenStorageKey, this.showHiddenChapters ? '1' : '0');
+        } catch {
+            // Ignore storage errors.
+        }
         await this.load();
+    }
+
+    _readShowHiddenChapters() {
+        try {
+            return window.localStorage.getItem(this.showHiddenStorageKey) === '1';
+        } catch {
+            return false;
+        }
     }
 
     _syncControlState() {
@@ -340,8 +362,41 @@ export class Sidebar {
     }
 
     /** Returns tree data for create dialog parent selection */
-    getTree() {
-        return this.tree.filter((chapter) => !chapter.hidden);
+    getTree({ includeHidden = false } = {}) {
+        const source = this.fullTree.length > 0 ? this.fullTree : this.tree;
+        return includeHidden ? source : source.filter((chapter) => !chapter.hidden);
+    }
+
+    /** Human-readable "Chapter / Section / Topic" label for a topic path ('' if unknown). */
+    describeTopic(topicPath) {
+        const normalizedPath = String(topicPath || '').trim();
+        if (!normalizedPath) return '';
+
+        for (const chapter of this.getTree({ includeHidden: true })) {
+            for (const section of chapter.sections || []) {
+                const topic = (section.topics || []).find((entry) => entry.path === normalizedPath);
+                if (topic) {
+                    return [chapter.label, section.label, topic.label].filter(Boolean).join(' / ');
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /** Finds a topic anywhere in the material tree, including hidden chapters. */
+    findTopic(topicPath) {
+        const normalizedPath = String(topicPath || '').trim();
+        if (!normalizedPath) return null;
+
+        for (const chapter of this.getTree({ includeHidden: true })) {
+            for (const section of chapter.sections || []) {
+                const topic = (section.topics || []).find((entry) => entry.path === normalizedPath);
+                if (topic) return topic;
+            }
+        }
+
+        return null;
     }
 
     async _toggleChapterHidden(chapter) {

@@ -1820,10 +1820,11 @@ test('preview renderer always injects runtime bridge regardless of console state
     assert.match(withConsole, /learncode-console-command/);
     assert.match(withConsole, /stackFrames/);
     assert.match(withConsole, /unhandledrejection/);
-    assert.match(withConsole, /const RENDER_ID = 7/);
+    assert.match(withConsole, /"renderId":7/);
     assert.match(withoutConsole, /learncode-preview/);
-    assert.match(withoutConsole, /const RENDER_ID = 8/);
-    assert.match(withoutConsole, /try \{/);
+    assert.match(withoutConsole, /"renderId":8/);
+    // User code is never wrapped (it would change scoping and line numbers).
+    assert.doesNotMatch(withoutConsole, /try \{\s*console\.log\("hi"\)/);
 });
 
 test('preview renderer suppresses non-blocking diagnostics markup when console is enabled', () => {

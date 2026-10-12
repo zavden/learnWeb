@@ -1,6 +1,6 @@
 import { resolveExerciseComparison } from '../../utils/exerciseComparison.js';
 import { buildQuickOpenMatches } from '../../utils/fileQuickOpen.js';
-import { getDocumentFileVisibilityEntries, getExerciseConfig } from '../../utils/markdown.js';
+import { createEmptyExampleDocument, getDocumentFileVisibilityEntries, getExerciseConfig, parseExampleDocument } from '../../utils/markdown.js';
 import { fetchExample } from '../../utils/api.js';
 
 export const exercisePanelMixin = {

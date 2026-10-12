@@ -10,8 +10,10 @@
   padding: 20px;
   border-bottom: 1px solid var(--border-default);
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
 
 .gallery-header-actions {
@@ -21,10 +23,18 @@
 }
 
 .gallery-header h2 {
+  /* Long topic labels take their own row instead of being cut by the filters. */
+  flex: 1 1 260px;
   font-size: 18px;
   font-weight: 600;
+  line-height: 1.3;
   color: var(--text-primary);
   margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 #gallery-grid {
@@ -66,6 +76,16 @@
   position: relative;
   overflow: hidden;
   border-bottom: 1px solid var(--border-muted);
+}
+
+.card-preview-unavailable {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+  font-size: 12px;
 }
 
 .card-meta-overlay {
@@ -241,6 +261,8 @@
 .card-type-tag.type-html    { background: rgba(59, 130, 246, 0.10); border-color: rgba(59, 130, 246, 0.30); color: #3b82f6; }
 .card-type-tag.type-vue     { background: rgba(52, 211, 153, 0.10); border-color: rgba(52, 211, 153, 0.30); color: #10b981; }
 .card-type-tag.type-react   { background: rgba(96, 165, 250, 0.10); border-color: rgba(96, 165, 250, 0.30); color: #60a5fa; }
+.card-type-tag.type-js      { background: rgba(234, 179, 8, 0.12); border-color: rgba(234, 179, 8, 0.35); color: #a16207; }
+.card-type-tag.type-ts      { background: rgba(37, 99, 235, 0.12); border-color: rgba(37, 99, 235, 0.35); color: #1d4ed8; }
 .card-type-tag.type-svg     { background: rgba(251, 191, 36, 0.10); border-color: rgba(251, 191, 36, 0.30); color: #d97706; }
 .card-type-tag.type-shader  { background: rgba(168, 85, 247, 0.10); border-color: rgba(168, 85, 247, 0.30); color: #8b5cf6; }
 
@@ -343,6 +365,12 @@
   color: #047857;
 }
 
+.card-stage-badge.stage-professional {
+  background: rgba(15, 23, 42, 0.12);
+  color: #0f172a;
+  border: 1px solid rgba(15, 23, 42, 0.35);
+}
+
 .card-stage-badge.stage-pending {
   background: rgba(251, 191, 36, 0.16);
   color: #b45309;
@@ -407,3 +435,34 @@
   min-height: 32px;
   font-size: 11px;
 }
+
+/* Console-only examples show their code instead of an empty page. */
+.card-code-preview {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 14px 16px;
+  overflow: hidden;
+  background: #0f172a;
+  color: #e2e8f0;
+  font: 12px/1.55 "JetBrains Mono", ui-monospace, monospace;
+  white-space: pre;
+  pointer-events: none;
+}
+
+.card-code-preview-more {
+  display: block;
+  margin-top: 6px;
+  color: #64748b;
+  font-style: italic;
+}
+
+/* highlight.js tokens in code previews (Atom One Dark, same as the theory viewer) */
+.card-code-preview .hljs-comment, .card-code-preview .hljs-quote { color: #5c6370; font-style: italic; }
+.card-code-preview .hljs-keyword, .card-code-preview .hljs-doctag { color: #c678dd; }
+.card-code-preview .hljs-literal { color: #56b6c2; }
+.card-code-preview .hljs-string, .card-code-preview .hljs-regexp { color: #98c379; }
+.card-code-preview .hljs-number, .card-code-preview .hljs-attr, .card-code-preview .hljs-variable, .card-code-preview .hljs-type { color: #d19a66; }
+.card-code-preview .hljs-title, .card-code-preview .hljs-symbol, .card-code-preview .hljs-meta { color: #61aeee; }
+.card-code-preview .hljs-built_in, .card-code-preview .hljs-title.class_ { color: #e6c07b; }
+.card-code-preview .hljs-subst, .card-code-preview .hljs-name { color: #e06c75; }

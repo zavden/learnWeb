@@ -40,13 +40,101 @@ export function isHeadingLine(line) {
     return /^#{1,6}\s+.+$/.test(line);
 }
 
+const FENCE_OPENING_PATTERN = /^(`{3,}|~{3,})[ \t]*([\w+-]+)[ \t]*$/;
+const FENCE_CLOSING_PATTERN = /^ {0,3}(`{3,}|~{3,})[ \t]*$/;
+const INDENTED_FENCE_CLOSING_PATTERN = /^[ \t]+(`{3,}|~{3,})[ \t]*$/;
+
+// Opening fence of an example block: ```lang, ````lang or ~~~lang at column 0.
+export function parseFenceOpening(line = '') {
+    const match = String(line ?? '').match(FENCE_OPENING_PATTERN);
+    if (!match) return null;
+
+    return {
+        char: match[1][0],
+        length: match[1].length,
+        language: normalizeBlockType(match[2]),
+    };
+}
+
+// A closing fence uses the same character as the opening fence, is at least as long,
+// may be indented up to 3 spaces and carries no info string.
+export function isFenceClosingLine(line = '', fence = null) {
+    if (!fence) return false;
+    const match = String(line ?? '').match(FENCE_CLOSING_PATTERN);
+    return Boolean(match) && match[1][0] === fence.char && match[1].length >= fence.length;
+}
+
+// A deeper indented fence (4+ spaces or tabs). Not a closing fence by itself, but used
+// to recover when a block was clearly meant to end there.
+export function isIndentedFenceClosingLine(line = '', fence = null) {
+    if (!fence) return false;
+    const match = String(line ?? '').match(INDENTED_FENCE_CLOSING_PATTERN);
+    return Boolean(match) && match[1][0] === fence.char && match[1].length >= fence.length;
+}
+
+// Picks a backtick fence longer than any backtick run that starts a content line,
+// so the content can never close its own block.
+export function getFenceForContent(content = '') {
+    let longestRun = 0;
+
+    String(content ?? '').split('\n').forEach((line) => {
+        const match = line.match(/^[ \t]*(`{3,})/);
+        if (match) {
+            longestRun = Math.max(longestRun, match[1].length);
+        }
+    });
+
+    return '`'.repeat(Math.max(3, longestRun + 1));
+}
+
 export function isFenceLine(line) {
-    return /^```([\w+-]+)\s*$/.test(line);
+    return Boolean(parseFenceOpening(line));
 }
 
 export function parseFenceLanguage(line) {
-    const match = line.match(/^```([\w+-]+)\s*$/);
-    return match ? normalizeBlockType(match[1]) : '';
+    return parseFenceOpening(line)?.language || '';
+}
+
+// Normalizes the body of a fenced block: removes leading and trailing blank lines and the
+// indentation shared by every non-blank line. Relative indentation (including the first
+// line's) is preserved, which matters for Pug and SASS. The result is stable: parsing it
+// again yields the same text.
+export function stripSurroundingBlankLines(lines = []) {
+    let start = 0;
+    let end = lines.length;
+
+    while (start < end && lines[start].trim() === '') start += 1;
+    while (end > start && lines[end - 1].trim() === '') end -= 1;
+
+    const bodyLines = lines.slice(start, end);
+    let commonIndent = null;
+
+    bodyLines.forEach((line) => {
+        if (line.trim() === '') return;
+        const indent = line.match(/^[ \t]*/)[0];
+
+        if (commonIndent === null) {
+            commonIndent = indent;
+            return;
+        }
+
+        let length = 0;
+        while (length < commonIndent.length && length < indent.length && commonIndent[length] === indent[length]) {
+            length += 1;
+        }
+        commonIndent = commonIndent.slice(0, length);
+    });
+
+    if (!commonIndent) {
+        return bodyLines.join('\n');
+    }
+
+    return bodyLines
+        .map((line) => {
+            if (line.startsWith(commonIndent)) return line.slice(commonIndent.length);
+            return line.trim() === '' ? '' : line;
+        })
+        .join('\n');
 }
 
 export function headingsMatch(actualHeading, expectedHeading) {
@@ -406,19 +494,33 @@ export function createDuplicatePath(path = '', existingPaths = new Set()) {
     return candidate;
 }
 
+function isCanonicalNumberLiteral(value = '') {
+    return /^-?\d+(\.\d+)?$/.test(value) && String(Number(value)) === value;
+}
+
 export function parseMetadataValue(rawValue = '') {
     const value = String(rawValue).trim();
 
     if (value === '') return '';
     if (value === 'true') return true;
     if (value === 'false') return false;
-    if (/^-?\d+(\.\d+)?$/.test(value)) return Number(value);
+    // Only coerce numbers that survive the roundtrip ("007" and "1.50" stay strings).
+    if (isCanonicalNumberLiteral(value)) return Number(value);
 
-    if (
-        (value.startsWith('"') && value.endsWith('"'))
-        || (value.startsWith("'") && value.endsWith("'"))
-    ) {
+    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+        // Values are serialized with JSON.stringify, so decode them with JSON.parse.
+        // Hand-written values with invalid escapes (e.g. "C:\path") fall back to the raw text.
+        try {
+            const parsed = JSON.parse(value);
+            if (typeof parsed === 'string') return parsed;
+        } catch { /* fall through */ }
+
         return value.slice(1, -1);
+    }
+
+    if (value.length >= 2 && value.startsWith("'") && value.endsWith("'")) {
+        // YAML single-quoted scalar: '' is an escaped single quote.
+        return value.slice(1, -1).replaceAll("''", "'");
     }
 
     return value;
@@ -506,7 +608,13 @@ export function serializeMetadataValue(value) {
         return String(value);
     }
 
-    if (typeof value === 'string' && /^[A-Za-z0-9_./-]+$/.test(value)) {
+    if (
+        typeof value === 'string'
+        && /^[A-Za-z0-9_./-]+$/.test(value)
+        && value !== 'true'
+        && value !== 'false'
+        && !isCanonicalNumberLiteral(value)
+    ) {
         return value;
     }
 
@@ -544,6 +652,24 @@ export function parseExerciseListValue(value) {
 
     return text
         .split(separator)
+        .map((entry) => entry.replace(/\\n/g, '\n').trim())
+        .filter(Boolean);
+}
+
+// Free-text lists (exercise_instructions, exercise_hints) are separated ONLY by "||",
+// so a single "|" or a comma can be used inside a step.
+export function parseExerciseTextListValue(value) {
+    if (Array.isArray(value)) {
+        return value
+            .map((entry) => String(entry ?? '').trim())
+            .filter(Boolean);
+    }
+
+    const text = String(value ?? '').trim();
+    if (!text) return [];
+
+    return text
+        .split('||')
         .map((entry) => entry.replace(/\\n/g, '\n').trim())
         .filter(Boolean);
 }

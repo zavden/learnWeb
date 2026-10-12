@@ -430,6 +430,9 @@ body.is-resizing-console {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.tree-item .label.is-slug-label {
   text-transform: capitalize;
 }
 

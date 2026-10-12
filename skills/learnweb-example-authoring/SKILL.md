@@ -110,7 +110,15 @@ document.getElementById('btn').addEventListener('click', () => {
 ```
 ```
 
-All three blocks are optional. You can have HTML-only, CSS-only, JS-only, or any combination.
+All three blocks are optional. You can have HTML-only, CSS-only, JS-only, TS-only, or any combination (at most one markup, one style and one script block). Console-only JS/TS examples (no markup) are valid; add `console: true`.
+
+Runtime notes (see `skills/learnweb-course-authoring/references/runtime.md` for the full capability matrix):
+
+- The script runs as a classic script; it switches to `type="module"` automatically when it has top-level `import`/`export`/`await`.
+- Loops get a guard that stops a run after ~1.2 s without yielding (`loop_protect: false` disables it).
+- `typecheck: false` disables TypeScript type checking for one example.
+- Relative URLs (`fetch('data.json')`, images, workers, module imports) resolve inside the topic's `assets/` folder.
+- No styles are injected into plain HTML examples: the preview shows the real browser defaults.
 
 ### Supported Legacy Block Types
 
@@ -124,7 +132,7 @@ All three blocks are optional. You can have HTML-only, CSS-only, JS-only, or any
 | `# SCSS` | `scss` | CSS (via Sass compiler) |
 | `# SASS` | `sass` | CSS (via Sass compiler) |
 | `# JavaScript` | `javascript` | JavaScript |
-| `# TypeScript` | `typescript` | JavaScript (via esbuild) |
+| `# TypeScript` | `typescript` | JavaScript (TypeScript compiler, ES2022, `strict` type checking — type errors are shown but the code still runs) |
 | `# JSX` | `jsx` | JavaScript (React single-file) |
 | `# TSX` | `tsx` | JavaScript (React single-file) |
 | `# Vertex` | `vertex` | GLSL vertex shader |
@@ -144,7 +152,7 @@ All three blocks are optional. You can have HTML-only, CSS-only, JS-only, or any
 
 ## Format Reference: HTML-FULL
 
-A complete HTML document in a single block. No other blocks allowed.
+A complete HTML document in a single block. No other blocks allowed. Write the heading `# HTML-FULL` with a plain ```` ```html ```` fence (```` ```html-full ```` also works); the heading decides the type.
 
 ```markdown
 # HTML-FULL

@@ -60,8 +60,17 @@ export const lineHighlightsMixin = {
     },
 
     _injectHighlightsIntoDocument(doc) {
+        // Serialize in document file order so the metadata string is stable
+        // (dirty tracking compares serialized documents).
+        const liveHighlights = this._buildHighlightsForPersist();
+        const orderedHighlights = new Map();
+        (doc.files || []).forEach((file) => {
+            if (liveHighlights.has(file.id)) {
+                orderedHighlights.set(file.id, liveHighlights.get(file.id));
+            }
+        });
         const highlightsStr = serializeHighlights(
-            this._buildHighlightsForPersist(),
+            orderedHighlights,
             doc.files || []
         );
         const metadata = { ...(doc.metadata || {}) };
@@ -117,13 +126,30 @@ export const lineHighlightsMixin = {
     _toggleHighlightColorPicker(anchorBtn) {
         const existing = document.querySelector('.highlight-color-picker');
         if (existing) {
-            existing.remove();
-            if (existing._anchorBtn === anchorBtn) return;
+            const sameAnchor = existing._anchorBtn === anchorBtn;
+            if (typeof existing._close === 'function') {
+                existing._close();
+            } else {
+                existing.remove();
+            }
+            if (sameAnchor) return;
         }
 
         const picker = document.createElement('div');
         picker.className = 'highlight-color-picker';
         picker._anchorBtn = anchorBtn;
+
+        const closeHandler = (event) => {
+            // Clicks on the anchor button are handled by the toggle itself.
+            if (picker.contains(event.target) || anchorBtn.contains(event.target)) return;
+            close();
+        };
+
+        const close = () => {
+            picker.remove();
+            document.removeEventListener('click', closeHandler, true);
+        };
+        picker._close = close;
 
         for (const color of HIGHLIGHT_COLORS) {
             const option = document.createElement('button');
@@ -138,7 +164,7 @@ export const lineHighlightsMixin = {
             option.addEventListener('click', (event) => {
                 event.stopPropagation();
                 this._setActiveHighlightColor(color.id);
-                picker.remove();
+                close();
             });
             picker.appendChild(option);
         }
@@ -149,14 +175,6 @@ export const lineHighlightsMixin = {
         picker.style.top = `${rect.bottom + 4}px`;
         picker.style.left = `${rect.left}px`;
 
-        setTimeout(() => {
-            const closeHandler = (event) => {
-                if (!picker.contains(event.target)) {
-                    picker.remove();
-                    document.removeEventListener('click', closeHandler, true);
-                }
-            };
-            document.addEventListener('click', closeHandler, true);
-        }, 0);
+        document.addEventListener('click', closeHandler, true);
     },
 };
