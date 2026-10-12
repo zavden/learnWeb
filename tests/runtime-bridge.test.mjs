@@ -18,6 +18,7 @@ function createFrame({ beforeScripts = '' } = {}) {
         clearTimeout,
         performance: { now: () => performance.now() },
         URL,
+        URLSearchParams,
     };
     sandbox.window = sandbox;
     // Like window.postMessage: messages are structured-cloned (also normalises vm realms).
@@ -245,21 +246,54 @@ test('REPL evaluates in the page global scope', async () => {
 
 test('forms: unhandled submits are blocked and logged; method=dialog passes through', async () => {
     const frame = await runExample('', { beforeScripts: 'globalThis.FormData = class { constructor() {} entries() { return [["email", "a@b.c"], ["tag", "x"], ["tag", "y"]][Symbol.iterator](); } };' });
-    const makeForm = (method) => ({ tagName: 'FORM', getAttribute: (name) => (name === 'method' ? method : name === 'action' ? '/save' : null) });
+    const makeForm = (method, action = '/save', enctype = null) => ({
+        tagName: 'FORM',
+        getAttribute: (name) => ({ method, action, enctype })[name] ?? null,
+    });
+    const submit = (form, defaultPrevented = false) => {
+        let prevented = false;
+        frame.dispatch('submit', { target: form, submitter: null, defaultPrevented, preventDefault() { prevented = true; } });
+        return prevented;
+    };
 
-    let prevented = false;
-    frame.dispatch('submit', { target: makeForm('post'), submitter: null, defaultPrevented: false, preventDefault() { prevented = true; } });
-    assert.equal(prevented, true);
+    assert.equal(submit(makeForm('post')), true);
     await settle();
-    assert.equal(frame.posted.at(-1).text, "Form submitted (navigation blocked in preview): POST /save {email: 'a@b.c', tag: Array(2)}");
+    assert.equal(frame.posted.at(-1).text, "Form submitted (navigation blocked in preview): POST /save (application/x-www-form-urlencoded) {email: 'a@b.c', tag: Array(2)}");
 
-    prevented = false;
-    frame.dispatch('submit', { target: makeForm('dialog'), submitter: null, defaultPrevented: false, preventDefault() { prevented = true; } });
-    assert.equal(prevented, false);
+    submit(makeForm('POST', '/upload', 'multipart/form-data'));
+    await settle();
+    assert.match(frame.posted.at(-1).text, /: POST \/upload \(multipart\/form-data\) \{/);
+
+    // GET replaces the query of the action and keeps its fragment; an invalid method means GET.
+    submit(makeForm('put', '/search?old=1#results'));
+    await settle();
+    assert.match(frame.posted.at(-1).text, /: GET \/search\?email=a%40b\.c&tag=x&tag=y#results \{/);
+    submit(makeForm('get', null));
+    await settle();
+    assert.match(frame.posted.at(-1).text, /: GET \(this page\)\?email=a%40b\.c&tag=x&tag=y \{/);
+
+    assert.equal(submit(makeForm('dialog')), false);
 
     const before = frame.posted.length;
-    frame.dispatch('submit', { target: makeForm('get'), submitter: null, defaultPrevented: true, preventDefault() {} });
+    submit(makeForm('get'), true);
     assert.equal(frame.posted.length, before, 'handled submits are left alone');
+});
+
+test('forms: files are logged with their name, size and type', async () => {
+    const frame = await runExample('', {
+        beforeScripts: [
+            'globalThis.File = class File { constructor(name, size, type) { this.name = name; this.size = size; this.type = type; } };',
+            'globalThis.FormData = class { constructor() {} entries() { return [["cv", new File("cv.pdf", 24576, "application/pdf")], ["photo", new File("", 0, "application/octet-stream")]][Symbol.iterator](); } };',
+        ].join('\n'),
+    });
+    frame.dispatch('submit', {
+        target: { tagName: 'FORM', getAttribute: (name) => ({ method: 'post', action: '/apply', enctype: 'multipart/form-data' })[name] ?? null },
+        submitter: null,
+        defaultPrevented: false,
+        preventDefault() {},
+    });
+    await settle();
+    assert.equal(frame.posted.at(-1).text, "Form submitted (navigation blocked in preview): POST /apply (multipart/form-data) {cv: 'File \"cv.pdf\" (24 KB, application/pdf)', photo: 'File (no file chosen)'}");
 });
 
 test('dialogs are replaced by notices during live edits, in order', async () => {

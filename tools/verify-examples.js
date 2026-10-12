@@ -12,6 +12,7 @@ import { validateShaderPreviewDocument } from '../src/utils/shaderPreviewDiagnos
 import {
     buildResult,
     collectTopicPaths,
+    consoleLinesFromMessages,
     filterExampleFiles,
     formatProblem,
     parseVerifyParams,
@@ -163,7 +164,7 @@ async function verifyCompiled(documentModel, topicPath, state) {
     return problemsFromCompileDiagnostics(diagnostics);
 }
 
-async function verifyExample(topicPath, file, ms) {
+async function verifyExample(topicPath, file, ms, { logs = false } = {}) {
     const startedAt = performance.now();
     teardownFrame();
     renderSequence += 1;
@@ -206,6 +207,7 @@ async function verifyExample(topicPath, file, ms) {
     return buildResult({
         durationMs: performance.now() - startedAt,
         file,
+        logs: logs ? consoleLinesFromMessages(state.messages) : null,
         mode: state.mode,
         note,
         problems,
@@ -216,9 +218,9 @@ async function verifyExample(topicPath, file, ms) {
 }
 
 async function run() {
-    const { path, ms, only } = parseVerifyParams(window.location.search);
+    const { path, ms, only, logs } = parseVerifyParams(window.location.search);
     if (!path) {
-        setStatus('Add ?path=<chapter>[/<section>[/<topic>]] to the URL (optional &ms=1500&only=03-).');
+        setStatus('Add ?path=<chapter>[/<section>[/<topic>]] to the URL (optional &ms=1500&only=03-&logs=1).');
         window.__verifyDone = true;
         return;
     }
@@ -248,7 +250,7 @@ async function run() {
         if (stopRequested) break;
         const { topicPath, file } = queue[index];
         setStatus(`Running ${index + 1}/${queue.length}: ${topicPath}/${file}`);
-        const result = await verifyExample(topicPath, file, ms);
+        const result = await verifyExample(topicPath, file, ms, { logs });
         window.__verifyResults.push(result);
         appendRow(result);
         renderSummary();

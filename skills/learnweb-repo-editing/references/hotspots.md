@@ -74,6 +74,7 @@ All editor/* modules are mixins applied via `Object.assign(Editor.prototype, ...
 - `src/utils/compiler/markupCompiler.js` — Pug compilation
 - `src/utils/compiler/styleCompiler.js` — SCSS/SASS compilation
 - `src/utils/compiler/scriptCompiler.js` — JavaScript syntax check + TypeScript transpile (ES2022) + loop guards
+- `src/utils/compiler/syntaxCheck.js` — JavaScript syntax errors as Chrome reports them (V8 `vm.Script` for classic scripts, TS parser for modules, plus the browser-only `let top`/`window`/`document`/`location` early error)
 - `src/utils/compiler/typeChecker.js` — cached TypeScript language service (`strict`, ES2023 + DOM libs); type errors are non-blocking diagnostics
 - `src/utils/compiler/loopGuard.js` — same-line loop guards that stop endless loops after ~1.2 s
 - `src/utils/compiler/isolatedCompiler.js` + `compileWorkerThread.js` — the server compiles in a worker thread with memory/time limits (endless Sass/Pug loops can't take the API down)
@@ -184,7 +185,7 @@ Pending mirrors the Favorites architecture exactly: file-based JSON storage, ser
 - `tests/runtime-*.test.mjs` — preview document and in-page runtime (console inspector, errors)
 - `tests/ui-*.test.mjs` — dirty tracking and Vim shortcut config
 
-Total: 223 tests. Run with `npm test`.
+Total: 235 tests. Run with `npm test`.
 
 ## 14. Course Content Checker
 - `tools/verify-examples.html` (+ `verify-examples.js`, `verify-core.js`) — browser harness: `http://localhost:5174/tools/verify-examples.html?path=<ch>/<sec>[&ms=1500][&only=03-]` runs examples through the real hosted preview one at a time and collects runtime problems (`window.__verifyResults`).

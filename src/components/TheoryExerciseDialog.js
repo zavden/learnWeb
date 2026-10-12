@@ -2,6 +2,20 @@ import { fetchExample } from '../utils/api.js';
 import { compileExample } from '../utils/compileClient.js';
 import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../utils/exampleRenderer.js';
 import { getExampleEditorialMetadata, isShaderDocument, parseExampleDocument } from '../utils/markdown.js';
+import { consoleManagerMixin } from './preview/ConsoleManager.js';
+
+// The dialog console reuses the main console's value rendering, so objects expand on click
+// (down to [[Prototype]]) by asking the dialog's iframe, exactly as in the editor preview.
+const BORROWED_CONSOLE_METHODS = [
+    '_createConsoleValueSpan',
+    '_rejectPendingConsoleInspects',
+    '_renderConsoleParts',
+    '_renderConsoleProperty',
+    '_renderConsoleValue',
+    '_requestConsoleInspect',
+    '_resolveConsoleInspect',
+    '_sanitizeConsoleStyle',
+];
 
 function buildConsoleTable({ header, rows }) {
     const table = document.createElement('table');
@@ -40,6 +54,11 @@ export class TheoryExerciseDialog {
         this.consoleList = null;
         this.consoleCount = 0;
         this.renderCount = 0;
+        // State used by the borrowed console methods (see BORROWED_CONSOLE_METHODS).
+        this.iframe = null;
+        this._renderToken = 0;
+        this._consoleInspectRequests = new Map();
+        this._consoleInspectSequence = 0;
 
         // Console output of the previewed example (theory pages have no console of their own).
         window.addEventListener('message', (event) => this._handleFrameMessage(event));
@@ -48,8 +67,10 @@ export class TheoryExerciseDialog {
         this.btnCloseIcon?.addEventListener('click', () => this.dialog?.close());
         // Remove the live preview on close so it stops running in the background.
         this.dialog?.addEventListener('close', () => {
+            this._rejectPendingConsoleInspects();
             this.currentRequest = null;
             this.currentFrame = null;
+            this.iframe = null;
             this.consoleList = null;
             if (this.stage) {
                 this.stage.innerHTML = '';
@@ -116,6 +137,7 @@ export class TheoryExerciseDialog {
 
             this._renderPreview({
                 consoleOnly,
+                renderId: isShaderDocument(documentModel) ? 0 : renderId,
                 description: editorial.description || '',
                 iframe,
                 path: `/${this.currentTopicPath}/examples/${this.currentFilename}`,
@@ -148,11 +170,14 @@ export class TheoryExerciseDialog {
         this.btnOpen.disabled = true;
     }
 
-    _renderPreview({ iframe, title, description, path, consoleOnly = false }) {
+    _renderPreview({ iframe, title, description, path, consoleOnly = false, renderId = 0 }) {
         if (!this.stage || !this.empty || !this.title || !this.note || !this.btnOpen) return;
         this.stage.innerHTML = '';
         this.stage.classList.toggle('is-console-only', consoleOnly);
+        this._rejectPendingConsoleInspects();
         this.currentFrame = iframe;
+        this.iframe = iframe;
+        this._renderToken = renderId;
         this.consoleCount = 0;
         this.consoleList = document.createElement('ol');
         this.consoleList.className = 'theory-exercise-dialog-console hidden';
@@ -170,6 +195,10 @@ export class TheoryExerciseDialog {
         if (!data || data.source !== 'learncode-preview' || !this.currentFrame || !this.consoleList) return;
         if (event.source !== this.currentFrame.contentWindow) return;
 
+        if (data.kind === 'inspect-result') {
+            this._resolveConsoleInspect(data);
+            return;
+        }
         if (data.kind === 'console-clear') {
             this.consoleList.replaceChildren();
             this.consoleCount = 0;
@@ -184,9 +213,12 @@ export class TheoryExerciseDialog {
         item.className = `theory-exercise-dialog-console-entry is-${level}`;
         const depth = Array.isArray(data.groups) ? data.groups.length : 0;
         if (depth > 0) item.style.paddingInlineStart = `${10 + depth * 14}px`;
-        let text = String(data.text ?? (Array.isArray(data.values) ? data.values.join(' ') : ''));
-        if (data.kind === 'runtime-error' && data.line) text += `  (line ${data.line})`;
-        item.textContent = text;
+        if (Array.isArray(data.parts) && data.parts.length > 0) {
+            this._renderConsoleParts(item, data.parts);
+        } else {
+            item.textContent = String(data.text ?? (Array.isArray(data.values) ? data.values.join(' ') : ''));
+        }
+        if (data.kind === 'runtime-error' && data.line) item.append(`  (line ${data.line})`);
         if (data.table && Array.isArray(data.table.header) && Array.isArray(data.table.rows)) {
             item.appendChild(buildConsoleTable(data.table));
         }
@@ -202,3 +234,7 @@ export class TheoryExerciseDialog {
         this.consoleList.scrollTop = this.consoleList.scrollHeight;
     }
 }
+
+BORROWED_CONSOLE_METHODS.forEach((name) => {
+    TheoryExerciseDialog.prototype[name] = consoleManagerMixin[name];
+});

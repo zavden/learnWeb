@@ -11,7 +11,8 @@ export function parseVerifyParams(search = '') {
     const rawMs = Number.parseInt(params.get('ms') || '', 10);
     const ms = Number.isFinite(rawMs) ? Math.min(Math.max(rawMs, 200), 20000) : DEFAULT_OBSERVE_MS;
     const only = String(params.get('only') || '').trim();
-    return { path, ms, only };
+    const logs = ['1', 'true', 'yes'].includes(String(params.get('logs') || '').trim().toLowerCase());
+    return { path, ms, only, logs };
 }
 
 // Topic paths ("ch/sec/top") under a chapter, section or topic path, in tree order.
@@ -136,6 +137,21 @@ export function dedupeProblems(problems = []) {
  * - warn: no problems but the page never reported that its runtime booted
  * - ok
  */
+// Console output of a run as plain text lines ("log: ✓ total"), for checking what an example prints
+// (exercise self-checks, audits). Only used when the harness runs with &logs=1.
+export function consoleLinesFromMessages(messages = [], limit = 200) {
+    const lines = [];
+    (Array.isArray(messages) ? messages : []).forEach((message) => {
+        if (!message || typeof message !== 'object' || message.kind !== 'console') return;
+        if (message.method === 'clear') return;
+        const text = typeof message.text === 'string'
+            ? message.text
+            : Array.isArray(message.values) ? message.values.join(' ') : '';
+        lines.push(`${message.method || message.level || 'log'}: ${text}`.slice(0, MESSAGE_LIMIT));
+    });
+    return lines.slice(0, limit);
+}
+
 export function classifyResult({ stage = '', problems = [], ready = true } = {}) {
     const unique = dedupeProblems(problems);
     if (unique.length > 0) {
@@ -144,7 +160,7 @@ export function classifyResult({ stage = '', problems = [], ready = true } = {})
     return ready ? 'ok' : 'warn';
 }
 
-export function buildResult({ topicPath = '', file = '', stage = '', problems = [], ready = true, mode = '', durationMs = 0, note = '' } = {}) {
+export function buildResult({ topicPath = '', file = '', stage = '', problems = [], ready = true, mode = '', durationMs = 0, note = '', logs = null } = {}) {
     const unique = dedupeProblems(problems);
     const result = {
         path: `${topicPath}/examples/${file}`,
@@ -161,6 +177,7 @@ export function buildResult({ topicPath = '', file = '', stage = '', problems = 
         result.problems = [{ kind: 'not-ready', message: 'The preview runtime never reported ready (page did not boot?)', file: '', line: null }];
     }
     if (note) result.note = note;
+    if (Array.isArray(logs)) result.logs = logs;
     return result;
 }
 

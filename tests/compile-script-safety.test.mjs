@@ -167,3 +167,15 @@ test('javascript syntax errors come from V8 and match the browser', () => {
     // Top-level await makes the script a module, which is valid.
     assert.equal(compileScript({ type: 'javascript', content: "const r = await fetch('x');" }).diagnostics.length, 0);
 });
+
+test('classic scripts cannot redeclare non-configurable window globals, as in Chrome', () => {
+    const topConst = compileScript({ type: 'javascript', content: "console.log(1);\nconst { top, left } = box;\n" });
+    assert.deepEqual(topConst.diagnostics.map((d) => [d.code, d.line, d.column, d.message]), [
+        ['javascript-syntax', 2, 9, "SyntaxError: Identifier 'top' has already been declared"],
+    ]);
+    assert.equal(compileScript({ type: 'javascript', content: 'class location {}' }).diagnostics.length, 1);
+    // Ordinary window properties, `var`, nested scopes and modules are fine.
+    for (const content of ['let name = 1; const status = 2;', 'var top = 1;', '{ const top = 1; }', 'function f() { let window = 1; }', "export const top = 1;"]) {
+        assert.equal(compileScript({ type: 'javascript', content }).diagnostics.length, 0, content);
+    }
+});

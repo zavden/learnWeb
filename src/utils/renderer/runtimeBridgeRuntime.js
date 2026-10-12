@@ -1606,7 +1606,9 @@ export function learncodeRuntimeBridge(config) {
         if (!form || String(form.tagName || '').toUpperCase() !== 'FORM') return;
         const submitter = event.submitter || null;
         const attribute = (element, name) => (element && typeof element.getAttribute === 'function' ? element.getAttribute(name) : null);
-        const method = String(attribute(submitter, 'formmethod') || attribute(form, 'method') || 'get').toLowerCase();
+        // Attributes, not form.method/form.action: a control named "method" or "action" shadows those properties.
+        const rawMethod = String(attribute(submitter, 'formmethod') || attribute(form, 'method') || 'get').toLowerCase();
+        const method = ['get', 'post', 'dialog'].includes(rawMethod) ? rawMethod : 'get';
         if (method === 'dialog') return;
 
         event.preventDefault();
@@ -1622,16 +1624,44 @@ export function learncodeRuntimeBridge(config) {
                 entries = [];
             }
         }
+        // Files are shown as the browser would describe them; a GET only sends their names.
+        const describeFile = (file) => {
+            if (!file || !file.name) return 'File (no file chosen)';
+            const size = file.size >= 1024 ? Math.round(file.size / 1024) + ' KB' : file.size + ' bytes';
+            return 'File "' + file.name + '" (' + size + (file.type ? ', ' + file.type : '') + ')';
+        };
+        const isFile = (value) => typeof win.File === 'function' && value instanceof win.File;
         const data = {};
-        entries.forEach(([name, value]) => {
+        entries.forEach(([name, rawValue]) => {
+            const value = isFile(rawValue) ? describeFile(rawValue) : rawValue;
             if (hasOwn.call(data, name)) {
                 data[name] = isArray(data[name]) ? data[name].concat([value]) : [data[name], value];
             } else {
                 data[name] = value;
             }
         });
-        const action = attribute(submitter, 'formaction') || attribute(form, 'action') || '(this page)';
-        emit('info', ['Form submitted (navigation blocked in preview): ' + method.toUpperCase() + ' ' + action, data], { method: 'form-submit' });
+        const rawAction = attribute(submitter, 'formaction') ?? attribute(form, 'action');
+        let target = rawAction || '(this page)';
+        if (method === 'get') {
+            // GET replaces the action's query string with the form data (the fragment stays).
+            try {
+                const query = new win.URLSearchParams(entries.map(([name, value]) => [name, isFile(value) ? value.name : String(value)])).toString();
+                const action = rawAction || '';
+                const hashIndex = action.indexOf('#');
+                const withoutHash = hashIndex === -1 ? action : action.slice(0, hashIndex);
+                const hash = hashIndex === -1 ? '' : action.slice(hashIndex);
+                const queryIndex = withoutHash.indexOf('?');
+                const base = queryIndex === -1 ? withoutHash : withoutHash.slice(0, queryIndex);
+                target = (base || (rawAction ? '' : '(this page)')) + '?' + query + hash;
+            } catch {
+                // Keep the raw action.
+            }
+        } else {
+            const rawEnctype = String(attribute(submitter, 'formenctype') || attribute(form, 'enctype') || '').toLowerCase();
+            const enctype = ['multipart/form-data', 'text/plain'].includes(rawEnctype) ? rawEnctype : 'application/x-www-form-urlencoded';
+            target += ' (' + enctype + ')';
+        }
+        emit('info', ['Form submitted (navigation blocked in preview): ' + method.toUpperCase() + ' ' + target, data], { method: 'form-submit' });
     });
 
     // ─── Links to other sites ──────────────────────────────

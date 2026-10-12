@@ -4,6 +4,7 @@ import {
     buildResult,
     classifyResult,
     collectTopicPaths,
+    consoleLinesFromMessages,
     filterExampleFiles,
     formatProblem,
     parseVerifyParams,
@@ -25,8 +26,9 @@ const tree = [
 ];
 
 test('parses URL parameters with sane defaults and bounds', () => {
-    assert.deepEqual(parseVerifyParams('?path=/ch02-html/sec01-web/&ms=900&only=03-'), { path: 'ch02-html/sec01-web', ms: 900, only: '03-' });
-    assert.deepEqual(parseVerifyParams(''), { path: '', ms: 1500, only: '' });
+    assert.deepEqual(parseVerifyParams('?path=/ch02-html/sec01-web/&ms=900&only=03-'), { path: 'ch02-html/sec01-web', ms: 900, only: '03-', logs: false });
+    assert.deepEqual(parseVerifyParams(''), { path: '', ms: 1500, only: '', logs: false });
+    assert.equal(parseVerifyParams('?path=x&logs=1').logs, true);
     assert.equal(parseVerifyParams('?path=x&ms=5').ms, 200);
     assert.equal(parseVerifyParams('?path=x&ms=abc').ms, 1500);
 });
@@ -95,4 +97,16 @@ test('summary counts every status', () => {
     assert.deepEqual(summarizeResults([{ status: 'ok' }, { status: 'error' }, { status: 'expected' }, { status: 'warn' }, { status: 'ok' }]), {
         total: 5, ok: 2, warn: 1, error: 1, expected: 1,
     });
+});
+
+test('console lines are collected only from console messages', () => {
+    const lines = consoleLinesFromMessages([
+        { kind: 'console', method: 'log', level: 'log', text: '✓ total' },
+        { kind: 'console', method: 'clear', level: 'log', text: '' },
+        { kind: 'runtime-error', text: 'boom' },
+        { kind: 'console', method: 'warn', level: 'warn', values: ['a', 'b'] },
+    ]);
+    assert.deepEqual(lines, ['log: ✓ total', 'warn: a b']);
+    assert.equal(buildResult({ topicPath: 't', file: 'f.md' }).logs, undefined);
+    assert.deepEqual(buildResult({ topicPath: 't', file: 'f.md', logs: ['log: x'] }).logs, ['log: x']);
 });
