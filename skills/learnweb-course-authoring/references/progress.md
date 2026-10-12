@@ -1,6 +1,6 @@
 # Course progress and hand-off notes
 
-Last updated: 2026-10-12 (session paused by the user's usage budget; module-2 lessons completed by the coordinator).
+Last updated: 2026-10-12, second pause (user's usage budget). Modules 2 and 3 of every lane are complete; modules 4 are partly written.
 
 Read this first when resuming the course work. The syllabus is in [plan.md](plan.md), the authoring
 rules in [../SKILL.md](../SKILL.md), runtime capabilities in [runtime.md](runtime.md).
@@ -12,50 +12,78 @@ Legend: ✅ complete and verified (checker 0/0 + browser harness) · 🟡 partia
 | Module | Lessons | top90 | top95 | Notes |
 |---|---|---|---|---|
 | ch02-html/sec01-la-web-y-el-documento | ✅ 5/5 | ✅ 7 ex + 3 exercises | ✅ 12 | 67 examples |
-| ch02-html/sec02-contenido-y-semantica | ✅ 7/7 | ⬜ | ⬜ | 54 examples; not yet browser-verified |
-| ch02-html/sec03-formularios | ⬜ | ⬜ | ⬜ | |
-| ch02-html/sec04-multimedia-y-embebidos | ⬜ | ⬜ | ⬜ | |
+| ch02-html/sec02-contenido-y-semantica | ✅ 7/7 | ✅ 8 + 4 exercises | ✅ 13 | 83 examples; browser-verified 0 problems |
+| ch02-html/sec03-formularios | ✅ 5/5 | ✅ 8 + 3 exercises | ✅ 13 | 74 examples; browser-verified 0 problems (top95 form-audit all ✅); top05/05 rewritten (Escape now empties returnValue in Chrome; close() without argument keeps it) |
+| ch02-html/sec04-multimedia-y-embebidos | 🟡 3/5 (top01-03) | ⬜ | ⬜ | 26 examples, runtime-verified; visual checks pending |
 | ch03-css/sec01-fundamentos-y-cascada | ✅ 10/10 | ✅ 7 + 3 exercises | ✅ 11 | 112 examples |
-| ch03-css/sec02-modelo-de-cajas | ✅ 6/6 | ⬜ | ⬜ | 45 examples; not yet browser-verified |
-| ch03-css/sec03 … sec10 | ⬜ | ⬜ | ⬜ | |
+| ch03-css/sec02-modelo-de-cajas | ✅ 6/6 | ✅ 8 + 4 exercises | ✅ 13 | 74 examples; browser-verified 0 problems |
+| ch03-css/sec03-flujo-y-posicionamiento | ✅ 5/5 | ✅ 8 + 4 exercises | ✅ 12 | 69 examples; browser-verified 0 problems; top95/02 buy box uses a ×999 clamp switch at <40rem |
+| ch03-css/sec04-flexbox | 🟡 3/5 (top01-03) | ⬜ | ⬜ | 26 examples, runtime-verified; visual checks pending |
+| ch03-css/sec05 … sec10 | ⬜ | ⬜ | ⬜ | |
 | ch04-sass/sec01 | ⬜ | ⬜ | ⬜ | |
 | ch05-javascript/sec01-primeros-pasos | ✅ 7/7 | ✅ 7 + 3 exercises | ✅ 12 | 89 examples |
-| ch05-javascript/sec02-datos | ✅ 7/7 | ⬜ | ⬜ | 63 examples; outputs verified with node (TZ=Europe/Madrid) |
-| ch05-javascript/sec03 … sec08 | ⬜ | ⬜ | ⬜ | |
+| ch05-javascript/sec02-datos | ✅ 7/7 | ✅ 8 + 4 exercises | ✅ 12 | 91 examples; browser-verified 0 problems; Chrome output = node output |
+| ch05-javascript/sec03-funciones-y-ambito | ✅ 7/7 | ✅ 8 + 3 exercises | ✅ 12 | 87 examples; browser-verified 0 problems |
+| ch05-javascript/sec04-objetos-y-prototipos | ✅ 5/5 | ⬜ | ⬜ | 48 lesson examples browser-verified; theory dialog console now expands objects |
+| ch05-javascript/sec05 … sec08 | ⬜ | ⬜ | ⬜ | |
 | ch06 … ch08 | ⬜ | ⬜ | ⬜ | |
 
-Modules with lessons done but top90/top95 pending (all checker-clean; lessons written by agents and, for the
-last ones, by the coordinator; NONE of these 162 examples has been run through the browser harness yet):
-
-- **ch02-html/sec02-contenido-y-semantica** — top01-texto, top02-listas, top03-enlaces, top04-imagenes,
-  top05-tablas, top06-estructura-semantica, top07-accesibilidad. Conventions: tiny JS only to make facts
-  visible, labeled "Adelanto: JavaScript se explica en su capítulo"; inline `onclick` with a "events come
-  later" note; CSS only for readability (some examples use position/grid with a forward-reference comment).
-  To check in Chrome: top01/07 `<q>` quotes per language, top01/04 `wbr`/`&shy;`, top03/03 (↗ then
-  `window.opener`), top03/04 download, top04/04-06 `currentSrc` choices (resize / ↗ + device mode),
-  top07/07 Tab order, top07/08 skip link on Tab.
-- **ch03-css/sec02-modelo-de-cajas** — top01-la-caja, top02-display, top03-margenes, top04-tamanos,
-  top05-overflow, top06-bordes-sombras-y-fondos (assets dots.svg, leaf.svg, photo.svg). DevTools colour
-  convention (content #bfdbfe, padding #bbf7d0, border #facc15, margin #fed7aa). All promises from earlier
-  lessons are fulfilled (margin collapsing, auto centring, box-shadow, background under the border, body
-  background → canvas). Forward references only: gradients, filters (sec07), floats/position (sec03),
-  flex/grid gap. To check: top05/02 computed overflow-y, top05/05 scrollbar-gutter (macOS overlay
-  scrollbars hide the effect), top06/04 body canvas propagation, top06/07 focus rings.
-- **ch05-javascript/sec02-datos** — top01-numeros … top07-fechas-e-intl. Arrow functions explained once in
-  the arrays main.md (examples add a one-line comment); Intl always with explicit locale/timeZone (es-ES
-  doesn't group 4-digit numbers; outputs contain NBSP); verify outputs with `TZ=Europe/Madrid node`.
-  Promise for ch05 sec03 (functions): top06-json-y-copias says immutability ("crear un objeto nuevo con lo
-  que cambia") is covered in the functions module — include it in top06-funciones-de-orden-superior. Plan
-  gap: no regular-expressions lesson yet (used with one-line comments); consider adding one to sec06.
+Current goal (user, 2026-10-12): write modules 3 and 4 of each lane, max 3 agents at a time. Modules 3 are done;
+resume with the modules 4 (fresh agents: they read the module folder first, then continue).
 
 Next actions when resuming:
-1. `npm run dev`, then run the browser harness on the three sections above
-   (`/tools/verify-examples.html?path=ch02-html/sec02-contenido-y-semantica&ms=1200`, etc.; keep each
-   browser_batch under ~45 s and read `window.__verifyResults` afterwards).
-2. Write top90-integracion + top95-profesional for those three modules (fresh agents: give them the module
-   folder to read first, then the usual top90/top95 instructions; mark top95 `example_stage: professional`).
-3. Continue the lanes in plan order: HTML sec03-formularios, CSS sec03-flujo-y-posicionamiento,
-   JS sec03-funciones-y-ambito.
+1. `npm run dev`. The paused agents' contexts are gone after compaction: use FRESH agents with the prompts in the
+   coordinator's messages as templates (common head: AGENTS.md, SKILL.md, plan.md, runtime.md, example/theory
+   skills; the previous module for tone; exact assignment; audience; runtime facts; quality bar; process; heat rule;
+   report). Tell each one which topics already exist and must not be rewritten.
+2. **JS ch05/sec04-objetos-y-prototipos**: lessons done. Write top90 + top95. Agent's plan: top90 combined = shape
+   hierarchy, inventory with accessors, plugins by delegation, polyfills with tests, hand-wired "class" factory,
+   glossary with `Object.create(null)` vs `{}`, layered frozen settings, mixins (copy vs delegate); exercises =
+   myNew/myInstanceOf/inherit, account model with accessors, bug hunt (template:
+   sec03/top90/examples/09-ej-utilidades-de-funciones.md). top95 = library domain model, event emitter +
+   observable model, money/units value objects, settings store with accessors, plugin text formatter, widget base
+   "type" + 2 widgets with UI, prototype-chain inspector, polyfill bundle with tests, record type with dirty tracking,
+   state machine with delegating states. No `class` yet (module 5). Exact console text can be checked with
+   `node claude_resume/run-example.mjs <example.md>` (runs the real runtime bridge in a vm; no DOM).
+3. **CSS ch03/sec04-flexbox**: top01-03 done (conventions: containers `2px dashed #7c3aed`, items `#e0e7ff` with
+   `#4338ca` border; top03 assets `ruler-400.svg`, `free-space.svg`; containers exactly 400px with a ruler). Write
+   top04-trampas-de-flex (plan: `<pre>` that won't shrink until `min-width: 0`; ellipsis that doesn't appear;
+   `flex: 1` columns made unequal by a long email; `min-height: 0` in a nested column; initials avatar squashed
+   by shrinking; image stretched; PROMISES from sec03: sticky failing under `align-items: stretch`, `order` vs Tab
+   order with `reading-flow: flex-visual` (Chrome 137+)) and top05-patrones-flex (plan.md list + input+button and a
+   panel whose body fills the remaining height, promised by sec02 top95), then top90 + top95.
+   Visual checks pending: top02/09 (`safe center` needed?), rulers in top03/02-06 and 08, baseline line top02/04,
+   computed table top03/07, stretched items in top01/03 column panel.
+4. **HTML ch02/sec04-multimedia-y-embebidos**: top01-03 done (top01 assets: the 7 media files + 6 .vtt incl. a broken
+   SRT one; tracks need `crossorigin="anonymous"` on `<video>` because cards/dialogs are opaque-origin srcdoc;
+   top02 `assets/calendar.ics`). Write top04-iframes-y-embebidos (srcdoc + sandbox demos, the
+   allow-scripts + allow-same-origin bug, a site that refuses framing; top01 and top03 promise top04 explains
+   `sandbox` and `allow="autoplay"`) and top05-template-y-metadatos (template cloning + "template empties itself"
+   bug, slot via declarative shadow DOM, Open Graph / link rel / JSON-LD as HTML-FULL), then top90 + top95.
+   Checks pending in Chrome: top01/06 autoplay (blocked unmuted in theory cards; in the editor preview it may
+   play with sound after a click), top01/03 canPlayType, top01/05 SRT track error event, top01/08 `#t=3,6`,
+   top02/09 `<use href>` in theory cards, top03/04 blurry vs sharp canvas, top03/06 canvas fallback.
+5. Media files (generated with ffmpeg) are kept in the gitignored `claude_resume/media/` in case more are needed.
+6. After the modules 4: continue the plan (HTML sec05?/ch04 Sass, CSS sec05-grid, JS sec05-clases-y-poo…).
+
+Notes carried forward:
+- Learner's browser: America/Mexico_City (no DST), en-US. See runtime.md "The learner's browser".
+- JS sec02 promise: immutability is taught in sec03/top06-funciones-de-orden-superior. Plan gap: no
+  regular-expressions lesson yet (used with one-line comments); consider adding one to sec06.
+- CSS sec02 top95 used `vertical-align` and overlapping badges/ribbons (negative margins) with forward
+  references; sec03 explains them.
+- Placeholder `href="#"` links: ~240 in CSS sec01-03 demos and HTML sec02 (top06); the guide now asks for
+  plausible paths in new content. Old ones left (harmless in CSS demos); could be tidied.
+- HTML sec02: lesson examples top05/01 and 03 omit `<tbody>` (before the lesson introduces it) and top06 uses
+  `href="#"` placeholders (top03 teaches it as a bug) — left as is, could be tidied.
+- Media: ffmpeg is installed (/opt/homebrew/bin, libx264, libvpx-vp9,
+  libopus, libmp3lame, lavfi testsrc2/life/aevalsrc; no drawtext). The coordinator generates them (short CPU
+  burst), agents ask for them.
+  Generated files, kept in the gitignored `claude_resume/media/` (already copied into sec04/top01-audio-y-video/assets/):
+  `life.webm` (VP9+Opus) / `life.mp4` (H.264+AAC) — 12 s, 640×360, Conway's Game of Life (cyan cells on
+  #0f172a) with a plucked 8-note melody (C E G C' A G E D, 0.5 s each, looping every 4 s); `life-poster.jpg`
+  (frame at 3 s); `counter.webm` / `counter.mp4` — 8 s ffmpeg `testsrc` pattern with a running counter, no
+  audio (good for subtitle timing and currentTime); `melody.mp3` / `melody.ogg` (Opus) — the 12 s melody alone.
 
 To see the real state at any time: `node scripts/check-material.mjs material/<ch>/<sec>` (counts topics and
 examples; missing top90/top95 show as warnings).
@@ -70,7 +98,9 @@ examples; missing top90/top95 show as warnings).
    headless browsers); they ask the coordinator.
 3. After each task: `node scripts/check-material.mjs <section>` (0 errors / 0 warnings) and the browser
    harness `http://localhost:5174/tools/verify-examples.html?path=<ch>/<sec>[/<topic>]&ms=1200`
-   (read `window.__verifyResults`; keep browser_batch waits under ~45 s per call).
+   (read `window.__verifyResults`; keep browser_batch waits under ~45 s per call). Add `&logs=1` to get each
+   example's console lines in `result.logs`: exercises must print ❌/✗ for the work left to do in the starting
+   state and only ✅/✓ in the solution; audits in top95 pages must print no ❌.
 4. Spot-check one or two flagged examples visually; read one main.md for quality.
 5. Mark top95 examples `example_stage: professional` (some agents default to final-solution).
 
@@ -88,9 +118,9 @@ folder, no app code, no browser, heat rule); final report format.
 - `npm run dev` (vite :5174 + API on 127.0.0.1:3001). The API must be restarted after server-side changes
   (server.js, compiler, materialTree…).
 - Hosted previews are served from `http://localhost:3001/preview/...` (same hostname as the app, port 3001).
-- Tests: `npm test` (234 at pause time). Build: `npm run build`.
+- Tests: `npm test` (235). Build: `npm run build`.
 
-## App changes made during the course work (already in the working tree, uncommitted)
+## App changes made during the course work (committed: 7c7485d, 6a129ae)
 
 Security hardening of server.js; isolated compiler worker; TypeScript type checking; V8 syntax checks; loop
 guards (script block and inline <script>); hosted preview runtime with Chrome-like console; theory sanitizing,
@@ -98,3 +128,7 @@ example links `[x](NN-x.md)`, «▶ Run» on code embeds and a console in the th
 previews for console-only examples, JS/TS type tags, `professional` stage; «Assets» browser; ↗ open-preview-in-tab;
 labels from label.txt / main.md heading; content checker (`scripts/check-material.mjs`), contrast helper
 (`scripts/contrast.mjs`) and browser harness (`tools/verify-examples.html`).
+
+Second session (6a129ae): browser-only `let top|window|document|location` SyntaxError in the checker; faithful submit
+log (real GET URL, POST enctype, files with name/size/type); expandable values in the theory «▶ Run» console;
+`&logs=1` in the verify harness.

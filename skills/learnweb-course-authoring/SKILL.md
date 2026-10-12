@@ -135,6 +135,13 @@ console: true                     # whenever the example prints to the console
   file names are identifiers, so English).
 - Infinite loops are stopped by LearnWeb after ~1.2 s; long-but-finite computations must be chunked or
   use `loop_protect: false`.
+- Placeholder links in demos and professional pages: use plausible paths (`/blog/riego-por-goteo`) or fragments
+  that point to a real `id`; `href="#"` jumps to the top of the page (the HTML links lesson teaches it as a bug).
+- Classic scripts share the page's global scope: a top-level `let`/`const` named like a non-configurable
+  `window` property (`top`, `window`, `document`, `location`) is a SyntaxError in the browser (Node accepts it).
+  Avoid those names, or wrap the code in a block.
+- The verify harness reports `console.error` as a problem: for errors the example handles on purpose, use
+  `console.warn`/`console.log` unless the example is `common-error`.
 - TypeScript examples are type-checked (`strict`). Type errors appear in red in the editor but the
   JavaScript still runs. Examples that *teach* a type error must say so in a comment
   (`// ❌ Error TS2322 a propósito: …`) and use `example_stage: common-error`.
@@ -174,7 +181,8 @@ and **no** `exercise*` keys.
 4. Runtime check (coordinator, in Chrome): `http://localhost:5174/tools/verify-examples.html?path=<ch>/<sec>`
    runs every example of the module through the real preview, one at a time, and reports uncaught errors,
    rejections, `console.error`, failed asserts and loop-guard trips (problems in `common-error`/`exercise`
-   examples are marked "expected?"). Results: `window.__verifyResults`.
+   examples are marked "expected?"). Results: `window.__verifyResults`; with `&logs=1` each result also
+   has `logs` (the console lines), used to check exercise self-checks (❌ before, ✅ in the solution).
 
 Heat rule (fanless MacBook Air M1): no `npm run build`, no headless browsers, no extra servers, no long
 loops. The checker is fine (it compiles in a memory/time-limited worker).

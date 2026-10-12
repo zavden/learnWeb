@@ -19,8 +19,17 @@ Verified in Chrome (Apple M1) on 2026-10-12, after the runtime rewrite.
 - The ↗ button in the preview toolbar opens the current hosted page in its own tab (useful for `meta viewport`,
   DevTools device mode, quirks mode, printing). The server keeps the last 24 rendered pages.
 - Theory preview cards show the page only. The «▶ Run» button under code embeds (and clicking a card) opens a
-  dialog that runs the example with a simple console below it (text lines, groups, `console.table` as a table);
+  dialog that runs the example with a console below it (Chrome-like values that expand on click down to `[[Prototype]]`, groups, `console.table` as a table);
   for console-only examples the console fills the dialog. Gallery cards of console-only examples show code.
+
+## The learner's browser
+
+- Chrome on macOS, time zone **America/Mexico_City** (no daylight saving time since 2022), `navigator.language` **en-US**.
+- Never let a printed result depend on the local zone or locale: pass an explicit locale and `timeZone` to `Intl`, build
+  instants from ISO strings with `Z` or an offset, and when a value must be local, print the zone first and give the
+  expected output for both Madrid and Ciudad de México. DST effects must be shown in a zone that has DST
+  (`Europe/Madrid`) through `Intl`; they do not appear in Mexico City.
+- Verify console outputs with `TZ=America/Mexico_City node` (Chrome's `Intl` output matched Node's exactly on 2026-10-12).
 
 ## Capability matrix (vanilla HTML/CSS/JS/TS examples)
 
@@ -33,7 +42,7 @@ Verified in Chrome (Apple M1) on 2026-10-12, after the runtime rewrite.
 | `localStorage`, `sessionStorage`, IndexedDB, cookies | ✅ | One origin shared by all examples: namespace keys (`lw-css-tema`) and clean up in the example |
 | `fetch()` of assets, JSON, text, binary | ✅ | |
 | `#anchors`, `:target`, `history.pushState`, `popstate` | ✅ | |
-| Forms (`submit`, validation, `method="dialog"`) | ✅ | A submit not handled with `preventDefault()` is blocked and logged with its fields |
+| Forms (`submit`, validation, `method="dialog"`) | ✅ | A submit not handled with `preventDefault()` is blocked and logged with its fields: `GET <action with the form data as query>` or `POST <action> (<enctype>)`, files as `File "cv.pdf" (24 KB, application/pdf)` |
 | Web Workers (classic and module), Blob workers | ✅ | |
 | `SharedArrayBuffer` / `Atomics` | ❌ | Needs cross-origin isolation (COOP/COEP); explain, show the concept with `postMessage` |
 | WebAssembly (`instantiate` from bytes, `instantiateStreaming` of an asset) | ✅ | `.wasm` served as `application/wasm` |
