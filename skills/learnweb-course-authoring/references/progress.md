@@ -1,6 +1,6 @@
 # Course progress and hand-off notes
 
-Last updated: 2026-10-12 (session paused by the user's usage budget).
+Last updated: 2026-10-12 (session paused by the user's usage budget; module-2 lessons completed by the coordinator).
 
 Read this first when resuming the course work. The syllabus is in [plan.md](plan.md), the authoring
 rules in [../SKILL.md](../SKILL.md), runtime capabilities in [runtime.md](runtime.md).
@@ -12,45 +12,50 @@ Legend: ✅ complete and verified (checker 0/0 + browser harness) · 🟡 partia
 | Module | Lessons | top90 | top95 | Notes |
 |---|---|---|---|---|
 | ch02-html/sec01-la-web-y-el-documento | ✅ 5/5 | ✅ 7 ex + 3 exercises | ✅ 12 | 67 examples |
-| ch02-html/sec02-contenido-y-semantica | 🟡 3/7 | ⬜ | ⬜ | 25 examples so far |
+| ch02-html/sec02-contenido-y-semantica | ✅ 7/7 | ⬜ | ⬜ | 54 examples; not yet browser-verified |
 | ch02-html/sec03-formularios | ⬜ | ⬜ | ⬜ | |
 | ch02-html/sec04-multimedia-y-embebidos | ⬜ | ⬜ | ⬜ | |
 | ch03-css/sec01-fundamentos-y-cascada | ✅ 10/10 | ✅ 7 + 3 exercises | ✅ 11 | 112 examples |
-| ch03-css/sec02-modelo-de-cajas | 🟡 2/6 | ⬜ | ⬜ | 18 examples so far |
+| ch03-css/sec02-modelo-de-cajas | ✅ 6/6 | ⬜ | ⬜ | 45 examples; not yet browser-verified |
 | ch03-css/sec03 … sec10 | ⬜ | ⬜ | ⬜ | |
 | ch04-sass/sec01 | ⬜ | ⬜ | ⬜ | |
 | ch05-javascript/sec01-primeros-pasos | ✅ 7/7 | ✅ 7 + 3 exercises | ✅ 12 | 89 examples |
-| ch05-javascript/sec02-datos | 🟡 4/7 | ⬜ | ⬜ | 38 examples so far |
+| ch05-javascript/sec02-datos | ✅ 7/7 | ⬜ | ⬜ | 63 examples; outputs verified with node (TZ=Europe/Madrid) |
 | ch05-javascript/sec03 … sec08 | ⬜ | ⬜ | ⬜ | |
 | ch06 … ch08 | ⬜ | ⬜ | ⬜ | |
 
-Paused modules (exact state at pause; all checker-clean, no half-written files):
+Modules with lessons done but top90/top95 pending (all checker-clean; lessons written by agents and, for the
+last ones, by the coordinator; NONE of these 162 examples has been run through the browser harness yet):
 
-- **ch02-html/sec02-contenido-y-semantica** — ✅ top01-texto (9), top02-listas (7), top03-enlaces (9, assets
-  `pages/*.html`, `files/schedule.txt`). ⬜ top04-imagenes, top05-tablas, top06-estructura-semantica,
-  top07-accesibilidad, then top90/top95. Notes: JS shown only as inline `onclick` with a "events come later"
-  comment; `.md-` code embeds when the console is the point. To check in Chrome: top01/07 `<q>` quotes per
-  language, top01/04 `wbr`/`&shy;`, top03/03 (↗ then `window.opener`/referrer), top03/04 download, top03/02 & 09
-  fragment jumps in theory cards.
-- **ch03-css/sec02-modelo-de-cajas** — ✅ top01-la-caja (9), top02-display (9). ⬜ top03-margenes, top04-tamanos,
-  top05-overflow, top06-bordes-sombras-y-fondos, then top90/top95. Notes: DevTools colour convention (content
-  #bfdbfe, padding #bbf7d0, border #facc15, margin #fed7aa); JS snippets start with "Adelanto: JavaScript se
-  explica en su capítulo" and print `getBoundingClientRect` values on screen. Promises to keep: margin collapsing
-  in lesson 3 (top02/08 points there); `margin-inline: auto` centring in lesson 3; `box-shadow` and background
-  under the border in lesson 6; the body-background-to-canvas rule promised by ch03 sec01 `04-margen-del-body.md`
-  belongs in top06. Gradients, `overflow-wrap`, `object-fit` only as forward references.
-- **ch05-javascript/sec02-datos** — ✅ top01-numeros (10), top02-strings (9), top03-arrays (10),
-  top04-objetos-literales (9). ⬜ top05-map-set-y-weak, top06-json-y-copias, top07-fechas-e-intl, then
-  top90/top95. Notes: earlier lessons reference these by the names «Map, Set y WeakMap», «JSON y copias»,
-  «Fechas e Intl» and «Funciones y ámbito» — keep them; promised content: shallow vs deep copy, Map keys,
-  `Map.groupBy`; arrow functions are explained once in the arrays main.md (examples add a one-line comment);
-  Intl needs explicit locales (es-ES doesn't group 4-digit numbers: `1234,50 €`; outputs contain NBSP); verify
-  outputs with node using `TZ=Europe/Madrid`. Plan gap: no regular-expressions lesson yet (consider adding one
-  to sec02 or sec06 when resuming).
+- **ch02-html/sec02-contenido-y-semantica** — top01-texto, top02-listas, top03-enlaces, top04-imagenes,
+  top05-tablas, top06-estructura-semantica, top07-accesibilidad. Conventions: tiny JS only to make facts
+  visible, labeled "Adelanto: JavaScript se explica en su capítulo"; inline `onclick` with a "events come
+  later" note; CSS only for readability (some examples use position/grid with a forward-reference comment).
+  To check in Chrome: top01/07 `<q>` quotes per language, top01/04 `wbr`/`&shy;`, top03/03 (↗ then
+  `window.opener`), top03/04 download, top04/04-06 `currentSrc` choices (resize / ↗ + device mode),
+  top07/07 Tab order, top07/08 skip link on Tab.
+- **ch03-css/sec02-modelo-de-cajas** — top01-la-caja, top02-display, top03-margenes, top04-tamanos,
+  top05-overflow, top06-bordes-sombras-y-fondos (assets dots.svg, leaf.svg, photo.svg). DevTools colour
+  convention (content #bfdbfe, padding #bbf7d0, border #facc15, margin #fed7aa). All promises from earlier
+  lessons are fulfilled (margin collapsing, auto centring, box-shadow, background under the border, body
+  background → canvas). Forward references only: gradients, filters (sec07), floats/position (sec03),
+  flex/grid gap. To check: top05/02 computed overflow-y, top05/05 scrollbar-gutter (macOS overlay
+  scrollbars hide the effect), top06/04 body canvas propagation, top06/07 focus rings.
+- **ch05-javascript/sec02-datos** — top01-numeros … top07-fechas-e-intl. Arrow functions explained once in
+  the arrays main.md (examples add a one-line comment); Intl always with explicit locale/timeZone (es-ES
+  doesn't group 4-digit numbers; outputs contain NBSP); verify outputs with `TZ=Europe/Madrid node`.
+  Promise for ch05 sec03 (functions): top06-json-y-copias says immutability ("crear un objeto nuevo con lo
+  que cambia") is covered in the functions module — include it in top06-funciones-de-orden-superior. Plan
+  gap: no regular-expressions lesson yet (used with one-line comments); consider adding one to sec06.
 
-Next actions when resuming: (1) run the browser harness on the three paused sections (not yet done for the
-new lessons); (2) spawn fresh agents to finish each paused module's remaining lessons, then resume them for
-top90/top95; (3) continue the lanes in plan order.
+Next actions when resuming:
+1. `npm run dev`, then run the browser harness on the three sections above
+   (`/tools/verify-examples.html?path=ch02-html/sec02-contenido-y-semantica&ms=1200`, etc.; keep each
+   browser_batch under ~45 s and read `window.__verifyResults` afterwards).
+2. Write top90-integracion + top95-profesional for those three modules (fresh agents: give them the module
+   folder to read first, then the usual top90/top95 instructions; mark top95 `example_stage: professional`).
+3. Continue the lanes in plan order: HTML sec03-formularios, CSS sec03-flujo-y-posicionamiento,
+   JS sec03-funciones-y-ambito.
 
 To see the real state at any time: `node scripts/check-material.mjs material/<ch>/<sec>` (counts topics and
 examples; missing top90/top95 show as warnings).
