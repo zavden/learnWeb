@@ -4,6 +4,8 @@ export const DEFAULT_OBSERVE_MS = 1500;
 export const EXPECTED_PROBLEM_STAGES = new Set(['common-error', 'exercise']);
 const LOOP_GUARD_PATTERN = /Possible infinite loop/i;
 const MESSAGE_LIMIT = 300;
+// Console lines (&logs=1) are compared with expected output, so they keep much more text.
+const LOG_LINE_LIMIT = 4000;
 
 export function parseVerifyParams(search = '') {
     const params = new URLSearchParams(search);
@@ -152,7 +154,7 @@ export function consoleLinesFromMessages(messages = [], limit = 200) {
         const text = typeof message.text === 'string'
             ? message.text
             : Array.isArray(message.values) ? message.values.join(' ') : '';
-        lines.push(`${message.method || message.level || 'log'}: ${text}`.slice(0, MESSAGE_LIMIT));
+        lines.push(`${message.method || message.level || 'log'}: ${text}`.slice(0, LOG_LINE_LIMIT));
     });
     return lines.slice(0, limit);
 }

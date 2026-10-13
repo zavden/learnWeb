@@ -124,6 +124,12 @@ test('module detection: classic by default, module for import/export/top-level a
     assert.equal(isModuleScript("import('./lazy.js').then(console.log);"), false);
     assert.equal(isModuleScript('// import x from "y"\nconsole.log(1);'), false);
     assert.equal(isModuleScript('console.log(import.meta.url);'), true);
+    // Identifiers that start with the keywords are not statements (methods at the start of a line).
+    assert.equal(isModuleScript('class Store {\n  importReceipts(csv) {}\n  exportCsv() {}\n}'), false);
+    assert.equal(isModuleScript("import{ a }from'./a.js';"), true);
+    assert.equal(isModuleScript("import './side-effect.js';"), true);
+    assert.equal(isModuleScript('export * from "./a.js";'), true);
+    assert.equal(isModuleScript('export default 1;'), true);
 
     const moduleHtml = renderCompiledExampleDocument({ html: '', js: "import x from './a.js';\nconsole.log(x);" }, '', [], {});
     assert.match(moduleHtml, /<script type="module">import x/);

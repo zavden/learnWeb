@@ -8,7 +8,9 @@
 // 2. top-level `await`: the code fails to parse as a plain function body but parses as an async
 //    function body.
 
-const LINE_IMPORT_EXPORT_PATTERN = /^[ \t]*(?:import\s*(?:[\w$*{]|["'`])|export\s*(?:[\w$*{]|default\b))/m;
+// `import x`, `import {…}`, `import * as`, `import 'x'`, `export const`, `export {…}`, `export *`, but
+// not identifiers that merely start with the keyword (`importReceipts(csv) {`, `exportCsv()`).
+const LINE_IMPORT_EXPORT_PATTERN = /^[ \t]*(?:import(?:\s+[\w$]|\s*[*{"'`])|export(?:\s+[\w$]|\s*[*{]))/m;
 const IMPORT_META_PATTERN = /\bimport\s*\.\s*meta\b/;
 
 function stripComments(code = '') {

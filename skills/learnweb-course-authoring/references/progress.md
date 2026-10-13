@@ -26,7 +26,7 @@ Legend: ✅ complete and verified (checker 0/0 + browser harness) · 🟡 partia
 | ch05-javascript/sec02-datos | ✅ 7/7 | ✅ 8 + 4 exercises | ✅ 12 | 91 examples; browser-verified 0 problems; Chrome output = node output |
 | ch05-javascript/sec03-funciones-y-ambito | ✅ 7/7 | ✅ 8 + 3 exercises | ✅ 12 | 87 examples; browser-verified 0 problems |
 | ch05-javascript/sec04-objetos-y-prototipos | ✅ 5/5 | ✅ 8 + 3 exercises | ✅ 11 | 73 examples; browser-verified 0 problems (exercises ✗ → ✓) |
-| ch05-javascript/sec05-clases-y-poo | ✅ 6/6 | ⬜ (in progress) | ⬜ | 54 lesson examples; Chrome console output = run-example output (hash-compared 53/53) |
+| ch05-javascript/sec05-clases-y-poo | ✅ 6/6 | ✅ 7 + 3 exercises | ✅ 12 | 79 examples; browser-verified 0 problems; Chrome console = run-example output (hash-compared; only U+202F vs space in Intl ranges) |
 | ch05-javascript/sec06 … sec08 | ⬜ | ⬜ | ⬜ | |
 | ch06 … ch08 | ⬜ | ⬜ | ⬜ | |
 
@@ -80,7 +80,8 @@ Notes carried forward:
   srcdoc content in a `<div>` instead of a full document.
 - Learner's browser: America/Mexico_City (no DST), en-US. See runtime.md "The learner's browser".
 - JS sec02 promise: immutability is taught in sec03/top06-funciones-de-orden-superior. Plan gap: no
-  regular-expressions lesson yet (used with one-line comments); consider adding one to sec06.
+  regular-expressions lesson yet; the sec05 agent removed regexes from its examples (string checks instead).
+  Add a regex topic (e.g. to sec06 or a new JS section) before the forms-with-JS module needs it.
 - CSS sec02 top95 used `vertical-align` and overlapping badges/ribbons (negative margins) with forward
   references; sec03 explains them.
 - Placeholder `href="#"` links: ~240 in CSS sec01-03 demos and HTML sec02 (top06); the guide now asks for
