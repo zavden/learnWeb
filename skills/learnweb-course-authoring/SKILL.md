@@ -115,7 +115,10 @@ console: true                     # whenever the example prints to the console
   examples are valid (use `console: true`).
 - Use `# HTML-FULL` (```` ```html ````, only block) when the lesson is about the document itself (doctype,
   head, meta, quirks mode, script loading order).
-- Sass examples use `# SCSS` (or `# SASS` when teaching the indented syntax).
+- Sass examples use `# SCSS` (or `# SASS` when teaching the indented syntax). Their code embeds show the generated
+  CSS in an extra `compiled.css` tab (plus `sass-output.txt` when `@debug`/`@warn`/errors print something):
+  `[[exercise:03-anidar.md-(styles.scss|compiled.css)]]` shows only the source and its output. Don't paste the
+  compiled CSS into comments; the tab is always up to date.
 - Fences: ```` ```lang ```` at column 0, nothing after the language. If the code contains a ```` ``` ````
   line, use a longer fence (```` ```` ````) or `~~~`.
 - No prose between blocks. Comments inside the code carry the explanation:
@@ -142,6 +145,8 @@ console: true                     # whenever the example prints to the console
   Avoid those names, or wrap the code in a block.
 - The verify harness reports `console.error` as a problem: for errors the example handles on purpose, use
   `console.warn`/`console.log` unless the example is `common-error`.
+- Sass compile errors (`@error`, undefined variables…) and deprecation warnings are allowed by the checker only in
+  `common-error`/`exercise` examples; `@debug` and `@warn` output is always allowed.
 - TypeScript examples are type-checked (`strict`). Type errors appear in red in the editor but the
   JavaScript still runs. Examples that *teach* a type error must say so in a comment
   (`// ❌ Error TS2322 a propósito: …`) and use `example_stage: common-error`.

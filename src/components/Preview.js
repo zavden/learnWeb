@@ -13,7 +13,8 @@ import { getShaderConfig, isShaderDocument } from '../utils/markdown.js';
 import { validateShaderPreviewDocument } from '../utils/shaderPreviewDiagnostics.js';
 import { getTheoryDocumentContent, isTheoryDocument } from '../utils/theoryDocument.js';
 import { loadTheoryExerciseEmbeds } from '../utils/theoryExerciseEmbeds.js';
-import { renderTheoryPreviewDocument } from '../utils/theoryRenderer.js';
+import { highlightCode, renderTheoryPreviewDocument } from '../utils/theoryRenderer.js';
+import { buildCompiledStyleFiles, COMPILED_CSS_PATH, SASS_OUTPUT_PATH } from '../utils/compiledStyleView.js';
 import { consoleManagerMixin } from './preview/ConsoleManager.js';
 import { runtimeDiagnosticsMixin } from './preview/RuntimeDiagnostics.js';
 import { shaderControlsMixin } from './preview/ShaderControls.js';
@@ -34,6 +35,15 @@ export class Preview {
         this.btnOpenPreviewTab?.addEventListener('click', () => {
             // The hosted page is a normal page on the preview origin, so it also works on its own tab.
             if (this._frameMode === 'hosted' && this._hostedUrl) window.open(this._hostedUrl, '_blank', 'noopener');
+        });
+        this.btnCompiledCss = document.getElementById('btn-preview-compiled-css');
+        this.compiledPanel = document.getElementById('preview-compiled-panel');
+        this.compiledMessages = document.getElementById('preview-compiled-messages');
+        this.compiledCode = document.getElementById('preview-compiled-code');
+        this._compiledPanelOpen = false;
+        this.btnCompiledCss?.addEventListener('click', () => {
+            this._compiledPanelOpen = !this._compiledPanelOpen;
+            this._applyCompiledPanelState();
         });
         this.btnConsoleOverride = document.getElementById('btn-console-override');
         this.runtimeStatus = document.getElementById('preview-runtime-status');
@@ -428,12 +438,43 @@ export class Preview {
         clearTimeout(this._debounceTimer);
         this._clearRuntimeDiagnostics();
         this._resetConsoleSession();
+        this._updateCompiledStyleView([]);
         this._setFrameDisplayMode('default');
         this._showSrcdoc(renderCompiledExampleDocument({}, this._currentTopicPath, [], {
             consoleEnabled: false,
             renderId: this._renderToken,
         }));
         this._emitCompileState([]);
+    }
+
+    // Sass examples get a «CSS» toggle that shows the generated CSS and the compiler's
+    // @debug/@warn/error lines over the preview.
+    _updateCompiledStyleView(generatedFiles = []) {
+        const css = generatedFiles.find((file) => file.path === COMPILED_CSS_PATH);
+        const messages = generatedFiles.find((file) => file.path === SASS_OUTPUT_PATH);
+        const available = generatedFiles.length > 0;
+        this.btnCompiledCss?.classList.toggle('hidden', !available);
+        if (!available) {
+            this._applyCompiledPanelState(false);
+            return;
+        }
+        if (this.compiledCode) {
+            this.compiledCode.innerHTML = css
+                ? highlightCode(css.content, 'css')
+                : '/* No CSS: the Sass code did not compile (see the messages above). */';
+        }
+        if (this.compiledMessages) {
+            this.compiledMessages.textContent = messages?.content || '';
+            this.compiledMessages.classList.toggle('hidden', !messages);
+        }
+        this._applyCompiledPanelState();
+    }
+
+    _applyCompiledPanelState(available = !this.btnCompiledCss?.classList.contains('hidden')) {
+        const open = Boolean(available && this._compiledPanelOpen);
+        this.compiledPanel?.classList.toggle('hidden', !open);
+        this.btnCompiledCss?.setAttribute('aria-pressed', open ? 'true' : 'false');
+        this.btnCompiledCss?.classList.toggle('is-active', open);
     }
 
     async _render(documentModel, { explicit = true } = {}) {
@@ -443,6 +484,8 @@ export class Preview {
         // Each run starts with a clean console (REPL history is kept).
         this._clearConsoleEntries();
         this._rejectPendingConsoleInspects();
+
+        if (isTheoryDocument(documentModel) || isShaderDocument(documentModel)) this._updateCompiledStyleView([]);
 
         if (isTheoryDocument(documentModel)) {
             this._setFrameDisplayMode('default');
@@ -483,6 +526,7 @@ export class Preview {
             if (renderToken !== this._renderToken) return;
 
             const diagnostics = result.compileDiagnostics || [];
+            this._updateCompiledStyleView(buildCompiledStyleFiles(documentModel, result));
             const renderOptions = {
                 consoleEnabled: this._consoleEnabled,
                 markupPath: this._getMarkupPath(documentModel),
@@ -521,6 +565,7 @@ export class Preview {
             ];
 
             this._setFrameDisplayMode('default');
+            this._updateCompiledStyleView([]);
             this._showSrcdoc(renderCompiledExampleDocument({}, this._currentTopicPath, diagnostics, {
                 consoleEnabled: this._consoleEnabled,
                 renderId: renderToken,

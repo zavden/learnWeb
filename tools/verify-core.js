@@ -11,8 +11,13 @@ export function parseVerifyParams(search = '') {
     const rawMs = Number.parseInt(params.get('ms') || '', 10);
     const ms = Number.isFinite(rawMs) ? Math.min(Math.max(rawMs, 200), 20000) : DEFAULT_OBSERVE_MS;
     const only = String(params.get('only') || '').trim();
-    const logs = ['1', 'true', 'yes'].includes(String(params.get('logs') || '').trim().toLowerCase());
-    return { path, ms, only, logs };
+    const isOn = (name) => ['1', 'true', 'yes'].includes(String(params.get(name) || '').trim().toLowerCase());
+    // show=1 keeps the last example on screen (for visual checks) in a frame of w×h CSS pixels.
+    const size = (name, fallback) => {
+        const value = Number.parseInt(params.get(name) || '', 10);
+        return Number.isFinite(value) ? Math.min(Math.max(value, 200), 2400) : fallback;
+    };
+    return { path, ms, only, logs: isOn('logs'), show: isOn('show'), width: size('w', 480), height: size('h', 270) };
 }
 
 // Topic paths ("ch/sec/top") under a chapter, section or topic path, in tree order.

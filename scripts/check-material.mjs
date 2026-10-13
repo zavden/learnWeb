@@ -110,10 +110,16 @@ async function checkExample(topicDir, filename, context) {
     for (const diagnostic of result.compileDiagnostics || []) {
         const where = diagnostic.line && !/\bline \d/.test(diagnostic.message || '') ? ` (line ${diagnostic.line}${diagnostic.column ? `:${diagnostic.column}` : ''})` : '';
         const message = `compile: ${diagnostic.code}: ${diagnostic.message}${where}`;
-        if (diagnostic.code === 'typescript-type') {
-            report(isTypeErrorDemo(documentModel) ? 'info' : 'error', filePath, `${message}${isTypeErrorDemo(documentModel) ? ' [allowed: common-error/exercise]' : ''}`);
+        if (diagnostic.code === 'typescript-type' || diagnostic.code === 'sass-compile-error' || diagnostic.code === 'sass-deprecation') {
+            // Type errors, Sass errors (`@error`, undefined variables…) and deprecations can be the lesson.
+            const allowed = isTypeErrorDemo(documentModel);
+            const level = allowed ? 'info' : (diagnostic.level === 'error' ? 'error' : 'warning');
+            report(level, filePath, `${message}${allowed ? ' [allowed: common-error/exercise]' : ''}`);
         } else if (diagnostic.level === 'error') {
             report('error', filePath, message);
+        } else if (diagnostic.code === 'sass-warning') {
+            // `@warn` output is intentional: Sass lessons print it on purpose.
+            report('info', filePath, message);
         } else if (diagnostic.code !== 'sass-debug') {
             report('warning', filePath, message);
         }

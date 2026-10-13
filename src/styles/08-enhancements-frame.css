@@ -64,6 +64,51 @@
   opacity: 1;
 }
 
+.preview-compiled-toggle.is-active {
+  border-color: rgba(88, 166, 255, 0.4);
+  background: rgba(88, 166, 255, 0.16);
+  color: #bfdbfe;
+}
+
+/* Generated CSS of a Sass example, shown over the preview (the page keeps running underneath). */
+.preview-compiled-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: auto;
+  padding: 14px 18px;
+  background: #0d1117;
+  color: #abb2bf;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.preview-compiled-title {
+  margin: 0 0 10px;
+  color: #c9d1d9;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 12px;
+}
+
+.preview-compiled-title span {
+  color: #8b949e;
+}
+
+.preview-compiled-messages {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-left: 3px solid #d29922;
+  background: rgba(210, 153, 34, 0.1);
+  color: #e3b341;
+  white-space: pre-wrap;
+}
+
+.preview-compiled-code {
+  margin: 0;
+  white-space: pre;
+}
+
 .resizer-handle {
   position: absolute;
   top: 0;

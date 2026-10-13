@@ -647,6 +647,9 @@ export function renderTheoryExportDocument(content = '', options = {}) {
       border-bottom-color: #60a5fa;
     }
 
+    .theory-code-embed-tab.is-generated { font-style: italic; }
+    .theory-code-embed-tab.is-generated::before { content: "→ "; opacity: 0.7; }
+
     .theory-code-embed-panel {
       display: none;
     }
@@ -1138,6 +1141,9 @@ export function renderTheoryPreviewDocument(content = '', options = {}) {
       color: #60a5fa;
       border-bottom-color: #60a5fa;
     }
+
+    .theory-code-embed-tab.is-generated { font-style: italic; }
+    .theory-code-embed-tab.is-generated::before { content: "→ "; opacity: 0.7; }
 
     .theory-code-embed-panel {
       display: none;

@@ -26,8 +26,9 @@ const tree = [
 ];
 
 test('parses URL parameters with sane defaults and bounds', () => {
-    assert.deepEqual(parseVerifyParams('?path=/ch02-html/sec01-web/&ms=900&only=03-'), { path: 'ch02-html/sec01-web', ms: 900, only: '03-', logs: false });
-    assert.deepEqual(parseVerifyParams(''), { path: '', ms: 1500, only: '', logs: false });
+    assert.deepEqual(parseVerifyParams('?path=/ch02-html/sec01-web/&ms=900&only=03-'), { path: 'ch02-html/sec01-web', ms: 900, only: '03-', logs: false, show: false, width: 480, height: 270 });
+    assert.deepEqual(parseVerifyParams(''), { path: '', ms: 1500, only: '', logs: false, show: false, width: 480, height: 270 });
+    assert.deepEqual(parseVerifyParams('?path=x&show=1&w=900&h=50'), { path: 'x', ms: 1500, only: '', logs: false, show: true, width: 900, height: 200 });
     assert.equal(parseVerifyParams('?path=x&logs=1').logs, true);
     assert.equal(parseVerifyParams('?path=x&ms=5').ms, 200);
     assert.equal(parseVerifyParams('?path=x&ms=abc').ms, 1500);

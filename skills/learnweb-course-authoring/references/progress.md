@@ -98,7 +98,10 @@ examples; missing top90/top95 show as warnings).
    headless browsers); they ask the coordinator.
 3. After each task: `node scripts/check-material.mjs <section>` (0 errors / 0 warnings) and the browser
    harness `http://localhost:5174/tools/verify-examples.html?path=<ch>/<sec>[/<topic>]&ms=1200`
-   (read `window.__verifyResults`; keep browser_batch waits under ~45 s per call). Add `&logs=1` to get each
+   (read `window.__verifyResults`; keep browser_batch waits under ~45 s per call). For a visual check of one example,
+   `&only=NN-&show=1&w=520&h=440` keeps it on screen in a frame of that size (`window.__verifyUrls` has the hosted URL
+   to open it full size). If reading results is blocked by the Chrome tool ("Cookie/query string data"), strip
+   `?&=%` and URLs from the JSON before returning it. Add `&logs=1` to get each
    example's console lines in `result.logs`: exercises must print ❌/✗ for the work left to do in the starting
    state and only ✅/✓ in the solution; audits in top95 pages must print no ❌.
 4. Spot-check one or two flagged examples visually; read one main.md for quality.
@@ -118,7 +121,7 @@ folder, no app code, no browser, heat rule); final report format.
 - `npm run dev` (vite :5174 + API on 127.0.0.1:3001). The API must be restarted after server-side changes
   (server.js, compiler, materialTree…).
 - Hosted previews are served from `http://localhost:3001/preview/...` (same hostname as the app, port 3001).
-- Tests: `npm test` (235). Build: `npm run build`.
+- Tests: `npm test` (241). Build: `npm run build`.
 
 ## App changes made during the course work (committed: 7c7485d, 6a129ae)
 

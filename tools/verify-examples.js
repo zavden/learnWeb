@@ -35,6 +35,8 @@ const elements = {
 };
 
 window.__verifyDone = false;
+// Hosted preview URL of each example ("ch/sec/top/file.md" → URL), to open one at full size.
+window.__verifyUrls = {};
 window.__verifyResults = [];
 
 let current = null;
@@ -152,6 +154,7 @@ async function verifyCompiled(documentModel, topicPath, state) {
     const hostedUrl = await publishPreviewDocument({ html: hostedHtml, renderId: state.renderId, topicPath });
 
     if (hostedUrl) {
+        window.__verifyUrls[documentModel.__verifyFile || ''] = hostedUrl;
         state.iframe.setAttribute('sandbox', HOSTED_PREVIEW_SANDBOX);
         state.iframe.src = hostedUrl;
         state.mode = 'hosted';
@@ -164,7 +167,7 @@ async function verifyCompiled(documentModel, topicPath, state) {
     return problemsFromCompileDiagnostics(diagnostics);
 }
 
-async function verifyExample(topicPath, file, ms, { logs = false } = {}) {
+async function verifyExample(topicPath, file, ms, { logs = false, show = false } = {}) {
     const startedAt = performance.now();
     teardownFrame();
     renderSequence += 1;
@@ -184,6 +187,7 @@ async function verifyExample(topicPath, file, ms, { logs = false } = {}) {
     try {
         const data = await fetchExample(topicPath, file);
         const documentModel = parseExampleDocument(data?.content || '');
+        documentModel.__verifyFile = `${topicPath}/${file}`;
         stage = getExampleStage(documentModel);
         problems.push(...problemsFromStructuralDiagnostics(documentModel.diagnostics));
 
@@ -201,7 +205,8 @@ async function verifyExample(topicPath, file, ms, { logs = false } = {}) {
         state.ready = true;
     } finally {
         current = null;
-        teardownFrame();
+        // In show mode the frame stays until the next example starts, so the last one remains visible.
+        if (!show) teardownFrame();
     }
 
     return buildResult({
@@ -218,7 +223,11 @@ async function verifyExample(topicPath, file, ms, { logs = false } = {}) {
 }
 
 async function run() {
-    const { path, ms, only, logs } = parseVerifyParams(window.location.search);
+    const { path, ms, only, logs, show, width, height } = parseVerifyParams(window.location.search);
+    if (show) {
+        elements.frameHost.style.width = `${width}px`;
+        elements.frameHost.style.height = `${height}px`;
+    }
     if (!path) {
         setStatus('Add ?path=<chapter>[/<section>[/<topic>]] to the URL (optional &ms=1500&only=03-&logs=1).');
         window.__verifyDone = true;
@@ -250,7 +259,7 @@ async function run() {
         if (stopRequested) break;
         const { topicPath, file } = queue[index];
         setStatus(`Running ${index + 1}/${queue.length}: ${topicPath}/${file}`);
-        const result = await verifyExample(topicPath, file, ms, { logs });
+        const result = await verifyExample(topicPath, file, ms, { logs, show });
         window.__verifyResults.push(result);
         appendRow(result);
         renderSummary();
