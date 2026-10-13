@@ -42,7 +42,10 @@ Next actions when resuming (pick with the user):
    `next()`, iterable protocol, Proxy for `obj[i]`/`__getattr__`). Consider adding a regular-expressions topic
    (no regex lesson exists yet; examples avoid them).
 4. HTML lane: Sass is complete (ch04 has one section). TypeScript (ch07) comes after ch06 in the course order, so
-   before starting it either write JS sec06-08 + ch06 first, or let this lane help the CSS lane (sec07+). Ask.
+   before starting it either write JS sec06-08 + ch06 first, or let this lane help the CSS lane (sec07+) or write
+   the missing regular-expressions topic. Ask the user.
+   Remaining (2026-10-13): 23 of 38 modules (~103 lessons): CSS sec06-10, JS sec06-08, ch06 sec01-06, ch07
+   sec01-03, ch08 sec01-06 — about 8 rounds of 3 parallel modules. Order matters: ch07/ch08 need ch05+ch06.
 5. Optional tidy-ups listed in the notes below (old `href="#"` placeholders, flex-basis-in-a-column example).
 
 Notes carried forward:
