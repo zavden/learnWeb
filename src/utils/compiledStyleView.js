@@ -2,11 +2,18 @@
 // and the @debug/@warn/error output next to the source (theory code embeds and the editor preview).
 
 const SASS_MESSAGE_LABELS = {
+    'compile-out-of-memory': 'Error',
+    'compile-timeout': 'Error',
+    'compile-worker-crashed': 'Error',
     'sass-compile-error': 'Error',
     'sass-debug': '@debug',
     'sass-deprecation': 'Deprecation warning',
     'sass-warning': '@warn',
 };
+
+// Failures that leave the page without CSS: Sass errors and the isolated compiler stopping a job
+// (an endless @while hits the timeout or the memory limit).
+const COMPILE_FAILURE_CODES = new Set(['compile-out-of-memory', 'compile-timeout', 'compile-worker-crashed', 'sass-compile-error']);
 
 export const COMPILED_CSS_PATH = 'compiled.css';
 export const SASS_OUTPUT_PATH = 'sass-output.txt';
@@ -16,7 +23,10 @@ export function getPreprocessedStyleFile(documentModel) {
     return files.find((file) => file?.slot === 'style' && (file.language === 'scss' || file.language === 'sass')) || null;
 }
 
-// One line per message, like the Sass command line: "styles.scss:4 @debug: 12px".
+// One line per message, like the Sass command line: "styles.scss:4 @debug: 12px". Messages raised
+// inside a mixin/function are followed by their call stack, as the CLI prints it:
+//     styles.scss 1:30  breakpoint()
+//     styles.scss 3:3   root stylesheet
 export function formatSassMessages(diagnostics = [], fileName = 'styles.scss') {
     return (Array.isArray(diagnostics) ? diagnostics : [])
         .filter((diagnostic) => SASS_MESSAGE_LABELS[diagnostic?.code])
@@ -26,12 +36,15 @@ export function formatSassMessages(diagnostics = [], fileName = 'styles.scss') {
                 .replace(/^@debug:\s*/, '')
                 .replace(/\s*\(line \d+, column \d+\)$/, '')
                 .trim();
-            return `${where} ${SASS_MESSAGE_LABELS[diagnostic.code]}: ${message}`;
+            const frames = Array.isArray(diagnostic.stack) ? diagnostic.stack : [];
+            const width = Math.max(0, ...frames.map((frame) => `${frame.line}:${frame.column}`.length));
+            const stackLines = frames.map((frame) => `    ${fileName} ${`${frame.line}:${frame.column}`.padEnd(width)}  ${frame.member}`);
+            return [`${where} ${SASS_MESSAGE_LABELS[diagnostic.code]}: ${message}`, ...stackLines].join('\n');
         });
 }
 
 export function hasSassCompileError(diagnostics = []) {
-    return (Array.isArray(diagnostics) ? diagnostics : []).some((diagnostic) => diagnostic?.code === 'sass-compile-error');
+    return (Array.isArray(diagnostics) ? diagnostics : []).some((diagnostic) => COMPILE_FAILURE_CODES.has(diagnostic?.code));
 }
 
 /**

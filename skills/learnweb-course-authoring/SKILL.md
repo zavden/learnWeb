@@ -142,7 +142,9 @@ console: true                     # whenever the example prints to the console
   that point to a real `id`; `href="#"` jumps to the top of the page (the HTML links lesson teaches it as a bug).
 - Classic scripts share the page's global scope: a top-level `let`/`const` named like a non-configurable
   `window` property (`top`, `window`, `document`, `location`) is a SyntaxError in the browser (Node accepts it).
-  Avoid those names, or wrap the code in a block.
+  Avoid those names, or wrap the code in a block. A top-level `class`/`function` named like a DOM interface
+  (`Document`, `Node`, `Text`, `Event`, `Range`, `Image`…) does not throw but replaces that global for every
+  script on the page (LearnWeb's console bridge included): pick another name (`Doc`, `TreeNode`…).
 - The verify harness reports `console.error` as a problem: for errors the example handles on purpose, use
   `console.warn`/`console.log` unless the example is `common-error`.
 - Sass compile errors (`@error`, undefined variables…) and deprecation warnings are allowed by the checker only in

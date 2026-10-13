@@ -17,6 +17,17 @@ function spanFromStack(stack = '') {
     return { start: { column: Number(match[2]) - 1, line: Number(match[1]) - 1 } };
 }
 
+// Dart Sass call stacks look like "- 1:30  bp()\n- 3:3   root stylesheet". Kept only when the message
+// comes from inside a mixin/function (more than one frame), so the learner can see where it was called.
+function parseSassStack(stack = '') {
+    const frames = String(stack || '')
+        .split('\n')
+        .map((line) => /^-?\s*(\d+):(\d+)\s+(.+?)\s*$/.exec(line.trim()))
+        .filter(Boolean)
+        .map(([, line, column, member]) => ({ column: Number(column), line: Number(line), member }));
+    return frames.length > 1 ? frames : [];
+}
+
 function formatSassErrorMessage(error) {
     // `error.message` embeds an ascii-art excerpt of the source; the editor already shows the line.
     const message = String(error?.sassMessage || error?.message || 'Failed to compile style block.').trim();
@@ -41,13 +52,14 @@ export function compileStyle(block) {
 
     if (block.type === 'scss' || block.type === 'sass') {
         const warnings = [];
-        const pushLoggedMessage = (code, message, span) => {
+        const pushLoggedMessage = (code, message, span, stack = '') => {
             if (warnings.length >= 20) return;
+            const frames = parseSassStack(stack);
             warnings.push(createCompileDiagnostic(
                 'warning',
                 code,
                 String(message || '').trim(),
-                { blocking: false, slot: 'style', type: block.type, ...spanLocation(span) }
+                { blocking: false, slot: 'style', type: block.type, ...spanLocation(span), ...(frames.length ? { stack: frames } : {}) }
             ));
         };
 
@@ -58,7 +70,8 @@ export function compileStyle(block) {
                     warn: (message, { deprecation, span, stack } = {}) => pushLoggedMessage(
                         deprecation ? 'sass-deprecation' : 'sass-warning',
                         message,
-                        span || spanFromStack(stack)
+                        span || spanFromStack(stack),
+                        stack
                     ),
                 },
                 syntax: block.type === 'sass' ? 'indented' : 'scss',
@@ -78,7 +91,12 @@ export function compileStyle(block) {
                         'error',
                         'sass-compile-error',
                         formatSassErrorMessage(error),
-                        { slot: 'style', type: block.type, ...spanLocation(error?.span) }
+                        {
+                            slot: 'style',
+                            type: block.type,
+                            ...spanLocation(error?.span),
+                            ...(parseSassStack(error?.sassStack).length ? { stack: parseSassStack(error?.sassStack) } : {}),
+                        }
                     ),
                 ],
             };
