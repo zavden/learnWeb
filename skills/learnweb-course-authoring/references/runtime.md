@@ -25,6 +25,11 @@ Verified in Chrome (Apple M1) on 2026-10-12, after the runtime rewrite.
 ## The learner's browser
 
 - Chrome on macOS, time zone **America/Mexico_City** (no daylight saving time since 2022), `navigator.language` **en-US**.
+- macOS in **dark mode** (2026-10-14): previews follow the system, because an iframe's `prefers-color-scheme` follows the used
+  `color-scheme` of its `<iframe>` element in the parent page and LearnWeb sets none — so `(prefers-color-scheme: dark)` matches by
+  default and `light-dark()` picks the dark value. Other media features: `prefers-reduced-motion: no-preference`,
+  `prefers-contrast: no-preference`, `hover: hover`, `pointer: fine`, `color-gamut: p3`, `dynamic-range: high`, `devicePixelRatio` 2.
+  Preview cards are 480 px wide.
 - Never let a printed result depend on the local zone or locale: pass an explicit locale and `timeZone` to `Intl`, build
   instants from ISO strings with `Z` or an offset, and when a value must be local, print the zone first and give the
   expected output for both Madrid and Ciudad de México. DST effects must be shown in a zone that has DST
@@ -52,8 +57,8 @@ Verified in Chrome (Apple M1) on 2026-10-12, after the runtime rewrite.
 | Popups, downloads, fullscreen, pointer lock, clipboard | ✅ | Allowed by the sandbox and `allow=` list; clipboard/fullscreen still need a user gesture |
 | Infinite loops | 🛑 stopped | `RangeError: Possible infinite loop at line N` after ~1.2 s in one task, in the script block and in inline `<script>` tags of HTML/HTML-FULL/Pug; disable with `loop_protect: false` |
 | JavaScript syntax errors | ✅ | Reported in the editor exactly as V8/Chrome does (classic scripts: `const x;`, duplicate `let`…); module scripts use the TypeScript parser |
-| Console | ✅ | log/info/warn/error/debug/table/dir/group/groupCollapsed/count/time/timeLog/assert/trace/clear and `%s %d %i %f %o %O %c`; Chrome-like previews; objects expand down to `[[Prototype]]`; getters shown as `(...)` |
-| Runtime errors | ✅ | Mapped to the editor line (JS, TS via source maps, HTML-FULL); `throw "x"` shows `Uncaught "x"` |
+| Console | ✅ | log/info/warn/error/debug/table/dir/group/groupCollapsed/count/time/timeLog/assert/trace/clear and `%s %d %i %f %o %O %c`; Chrome-like previews; objects expand down to `[[Prototype]]`; getters shown as `(...)`. DOM values like Chrome: a logged element prints as HTML with its attributes (`<li class="item">Pan</li>`, `<ul id="menu">…</ul>` when it has element children or > 80 characters of text), text nodes as `"Pan"`; inside arrays/objects/lists the short form `li#first.item`, `text`, `comment`; `NodeList(3) [li, li, li]`, `HTMLCollection(2) […]`, `DOMTokenList(2) ['a', 'b', value: 'a b']`; browser objects show their native accessors (`DOMRect {x: 8, …}`, `CustomEvent {isTrusted: false, detail: {…}, type: 'add', …}`, `AbortSignal {aborted: false, …}`, up to 8 entries); `console.dir(el)` → `li#first.item`; DOM errors → `DOMException: Failed to execute …` |
+| Runtime errors | ✅ | Mapped to the editor line (JS, TS via source maps, HTML-FULL); `throw "x"` shows `Uncaught "x"`. Like DevTools, the `Uncaught …` / `Uncaught (in promise) …` line comes after the page's own `error`/`unhandledrejection` listeners (and `onerror`) ran, and `event.preventDefault()` in one of them hides it |
 | TypeScript | ✅ | `strict` type checking (ES2023 + DOM libs) with errors in the editor; the JS still runs; target ES2022 (native `#private`, class fields) |
 | SCSS / SASS | ✅ | Dart Sass 1.98. Built-in modules (`sass:math`, `sass:color`, `sass:map`, `sass:list`, `sass:string`, `sass:meta`, `sass:selector`); no `@use` of other files; endless loops are stopped. The generated CSS is visible: code embeds of Sass examples get a generated `compiled.css` tab right after the SCSS tab (and a `sass-output.txt` tab with `styles.scss:4 @debug: …`, `@warn: …` and `Error: …` lines when there are messages, followed by the call stack when the message comes from inside a mixin/function, and the compiler's own timeout/memory errors for endless loops); in the editor, a «CSS» button in the preview toolbar shows the compiled CSS and those messages over the preview, and the status bar lists them under «Compile». A compile error leaves the page without CSS and shows the error |
 | Pug | ✅ | No `include`/`extends` |

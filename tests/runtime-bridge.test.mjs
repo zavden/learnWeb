@@ -37,6 +37,11 @@ function createFrame({ beforeScripts = '' } = {}) {
     sandbox.addEventListener = (type, listener) => {
         (listeners[type] ||= []).push(listener);
     };
+    sandbox.removeEventListener = (type, listener) => {
+        const list = listeners[type] || [];
+        const index = list.indexOf(listener);
+        if (index >= 0) list.splice(index, 1);
+    };
     sandbox.document = {
         addEventListener: (type, listener) => (documentListeners[type] ||= []).push(listener),
         baseURI: 'http://localhost:3001/preview/ch/sec/top/id/index.html',
@@ -121,7 +126,7 @@ test('console values are formatted like Chrome DevTools', async () => {
         '(2) [{…}, {…}] -0 10n Symbol(s) {[Symbol(k)]: 1}',
         '[Object: null prototype] {} (5) [empty, 1, empty × 2, 4] Uint8Array(2) [0, 0] /re/g Promise {<fulfilled>: 1} Promise {<pending>}',
         '{boom: (...)} {constructor: class Person, greet: ƒ} ƒ foo(a) { return a; }',
-        'Ann is 30 years, 42%, 1.5 (1) [1]',
+        'Ann is 30 years, 42%, 1.5 [1]',
         "{café: 12, 'two words': 1} ƒ* ids(start) { yield start; }",
     ]);
     assert.ok(frame.posted.every((message) => message.location?.path === 'script.js'));
@@ -347,4 +352,94 @@ test('module namespaces print as Module, and scripts that fail to load show the 
         'GET tienda/precio.js net::ERR_ABORTED 404 (Not Found)',
         'Failed to load script: extra.js',
     ]);
+});
+
+// A tiny stand-in for the browser's DOM classes: getters registered here report `[native code]`, like Blink's.
+const FAKE_DOM = `
+const nativeFns = new WeakSet();
+const realToString = Function.prototype.toString;
+Function.prototype.toString = function () {
+    return nativeFns.has(this) ? 'function ' + this.name + '() { [native code] }' : realToString.call(this);
+};
+function native(cls) {
+    nativeFns.add(cls);
+    Object.values(Object.getOwnPropertyDescriptors(cls.prototype)).forEach((d) => d.get && nativeFns.add(d.get));
+    globalThis[cls.name] = cls;
+    return cls;
+}
+native(class Node {});
+native(class Element extends Node {
+    constructor(tag, attrs = {}, children = []) {
+        super();
+        Object.assign(this, { nodeType: 1, nodeName: tag.toUpperCase(), localName: tag, namespaceURI: 'http://www.w3.org/1999/xhtml' });
+        this.attributes = Object.entries(attrs).map(([name, value]) => ({ name, value }));
+        this.id = attrs.id || '';
+        this.className = attrs.class || '';
+        this.childNodes = children;
+    }
+});
+native(class Text extends Node {
+    constructor(data) { super(); Object.assign(this, { nodeType: 3, nodeName: '#text', data }); }
+});
+native(class NodeList {
+    constructor(items) { items.forEach((item, index) => { this[index] = item; }); this.n = items.length; Object.defineProperty(this, 'n', { enumerable: false }); }
+    get length() { return this.n; }
+});
+native(class DOMTokenList {
+    constructor(tokens) { tokens.forEach((token, index) => { this[index] = token; }); Object.defineProperty(this, 'tokens', { value: tokens }); }
+    get length() { return this.tokens.length; }
+    get value() { return this.tokens.join(' '); }
+});
+native(class DOMRectReadOnly {
+    #r;
+    constructor(x, y, width, height) { this.#r = { x, y, width, height }; }
+    get x() { return this.#r.x; } get y() { return this.#r.y; }
+    get width() { return this.#r.width; } get height() { return this.#r.height; }
+    get top() { return this.#r.y; } get right() { return this.#r.x + this.#r.width; }
+    get bottom() { return this.#r.y + this.#r.height; } get left() { return this.#r.x; }
+});
+native(class DOMRect extends DOMRectReadOnly {
+    get x() { return super.x; } get y() { return super.y; }
+    get width() { return super.width; } get height() { return super.height; }
+});
+native(class DOMException extends Error {
+    constructor(message, name) { super(message); this.name = name; }
+});
+`;
+
+test('DOM values print like Chrome: elements as HTML, short forms, array-like lists and native accessors', async () => {
+    const frame = await runExample([
+        "const li = new Element('li', { class: 'item' }, [new Text('Pan')]);",
+        "const ul = new Element('ul', { id: 'menu' }, [new Text('\\n  '), li, new Text('\\n')]);",
+        "const box = new Element('input', { type: 'checkbox', checked: '' });",
+        'console.log(ul, li, box);',
+        "console.log([li], { el: ul }, new Text(' \\n Pan '));",
+        "console.log(new NodeList([li, new Text('\\n')]), new DOMTokenList(['card', 'active']));",
+        'console.log(new DOMRect(8, 8, 200, 50));',
+        'console.dir(li);',
+        "console.log(new DOMException(\"Failed to execute 'querySelector' on 'Document': '#1' is not a valid selector.\", 'SyntaxError'));",
+    ].join('\n'), { beforeScripts: FAKE_DOM });
+
+    assert.deepEqual(texts(frame), [
+        '<ul id="menu">…</ul> <li class="item">Pan</li> <input type="checkbox" checked>',
+        '[li.item] {el: ul#menu} " Pan "',
+        "NodeList(2) [li.item, text] DOMTokenList(2) ['card', 'active', value: 'card active']",
+        'DOMRect {x: 8, y: 8, width: 200, height: 50, top: 8, right: 208, bottom: 58, left: 8}',
+        'li.item',
+        "DOMException: Failed to execute 'querySelector' on 'Document': '#1' is not a valid selector.",
+    ]);
+});
+
+test('page error listeners run before LearnWeb reports the error, and preventDefault() hides the report', async () => {
+    const frame = await runExample("addEventListener('error', (event) => { console.log('handler: ' + event.message); if (event.message === 'silencio') event.preventDefault(); });");
+    const fire = (message) => frame.dispatch('error', {
+        message,
+        error: new Error(message),
+        defaultPrevented: false,
+        preventDefault() { this.defaultPrevented = true; },
+    });
+    fire('boom');
+    fire('silencio');
+    await settle();
+    assert.deepEqual(frame.posted.map((message) => message.text), ['handler: boom', 'Uncaught Error: boom', 'handler: silencio']);
 });

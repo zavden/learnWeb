@@ -187,7 +187,7 @@ Pending mirrors the Favorites architecture exactly: file-based JSON storage, ser
 - `tests/runtime-*.test.mjs` — preview document and in-page runtime (console inspector, errors)
 - `tests/ui-*.test.mjs` — dirty tracking and Vim shortcut config
 
-Total: 244 tests. Run with `npm test`.
+Total: 246 tests. Run with `npm test`.
 
 ## 14. Course Content Checker
 - `tools/verify-examples.html` (+ `verify-examples.js`, `verify-core.js`) — browser harness: `http://localhost:5174/tools/verify-examples.html?path=<ch>/<sec>[&ms=1500][&only=03-]` runs examples through the real hosted preview one at a time and collects runtime problems (`window.__verifyResults`).

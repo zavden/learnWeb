@@ -62,8 +62,19 @@ export function learncodeRuntimeBridge(config) {
     const MAX_HANDLES = 20000;
     const FLOOD_LIMIT = 2000;
     const TOP_STRING_LIMIT = 20000;
+    // Chrome's Elements tree shows a lone text child inline up to this length, else `…`.
+    const INLINE_TEXT_LIMIT = 80;
+    const VOID_ELEMENTS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr']);
+    // Global constructors that are part of JavaScript itself, not of the web platform.
+    const LANGUAGE_GLOBALS = new Set([
+        'Object', 'Function', 'Array', 'Number', 'String', 'Boolean', 'Symbol', 'BigInt', 'Date', 'RegExp',
+        'Error', 'EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'AggregateError', 'SuppressedError',
+        'Map', 'Set', 'WeakMap', 'WeakSet', 'WeakRef', 'FinalizationRegistry', 'Promise', 'Proxy',
+        'ArrayBuffer', 'SharedArrayBuffer', 'DataView', 'Iterator', 'AsyncIterator', 'DisposableStack', 'AsyncDisposableStack',
+    ]);
 
     // Natives captured before user code can patch them.
+    const ObjectPrototype = Object.prototype;
     const objToString = Object.prototype.toString;
     const hasOwn = Object.prototype.hasOwnProperty;
     const getProto = Object.getPrototypeOf;
@@ -361,6 +372,117 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
+    // NodeList, HTMLCollection and DOMTokenList print like arrays in Chrome: `NodeList(3) [li, li, li]`.
+    function isDomList(value) {
+        try {
+            return ['NodeList', 'HTMLCollection', 'DOMTokenList'].some((name) => typeof win[name] === 'function' && value instanceof win[name]);
+        } catch {
+            return false;
+        }
+    }
+
+    function isNativeFunction(fn) {
+        if (typeof fn !== 'function') return false;
+        try {
+            return /\{\s*\[native code\]\s*\}\s*$/.test(fnToString.call(fn));
+        } catch {
+            return false;
+        }
+    }
+
+    // Objects made by the browser (events, DOMRect, AbortSignal…): their data lives in native accessors on
+    // the prototype chain, which Chrome reads for its previews. Also true for subclasses written in JS.
+    function isPlatformObject(value) {
+        let proto = safeProto(value);
+        let guard = 0;
+        while (proto && guard < 50) {
+            guard += 1;
+            let descriptor = null;
+            try {
+                descriptor = getOwnDesc(proto, 'constructor');
+            } catch {
+                descriptor = null;
+            }
+            const ctor = descriptor && 'value' in descriptor ? descriptor.value : null;
+            const name = typeof ctor === 'function' ? functionName(ctor) : '';
+            if (name && !LANGUAGE_GLOBALS.has(name) && isNativeFunction(ctor)) {
+                try {
+                    if (win[name] === ctor) return true;
+                } catch {
+                    // Ignore.
+                }
+            }
+            proto = safeProto(proto);
+        }
+        return false;
+    }
+
+    function nativeGetter(descriptor) {
+        return descriptor && !('value' in descriptor) && isNativeFunction(descriptor.get);
+    }
+
+    // Native accessors of the prototype chain, nearest prototype first, skipping shadowed names.
+    function platformAccessorKeys(value, seen, limit) {
+        const keys = [];
+        let proto = safeProto(value);
+        let guard = 0;
+        while (proto && proto !== ObjectPrototype && guard < 50 && keys.length < limit) {
+            guard += 1;
+            for (const key of safeKeys(proto)) {
+                if (typeof key === 'symbol' || key === 'constructor' || seen.has(key)) continue;
+                seen.add(key);
+                let descriptor = null;
+                try {
+                    descriptor = getOwnDesc(proto, key);
+                } catch {
+                    descriptor = null;
+                }
+                if (!nativeGetter(descriptor)) continue;
+                keys.push(key);
+                if (keys.length >= limit) break;
+            }
+            proto = safeProto(proto);
+        }
+        return keys;
+    }
+
+    // Preview entries of a platform object: own enumerable properties (native getters read), then the
+    // native accessors of its prototypes. `skipKeys` hides keys an array-like preview already shows.
+    function platformPreviewItems(value, skipKeys) {
+        const items = [];
+        const seen = new Set(skipKeys || []);
+        const limit = PREVIEW_PROPS + 1;
+        for (const key of safeKeys(value)) {
+            if (items.length >= limit) break;
+            if (typeof key === 'symbol' || seen.has(key) || isIndexKey(key)) continue;
+            seen.add(key);
+            let descriptor = null;
+            try {
+                descriptor = getOwnDesc(value, key);
+            } catch {
+                descriptor = null;
+            }
+            if (!descriptor) continue;
+            if (nativeGetter(descriptor)) {
+                const result = safeGet(value, key);
+                if (result.ok) items.push(formatKey(key) + ': ' + shortPreview(result.value));
+            } else if (descriptor.enumerable) {
+                items.push(formatKey(key) + ': ' + ('value' in descriptor ? shortPreview(descriptor.value) : '(...)'));
+            }
+        }
+        if (items.length < limit) {
+            for (const key of platformAccessorKeys(value, seen, limit - items.length)) {
+                const result = safeGet(value, key);
+                if (result.ok) items.push(formatKey(key) + ': ' + shortPreview(result.value));
+            }
+        }
+        if (items.length > PREVIEW_PROPS) {
+            items.length = PREVIEW_PROPS;
+            items.push('…');
+        }
+        return items;
+    }
+
     function classify(value) {
         if (value === null) return 'null';
         const type = typeof value;
@@ -405,6 +527,7 @@ export function learncodeRuntimeBridge(config) {
         } catch {
             // Ignore.
         }
+        if (isDomList(value)) return 'domlist';
         if (isDomNode(value)) return 'node';
         try {
             if (value instanceof NativeError) return 'error';
@@ -575,10 +698,20 @@ export function learncodeRuntimeBridge(config) {
             || kind === 'undefined' || kind === 'null' || kind === 'symbol';
     }
 
+    function isDomException(value) {
+        try {
+            return typeof win.DOMException === 'function' && value instanceof win.DOMException;
+        } catch {
+            return false;
+        }
+    }
+
     function errorHeadline(error) {
         const nameResult = safeGet(error, 'name');
         const messageResult = safeGet(error, 'message');
-        const name = nameResult.ok && typeof nameResult.value === 'string' && nameResult.value ? nameResult.value : 'Error';
+        // Chrome titles DOM errors by their class: `DOMException: Failed to execute 'querySelector'…`.
+        const name = isDomException(error) ? 'DOMException'
+            : nameResult.ok && typeof nameResult.value === 'string' && nameResult.value ? nameResult.value : 'Error';
         const message = messageResult.ok && messageResult.value != null ? String(messageResult.value) : '';
         return message ? name + ': ' + message : name;
     }
@@ -621,24 +754,76 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
+    // Short form used inside arrays, objects and collections, like Chrome: `li#first.item`, `text`, `comment`.
     function nodeLabel(node) {
         try {
             const type = node.nodeType;
             if (type === 1) {
-                const tag = String(node.localName || node.tagName || 'element').toLowerCase();
-                const id = node.id ? '#' + node.id : '';
+                const tag = String(node.nodeName || node.localName || 'element').toLowerCase();
+                const id = typeof node.id === 'string' && node.id ? '#' + node.id : '';
                 const className = typeof node.className === 'string' && node.className.trim()
                     ? '.' + node.className.trim().split(/\s+/).join('.')
                     : '';
-                return '<' + tag + id + className + '>';
+                return tag + id + className;
             }
-            if (type === 3) return '#text ' + quoteString(node.data || '', 60);
-            if (type === 8) return '<!--' + truncate(node.data || '', 60) + '-->';
-            if (type === 9) return '#document';
-            if (type === 11) return '#document-fragment';
-            return String(node.nodeName || 'Node');
+            if (type === 10) return String(node.name || 'html');
+            return String(node.nodeName || 'node').replace(/^#/, '');
         } catch {
-            return 'Node';
+            return 'node';
+        }
+    }
+
+    function collapseSpace(text) {
+        return String(text).replace(/\s+/g, ' ');
+    }
+
+    // Child nodes Chrome's Elements tree shows (it hides whitespace-only text).
+    function visibleChildNodes(node) {
+        const result = [];
+        try {
+            const source = node.localName === 'template' && node.content ? node.content.childNodes : node.childNodes;
+            for (let index = 0; index < source.length; index += 1) {
+                const child = source[index];
+                if (child.nodeType === 3 && !/\S/.test(child.data)) continue;
+                result.push(child);
+            }
+            if (node.shadowRoot) result.push(node.shadowRoot);
+        } catch {
+            // Ignore.
+        }
+        return result;
+    }
+
+    // A logged node, like a collapsed row of Chrome's Elements tree: `<li class="item">Pan</li>`, `<ul id="menu">…</ul>`.
+    function nodeTitle(node) {
+        try {
+            const type = node.nodeType;
+            if (type === 1) {
+                const tag = String(node.localName || node.nodeName || 'element');
+                let open = '<' + tag;
+                const attributes = node.attributes || [];
+                for (let index = 0; index < attributes.length; index += 1) {
+                    const attribute = attributes[index];
+                    open += ' ' + attribute.name + (attribute.value === '' ? '' : '="' + truncate(attribute.value, STRING_PREVIEW) + '"');
+                }
+                open += '>';
+                if (VOID_ELEMENTS.has(tag) && node.namespaceURI === 'http://www.w3.org/1999/xhtml') return open;
+                const close = '</' + tag + '>';
+                const children = visibleChildNodes(node);
+                if (children.length === 0) return open + close;
+                if (children.length === 1 && children[0].nodeType === 3) {
+                    const text = collapseSpace(children[0].data).trim();
+                    if (text.length <= INLINE_TEXT_LIMIT) return open + text + close;
+                }
+                return open + '…' + close;
+            }
+            if (type === 3) return '"' + truncate(collapseSpace(node.data || ''), TOP_STRING_LIMIT) + '"';
+            if (type === 8) return '<!--' + truncate(node.data || '', STRING_PREVIEW) + '-->';
+            if (type === 10) return '<!DOCTYPE ' + String(node.name || 'html') + '>';
+            if (type === 11 && typeof node.mode === 'string' && node.host) return '#shadow-root (' + node.mode + ')';
+            return String(node.nodeName || 'node');
+        } catch {
+            return 'node';
         }
     }
 
@@ -707,6 +892,7 @@ export function learncodeRuntimeBridge(config) {
             }
             case 'window': return 'Window';
             case 'node': return nodeLabel(value);
+            case 'domlist': return (constructorName(value) || 'NodeList') + '(' + lengthOf(value) + ')';
             default: {
                 const proto = safeProto(value);
                 if (proto === null && isModuleNamespace(value)) return 'Module';
@@ -799,6 +985,11 @@ export function learncodeRuntimeBridge(config) {
         return items;
     }
 
+    // DevTools writes the length only from 2 items on: `[5]`, `[]`, `(2) [5, 6]`, `NodeList [li]`.
+    function arrayLengthText(length) {
+        return length > 1 ? '(' + length + ')' : '';
+    }
+
     // One-level preview used for top-level console arguments and expanded property rows.
     function fullPreview(value, ctx, mode) {
         const kind = classify(value);
@@ -814,12 +1005,19 @@ export function learncodeRuntimeBridge(config) {
                 const items = arrayLikePreviewItems(value, length);
                 const extraKeys = previewKeys(value, { includeIndices: false }).filter((key) => key !== 'length');
                 objectEntriesPreview(value, extraKeys).forEach((item) => items.push(item));
-                const prefix = name && name !== 'Array' ? name + '(' + length + ')' : '(' + length + ')';
-                return prefix + ' [' + items.join(', ') + ']';
+                const prefix = (name && name !== 'Array' ? name : '') + arrayLengthText(length);
+                return (prefix ? prefix + ' [' : '[') + items.join(', ') + ']';
             }
             case 'typedarray': {
                 const info = typedArrayInfo(value);
-                return info.name + '(' + info.length + ') [' + arrayLikePreviewItems(value, info.length).join(', ') + ']';
+                return info.name + arrayLengthText(info.length) + ' [' + arrayLikePreviewItems(value, info.length).join(', ') + ']';
+            }
+            case 'node': return mode === 'top' && !(ctx && ctx.dir) ? nodeTitle(value) : nodeLabel(value);
+            case 'domlist': {
+                const length = lengthOf(value);
+                const items = arrayLikePreviewItems(value, length);
+                platformPreviewItems(value, ['length']).forEach((item) => items.push(item));
+                return (constructorName(value) || 'NodeList') + arrayLengthText(length) + ' [' + items.join(', ') + ']';
             }
             case 'map': return 'Map(' + mapSize.call(value) + ') {' + collectionItems(value, 'map').join(', ') + '}';
             case 'set': return 'Set(' + setSize.call(value) + ') {' + collectionItems(value, 'set').join(', ') + '}';
@@ -847,7 +1045,10 @@ export function learncodeRuntimeBridge(config) {
                         if (tag.ok && typeof tag.value === 'string' && tag.value && tag.value !== 'Object') prefix = tag.value + ' ';
                     }
                 }
-                return prefix + '{' + objectEntriesPreview(value, previewKeys(value)).join(', ') + '}';
+                const entries = proto !== null && isPlatformObject(value)
+                    ? platformPreviewItems(value)
+                    : objectEntriesPreview(value, previewKeys(value));
+                return prefix + '{' + entries.join(', ') + '}';
             }
             default:
                 return shortPreview(value);
@@ -1007,12 +1208,20 @@ export function learncodeRuntimeBridge(config) {
         }
 
         const kind = classify(target);
+        const platform = kind === 'node' || kind === 'domlist' || (kind === 'object' && isPlatformObject(target));
         let keys = [];
         try {
             keys = ownKeys(target);
         } catch (error) {
             properties.push({ name: '[[Exception]]', internal: true, value: { type: 'string', preview: errorHeadline(error) } });
         }
+        // Browser objects keep their data in native accessors: Chrome lists them with their values.
+        const readNative = (key) => {
+            const result = safeGet(target, key);
+            return result.ok
+                ? describe(result.value, 'prop')
+                : { type: 'string', subtype: 'exception', preview: '[Exception: ' + (isErrorValue(result.error) ? errorHeadline(result.error) : shortPreview(result.error)) + ']' };
+        };
 
         let count = 0;
         for (const key of keys) {
@@ -1034,6 +1243,8 @@ export function learncodeRuntimeBridge(config) {
             };
             if ('value' in descriptor) {
                 item.value = describe(descriptor.value, 'prop');
+            } else if (platform && nativeGetter(descriptor)) {
+                item.value = readNative(key);
             } else {
                 item.accessor = true;
                 item.hasGetter = typeof descriptor.get === 'function';
@@ -1042,6 +1253,13 @@ export function learncodeRuntimeBridge(config) {
                 item.receiver = receiverHandle;
             }
             properties.push(item);
+        }
+
+        if (platform) {
+            const seen = new Set(keys);
+            for (const key of platformAccessorKeys(target, seen, EXPAND_LIMIT)) {
+                properties.push({ name: key, enumerable: true, value: readNative(key) });
+            }
         }
 
         if (kind === 'map' || kind === 'set') {
@@ -1306,7 +1524,7 @@ export function learncodeRuntimeBridge(config) {
         if (!CONSOLE_ENABLED && level !== 'error') return;
         if (!allowConsoleMessage()) return;
 
-        const ctx = { promises: [] };
+        const ctx = { promises: [], dir: options.method === 'dir' };
         const parts = formatArgs(args, ctx);
         const callerFrames = captureCallerFrames();
         const firstError = args.find((arg) => isErrorValue(arg));
@@ -1467,8 +1685,10 @@ export function learncodeRuntimeBridge(config) {
         return result.ok && typeof result.value === 'string' ? result.value : 'Error';
     }
 
-    win.addEventListener('error', (event) => {
-        if (!event || typeof event.message !== 'string') return;
+    // Chrome reports an uncaught error only after the page's own `error` listeners ran, and not at all when one
+    // of them called preventDefault() (or `onerror` returned true): these listeners are kept last (see below).
+    function onWindowError(event) {
+        if (!event || typeof event.message !== 'string' || event.defaultPrevented) return;
         const error = event.error;
         let message;
         let frames = [];
@@ -1515,7 +1735,8 @@ export function learncodeRuntimeBridge(config) {
             stackFrames: frames,
             stackText,
         }));
-    });
+    }
+    win.addEventListener('error', onWindowError);
 
     // A <script> whose src (or a module it imports) fails to load fires a plain `error` event at the element,
     // never at window, so the learner saw nothing. Chrome's console shows the failed request: do the same,
@@ -1568,7 +1789,8 @@ export function learncodeRuntimeBridge(config) {
         }, true);
     }
 
-    win.addEventListener('unhandledrejection', (event) => {
+    function onUnhandledRejection(event) {
+        if (event && event.defaultPrevented) return;
         const reason = event ? event.reason : undefined;
         const message = describeThrown(reason, 'Uncaught (in promise)');
         const described = isErrorValue(reason) ? describeErrorStack(reason) : { frames: [], stackText: '' };
@@ -1586,7 +1808,57 @@ export function learncodeRuntimeBridge(config) {
             stackFrames: described.frames,
             stackText: described.stackText,
         }));
-    });
+    }
+    win.addEventListener('unhandledrejection', onUnhandledRejection);
+
+    // Listeners run in registration order, so the page's `error`/`unhandledrejection` listeners (and `onerror`)
+    // would run after LearnWeb's. Re-adding ours after each one the page adds keeps them last, like Chrome's report.
+    (function keepReportsLast() {
+        const reporters = { error: onWindowError, unhandledrejection: onUnhandledRejection };
+        const add = win.addEventListener;
+        const remove = win.removeEventListener;
+        if (typeof add !== 'function' || typeof remove !== 'function') return;
+        const moveLast = (type) => {
+            remove.call(win, type, reporters[type]);
+            add.call(win, type, reporters[type]);
+        };
+        try {
+            Object.defineProperty(win, 'addEventListener', {
+                configurable: true,
+                writable: true,
+                value: function addEventListener(type, listener, options) {
+                    const target = this == null ? win : this;
+                    const result = add.call(target, type, listener, options);
+                    if (target === win && hasOwn.call(reporters, type) && listener !== reporters[type]) moveLast(type);
+                    return result;
+                },
+            });
+        } catch {
+            // Keep the native method.
+        }
+        ['error', 'unhandledrejection'].forEach((type) => {
+            let descriptor = null;
+            try {
+                descriptor = getOwnDesc(win, 'on' + type);
+            } catch {
+                descriptor = null;
+            }
+            if (!descriptor || typeof descriptor.set !== 'function' || !descriptor.configurable) return;
+            try {
+                Object.defineProperty(win, 'on' + type, {
+                    configurable: true,
+                    enumerable: descriptor.enumerable,
+                    get: descriptor.get,
+                    set: function (value) {
+                        descriptor.set.call(this == null ? win : this, value);
+                        moveLast(type);
+                    },
+                });
+            } catch {
+                // Keep the native accessor.
+            }
+        });
+    })();
 
     // ─── Parent commands (REPL + inspector) ────────────────
 
