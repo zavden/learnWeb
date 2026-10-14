@@ -176,7 +176,31 @@ console: true                     # whenever the example prints to the console
   `common-error`/`exercise` examples; `@debug` and `@warn` output is always allowed.
 - TypeScript examples are type-checked (`strict`). Type errors appear in red in the editor but the
   JavaScript still runs. Examples that *teach* a type error must say so in a comment
-  (`// ❌ Error TS2322 a propósito: …`) and use `example_stage: common-error`.
+  (`// ❌ Error TS2322 a propósito: …`) and use `example_stage: common-error`. After the embed of an example
+  with type errors, the ```text block lists them first, exactly as the theory dialog's strip shows them, then the
+  console (convention set by ch07 sec01):
+  ```text
+  // Errores de tipos (el código se ejecuta igual):
+  línea 4: TS2322: Type 'string' is not assignable to type 'number'.
+  // Consola:
+  total → 12
+  ```
+  Copy the messages from the checker's output (multi-line messages keep their indented lines). Professional
+  examples and exercise solutions have zero type errors; exercise starters may have them and still print ✗.
+  ES2024+ library APIs (`Object.groupBy`, `Promise.withResolvers`, Set methods…) are type errors with the course's
+  `ES2023` libs. Code embeds of TS examples show a generated `compiled.js` tab.
+- Where an example runs: the editor preview and the theory dialog (clicking a card or «▶ Run») are the real hosted
+  page (`http://localhost:3001`, real storage, history, forms); gallery and inline theory cards are sandboxed
+  `srcdoc` copies with origin `null` — no IndexedDB, no `pushState`, no form submission, in-memory storage shims.
+  Examples that use those APIs call them from user actions or catch the `SecurityError` and say on the page
+  «Esta tarjeta es un iframe aislado (origen null): ábrelo con ▶ o en el editor». Never print `location.href`
+  whole (the hosted URL has a random id).
+- Network examples use only the topic's `assets/` files and the local demo API `/api/demo/*` (echo, slow stream,
+  CORS modes; runtime.md); `http://127.0.0.1:3001/…` is the «other origin» of a page on `localhost:3001`; a
+  network error is `fetch('http://localhost:59999/')`. Storage keys are namespaced (`lw-<module>-…`) and cleaned
+  up, or come with a reset button when they persist on purpose. Take error texts from Chrome, not Node:
+  `response.json()` on an empty body says `Unexpected end of input`; an overwritten cookie moves to the end of
+  `document.cookie`.
 
 ### Runtime capabilities
 

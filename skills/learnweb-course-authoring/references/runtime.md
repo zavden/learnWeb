@@ -9,8 +9,17 @@ Verified in Chrome (Apple M1) on 2026-10-12, after the runtime rewrite.
   cannot touch the editor) but behaves like a normal website. Relative URLs resolve inside the topic's
   `assets/` folder (subfolders allowed): `fetch('datos.json')`, `new Worker('worker.js')`,
   `<img src="foto.webp">`, `<script type="module" src="util.js">`.
-- Gallery cards, theory embeds and dialogs use a sandboxed `srcdoc` copy instead (no real storage there; an
-  in-memory shim keeps storage-based examples from crashing). Shaders always use `srcdoc`.
+- The theory dialog (clicking a card or «▶ Run» under a code embed) runs the same hosted page since 2026-10-14
+  (it falls back to `srcdoc` only if the preview server doesn't answer). TypeScript type errors are listed above its
+  console under «Errores de tipos (el código se ejecuta igual)», one line per error: `línea 4: TS2322: …` (lines of
+  the TypeScript block) — course texts quote them in that format.
+- Gallery cards and inline theory cards use a sandboxed `srcdoc` copy instead (`sandbox="allow-scripts"`, origin
+  `"null"`, `location.href` = `about:srcdoc`, base URL `http://localhost:5174/api/topic/<ch>/<sec>/<top>/assets/`):
+  `localStorage`/`sessionStorage`/`document.cookie` are in-memory shims; `indexedDB.open()` and
+  `history.pushState/replaceState` throw `SecurityError`; every request is cross-origin (asset files and the demo
+  API send CORS headers). There is no `allow-forms` either: submit buttons, Enter and `requestSubmit()` do nothing (no
+  `submit` or `invalid` events, no validation bubbles); `checkValidity()` still works (checked 2026-10-14). Examples that use those APIs call them from user actions or catch the error and say so on
+  the page. Shaders always use `srcdoc`.
 - The page is re-run after every pause while typing. `alert/confirm/prompt` are skipped while typing (a
   notice appears) and run normally when the example is opened or ⟳ is pressed.
 - The console is cleared on every run.
@@ -45,7 +54,8 @@ Verified in Chrome (Apple M1) on 2026-10-12, after the runtime rewrite.
 | Import from CDN (`https://esm.sh/...`) | ✅ | Needs network; avoid unless the lesson is about it |
 | Several JS files | ✅ | One script block per example; extra modules as `.js` files in `assets/` (`import { x } from './03-tienda/util.js'`), import maps, Blob/`data:` modules and `import()`; they also work in sandboxed theory cards and dialogs. A module that fails to load (404) prints Chrome's `GET <path> net::ERR_ABORTED 404 (Not Found)` in the console; module namespaces print as `Module {…}` |
 | `localStorage`, `sessionStorage`, IndexedDB, cookies | ✅ | One origin shared by all examples: namespace keys (`lw-css-tema`) and clean up in the example |
-| `fetch()` of assets, JSON, text, binary | ✅ | |
+| `fetch()` of assets, JSON, text, binary | ✅ | A missing asset → 404 with the JSON body `{"error":"Asset not found"}` |
+| Local demo API for network lessons | ✅ | `/api/demo/echo` (any method; JSON echo of `method`, `path`, `query`, selected `headers` and the parsed `body` — JSON, urlencoded, multipart with files as `{name, size, type}`; invalid JSON with a JSON content type → 400; `?status=`, `?delay=` ms), `/api/demo/stream` (`chunks`, `interval`, `size`, `format=ndjson`, `length=no`), other `/api/demo/*` paths → 404 HTML page. CORS: `*` by default, `cors=no` none, `cors=origin` reflects the origin with credentials; `X-Demo-Server: LearnWeb` readable cross-origin with `expose=1`. `http://127.0.0.1:3001/…` is another origin for a page on `localhost:3001`. Code in `src/utils/demoApi.js`. Network error: `fetch('http://localhost:59999/')` (not port 9: Chrome blocks it as unsafe). Never call LearnWeb's other `/api` routes from examples |
 | `#anchors`, `:target`, `history.pushState`, `popstate` | ✅ | |
 | Forms (`submit`, validation, `method="dialog"`) | ✅ | A submit not handled with `preventDefault()` is blocked and logged with its fields: `GET <action with the form data as query>` or `POST <action> (<enctype>)`, files as `File "cv.pdf" (24 KB, application/pdf)` |
 | Web Workers (classic and module), Blob workers | ✅ | |
@@ -59,7 +69,7 @@ Verified in Chrome (Apple M1) on 2026-10-12, after the runtime rewrite.
 | JavaScript syntax errors | ✅ | Reported in the editor exactly as V8/Chrome does (classic scripts: `const x;`, duplicate `let`…); module scripts use the TypeScript parser |
 | Console | ✅ | log/info/warn/error/debug/table/dir/group/groupCollapsed/count/time/timeLog/assert/trace/clear and `%s %d %i %f %o %O %c`; Chrome-like previews; objects expand down to `[[Prototype]]`; getters shown as `(...)`. DOM values like Chrome: a logged element prints as HTML with its attributes (`<li class="item">Pan</li>`, `<ul id="menu">…</ul>` when it has element children or > 80 characters of text), text nodes as `"Pan"`; inside arrays/objects/lists the short form `li#first.item`, `text`, `comment`; `NodeList(3) [li, li, li]`, `HTMLCollection(2) […]`, `DOMTokenList(2) ['a', 'b', value: 'a b']`; browser objects show their native accessors (`DOMRect {x: 8, …}`, `CustomEvent {isTrusted: false, detail: {…}, type: 'add', …}`, `AbortSignal {aborted: false, …}`, up to 8 entries); `console.dir(el)` → `li#first.item`; DOM errors → `DOMException: Failed to execute …` |
 | Runtime errors | ✅ | Mapped to the editor line (JS, TS via source maps, HTML-FULL); `throw "x"` shows `Uncaught "x"`. Like DevTools, the `Uncaught …` / `Uncaught (in promise) …` line comes after the page's own `error`/`unhandledrejection` listeners (and `onerror`) ran, and `event.preventDefault()` in one of them hides it |
-| TypeScript | ✅ | `strict` type checking (ES2023 + DOM libs) with errors in the editor; the JS still runs; target ES2022 (native `#private`, class fields) |
+| TypeScript | ✅ | `strict` type checking (TypeScript 5.9, ES2023 + DOM libs, `moduleDetection: force`) with errors in the editor and in the theory dialog's «Errores de tipos» strip; the JS still runs; target ES2022 (native `#private`, class fields). Theory code embeds of TS examples get a generated `compiled.js` tab (the emitted JavaScript, without loop guards or source map) |
 | SCSS / SASS | ✅ | Dart Sass 1.98. Built-in modules (`sass:math`, `sass:color`, `sass:map`, `sass:list`, `sass:string`, `sass:meta`, `sass:selector`); no `@use` of other files; endless loops are stopped. The generated CSS is visible: code embeds of Sass examples get a generated `compiled.css` tab right after the SCSS tab (and a `sass-output.txt` tab with `styles.scss:4 @debug: …`, `@warn: …` and `Error: …` lines when there are messages, followed by the call stack when the message comes from inside a mixin/function, and the compiler's own timeout/memory errors for endless loops); in the editor, a «CSS» button in the preview toolbar shows the compiled CSS and those messages over the preview, and the status bar lists them under «Compile». A compile error leaves the page without CSS and shows the error |
 | Pug | ✅ | No `include`/`extends` |
 | Browser default styles | ✅ | Plain HTML examples get no injected CSS: what you see is the real user-agent stylesheet |

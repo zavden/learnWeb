@@ -135,8 +135,9 @@ Leyenda: «🐛» = comportamiento raro que DEBE tener ejemplo propio y entrada 
 ### sec10-arquitectura-css — Arquitectura y CSS moderno
 - top01-anidamiento-nativo — CSS nesting, `&`, 🐛 diferencias con Sass.
 - top02-metodologias — BEM, utilidades, componentes; `:where()` para especificidad cero; capas para orden.
-- top03-design-tokens — tokens con custom properties, temas, escalas de espacio/tipografía.
-- top04-resets-y-bases — reset moderno comentado línea a línea, `accent-color`, `color-scheme`.
+- top03-scope — `@scope` (raíz, límite «donut», proximidad, 🐛 la especificidad gana a la proximidad). (Separada de top02 en la sexta sesión.)
+- top04-design-tokens — tokens con custom properties, temas, escalas de espacio/tipografía.
+- top05-resets-y-bases — reset moderno comentado línea a línea, `accent-color`, `color-scheme`.
 
 ---
 
@@ -173,6 +174,7 @@ Leyenda: «🐛» = comportamiento raro que DEBE tener ejemplo propio y entrada 
 - top05-map-set-y-weak — `Map` vs objeto (claves de cualquier tipo), `Set`, operaciones de conjuntos, `WeakMap/WeakSet` y el GC.
 - top06-json-y-copias — `JSON.stringify/parse` (🐛 `undefined`, fechas, `NaN`), reviver/replacer, `structuredClone`, copia superficial vs profunda, igualdad por referencia.
 - top07-fechas-e-intl — `Date` (🐛 meses desde 0, zonas horarias), `Intl.DateTimeFormat`, `Intl.NumberFormat`, `Temporal` (mención).
+- top08-expresiones-regulares — literales y `new RegExp`, `test/match/matchAll/replace/split`, clases (🐛 `\w` solo ASCII → `\p{L}` con `u`/`v`), cuantificadores (🐛 voraces), anclas (🐛 sin `^…$` acepta subcadenas), grupos con nombre, lookaround, banderas (🐛 `lastIndex` con `g`), el modo `v` de `pattern`, `RegExp.escape`, 🐛 backtracking catastrófico. (Añadida en la sexta sesión: la necesitan los formularios con JS.)
 
 ### sec03-funciones-y-ambito — Funciones y ámbito
 - top01-formas-de-funcion — declaración, expresión, flecha (🐛 retorno implícito de objetos con `({})`), funciones como valores, callbacks.

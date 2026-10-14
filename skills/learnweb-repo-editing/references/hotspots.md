@@ -73,7 +73,7 @@ All editor/* modules are mixins applied via `Object.assign(Editor.prototype, ...
 - `src/utils/exampleCompiler.js` — facade re-exporting from compiler/
 - `src/utils/compiler/markupCompiler.js` — Pug compilation
 - `src/utils/compiler/styleCompiler.js` — SCSS/SASS compilation
-- `src/utils/compiledStyleView.js` — generated `compiled.css` / `sass-output.txt` views of Sass examples (theory code-embed tabs and the editor preview «CSS» panel)
+- `src/utils/compiledStyleView.js` — generated `compiled.css` / `sass-output.txt` views of Sass examples (theory code-embed tabs and the editor preview «CSS» panel) and `compiled.js` of TypeScript examples (code-embed tab; `jsView` from `scriptCompiler.js`)
 - `src/utils/compiler/scriptCompiler.js` — JavaScript syntax check + TypeScript transpile (ES2022) + loop guards
 - `src/utils/compiler/syntaxCheck.js` — JavaScript syntax errors as Chrome reports them (V8 `vm.Script` for classic scripts, TS parser for modules, plus the browser-only `let top`/`window`/`document`/`location` early error)
 - `src/utils/compiler/typeChecker.js` — cached TypeScript language service (`strict`, ES2023 + DOM libs); type errors are non-blocking diagnostics
@@ -103,7 +103,7 @@ If a request changes example format or metadata behavior, start here.
 ## 5. Theory Embeds
 
 - `src/components/TheoryViewer.js` — theory panel rendering
-- `src/components/TheoryExerciseDialog.js` — exercise popup from theory
+- `src/components/TheoryExerciseDialog.js` — example popup from theory («▶ Run» / card click): runs the hosted preview (srcdoc fallback), lists TypeScript type errors above its console
 - `src/utils/theoryRenderer.js` — theory HTML generation
 - `src/utils/theoryExerciseEmbeds.js` — `[[exercise:...]]` parsing and rendering
 - `src/utils/theoryDocument.js` — theory document model
@@ -134,7 +134,7 @@ Pending mirrors the Favorites architecture exactly: file-based JSON storage, ser
 ## 7. Sidebar And Tree
 
 - `src/components/Sidebar.js`
-- `src/utils/materialTree.js` — natural sort; display labels: topic = first `# ` heading of `main.md`, chapter/section = first line of `label.txt`
+- `src/utils/materialTree.js` — natural sort; display labels: topic = first `# ` heading of `main.md` (inline-code backticks dropped), chapter/section = first line of `label.txt`
 - `.hiddens`
 
 ## 8. App Wiring
@@ -145,6 +145,7 @@ Pending mirrors the Favorites architecture exactly: file-based JSON storage, ser
 
 - `server.js` — Express API (bound to 127.0.0.1): tree, examples CRUD, compile (isolated worker), theory, favorites, pending, assets (subfolders allowed), preview hosting, defaults. Every route confines paths to `material/` (`resolveInside`).
 - `src/utils/api.js` — frontend API client
+- `src/utils/demoApi.js` — `/api/demo/*` demo API for the network lessons (echo, slow stream, CORS modes), open to any origin; tests in `tests/server-demo-api.test.mjs`
 
 ## 10. Vim And Shortcuts
 
@@ -185,9 +186,10 @@ Pending mirrors the Favorites architecture exactly: file-based JSON storage, ser
 - `tests/compile-script-safety.test.mjs`, `tests/compile-isolated.test.mjs` — type checking, syntax diagnostics, loop guards, isolated compiler
 - `tests/data-*.test.mjs` — markdown fences/frontmatter, theory sanitizing, state stores, labels
 - `tests/runtime-*.test.mjs` — preview document and in-page runtime (console inspector, errors)
+- `tests/server-demo-api.test.mjs` — the course demo API
 - `tests/ui-*.test.mjs` — dirty tracking and Vim shortcut config
 
-Total: 246 tests. Run with `npm test`.
+Total: 253 tests. Run with `npm test`.
 
 ## 14. Course Content Checker
 - `tools/verify-examples.html` (+ `verify-examples.js`, `verify-core.js`) — browser harness: `http://localhost:5174/tools/verify-examples.html?path=<ch>/<sec>[&ms=1500][&only=03-]` runs examples through the real hosted preview one at a time and collects runtime problems (`window.__verifyResults`).
