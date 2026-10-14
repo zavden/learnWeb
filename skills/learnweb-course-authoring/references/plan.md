@@ -217,6 +217,7 @@ Leyenda: «🐛» = comportamiento raro que DEBE tener ejemplo propio y entrada 
 - top01-modulos-es — `import/export` (named/default), ámbito de módulo, modo estricto, `type="module"`, módulos se evalúan una vez, live bindings 🐛.
 - top02-import-dinamico — `import()`, carga diferida, importar desde un CDN (esm.sh) y desde blobs (simular varios archivos en un ejemplo).
 - top03-organizar-codigo — dependencias circulares 🐛, barrel files, separación por responsabilidades.
+- top04-rutas-import-maps-y-herramientas — cómo se resuelven las rutas, especificadores desnudos 🐛, un 404 rompe el grafo entero 🐛, import maps, módulos JSON (`with { type: 'json' }`), npm y empaquetadores (concepto).
 
 ---
 

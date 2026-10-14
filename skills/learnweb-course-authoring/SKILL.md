@@ -149,6 +149,11 @@ console: true                     # whenever the example prints to the console
   `TreeNode`, `CoopScheduler`…). Top-level `var` names that are `window` properties collide with them (checked in
   Chrome: `var name = 42` and `var status = 7` read back as strings, `var history = []` silently stays the
   browser's History object, `var alert = 'x'` replaces `alert`): avoid them too.
+- Multi-file JavaScript (ES modules): extra modules are `.js` files in the topic's `assets/`, one subfolder per
+  example or idea (`assets/03-tienda/precios.js`), imported with specifiers that start with `./`. They load in the
+  hosted preview, the gallery cards and the theory cards/dialogs (sandboxed srcdoc). Say in each example which asset
+  files it uses (learners read them with «Assets»). `node claude_resume/run-module.mjs` (needs
+  `--experimental-vm-modules`) prints the console of examples with static imports; `run-example.mjs` can't.
 - The verify harness reports `console.error` as a problem: for errors the example handles on purpose, use
   `console.warn`/`console.log` unless the example is `common-error`.
 - Sass compile errors (`@error`, undefined variables…) and deprecation warnings are allowed by the checker only in

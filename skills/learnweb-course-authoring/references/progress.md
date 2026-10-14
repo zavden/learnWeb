@@ -1,7 +1,7 @@
 # Course progress and hand-off notes
 
-Last updated: 2026-10-14. Modules 2-5 of every lane + CSS sec06-07 + JS sec06-07 are complete and browser-verified
-(1478 examples, 61 exercises, checker 0/0).
+Last updated: 2026-10-14. HTML sec01-04, CSS sec01-07, Sass sec01 and the whole JavaScript chapter (ch05 sec01-08)
+are complete and browser-verified (1538 examples, 64 exercises, checker 0/0).
 
 Read this first when resuming the course work. The syllabus is in [plan.md](plan.md), the authoring
 rules in [../SKILL.md](../SKILL.md), runtime capabilities in [runtime.md](runtime.md).
@@ -32,7 +32,7 @@ Legend: ✅ complete and verified (checker 0/0 + browser harness) · 🟡 partia
 | ch05-javascript/sec05-clases-y-poo | ✅ 6/6 | ✅ 7 + 3 exercises | ✅ 12 | 79 examples; browser-verified 0 problems; Chrome console = run-example output (hash-compared; only U+202F vs space in Intl ranges) |
 | ch05-javascript/sec06-iteracion-y-metaprogramacion | ✅ 5/5 | ✅ 8 + 3 exercises | ✅ 12 | 70 examples; browser-verified 0 problems; Chrome console = run-example output for all 70 (console.table compared by count) |
 | ch05-javascript/sec07-asincronia | ✅ 6/6 | ✅ 8 + 3 exercises | ✅ 12 | 78 examples; browser-verified (visible frame); console = run-example except documented Chrome-only results; top06/06 + top95/06 teach that `scheduler.yield()` starves painting |
-| ch05-javascript/sec08 | ⬜ | ⬜ | ⬜ | |
+| ch05-javascript/sec08-modulos | ✅ 4/4 (top04 rutas/import maps added to plan.md) | ✅ 7 + 3 exercises | ✅ 12 | 60 examples; written in one go (no review stop); browser-verified: console = run-module output except Chrome-only error texts (fixed in the text); asset imports work in hosted, gallery cards and theory dialogs; esm.sh example online |
 | ch06 … ch08 | ⬜ | ⬜ | ⬜ | |
 
 Fourth session (2026-10-13/14): «los siguientes 2 módulos completos» = CSS sec06-tipografia-y-texto + JS
@@ -41,7 +41,9 @@ disconnected at a review step, tell the user and wait before continuing.
 Then «continúa con otros 2» (2026-10-13): CSS sec07-efectos-visuales + JS sec07-asincronia, two agents. Public-domain
 images (Velasco, Hokusai, Apollo 17, Hubble, Aldrin; 960px JPEG + credit lines) are in the gitignored
 `claude_resume/images/`; `claude_resume/run-example.mjs` now runs async code (timers, queueMicrotask, MessageChannel,
-AbortController, fake rAF; `type="module"` scripts wrapped in an async function; `WAIT=<ms>`). Fonts for CSS sec06 (OFL, woff2) are in the gitignored
+AbortController, fake rAF; `type="module"` scripts wrapped in an async function; `WAIT=<ms>`).
+Then «haz un módulo más, haz los commits y apaga el servidor» (2026-10-14): JS sec08-modulos, one agent writing the
+whole module (lessons + top90 + top95) in one go; first course examples that import `.js` files from `assets/`. Fonts for CSS sec06 (OFL, woff2) are in the gitignored
 `claude_resume/fonts/` (README lists axes). Previous goal «termina el módulo 4 y haz el 5» — done. Lanes: HTML lane = HTML → Sass → TS →
 WASM/GPU; CSS lane; JS lane = JS → JS in the browser. Max 3 Opus agents at a time (or one Fable alone).
 
@@ -51,14 +53,15 @@ Next actions when resuming (pick with the user):
 2. CSS lane: `ch03-css/sec08-responsive` (promised: fluid type with `clamp()`, `prefers-reduced-motion`), then sec09
    animation (promised by sec07: transitions for the instant hover/flip states, `scaleX` progress bars, `will-change`;
    by JS sec07: compositor animations keep running while JS is busy).
-3. JS lane: `ch05-javascript/sec08-modulos` (ES modules; top-level await was shown only in module scripts), then
-   ch06 (promised by sec07: `addEventListener` + `signal`, `visibilitychange`, `unhandledrejection`, `fetch` with
-   `{ signal }`, workers, Web Animations `finished`, canvas loops). Still no regular-expressions lesson.
+3. JS lane: ch05 is complete. Next: ch06-javascript-en-el-navegador sec01-el-dom (promised by sec07: `addEventListener` + `signal`, `visibilitychange`, `unhandledrejection`, `fetch` with
+   `{ signal }`, Web Animations `finished`, canvas loops; by sec08: `addEventListener` instead of `onclick`, `fetch`,
+   CORS, the `URL` API). Workers are ch08/sec02 (content now says «capítulo 8»). Still no regular-expressions lesson.
+   The HTML lane can start ch07 TypeScript once ch06 has started (TS needs DOM types).
 4. HTML lane: Sass is complete (ch04 has one section). TypeScript (ch07) comes after ch06 in the course order, so
    before starting it either write JS sec06-08 + ch06 first, or let this lane help the CSS lane (sec07+) or write
    the missing regular-expressions topic. Ask the user.
-   Remaining (2026-10-14): 19 of 38 modules (~85 lessons): CSS sec08-10, JS sec08, ch06 sec01-06, ch07
-   sec01-03, ch08 sec01-06 — about 7 rounds of 3 parallel modules. Order matters: ch07/ch08 need ch05+ch06.
+   Remaining (2026-10-14): 18 of 38 modules (~82 lessons): CSS sec08-10, ch06 sec01-06, ch07 sec01-03, ch08
+   sec01-06 — about 6 rounds of 3 parallel modules. Order matters: ch07/ch08 need ch05+ch06.
 5. Optional tidy-ups listed in the notes below (old `href="#"` placeholders, flex-basis-in-a-column example).
 
 Notes carried forward:
@@ -67,6 +70,10 @@ Notes carried forward:
   `lang="en"` splits Spanish «rr» (guer-rilleros, car-retera) while `lang="es"` keeps it (guerri-lleros); Roboto
   Flex's `wdth` axis changes text width only ~15-20% at 16-24px; Chrome doesn't support `ui-serif`/`ui-monospace`;
   `font-family: monospace` alone → 13px; preload + @font-face metric overrides work without console warnings.
+- Chrome 155 error texts differ from Node 24 for modules: assigning to an import → `Cannot assign to property 'x' of
+  [object Module]` (Node: «read only property … of object '[object Module]'»); `import('lodash')` → `Failed to resolve
+  module specifier 'lodash'` (static import: the long message with double quotes and the «Relative references…» hint).
+  Always take module error texts from Chrome.
 - `scheduler.yield()` (Chrome 155, measured): 400 ms of 8 ms slices → 50 slices but only ~4 painted frames (its
   continuations run ahead of rendering; Chrome paints ~every 100 ms); `setTimeout(0)` → 33 slices / 25 frames;
   rAF + setTimeout → 25 / 25. Yield to a frame every ~16 ms when a JS-driven indicator must stay smooth.
@@ -149,9 +156,9 @@ folder, no app code, no browser, heat rule); final report format.
 - `npm run dev` (vite :5174 + API on 127.0.0.1:3001). The API must be restarted after server-side changes
   (server.js, compiler, materialTree…).
 - Hosted previews are served from `http://localhost:3001/preview/...` (same hostname as the app, port 3001).
-- Tests: `npm test` (242). Build: `npm run build`.
+- Tests: `npm test` (244). Build: `npm run build`.
 
-## App changes made during the course work (committed: 7c7485d, 6a129ae, 1f74d6f, afbb2fe, 0ef4f6d, 9859213)
+## App changes made during the course work (committed: 7c7485d, 6a129ae, 1f74d6f, afbb2fe, 0ef4f6d, 9859213, 6920719)
 
 Security hardening of server.js; isolated compiler worker; TypeScript type checking; V8 syntax checks; loop
 guards (script block and inline <script>); hosted preview runtime with Chrome-like console; theory sanitizing,
@@ -173,3 +180,8 @@ screen and keeps long console lines for output comparisons; module detection no 
 Fourth session (9859213): the console prints identifier keys with accents unquoted (`{café: 12}`) and generator
 functions as `ƒ* name()`, like Chrome. The guide's global-name rule now lists `Iterator`/`Proxy`/`Scheduler` and
 `var name/status/history/alert` collisions.
+6920719: a script/module that fails to load (404, also a static import inside the graph) prints Chrome's
+`GET <path> net::ERR_ABORTED 404 (Not Found)` in the console (from resource timings; asset routes send
+Timing-Allow-Origin so srcdoc copies see the status); module namespaces print as `Module {…}`.
+`claude_resume/run-module.mjs` (gitignored, written by the sec08 agent) runs examples with static imports, Blob/data:
+modules, import maps and JSON modules: `node --experimental-vm-modules claude_resume/run-module.mjs <example.md>`.

@@ -38,7 +38,7 @@ Verified in Chrome (Apple M1) on 2026-10-12, after the runtime rewrite.
 | Classic script (globals, `onclick="fn()"`) | ✅ default | Top-level `function`/`var` become globals as in a normal page |
 | `import` / `export`, top-level `await` | ✅ | The script switches to `type="module"` automatically when it has top-level `import`/`export`/`await` or `import.meta` |
 | Import from CDN (`https://esm.sh/...`) | ✅ | Needs network; avoid unless the lesson is about it |
-| Several JS files | ⚠️ | One script block per example; extra modules as `.js` files in `assets/` (`import './util.js'`) or built from Blobs |
+| Several JS files | ✅ | One script block per example; extra modules as `.js` files in `assets/` (`import { x } from './03-tienda/util.js'`), import maps, Blob/`data:` modules and `import()`; they also work in sandboxed theory cards and dialogs. A module that fails to load (404) prints Chrome's `GET <path> net::ERR_ABORTED 404 (Not Found)` in the console; module namespaces print as `Module {…}` |
 | `localStorage`, `sessionStorage`, IndexedDB, cookies | ✅ | One origin shared by all examples: namespace keys (`lw-css-tema`) and clean up in the example |
 | `fetch()` of assets, JSON, text, binary | ✅ | |
 | `#anchors`, `:target`, `history.pushState`, `popstate` | ✅ | |
