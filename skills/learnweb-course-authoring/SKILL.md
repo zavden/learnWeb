@@ -148,7 +148,9 @@ console: true                     # whenever the example prints to the console
   bridge included; a top-level `class Iterator` breaks the iterator helpers): pick another name (`Doc`,
   `TreeNode`, `CoopScheduler`…). Top-level `var` names that are `window` properties collide with them (checked in
   Chrome: `var name = 42` and `var status = 7` read back as strings, `var history = []` silently stays the
-  browser's History object, `var alert = 'x'` replaces `alert`): avoid them too.
+  browser's History object, `var alert = 'x'` replaces `alert`): avoid them too. The same goes for top-level
+  functions named like `window` methods (`blur`, `focus`, `close`, `open`, `print`, `scroll`, `stop`): use
+  `boxBlur`, `closeDialog`…
 - Multi-file JavaScript (ES modules): extra modules are `.js` files in the topic's `assets/`, one subfolder per
   example or idea (`assets/03-tienda/precios.js`), imported with specifiers that start with `./`. They load in the
   hosted preview, the gallery cards and the theory cards/dialogs (sandboxed srcdoc). Say in each example which asset
@@ -188,7 +190,14 @@ console: true                     # whenever the example prints to the console
   Copy the messages from the checker's output (multi-line messages keep their indented lines). Professional
   examples and exercise solutions have zero type errors; exercise starters may have them and still print ✗.
   ES2024+ library APIs (`Object.groupBy`, `Promise.withResolvers`, Set methods…) are type errors with the course's
-  `ES2023` libs. Code embeds of TS examples show a generated `compiled.js` tab.
+  `ES2023` libs. Code embeds of TS examples show a generated `compiled.js` tab. Scripts compile with `alwaysStrict`
+  like `tsc --strict`: the emitted JS starts with `"use strict";`, so writes to frozen objects throw and a detached
+  `this` is `undefined` (catch them when the example shows them).
+- Errors in expected output: Chrome 155 (and LearnWeb's console) title DOM errors by their name — `Uncaught
+  NotSupportedError: …`, `Uncaught (in promise) AbortError: …`, `console.log(domError)` → `SyntaxError: Failed to
+  execute …` — never `DOMException: …`. The «ResizeObserver loop completed…» error reaches `window` listeners but is
+  never printed. Never print whole lists that the browser may extend (`dataTransfer.types` gets
+  `chromium/x-drag-id` in real drags): print the fact you test (`types.includes(MY_TYPE)`).
 - Where an example runs: the editor preview and the theory dialog (clicking a card or «▶ Run») are the real hosted
   page (`http://localhost:3001`, real storage, history, forms); gallery and inline theory cards are sandboxed
   `srcdoc` copies with origin `null` — no IndexedDB, no `pushState`, no form submission, in-memory storage shims.

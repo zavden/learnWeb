@@ -60,7 +60,7 @@ All editor/* modules are mixins applied via `Object.assign(Editor.prototype, ...
 - `src/utils/exampleRenderer.js` — facade re-exporting from renderer/
 - `src/utils/renderer/documentRenderer.js` — preview document generation (no injected styles, escaped inline code, script kind)
 - `src/utils/renderer/previewHost.js` — hosted preview: documents are POSTed to `/api/preview-documents` and loaded from `http://<host>:3001/preview/...` (real origin: storage, forms, anchors, workers); falls back to srcdoc
-- `src/utils/renderer/runtimeBridgeRuntime.js` — the in-page runtime (console inspector with expandable `[[Prototype]]` trees, error mapping, form-submit logging, storage shims for srcdoc)
+- `src/utils/renderer/runtimeBridgeRuntime.js` — the in-page runtime (console inspector with expandable `[[Prototype]]` trees, error mapping, form-submit logging, storage shims for srcdoc); errors are titled by their name like Chrome 155 (DOM errors too, never `DOMException:`) and the ResizeObserver loop error is not reported
 - `src/utils/renderer/runtimeBridge.js` — builds the bridge script injected in `<head>` on a single line
 - `src/utils/renderer/scriptKind.js` — classic vs module script detection
 - `src/utils/renderer/sourceMap.js` — inline source-map decoding for TypeScript line mapping
@@ -74,7 +74,7 @@ All editor/* modules are mixins applied via `Object.assign(Editor.prototype, ...
 - `src/utils/compiler/markupCompiler.js` — Pug compilation
 - `src/utils/compiler/styleCompiler.js` — SCSS/SASS compilation
 - `src/utils/compiledStyleView.js` — generated `compiled.css` / `sass-output.txt` views of Sass examples (theory code-embed tabs and the editor preview «CSS» panel) and `compiled.js` of TypeScript examples (code-embed tab; `jsView` from `scriptCompiler.js`)
-- `src/utils/compiler/scriptCompiler.js` — JavaScript syntax check + TypeScript transpile (ES2022) + loop guards
+- `src/utils/compiler/scriptCompiler.js` — JavaScript syntax check + TypeScript transpile (ES2022, `alwaysStrict`: scripts get `"use strict"` like `tsc --strict`) + loop guards
 - `src/utils/compiler/syntaxCheck.js` — JavaScript syntax errors as Chrome reports them (V8 `vm.Script` for classic scripts, TS parser for modules, plus the browser-only `let top`/`window`/`document`/`location` early error)
 - `src/utils/compiler/typeChecker.js` — cached TypeScript language service (`strict`, ES2023 + DOM libs); type errors are non-blocking diagnostics
 - `src/utils/compiler/loopGuard.js` — same-line loop guards that stop endless loops after ~1.2 s
@@ -189,7 +189,7 @@ Pending mirrors the Favorites architecture exactly: file-based JSON storage, ser
 - `tests/server-demo-api.test.mjs` — the course demo API
 - `tests/ui-*.test.mjs` — dirty tracking and Vim shortcut config
 
-Total: 253 tests. Run with `npm test`.
+Total: 255 tests. Run with `npm test`.
 
 ## 14. Course Content Checker
 - `tools/verify-examples.html` (+ `verify-examples.js`, `verify-core.js`) — browser harness: `http://localhost:5174/tools/verify-examples.html?path=<ch>/<sec>[&ms=1500][&only=03-]` runs examples through the real hosted preview one at a time and collects runtime problems (`window.__verifyResults`).
