@@ -40,7 +40,8 @@ export function readFolderLabel(folderPath) {
 }
 
 // Display label of a topic: text of the first "# " heading in the first 2KB of main.md,
-// ignoring fenced code. Trailing "#" closers are removed; everything else is kept as written.
+// ignoring fenced code. Trailing "#" closers and the backticks of inline code (`as const`) are
+// removed; everything else is kept as written.
 export function readTopicHeadingLabel(topicPath) {
     const head = readFileHead(path.join(topicPath, 'main.md'));
     const lines = head.split(/\r?\n/);
@@ -60,7 +61,7 @@ export function readTopicHeadingLabel(topicPath) {
 
         const headingMatch = line.match(/^ {0,3}#[ \t]+(.+?)[ \t]*$/);
         if (headingMatch) {
-            const text = headingMatch[1].replace(/[ \t]+#+$/, '').trim();
+            const text = headingMatch[1].replace(/[ \t]+#+$/, '').replace(/`([^`]+)`/g, '$1').trim();
             if (text) return text;
         }
     }

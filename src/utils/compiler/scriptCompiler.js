@@ -126,8 +126,15 @@ function compileTypeScript(block, { sourcePath, loopProtect, typeCheck }) {
 
     return {
         js: result.outputText || '',
+        // The JavaScript TypeScript generates, as a learner would see it from `tsc`: no loop guards and
+        // no inline source map (theory code embeds show it in a `compiled.js` tab).
+        jsView: syntaxDiagnostics.length === 0 ? stripSourceMapComment(syntaxCheck.outputText) : '',
         diagnostics,
     };
+}
+
+function stripSourceMapComment(code = '') {
+    return String(code || '').replace(/\n?\/\/# sourceMappingURL=\S*\s*$/, '\n');
 }
 
 export function compileScript(block, { sourcePath = '', loopProtect = true, typeCheck = true } = {}) {

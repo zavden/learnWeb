@@ -230,6 +230,35 @@
   background: rgba(248, 113, 113, 0.08);
 }
 
+/* TypeScript type errors of the previewed example (the JavaScript still runs). */
+.theory-exercise-dialog-types {
+  flex: 0 0 auto;
+  max-height: 30%;
+  overflow: auto;
+  padding: 6px 10px;
+  border-top: 1px solid rgba(248, 113, 113, 0.35);
+  background: #1c1017;
+  color: #fca5a5;
+  font: 12px/1.5 "JetBrains Mono", ui-monospace, monospace;
+}
+
+.theory-exercise-dialog-types-title {
+  margin: 0 0 2px;
+  color: #fecaca;
+  font: 600 12px/1.5 system-ui, sans-serif;
+}
+
+.theory-exercise-dialog-types ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.theory-exercise-dialog-types li {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .theory-exercise-dialog-empty {
   margin-top: 14px;
   text-align: center;

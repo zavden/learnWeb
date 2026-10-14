@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { compileExampleDocument } from '../src/utils/exampleCompiler.js';
 import {
+    buildCompiledScriptFiles,
     buildCompiledStyleFiles,
     formatSassMessages,
     withCompiledStyleFiles,
@@ -90,4 +91,41 @@ test('messages from inside a mixin carry the call stack, and compiler timeouts c
     });
     assert.deepEqual(timedOut.map((file) => file.path), ['sass-output.txt']);
     assert.equal(timedOut[0].content, 'styles.scss Error: Compilation took longer than 5s and was stopped.');
+});
+
+test('TypeScript examples get the JavaScript they compile to, without loop guards or source maps', async () => {
+    const documentModel = parseExampleDocument(`---
+example_stage: minimal
+---
+
+# TypeScript
+
+\`\`\`typescript
+enum Size { S, M }
+const sizes: Size[] = [Size.S, Size.M];
+for (let i: number = 0; i < sizes.length; i++) {
+  console.log(Size[sizes[i]]);
+}
+\`\`\`
+`);
+    const result = await compileExampleDocument(documentModel);
+    const files = buildCompiledScriptFiles(documentModel, result);
+    assert.deepEqual(files.map((file) => file.path), ['compiled.js']);
+    const code = files[0].content;
+    assert.match(code, /var Size;\n\(function \(Size\) \{/);
+    assert.match(code, /for \(let i = 0; i < sizes\.length; i\+\+\) \{/);
+    assert.doesNotMatch(code, /sourceMappingURL|__lw|loop/i);
+    // The code that runs still has its guards and source map.
+    assert.match(result.compiledDocument.js, /sourceMappingURL/);
+
+    assert.deepEqual(buildCompiledScriptFiles(parseExampleDocument(`---
+example_stage: minimal
+---
+
+# JavaScript
+
+\`\`\`javascript
+console.log(1);
+\`\`\`
+`), result), []);
 });

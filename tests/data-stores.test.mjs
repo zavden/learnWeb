@@ -84,6 +84,9 @@ test('tree labels come from label.txt and the first main.md heading, keeping acc
     fs.writeFileSync(path.join(materialDir, 'ch01-logica', 'sec01-operadores', 'label.txt'), 'Operadores lógicos\n');
     fs.writeFileSync(path.join(topicDir, 'main.md'), '```md\n# Not this one\n```\n\n# 3. Lógica booleana ##\n\nTexto.\n');
     fs.writeFileSync(path.join(plainTopicDir, 'main.md'), 'Sin encabezado.\n\n## Solo h2\n');
+    const codeTopicDir = path.join(materialDir, 'ch01-logica', 'sec01-operadores', 'top05-const');
+    fs.mkdirSync(codeTopicDir, { recursive: true });
+    fs.writeFileSync(path.join(codeTopicDir, 'main.md'), '# Literales y `as const`\n');
 
     const tree = buildMaterialTree(materialDir, {});
     const [chapter, cssChapter] = tree;
@@ -95,6 +98,7 @@ test('tree labels come from label.txt and the first main.md heading, keeping acc
     assert.deepEqual(section.topics.map((topic) => [topic.id, topic.label, topic.path]), [
         ['top03-logica-booleana', '3. Lógica booleana', 'ch01-logica/sec01-operadores/top03-logica-booleana'],
         ['top04-sin-titulo', 'sin titulo', 'ch01-logica/sec01-operadores/top04-sin-titulo'],
+        ['top05-const', 'Literales y as const', 'ch01-logica/sec01-operadores/top05-const'],
     ]);
     assert.equal(cssChapter.label, 'css');
     assert.equal(cssChapter.sections[0].label, 'a');

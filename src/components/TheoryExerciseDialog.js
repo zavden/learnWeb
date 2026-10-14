@@ -2,6 +2,7 @@ import { fetchExample } from '../utils/api.js';
 import { compileExample } from '../utils/compileClient.js';
 import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../utils/exampleRenderer.js';
 import { getExampleEditorialMetadata, isShaderDocument, parseExampleDocument } from '../utils/markdown.js';
+import { HOSTED_PREVIEW_SANDBOX, markHostedPreviewUnavailable, publishPreviewDocument } from '../utils/renderer/previewHost.js';
 import { consoleManagerMixin } from './preview/ConsoleManager.js';
 
 // The dialog console reuses the main console's value rendering, so objects expand on click
@@ -16,6 +17,28 @@ const BORROWED_CONSOLE_METHODS = [
     '_resolveConsoleInspect',
     '_sanitizeConsoleStyle',
 ];
+
+// Same safety net as the editor preview: a hosted page that never boots falls back to srcdoc.
+const HOSTED_READY_TIMEOUT_MS = 4000;
+
+// TypeScript type errors don't stop the example (the JavaScript still runs), so the dialog lists
+// them above the console, numbered by line of the TypeScript block, as the course texts quote them.
+function buildTypeErrorsStrip(typeErrors) {
+    const strip = document.createElement('section');
+    strip.className = 'theory-exercise-dialog-types';
+    strip.setAttribute('aria-label', 'Errores de tipos');
+    const title = document.createElement('p');
+    title.className = 'theory-exercise-dialog-types-title';
+    title.textContent = 'Errores de tipos (el código se ejecuta igual)';
+    const list = document.createElement('ol');
+    typeErrors.forEach((diagnostic) => {
+        const item = document.createElement('li');
+        item.textContent = `${diagnostic.line ? `línea ${diagnostic.line}: ` : ''}${diagnostic.message}`;
+        list.appendChild(item);
+    });
+    strip.append(title, list);
+    return strip;
+}
 
 function buildConsoleTable({ header, rows }) {
     const table = document.createElement('table');
@@ -54,6 +77,7 @@ export class TheoryExerciseDialog {
         this.consoleList = null;
         this.consoleCount = 0;
         this.renderCount = 0;
+        this.hostedWatchdog = null;
         // State used by the borrowed console methods (see BORROWED_CONSOLE_METHODS).
         this.iframe = null;
         this._renderToken = 0;
@@ -67,6 +91,7 @@ export class TheoryExerciseDialog {
         this.btnCloseIcon?.addEventListener('click', () => this.dialog?.close());
         // Remove the live preview on close so it stops running in the background.
         this.dialog?.addEventListener('close', () => {
+            clearTimeout(this.hostedWatchdog);
             this._rejectPendingConsoleInspects();
             this.currentRequest = null;
             this.currentFrame = null;
@@ -109,6 +134,7 @@ export class TheoryExerciseDialog {
             iframe.sandbox = 'allow-scripts';
             this.renderCount += 1;
             const renderId = this.renderCount;
+            let typeErrors = [];
 
             if (isShaderDocument(documentModel)) {
                 iframe.srcdoc = renderShaderExampleDocument(documentModel, {
@@ -123,12 +149,33 @@ export class TheoryExerciseDialog {
             } else {
                 const result = await compileExample({ document: documentModel });
                 if (requestId !== this.currentRequest) return;
-                iframe.srcdoc = renderCompiledExampleDocument(
+                const diagnostics = result.compileDiagnostics || [];
+                typeErrors = diagnostics.filter((diagnostic) => diagnostic.code === 'typescript-type');
+                const renderSrcdoc = () => renderCompiledExampleDocument(
                     result.compiledDocument,
                     this.currentTopicPath,
-                    result.compileDiagnostics || [],
+                    diagnostics,
                     { consoleEnabled: true, renderId }
                 );
+                // Like the editor preview, the example runs as a real page on the preview origin
+                // (storage, cookies, IndexedDB, history.pushState, same-origin requests); the
+                // sandboxed srcdoc copy is only the fallback.
+                const hostedUrl = await publishPreviewDocument({
+                    html: renderCompiledExampleDocument(
+                        result.compiledDocument,
+                        this.currentTopicPath,
+                        diagnostics,
+                        { consoleEnabled: true, hosted: true, renderId }
+                    ),
+                    renderId,
+                    topicPath: this.currentTopicPath,
+                });
+                if (requestId !== this.currentRequest) return;
+                if (hostedUrl) {
+                    this._loadHosted(iframe, hostedUrl, renderSrcdoc, requestId);
+                } else {
+                    iframe.srcdoc = renderSrcdoc();
+                }
             }
 
             // Script-only examples have nothing to show on the page: give the space to the console.
@@ -142,6 +189,7 @@ export class TheoryExerciseDialog {
                 iframe,
                 path: `/${this.currentTopicPath}/examples/${this.currentFilename}`,
                 title: editorial.description || this.currentFilename,
+                typeErrors,
             });
         } catch (error) {
             if (requestId !== this.currentRequest) return;
@@ -170,7 +218,25 @@ export class TheoryExerciseDialog {
         this.btnOpen.disabled = true;
     }
 
-    _renderPreview({ iframe, title, description, path, consoleOnly = false, renderId = 0 }) {
+    _loadHosted(iframe, url, renderSrcdoc, requestId) {
+        iframe.sandbox = HOSTED_PREVIEW_SANDBOX;
+        // The same permissions as the editor preview (fullscreen, clipboard, camera…).
+        const allow = document.getElementById('preview-frame')?.getAttribute('allow');
+        if (allow) iframe.setAttribute('allow', allow);
+        iframe.src = url;
+        this.frameReady = false;
+        clearTimeout(this.hostedWatchdog);
+        this.hostedWatchdog = setTimeout(() => {
+            if (requestId !== this.currentRequest || this.currentFrame !== iframe || this.frameReady) return;
+            markHostedPreviewUnavailable();
+            iframe.removeAttribute('src');
+            // Drop `allow-same-origin` before loading the srcdoc copy.
+            iframe.sandbox = 'allow-scripts';
+            iframe.srcdoc = renderSrcdoc();
+        }, HOSTED_READY_TIMEOUT_MS);
+    }
+
+    _renderPreview({ iframe, title, description, path, consoleOnly = false, renderId = 0, typeErrors = [] }) {
         if (!this.stage || !this.empty || !this.title || !this.note || !this.btnOpen) return;
         this.stage.innerHTML = '';
         this.stage.classList.toggle('is-console-only', consoleOnly);
@@ -183,6 +249,7 @@ export class TheoryExerciseDialog {
         this.consoleList.className = 'theory-exercise-dialog-console hidden';
         this.consoleList.setAttribute('aria-label', 'Console output');
         this.stage.appendChild(iframe);
+        if (typeErrors.length > 0) this.stage.appendChild(buildTypeErrorsStrip(typeErrors));
         this.stage.appendChild(this.consoleList);
         this.empty.classList.add('hidden');
         this.title.textContent = title || this.currentFilename || 'Exercise Preview';
@@ -195,6 +262,11 @@ export class TheoryExerciseDialog {
         if (!data || data.source !== 'learncode-preview' || !this.currentFrame || !this.consoleList) return;
         if (event.source !== this.currentFrame.contentWindow) return;
 
+        if (data.kind === 'runtime-ready') {
+            this.frameReady = true;
+            clearTimeout(this.hostedWatchdog);
+            return;
+        }
         if (data.kind === 'inspect-result') {
             this._resolveConsoleInspect(data);
             return;

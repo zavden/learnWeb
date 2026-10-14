@@ -1,8 +1,10 @@
 import { fetchExample } from './api.js';
 import { compileExample } from './compileClient.js';
 import {
+    buildCompiledScriptFiles,
     buildCompiledStyleFiles,
     getPreprocessedStyleFile,
+    getTypeScriptFile,
     withCompiledStyleFiles,
 } from './compiledStyleView.js';
 import {
@@ -390,6 +392,7 @@ export async function loadTheoryExerciseEmbeds(topicPath, content = '') {
 
                 let previewSrcdoc = '';
                 let generatedFiles = [];
+                let generatedScriptFiles = [];
                 try {
                     if (isShaderDocument(documentModel)) {
                         previewSrcdoc = renderShaderExampleDocument(documentModel, {
@@ -404,6 +407,7 @@ export async function loadTheoryExerciseEmbeds(topicPath, content = '') {
                     } else {
                         const result = await compileExample({ document: documentModel });
                         generatedFiles = buildCompiledStyleFiles(documentModel, result);
+                        generatedScriptFiles = buildCompiledScriptFiles(documentModel, result);
                         previewSrcdoc = renderCompiledExampleDocument(
                             result.compiledDocument,
                             normalizedTopicPath,
@@ -416,9 +420,13 @@ export async function loadTheoryExerciseEmbeds(topicPath, content = '') {
 
                 return [filename, {
                     codeFiles: withCompiledStyleFiles(
-                        codeFiles,
-                        getPreprocessedStyleFile(documentModel)?.path || '',
-                        generatedFiles
+                        withCompiledStyleFiles(
+                            codeFiles,
+                            getPreprocessedStyleFile(documentModel)?.path || '',
+                            generatedFiles
+                        ),
+                        getTypeScriptFile(documentModel)?.path || '',
+                        generatedScriptFiles
                     ),
                     description: editorial.description || '',
                     exists: true,

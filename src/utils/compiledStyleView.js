@@ -1,5 +1,6 @@
 // Read-only views of what the Sass compiler produced, so Sass lessons can show the generated CSS
 // and the @debug/@warn/error output next to the source (theory code embeds and the editor preview).
+// TypeScript examples get the same treatment for the JavaScript they compile to (`compiled.js`).
 
 const SASS_MESSAGE_LABELS = {
     'compile-out-of-memory': 'Error',
@@ -16,6 +17,7 @@ const SASS_MESSAGE_LABELS = {
 const COMPILE_FAILURE_CODES = new Set(['compile-out-of-memory', 'compile-timeout', 'compile-worker-crashed', 'sass-compile-error']);
 
 export const COMPILED_CSS_PATH = 'compiled.css';
+export const COMPILED_JS_PATH = 'compiled.js';
 export const SASS_OUTPUT_PATH = 'sass-output.txt';
 
 export function getPreprocessedStyleFile(documentModel) {
@@ -81,6 +83,29 @@ export function buildCompiledStyleFiles(documentModel, compileResult) {
         });
     }
     return files;
+}
+
+export function getTypeScriptFile(documentModel) {
+    const files = Array.isArray(documentModel?.files) ? documentModel.files : [];
+    return files.find((file) => file?.slot === 'script' && file.language === 'typescript') || null;
+}
+
+/**
+ * The JavaScript a TypeScript example compiles to (types erased; `enum` and parameter properties
+ * become real code). Returns [] for other examples or when the TypeScript has syntax errors.
+ */
+export function buildCompiledScriptFiles(documentModel, compileResult) {
+    if (!getTypeScriptFile(documentModel) || !compileResult) return [];
+    const js = String(compileResult.compiledDocument?.jsView || '').trimEnd();
+    if (!js) return [];
+    return [{
+        content: `${js}\n`,
+        generated: true,
+        highlights: [],
+        language: 'javascript',
+        name: COMPILED_JS_PATH,
+        path: COMPILED_JS_PATH,
+    }];
 }
 
 // Inserts the generated files right after the Sass source tab.

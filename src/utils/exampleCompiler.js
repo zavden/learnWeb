@@ -59,6 +59,7 @@ export async function compileExampleDocument(sourceDocument) {
             html: markupResult.html,
             css: styleResult.css,
             js: scriptResult.js,
+            ...(scriptResult.jsView ? { jsView: scriptResult.jsView } : {}),
             lang: String(metadata.lang ?? '').trim(),
             markupType: markupBlock?.type || '',
             runtimeScriptPath: scriptFile?.path || '',
