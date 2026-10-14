@@ -65,6 +65,16 @@ test('typescript emits modern class fields', () => {
     assert.doesNotMatch(result.js, /WeakMap/);
 });
 
+test('typescript scripts run in strict mode like tsc --strict, modules stay untouched', () => {
+    const script = compileScript({ type: 'typescript', content: 'const sizes = Object.freeze([1, 2]);\nconsole.log(sizes);\n' }, { typeCheck: false });
+    assert.match(script.js, /^"use strict";/);
+    assert.match(script.jsView, /^"use strict";/);
+    assert.throws(() => runGuarded(script.js.replace('sizes);', 'sizes); sizes[0] = 9;')), /Cannot assign to read only property/);
+
+    const module = compileScript({ type: 'typescript', content: "import { x } from './util.js';\nconsole.log(x);\n" }, { typeCheck: false });
+    assert.doesNotMatch(module.js, /use strict/);
+});
+
 test('javascript syntax errors are reported with their line and column', () => {
     const result = compileScript({ type: 'javascript', content: "console.log('ok');\nlet x = ;\n" }, { sourcePath: 'script.js' });
     assert.equal(result.diagnostics.length, 1);

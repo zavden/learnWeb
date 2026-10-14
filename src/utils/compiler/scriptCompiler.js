@@ -58,6 +58,9 @@ function compileTypeScript(block, { sourcePath, loopProtect, typeCheck }) {
     const source = block.content || '';
     const transpileOptions = {
         compilerOptions: {
+            // Like `tsc --strict`: scripts without imports/exports get "use strict" (modules already are),
+            // so the code runs with the semantics the type checker assumes (writes to frozen objects throw…).
+            alwaysStrict: true,
             inlineSourceMap: true,
             inlineSources: true,
             module: ts.ModuleKind.ESNext,
