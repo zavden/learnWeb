@@ -426,7 +426,7 @@ test('DOM values print like Chrome: elements as HTML, short forms, array-like li
         "NodeList(2) [li.item, text] DOMTokenList(2) ['card', 'active', value: 'card active']",
         'DOMRect {x: 8, y: 8, width: 200, height: 50, top: 8, right: 208, bottom: 58, left: 8}',
         'li.item',
-        "DOMException: Failed to execute 'querySelector' on 'Document': '#1' is not a valid selector.",
+        "SyntaxError: Failed to execute 'querySelector' on 'Document': '#1' is not a valid selector.",
     ]);
 });
 
@@ -442,4 +442,16 @@ test('page error listeners run before LearnWeb reports the error, and preventDef
     fire('silencio');
     await settle();
     assert.deepEqual(frame.posted.map((message) => message.text), ['handler: boom', 'Uncaught Error: boom', 'handler: silencio']);
+});
+
+test('the ResizeObserver loop error reaches page listeners but is not printed, like in Chrome', async () => {
+    const frame = await runExample("addEventListener('error', (event) => console.log('handler: ' + event.message));");
+    frame.dispatch('error', {
+        message: 'ResizeObserver loop completed with undelivered notifications.',
+        error: null,
+        defaultPrevented: false,
+        preventDefault() { this.defaultPrevented = true; },
+    });
+    await settle();
+    assert.deepEqual(frame.posted.map((message) => message.text), ['handler: ResizeObserver loop completed with undelivered notifications.']);
 });

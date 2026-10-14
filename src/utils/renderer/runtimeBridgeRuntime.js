@@ -698,20 +698,12 @@ export function learncodeRuntimeBridge(config) {
             || kind === 'undefined' || kind === 'null' || kind === 'symbol';
     }
 
-    function isDomException(value) {
-        try {
-            return typeof win.DOMException === 'function' && value instanceof win.DOMException;
-        } catch {
-            return false;
-        }
-    }
-
     function errorHeadline(error) {
         const nameResult = safeGet(error, 'name');
         const messageResult = safeGet(error, 'message');
-        // Chrome titles DOM errors by their class: `DOMException: Failed to execute 'querySelector'…`.
-        const name = isDomException(error) ? 'DOMException'
-            : nameResult.ok && typeof nameResult.value === 'string' && nameResult.value ? nameResult.value : 'Error';
+        // DOM errors too are titled by their name, as Chrome 155 does: `SyntaxError: Failed to execute
+        // 'querySelector'…`, `Uncaught (in promise) AbortError: …` (older versions said `DOMException`).
+        const name = nameResult.ok && typeof nameResult.value === 'string' && nameResult.value ? nameResult.value : 'Error';
         const message = messageResult.ok && messageResult.value != null ? String(messageResult.value) : '';
         return message ? name + ': ' + message : name;
     }
@@ -1690,6 +1682,8 @@ export function learncodeRuntimeBridge(config) {
     function onWindowError(event) {
         if (!event || typeof event.message !== 'string' || event.defaultPrevented) return;
         const error = event.error;
+        // Chrome fires this one at window (pages can listen for it) but never prints it in the console.
+        if ((error === undefined || error === null) && event.message.startsWith('ResizeObserver loop')) return;
         let message;
         let frames = [];
         let stackText = '';
