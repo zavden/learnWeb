@@ -30,6 +30,7 @@ import {
 } from './src/utils/pendingStore.js';
 import { loadVimShortcutConfig } from './src/editor/vimShortcutConfig.js';
 import { buildMaterialTree, readHiddenState, setChapterHidden } from './src/utils/materialTree.js';
+import { createDemoApiRouter } from './src/utils/demoApi.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,6 +55,10 @@ const appCors = cors({
         callback(null, !origin || LOCAL_APP_ORIGIN_PATTERN.test(origin));
     },
 });
+// The demo API of the network lessons (fetch, CORS, streams) is open to any origin: it reads no
+// files and only echoes the request back. It sets its own CORS headers (see src/utils/demoApi.js).
+app.use('/api/demo', createDemoApiRouter());
+
 app.use((req, res, next) => {
     if ((req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') && ASSET_ROUTE_PATTERN.test(req.path)) {
         // Lets the preview runtime read the status of a failed asset request (a 404 module import) in
