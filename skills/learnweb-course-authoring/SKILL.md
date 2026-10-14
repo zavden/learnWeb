@@ -154,6 +154,22 @@ console: true                     # whenever the example prints to the console
   hosted preview, the gallery cards and the theory cards/dialogs (sandboxed srcdoc). Say in each example which asset
   files it uses (learners read them with «Assets»). `node claude_resume/run-module.mjs` (needs
   `--experimental-vm-modules`) prints the console of examples with static imports; `run-example.mjs` can't.
+- DOM values in expected output: write them in Chrome's console format, which LearnWeb shares (elements as HTML,
+  `li#first.item` inside arrays/objects, `NodeList(3) […]`; arrays and lists show the length only from 2 items:
+  `[x]`, `[]`); see runtime.md. Prefer logging derived strings/numbers/booleans; never log whole events, `style`,
+  `getComputedStyle()` or `window`.
+- Interactive examples (the harness can't click): print a setup line on load (`Listo: pulsa «Añadir»…`), keep a
+  visible on-page log, and write the ```text block as the load output followed by `// Tras pulsar «…»:` sections.
+  Audits that simulate interaction must also check the visual result (`getBoundingClientRect()`), not only state:
+  a carousel once logged «2/5» while showing slide 1 because `translate: -20%` is a percentage of the track's OWN
+  width.
+- Toggling `hidden` on an element whose class sets `display` does nothing (the author `display` beats the
+  attribute's UA `display: none`): add `.x[hidden] { display: none; }` or a `[hidden]` rule wherever JS or HTML
+  hides such elements. `:has()` cannot be nested inside another `:has()`.
+- Motion in live cards (gallery and theory cards are live iframes, many at once, on a fanless laptop): no infinite
+  animations by default (finite counts, or start on hover/focus/a checkbox), compositor-only properties, and
+  every motion example honours `prefers-reduced-motion`. Freeze frames (`animation-play-state: paused` + a negative
+  `animation-delay`) make timing results checkable without watching the motion.
 - The verify harness reports `console.error` as a problem: for errors the example handles on purpose, use
   `console.warn`/`console.log` unless the example is `common-error`.
 - Sass compile errors (`@error`, undefined variables…) and deprecation warnings are allowed by the checker only in

@@ -1,7 +1,8 @@
 # Course progress and hand-off notes
 
-Last updated: 2026-10-14. HTML sec01-04, CSS sec01-07, Sass sec01 and the whole JavaScript chapter (ch05 sec01-08)
-are complete and browser-verified (1538 examples, 64 exercises, checker 0/0).
+Last updated: 2026-10-14 (fifth session). HTML sec01-04, CSS sec01-09, Sass sec01, the whole JavaScript chapter
+(ch05 sec01-08) and ch06 sec01-02 (DOM, events) are complete and browser-verified (1827 examples, 76 exercises,
+checker 0/0).
 
 Read this first when resuming the course work. The syllabus is in [plan.md](plan.md), the authoring
 rules in [../SKILL.md](../SKILL.md), runtime capabilities in [runtime.md](runtime.md).
@@ -23,7 +24,9 @@ Legend: ✅ complete and verified (checker 0/0 + browser harness) · 🟡 partia
 | ch03-css/sec05-grid | ✅ 5/5 | ✅ 8 + 3 exercises | ✅ 13 | 70 examples; browser-verified 0 problems (rulers, overlays, dense, subgrid, reading-flow Tab order); top90/09 SKU made unbreakable so `1fr` shows the bug |
 | ch03-css/sec06-tipografia-y-texto | ✅ 4/4 | ✅ 8 + 3 exercises | ✅ 12 | 60 examples; browser-verified 0 problems + measurements (font swap 128→189px, adjusted fallback 189px); fonts in topic assets (OFL); top90/11 base cell rule uses `:where()` so `.price` wins |
 | ch03-css/sec07-efectos-visuales | ✅ 5/5 (3D split into top05) | ✅ 8 + 3 exercises | ✅ 12 | 70 examples; browser-verified 0 problems + measurements/screenshots; public-domain images (Velasco, Hokusai, NASA) per topic; top02/08 notes that blend colours differ on P3 screens |
-| ch03-css/sec08 … sec10 | ⬜ | ⬜ | ⬜ | |
+| ch03-css/sec08-responsive | ✅ 5/5 | ✅ 7 + 3 exercises | ✅ 12 | 71 examples; browser-verified 0 problems + measurements (fluid type 16.73px at 480, mini viewports via srcdoc iframes, image-set picks 2x on Retina, scroll-state queries); public-domain images + a 480×600 Velasco crop for `<picture>` art direction |
+| ch03-css/sec09-animacion | ✅ 5/5 | ✅ 8 + 3 exercises | ✅ 12 | 70 examples; browser-verified 0 problems; freeze-frame positions measured (easing 50 %: linear 114, ease 183, ease-in 72, ease-out 156 px); no infinite animation runs on load in top95; fixed top95/02 (`hidden` lost to `display: grid`) |
+| ch03-css/sec10-arquitectura-css | ⬜ | ⬜ | ⬜ | |
 | ch04-sass/sec01-sass-fundamentos | ✅ 8/8 | ✅ 8 + 3 exercises | ✅ 13 | 91 examples; browser-verified 0 problems (7 intentional compile errors in common-error); exercises self-check via a locked CSSOM script (❌ → ✅) |
 | ch05-javascript/sec01-primeros-pasos | ✅ 7/7 | ✅ 7 + 3 exercises | ✅ 12 | 89 examples |
 | ch05-javascript/sec02-datos | ✅ 7/7 | ✅ 8 + 4 exercises | ✅ 12 | 91 examples; browser-verified 0 problems; Chrome output = node output |
@@ -33,7 +36,9 @@ Legend: ✅ complete and verified (checker 0/0 + browser harness) · 🟡 partia
 | ch05-javascript/sec06-iteracion-y-metaprogramacion | ✅ 5/5 | ✅ 8 + 3 exercises | ✅ 12 | 70 examples; browser-verified 0 problems; Chrome console = run-example output for all 70 (console.table compared by count) |
 | ch05-javascript/sec07-asincronia | ✅ 6/6 | ✅ 8 + 3 exercises | ✅ 12 | 78 examples; browser-verified (visible frame); console = run-example except documented Chrome-only results; top06/06 + top95/06 teach that `scheduler.yield()` starves painting |
 | ch05-javascript/sec08-modulos | ✅ 4/4 (top04 rutas/import maps added to plan.md) | ✅ 7 + 3 exercises | ✅ 12 | 60 examples; written in one go (no review stop); browser-verified: console = run-module output except Chrome-only error texts (fixed in the text); asset imports work in hosted, gallery cards and theory dialogs; esm.sh example online |
-| ch06 … ch08 | ⬜ | ⬜ | ⬜ | |
+| ch06-javascript-en-el-navegador/sec01-el-dom | ✅ 5/5 | ✅ 8 + 3 exercises | ✅ 12 | 67 examples; console output = every ```text block in Chrome (DOM values in the new Chrome format); exercises ✗→✓; clicked by hand (cart clamp, focus kept by moveBefore) |
+| ch06-javascript-en-el-navegador/sec02-eventos | ✅ 6/6 | ✅ 8 + 3 exercises | ✅ 12 | 81 examples; load output = ```text blocks; click-throughs in Chrome (phases, real click vs el.click() microtasks, dblclick, menus, carousel); fixed top95/10 carousel (`translate` % of its own box) |
+| ch06 sec03-06, ch07, ch08 | ⬜ | ⬜ | ⬜ | |
 
 Fourth session (2026-10-13/14): «los siguientes 2 módulos completos» = CSS sec06-tipografia-y-texto + JS
 sec06-iteracion-y-metaprogramacion — done (two agents; the HTML lane waited). User rule: if the Chrome extension is
@@ -46,27 +51,49 @@ Then «haz un módulo más, haz los commits y apaga el servidor» (2026-10-14): 
 whole module (lessons + top90 + top95) in one go; first course examples that import `.js` files from `assets/` —
 done, committed and pushed (84ea2f1); dev server stopped. Fourth session ended here (2026-10-14). Fonts for CSS sec06 (OFL, woff2) are in the gitignored
 `claude_resume/fonts/` (README lists axes). Previous goal «termina el módulo 4 y haz el 5» — done. Lanes: HTML lane = HTML → Sass → TS →
-WASM/GPU; CSS lane; JS lane = JS → JS in the browser. Max 3 Opus agents at a time (or one Fable alone).
+WASM/GPU; CSS lane; JS lane = JS → JS in the browser. Max 3 Opus agents at a time (or one Fable alone); the user allowed 4 in the fifth session — ask before going above 3.
+
+Fifth session (2026-10-14): «continúa con 4 módulos más, puedes crear los 4 agentes» = CSS sec08-responsive,
+CSS sec09-animacion, ch06 sec01-el-dom and ch06 sec02-eventos, four Opus xhigh agents in parallel (the user allowed 4
+this time), lessons → Chrome review → top90/top95 → Chrome review — all done, committed and pushed; dev server stopped.
+App changes this session: the console prints DOM values and browser objects like Chrome, arrays/lists show their
+length only from 2 items, and uncaught-error reports come after the page's own error handlers (see below).
 
 Next actions when resuming (pick with the user):
-1. `npm run dev`; read this file; agents are fresh each module (prompts: see "Prompt template" below and the
-   coordinator's messages; the scratchpad `prompts/` folder may be gone).
-2. CSS lane: `ch03-css/sec08-responsive` (promised: fluid type with `clamp()`, `prefers-reduced-motion`), then sec09
-   animation (promised by sec07: transitions for the instant hover/flip states, `scaleX` progress bars, `will-change`;
-   by JS sec07: compositor animations keep running while JS is busy).
-3. JS lane: ch05 is complete. Next: ch06-javascript-en-el-navegador sec01-el-dom (promised by sec07: `addEventListener` + `signal`, `visibilitychange`, `unhandledrejection`, `fetch` with
-   `{ signal }`, Web Animations `finished`, canvas loops; by sec08: `addEventListener` instead of `onclick`, `fetch`,
-   CORS, the `URL` API). Workers are ch08/sec02 (content now says «capítulo 8»). Still no regular-expressions lesson.
-   The HTML lane can start ch07 TypeScript once ch06 has started (TS needs DOM types).
-4. HTML lane: Sass is complete (ch04 has one section) and the JS chapter is done. TypeScript (ch07) needs ch06 (DOM
-   types), so this lane can: help the CSS lane (sec09/sec10), write the missing regular-expressions topic (needed by
-   ch06 forms validation), or start ch07 once ch06 sec01-02 exist. Ask the user. Last sessions ran 2 lanes (CSS + JS);
-   the Chrome review is mandatory — if the extension is disconnected, tell the user and wait.
-   Remaining (2026-10-14): 18 of 38 modules (~82 lessons): CSS sec08-10, ch06 sec01-06, ch07 sec01-03, ch08
-   sec01-06 — about 6 rounds of 3 parallel modules. Order matters: ch07/ch08 need ch05+ch06.
+1. `npm run dev`; read this file; check the Chrome extension (tabs_context_mcp) before any review; agents are fresh
+   each module (prompts: "Prompt template" below; the fifth session's four prompts are good models).
+2. CSS lane: `ch03-css/sec10-arquitectura-css` — the last CSS module (promised by sec08/sec09: native nesting vs Sass,
+   `@layer` incl. the `print` layer and two-level tokens of sec08 top95, the global `prefers-reduced-motion: reduce`
+   reset, fluid tokens `--step-n`/`--space-*`, `light-dark()` + `color-scheme` theming).
+3. JS lane: ch06 sec03-formularios-con-js (promised by sec02: `input` vs `change`, `beforeinput`, `FormData`,
+   `requestSubmit`, JS validation; by sec01: `valueAsNumber`, `form.reset()` and `defaultValue`), then sec04
+   red-y-almacenamiento (`fetch` with `{ signal }`, CORS, `URL`, `history.pushState`, `localStorage` for the chosen
+   theme of CSS sec08), sec05 gráficos (Web Animations API: `getAnimations`, FLIP, View Transition promises — promised
+   by CSS sec09), sec06 APIs (`IntersectionObserver` for the current section / reveal, `ResizeObserver` for masonry,
+   `visibilitychange`, Shadow DOM `composed`). Still no regular-expressions lesson (sec03 forms validation needs it).
+4. HTML lane: ch07 TypeScript can start now (ch06 sec01-02 exist; typed `detail`, `querySelector<T>` and `null` from
+   the DOM were promised), or write the regular-expressions topic. ch08 (binary data, workers, WASM, WebGPU) last.
+   Remaining (2026-10-14): 14 of 38 modules: CSS sec10, ch06 sec03-06, ch07 sec01-03, ch08 sec01-06 — about 4 rounds
+   of 3-4 parallel modules. Order matters: ch07/ch08 need ch05+ch06.
 5. Optional tidy-ups listed in the notes below (old `href="#"` placeholders, flex-basis-in-a-column example).
 
 Notes carried forward:
+- Checked in Chrome 155 during the fifth session: an iframe's `prefers-color-scheme` follows the used `color-scheme`
+  of its `<iframe>` element in the parent (LearnWeb sets none → the OS; the learner's macOS is DARK);
+  `container-type: size/inline-size` creates NO containing block for fixed/absolute descendants and NO stacking context
+  (removed the old claims from CSS sec03 top04/top05); a real click runs microtasks between listeners, `el.click()`
+  doesn't; simultaneous `transitionend` events arrive in alphabetical order of property name; `display: none`
+  mid-transition fires `transitioncancel`; duplicate `view-transition-name`s reject `ready` with «Transition was aborted
+  because of invalid state. Snapshot capture failed»; `scroll-state(stuck: top)` container queries, `setHTML()` and
+  `moveBefore()` exist; `CSS.supports('(backdrop-filter)')` is false (no value), `image-set()` rejects `w`
+  descriptors, a media query mixing `and`/`or` without parentheses is `not all`. `link.href` is
+  `http://localhost:3001/…` in the hosted preview and `…5174/…` in theory dialogs (relative `<base>` in srcdoc).
+- Verification tricks from the fifth session: compare console output with the ```text blocks of main.md (a small
+  extractor + a comparison module served from `tools/`, deleted afterwards); click-throughs on the hosted page in a
+  second tab (the runtime also logs to the real console, so `read_console_messages` works); freeze frames read via
+  `getComputedStyle(el).translate`; screenshots can't be taken while the main thread is blocked, so «compositor keeps
+  moving while JS is busy» can't be measured with screenshots; count infinite animations on load with
+  `document.getAnimations().filter(a => a.effect.getComputedTiming().iterations === Infinity)`.
 - Facts checked in Chrome during CSS sec06 (keep them true in later modules): copy/paste of `text-transform`ed text
   gives the ORIGINAL HTML text (only `getSelection().toString()` returns the transformed one); `hyphens: auto` with
   `lang="en"` splits Spanish «rr» (guer-rilleros, car-retera) while `lang="es"` keeps it (guerri-lleros); Roboto
@@ -130,7 +157,7 @@ examples; missing top90/top95 show as warnings).
 1. One agent per module, two tasks: (a) lessons top01…topNN; (b) when approved, resume the same agent for
    top90-integracion + top95-profesional (it knows the lessons). Spawn a FRESH agent for the next module
    (contexts reach ~500K tokens after both tasks).
-2. Up to 3 Opus agents in parallel (user rule), one per lane: HTML→Sass→TS→WASM/GPU, CSS, JS→JS-browser.
+2. Up to 3 Opus agents in parallel (user rule; 4 when the user says so, as in the fifth session), one per lane: HTML→Sass→TS→WASM/GPU, CSS, JS→JS-browser.
    Never more than 3; a Fable agent only alone. Agents must not run heavy commands (no build, servers,
    headless browsers); they ask the coordinator.
 3. After each task: `node scripts/check-material.mjs <section>` (0 errors / 0 warnings) and the browser
@@ -158,9 +185,9 @@ folder, no app code, no browser, heat rule); final report format.
 - `npm run dev` (vite :5174 + API on 127.0.0.1:3001). The API must be restarted after server-side changes
   (server.js, compiler, materialTree…).
 - Hosted previews are served from `http://localhost:3001/preview/...` (same hostname as the app, port 3001).
-- Tests: `npm test` (244). Build: `npm run build`.
+- Tests: `npm test` (246). Build: `npm run build`.
 
-## App changes made during the course work (committed: 7c7485d, 6a129ae, 1f74d6f, afbb2fe, 0ef4f6d, 9859213, 6920719)
+## App changes made during the course work (committed: 7c7485d, 6a129ae, 1f74d6f, afbb2fe, 0ef4f6d, 9859213, 6920719, fa301f1)
 
 Security hardening of server.js; isolated compiler worker; TypeScript type checking; V8 syntax checks; loop
 guards (script block and inline <script>); hosted preview runtime with Chrome-like console; theory sanitizing,
@@ -187,3 +214,8 @@ functions as `ƒ* name()`, like Chrome. The guide's global-name rule now lists `
 Timing-Allow-Origin so srcdoc copies see the status); module namespaces print as `Module {…}`.
 `claude_resume/run-module.mjs` (gitignored, written by the sec08 agent) runs examples with static imports, Blob/data:
 modules, import maps and JSON modules: `node --experimental-vm-modules claude_resume/run-module.mjs <example.md>`.
+Fifth session (fa301f1): DOM values print like Chrome DevTools (elements as HTML, `li#a.b`/`text`/`comment` short
+forms, NodeList/HTMLCollection/DOMTokenList as arrays, native accessors of browser objects, `console.dir(node)` short,
+`DOMException: …`); arrays/lists show the length only from 2 items (29 old ```text lines in ch05 and one in HTML sec01
+updated and re-verified); the runtime's uncaught-error reporters stay last on window and honour `preventDefault()`.
+Tests: 246.
