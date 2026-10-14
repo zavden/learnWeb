@@ -43,7 +43,8 @@ images (Velasco, Hokusai, Apollo 17, Hubble, Aldrin; 960px JPEG + credit lines) 
 `claude_resume/images/`; `claude_resume/run-example.mjs` now runs async code (timers, queueMicrotask, MessageChannel,
 AbortController, fake rAF; `type="module"` scripts wrapped in an async function; `WAIT=<ms>`).
 Then «haz un módulo más, haz los commits y apaga el servidor» (2026-10-14): JS sec08-modulos, one agent writing the
-whole module (lessons + top90 + top95) in one go; first course examples that import `.js` files from `assets/`. Fonts for CSS sec06 (OFL, woff2) are in the gitignored
+whole module (lessons + top90 + top95) in one go; first course examples that import `.js` files from `assets/` —
+done, committed and pushed (84ea2f1); dev server stopped. Fourth session ended here (2026-10-14). Fonts for CSS sec06 (OFL, woff2) are in the gitignored
 `claude_resume/fonts/` (README lists axes). Previous goal «termina el módulo 4 y haz el 5» — done. Lanes: HTML lane = HTML → Sass → TS →
 WASM/GPU; CSS lane; JS lane = JS → JS in the browser. Max 3 Opus agents at a time (or one Fable alone).
 
@@ -57,9 +58,10 @@ Next actions when resuming (pick with the user):
    `{ signal }`, Web Animations `finished`, canvas loops; by sec08: `addEventListener` instead of `onclick`, `fetch`,
    CORS, the `URL` API). Workers are ch08/sec02 (content now says «capítulo 8»). Still no regular-expressions lesson.
    The HTML lane can start ch07 TypeScript once ch06 has started (TS needs DOM types).
-4. HTML lane: Sass is complete (ch04 has one section). TypeScript (ch07) comes after ch06 in the course order, so
-   before starting it either write JS sec06-08 + ch06 first, or let this lane help the CSS lane (sec07+) or write
-   the missing regular-expressions topic. Ask the user.
+4. HTML lane: Sass is complete (ch04 has one section) and the JS chapter is done. TypeScript (ch07) needs ch06 (DOM
+   types), so this lane can: help the CSS lane (sec09/sec10), write the missing regular-expressions topic (needed by
+   ch06 forms validation), or start ch07 once ch06 sec01-02 exist. Ask the user. Last sessions ran 2 lanes (CSS + JS);
+   the Chrome review is mandatory — if the extension is disconnected, tell the user and wait.
    Remaining (2026-10-14): 18 of 38 modules (~82 lessons): CSS sec08-10, ch06 sec01-06, ch07 sec01-03, ch08
    sec01-06 — about 6 rounds of 3 parallel modules. Order matters: ch07/ch08 need ch05+ch06.
 5. Optional tidy-ups listed in the notes below (old `href="#"` placeholders, flex-basis-in-a-column example).
