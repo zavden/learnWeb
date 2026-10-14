@@ -30,7 +30,9 @@ Legend: ✅ complete and verified (checker 0/0 + browser harness) · 🟡 partia
 | ch05-javascript/sec06 … sec08 | ⬜ | ⬜ | ⬜ | |
 | ch06 … ch08 | ⬜ | ⬜ | ⬜ | |
 
-Current goal (user, 2026-10-13): «termina el módulo 4 y haz el 5» — done. Lanes: HTML lane = HTML → Sass → TS →
+Current goal (user, 2026-10-13, fourth session): «los siguientes 2 módulos completos» = CSS sec06-tipografia-y-texto + JS
+sec06-iteracion-y-metaprogramacion (two agents; the HTML lane waits). Fonts for CSS sec06 (OFL, woff2) are in the gitignored
+`claude_resume/fonts/` (README lists axes). Previous goal «termina el módulo 4 y haz el 5» — done. Lanes: HTML lane = HTML → Sass → TS →
 WASM/GPU; CSS lane; JS lane = JS → JS in the browser. Max 3 Opus agents at a time (or one Fable alone).
 
 Next actions when resuming (pick with the user):

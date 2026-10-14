@@ -547,7 +547,8 @@ export function learncodeRuntimeBridge(config) {
 
     function formatKey(key) {
         if (typeof key === 'symbol') return '[' + symbolText(key) + ']';
-        if (/^[A-Za-z_$][\w$]*$/.test(key) || isIndexKey(key)) return key;
+        // Any valid identifier stays unquoted, like Chrome: {café: 12}, {año: 2024}.
+        if (/^[\p{ID_Start}$_][\p{ID_Continue}$\u200C\u200D]*$/u.test(key) || isIndexKey(key)) return key;
         return quoteString(key);
     }
 
@@ -649,7 +650,8 @@ export function learncodeRuntimeBridge(config) {
         const paramsMatch = source.match(/^[^(]*\(([^)]*)\)/);
         const params = paramsMatch ? paramsMatch[1].replace(/\s+/g, ' ').trim() : '';
         const isAsync = /^async\b/.test(source);
-        return (isAsync ? 'async ' : '') + 'ƒ ' + (functionName(fn) || '') + '(' + params + ')';
+        const isGenerator = /^(?:async\s+)?function\s*\*/.test(source);
+        return (isAsync ? 'async ' : '') + (isGenerator ? 'ƒ* ' : 'ƒ ') + (functionName(fn) || '') + '(' + params + ')';
     }
 
     function functionSource(fn) {
@@ -662,7 +664,7 @@ export function learncodeRuntimeBridge(config) {
         source = truncate(source, 4000);
         if (/^class[\s{]/.test(source)) return source;
         if (/^(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/.test(source)) return source;
-        const replaced = source.replace(/^(async\s+)?function\b\s*/, (match, asyncPrefix) => (asyncPrefix ? 'async ' : '') + 'ƒ ');
+        const replaced = source.replace(/^(async\s+)?function\b\s*(\*)?\s*/, (match, asyncPrefix, star) => (asyncPrefix ? 'async ' : '') + (star ? 'ƒ* ' : 'ƒ '));
         if (replaced !== source) return replaced;
         return 'ƒ ' + source;
     }

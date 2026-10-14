@@ -103,6 +103,7 @@ test('console values are formatted like Chrome DevTools', async () => {
         'console.log(Object.create(null), [ , 1, , , 4], new Uint8Array(2), /re/g, Promise.resolve(1), new Promise(() => {}));',
         'console.log({ get boom() { throw new Error("never invoked"); } }, Person.prototype, function foo(a) { return a; });',
         "console.log('%s is %d years, %i%%, %f %o', 'Ann', 30.7, '42px', '1.5', [1]);",
+        "console.log({ café: 12, 'two words': 1 }, function* ids(start) { yield start; });",
     ].join('\n'));
 
     assert.deepEqual(texts(frame), [
@@ -111,9 +112,10 @@ test('console values are formatted like Chrome DevTools', async () => {
         '[Object: null prototype] {} (5) [empty, 1, empty × 2, 4] Uint8Array(2) [0, 0] /re/g Promise {<fulfilled>: 1} Promise {<pending>}',
         '{boom: (...)} {constructor: class Person, greet: ƒ} ƒ foo(a) { return a; }',
         'Ann is 30 years, 42%, 1.5 (1) [1]',
+        "{café: 12, 'two words': 1} ƒ* ids(start) { yield start; }",
     ]);
     assert.ok(frame.posted.every((message) => message.location?.path === 'script.js'));
-    assert.deepEqual(frame.posted.map((message) => message.location.line), [2, 3, 4, 5, 6]);
+    assert.deepEqual(frame.posted.map((message) => message.location.line), [2, 3, 4, 5, 6, 7]);
 });
 
 test('console helpers: table, count, time, group, assert, trace, clear', async () => {
