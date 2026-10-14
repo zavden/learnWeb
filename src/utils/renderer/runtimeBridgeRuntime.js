@@ -448,6 +448,11 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
+    // Module namespace objects: null prototype, frozen shape and the 'Module' tag.
+    function isModuleNamespace(value) {
+        return safeTag(value) === '[object Module]';
+    }
+
     function constructorName(value) {
         let proto = safeProto(value);
         let guard = 0;
@@ -704,6 +709,7 @@ export function learncodeRuntimeBridge(config) {
             case 'node': return nodeLabel(value);
             default: {
                 const proto = safeProto(value);
+                if (proto === null && isModuleNamespace(value)) return 'Module';
                 if (proto === null) return '[Object: null prototype] ' + (safeKeys(value).length ? '{…}' : '{}');
                 const name = constructorName(value);
                 if (name && name !== 'Object') return name;
@@ -830,7 +836,8 @@ export function learncodeRuntimeBridge(config) {
                 const proto = safeProto(value);
                 let prefix = '';
                 if (proto === null) {
-                    prefix = '[Object: null prototype] ';
+                    // `import * as ns` / `await import()` give a module namespace: Chrome prints `Module {…}`.
+                    prefix = isModuleNamespace(value) ? 'Module ' : '[Object: null prototype] ';
                 } else {
                     const name = constructorName(value);
                     if (name && name !== 'Object') {
@@ -1509,6 +1516,57 @@ export function learncodeRuntimeBridge(config) {
             stackText,
         }));
     });
+
+    // A <script> whose src (or a module it imports) fails to load fires a plain `error` event at the element,
+    // never at window, so the learner saw nothing. Chrome's console shows the failed request: do the same,
+    // finding it in the resource timings (asset routes send Timing-Allow-Origin, so srcdoc copies see it too).
+    const reportedFailures = new Set();
+    const HTTP_STATUS_TEXT = { 400: 'Bad Request', 403: 'Forbidden', 404: 'Not Found', 500: 'Internal Server Error' };
+    function failedScriptRequests() {
+        let entries = [];
+        try {
+            entries = win.performance.getEntriesByType('resource');
+        } catch {
+            return [];
+        }
+        return entries.filter((entry) => entry.initiatorType === 'script' && entry.responseStatus >= 400 && !reportedFailures.has(entry.name));
+    }
+    function shortUrl(url) {
+        const base = String((doc && doc.baseURI) || '').replace(/[^/]*$/, '');
+        return base && url.startsWith(base) ? url.slice(base.length) : url;
+    }
+    function reportLoadFailure(text) {
+        enqueue(createMessage('runtime-error', 'error', {
+            errorName: 'NetworkError',
+            parts: [{ kind: 'text', text }],
+            text,
+            values: [text],
+            groups: [],
+            location: null,
+            path: null,
+            line: null,
+            column: null,
+            stackFrames: [],
+            stackText: '',
+        }));
+    }
+    if (doc && typeof doc.addEventListener === 'function') {
+        doc.addEventListener('error', (event) => {
+            const target = event && event.target;
+            if (!target || target.tagName !== 'SCRIPT') return;
+            const failed = failedScriptRequests();
+            if (failed.length === 0) {
+                const src = target.src ? shortUrl(target.src) : '';
+                reportLoadFailure(src ? `Failed to load script: ${src}` : 'Failed to load module script: one of its imports could not be loaded');
+                return;
+            }
+            failed.forEach((entry) => {
+                reportedFailures.add(entry.name);
+                const statusText = HTTP_STATUS_TEXT[entry.responseStatus] ? ` (${HTTP_STATUS_TEXT[entry.responseStatus]})` : '';
+                reportLoadFailure(`GET ${shortUrl(entry.name)} net::ERR_ABORTED ${entry.responseStatus}${statusText}`);
+            });
+        }, true);
+    }
 
     win.addEventListener('unhandledrejection', (event) => {
         const reason = event ? event.reason : undefined;

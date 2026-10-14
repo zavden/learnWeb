@@ -56,6 +56,9 @@ const appCors = cors({
 });
 app.use((req, res, next) => {
     if ((req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') && ASSET_ROUTE_PATTERN.test(req.path)) {
+        // Lets the preview runtime read the status of a failed asset request (a 404 module import) in
+        // its resource timings, also from sandboxed srcdoc copies.
+        res.set('Timing-Allow-Origin', '*');
         return assetCors(req, res, next);
     }
 

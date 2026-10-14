@@ -16,10 +16,12 @@ function createFrame({ beforeScripts = '' } = {}) {
         location: { href: 'about:srcdoc', hash: '' },
         setTimeout,
         clearTimeout,
-        performance: { now: () => performance.now() },
+        performance: { now: () => performance.now(), getEntriesByType: () => resourceEntries },
         URL,
         URLSearchParams,
     };
+    const resourceEntries = [];
+    const documentListeners = {};
     sandbox.window = sandbox;
     // Like window.postMessage: messages are structured-cloned (also normalises vm realms).
     const frameState = { ready: 0 };
@@ -35,7 +37,11 @@ function createFrame({ beforeScripts = '' } = {}) {
     sandbox.addEventListener = (type, listener) => {
         (listeners[type] ||= []).push(listener);
     };
-    sandbox.document = { addEventListener: noop, querySelector: () => null };
+    sandbox.document = {
+        addEventListener: (type, listener) => (documentListeners[type] ||= []).push(listener),
+        baseURI: 'http://localhost:3001/preview/ch/sec/top/id/index.html',
+        querySelector: () => null,
+    };
     vm.createContext(sandbox);
     if (beforeScripts) vm.runInContext(beforeScripts, sandbox);
 
@@ -44,7 +50,11 @@ function createFrame({ beforeScripts = '' } = {}) {
         state: frameState,
         posted,
         listeners,
+        resourceEntries,
         sandbox,
+        dispatchOnDocument(type, event) {
+            (documentListeners[type] || []).forEach((listener) => listener(event));
+        },
         dispatch(type, event) {
             (listeners[type] || []).forEach((listener) => listener(event));
         },
@@ -319,4 +329,22 @@ test('console disabled: only errors are reported, and floods are throttled', asy
 
     const flood = await runExample('for (let i = 0; i < 2500; i += 1) console.log(i);');
     assert.equal(texts(flood).length, 2000);
+});
+
+test('module namespaces print as Module, and scripts that fail to load show the failed request', async () => {
+    const frame = await runExample("console.log(Object.create(null, { [Symbol.toStringTag]: { value: 'Module' }, total: { value: 3, enumerable: true } }));");
+    assert.deepEqual(texts(frame), ['Module {total: 3}']);
+
+    frame.resourceEntries.push(
+        { name: 'http://localhost:3001/preview/ch/sec/top/id/tienda/precios.js', initiatorType: 'script', responseStatus: 200 },
+        { name: 'http://localhost:3001/preview/ch/sec/top/id/tienda/precio.js', initiatorType: 'script', responseStatus: 404 },
+    );
+    frame.dispatchOnDocument('error', { target: { tagName: 'IMG', src: 'foto.webp' } });
+    frame.dispatchOnDocument('error', { target: { tagName: 'SCRIPT', src: '' } });
+    frame.dispatchOnDocument('error', { target: { tagName: 'SCRIPT', src: 'http://localhost:3001/preview/ch/sec/top/id/extra.js' } });
+    await settle();
+    assert.deepEqual(texts(frame, 'runtime-error'), [
+        'GET tienda/precio.js net::ERR_ABORTED 404 (Not Found)',
+        'Failed to load script: extra.js',
+    ]);
 });
