@@ -61,7 +61,7 @@ Para el mapa detallado: [hotspots.md](skills/learnweb-repo-editing/references/ho
 | Tipo de cambio | Comando |
 |----------------|---------|
 | Contenido puro (material/) | Verificacion de formato o ninguno |
-| Parser, metadata, editor, preview, backend | `npm test` (241 tests) |
+| Parser, metadata, editor, preview, backend | `npm test` (242 tests) |
 | Course content (material/ch02+) | `node scripts/check-material.mjs material/<capitulo>/<seccion>` |
 | UI/runtime | `npm run build` |
 

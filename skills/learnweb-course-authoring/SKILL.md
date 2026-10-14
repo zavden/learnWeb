@@ -143,8 +143,12 @@ console: true                     # whenever the example prints to the console
 - Classic scripts share the page's global scope: a top-level `let`/`const` named like a non-configurable
   `window` property (`top`, `window`, `document`, `location`) is a SyntaxError in the browser (Node accepts it).
   Avoid those names, or wrap the code in a block. A top-level `class`/`function` named like a DOM interface
-  (`Document`, `Node`, `Text`, `Event`, `Range`, `Image`…) does not throw but replaces that global for every
-  script on the page (LearnWeb's console bridge included): pick another name (`Doc`, `TreeNode`…).
+  (`Document`, `Node`, `Text`, `Event`, `Range`, `Image`, `Scheduler`…) or a JS built-in (`Iterator`, `Proxy`,
+  `Reflect`, `Symbol`) does not throw but replaces that global for every script on the page (LearnWeb's console
+  bridge included; a top-level `class Iterator` breaks the iterator helpers): pick another name (`Doc`,
+  `TreeNode`, `CoopScheduler`…). Top-level `var` names that are `window` properties collide with them (checked in
+  Chrome: `var name = 42` and `var status = 7` read back as strings, `var history = []` silently stays the
+  browser's History object, `var alert = 'x'` replaces `alert`): avoid them too.
 - The verify harness reports `console.error` as a problem: for errors the example handles on purpose, use
   `console.warn`/`console.log` unless the example is `common-error`.
 - Sass compile errors (`@error`, undefined variables…) and deprecation warnings are allowed by the checker only in
