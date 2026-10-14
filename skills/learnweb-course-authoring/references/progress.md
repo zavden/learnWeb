@@ -61,7 +61,8 @@ length only from 2 items, and uncaught-error reports come after the page's own e
 
 Next actions when resuming (pick with the user):
 1. `npm run dev`; read this file; check the Chrome extension (tabs_context_mcp) before any review; agents are fresh
-   each module (prompts: "Prompt template" below; the fifth session's four prompts are good models).
+   each module (prompts: "Prompt template" below; the fifth session's four lesson prompts are saved in the gitignored
+   `claude_resume/prompts/` and are good models).
 2. CSS lane: `ch03-css/sec10-arquitectura-css` — the last CSS module (promised by sec08/sec09: native nesting vs Sass,
    `@layer` incl. the `print` layer and two-level tokens of sec08 top95, the global `prefers-reduced-motion: reduce`
    reset, fluid tokens `--step-n`/`--space-*`, `light-dark()` + `color-scheme` theming).
