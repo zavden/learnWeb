@@ -1,7 +1,7 @@
 # Course progress and hand-off notes
 
-Last updated: 2026-10-14. Modules 2-5 of every lane + CSS sec06 + JS sec06 are complete and browser-verified
-(1330 examples, 55 exercises, checker 0/0).
+Last updated: 2026-10-14. Modules 2-5 of every lane + CSS sec06-07 + JS sec06-07 are complete and browser-verified
+(1478 examples, 61 exercises, checker 0/0).
 
 Read this first when resuming the course work. The syllabus is in [plan.md](plan.md), the authoring
 rules in [../SKILL.md](../SKILL.md), runtime capabilities in [runtime.md](runtime.md).
@@ -22,7 +22,8 @@ Legend: ✅ complete and verified (checker 0/0 + browser harness) · 🟡 partia
 | ch03-css/sec04-flexbox | ✅ 5/5 | ✅ 8 + 3 exercises | ✅ 13 | 73 examples; browser-verified 0 problems + visual checks; top04/07 image made 64px so the stretch shows at card width; top95/09 street field wrapped in a row (flex-basis in a column is a height) |
 | ch03-css/sec05-grid | ✅ 5/5 | ✅ 8 + 3 exercises | ✅ 13 | 70 examples; browser-verified 0 problems (rulers, overlays, dense, subgrid, reading-flow Tab order); top90/09 SKU made unbreakable so `1fr` shows the bug |
 | ch03-css/sec06-tipografia-y-texto | ✅ 4/4 | ✅ 8 + 3 exercises | ✅ 12 | 60 examples; browser-verified 0 problems + measurements (font swap 128→189px, adjusted fallback 189px); fonts in topic assets (OFL); top90/11 base cell rule uses `:where()` so `.price` wins |
-| ch03-css/sec07 … sec10 | ⬜ | ⬜ | ⬜ | |
+| ch03-css/sec07-efectos-visuales | ✅ 5/5 (3D split into top05) | ✅ 8 + 3 exercises | ✅ 12 | 70 examples; browser-verified 0 problems + measurements/screenshots; public-domain images (Velasco, Hokusai, NASA) per topic; top02/08 notes that blend colours differ on P3 screens |
+| ch03-css/sec08 … sec10 | ⬜ | ⬜ | ⬜ | |
 | ch04-sass/sec01-sass-fundamentos | ✅ 8/8 | ✅ 8 + 3 exercises | ✅ 13 | 91 examples; browser-verified 0 problems (7 intentional compile errors in common-error); exercises self-check via a locked CSSOM script (❌ → ✅) |
 | ch05-javascript/sec01-primeros-pasos | ✅ 7/7 | ✅ 7 + 3 exercises | ✅ 12 | 89 examples |
 | ch05-javascript/sec02-datos | ✅ 7/7 | ✅ 8 + 4 exercises | ✅ 12 | 91 examples; browser-verified 0 problems; Chrome output = node output |
@@ -30,27 +31,33 @@ Legend: ✅ complete and verified (checker 0/0 + browser harness) · 🟡 partia
 | ch05-javascript/sec04-objetos-y-prototipos | ✅ 5/5 | ✅ 8 + 3 exercises | ✅ 11 | 73 examples; browser-verified 0 problems (exercises ✗ → ✓) |
 | ch05-javascript/sec05-clases-y-poo | ✅ 6/6 | ✅ 7 + 3 exercises | ✅ 12 | 79 examples; browser-verified 0 problems; Chrome console = run-example output (hash-compared; only U+202F vs space in Intl ranges) |
 | ch05-javascript/sec06-iteracion-y-metaprogramacion | ✅ 5/5 | ✅ 8 + 3 exercises | ✅ 12 | 70 examples; browser-verified 0 problems; Chrome console = run-example output for all 70 (console.table compared by count) |
-| ch05-javascript/sec07 … sec08 | ⬜ | ⬜ | ⬜ | |
+| ch05-javascript/sec07-asincronia | ✅ 6/6 | ✅ 8 + 3 exercises | ✅ 12 | 78 examples; browser-verified (visible frame); console = run-example except documented Chrome-only results; top06/06 + top95/06 teach that `scheduler.yield()` starves painting |
+| ch05-javascript/sec08 | ⬜ | ⬜ | ⬜ | |
 | ch06 … ch08 | ⬜ | ⬜ | ⬜ | |
 
 Fourth session (2026-10-13/14): «los siguientes 2 módulos completos» = CSS sec06-tipografia-y-texto + JS
 sec06-iteracion-y-metaprogramacion — done (two agents; the HTML lane waited). User rule: if the Chrome extension is
-disconnected at a review step, tell the user and wait before continuing. Fonts for CSS sec06 (OFL, woff2) are in the gitignored
+disconnected at a review step, tell the user and wait before continuing.
+Then «continúa con otros 2» (2026-10-13): CSS sec07-efectos-visuales + JS sec07-asincronia, two agents. Public-domain
+images (Velasco, Hokusai, Apollo 17, Hubble, Aldrin; 960px JPEG + credit lines) are in the gitignored
+`claude_resume/images/`; `claude_resume/run-example.mjs` now runs async code (timers, queueMicrotask, MessageChannel,
+AbortController, fake rAF; `type="module"` scripts wrapped in an async function; `WAIT=<ms>`). Fonts for CSS sec06 (OFL, woff2) are in the gitignored
 `claude_resume/fonts/` (README lists axes). Previous goal «termina el módulo 4 y haz el 5» — done. Lanes: HTML lane = HTML → Sass → TS →
 WASM/GPU; CSS lane; JS lane = JS → JS in the browser. Max 3 Opus agents at a time (or one Fable alone).
 
 Next actions when resuming (pick with the user):
 1. `npm run dev`; read this file; agents are fresh each module (prompts: see "Prompt template" below and the
    coordinator's messages; the scratchpad `prompts/` folder may be gone).
-2. CSS lane: `ch03-css/sec07-efectos-visuales` (promises from sec06: `transform: rotate()` vs `writing-mode`,
-   flipping arrow icons with `:dir(rtl)`; fluid type with `clamp()` is promised to sec08).
-3. JS lane: `ch05-javascript/sec07-asincronia` (promises from sec06: async generators, `for await…of`,
-   `Symbol.asyncIterator`, `await using`, an async version of the top95/08 cursor paginator, asyncio analogy).
-   Still no regular-expressions lesson (examples avoid them; `String.raw` promised a note for it).
+2. CSS lane: `ch03-css/sec08-responsive` (promised: fluid type with `clamp()`, `prefers-reduced-motion`), then sec09
+   animation (promised by sec07: transitions for the instant hover/flip states, `scaleX` progress bars, `will-change`;
+   by JS sec07: compositor animations keep running while JS is busy).
+3. JS lane: `ch05-javascript/sec08-modulos` (ES modules; top-level await was shown only in module scripts), then
+   ch06 (promised by sec07: `addEventListener` + `signal`, `visibilitychange`, `unhandledrejection`, `fetch` with
+   `{ signal }`, workers, Web Animations `finished`, canvas loops). Still no regular-expressions lesson.
 4. HTML lane: Sass is complete (ch04 has one section). TypeScript (ch07) comes after ch06 in the course order, so
    before starting it either write JS sec06-08 + ch06 first, or let this lane help the CSS lane (sec07+) or write
    the missing regular-expressions topic. Ask the user.
-   Remaining (2026-10-14): 21 of 38 modules (~94 lessons): CSS sec07-10, JS sec07-08, ch06 sec01-06, ch07
+   Remaining (2026-10-14): 19 of 38 modules (~85 lessons): CSS sec08-10, JS sec08, ch06 sec01-06, ch07
    sec01-03, ch08 sec01-06 — about 7 rounds of 3 parallel modules. Order matters: ch07/ch08 need ch05+ch06.
 5. Optional tidy-ups listed in the notes below (old `href="#"` placeholders, flex-basis-in-a-column example).
 
@@ -60,6 +67,17 @@ Notes carried forward:
   `lang="en"` splits Spanish «rr» (guer-rilleros, car-retera) while `lang="es"` keeps it (guerri-lleros); Roboto
   Flex's `wdth` axis changes text width only ~15-20% at 16-24px; Chrome doesn't support `ui-serif`/`ui-monospace`;
   `font-family: monospace` alone → 13px; preload + @font-face metric overrides work without console warnings.
+- `scheduler.yield()` (Chrome 155, measured): 400 ms of 8 ms slices → 50 slices but only ~4 painted frames (its
+  continuations run ahead of rendering; Chrome paints ~every 100 ms); `setTimeout(0)` → 33 slices / 25 frames;
+  rAF + setTimeout → 25 / 25. Yield to a frame every ~16 ms when a JS-driven indicator must stay smooth.
+- The verify harness's `show=1` frame under-counts rAF frames during page load (top95/06 printed false there but
+  true in a normal tab AND in the app's real preview): confirm frame-count checks in the app preview.
+- Checked in Chrome 155 during CSS/JS sec07: rAF never fires in the verify harness's hidden frames — run rAF/timing
+  examples with `&show=1&w=520&h=300` (visible frame); `mix-blend-mode` on this Mac (P3 display) does not give
+  textbook CMY results (cyan×magenta looks violet, the centre maroon), so never promise exact blend colours; the
+  background of a `preserve-3d` element hides children with negative `translateZ`; mask-image `url()` assets load
+  in sandboxed theory cards (CORS ok); async iterator helpers don't exist yet; nested `setTimeout(0)` clamps to
+  ~4 ms after 5 levels. `run-example.mjs` reports late errors as `[runtime-error]`/`[unhandled-rejection]` lines.
 - JS sec06: LearnWeb's console fires Proxy traps when a proxy is logged (Chrome DevTools doesn't) — examples never
   log proxies; generator objects show as `Generator {}` and Map/Set iterators without entries (not fixable from JS).
 - Exercise self-checks can be defeated by specificity: a starter base rule like `.prices td { text-align: start }`
