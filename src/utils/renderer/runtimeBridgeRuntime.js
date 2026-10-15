@@ -2162,18 +2162,22 @@ export function learncodeRuntimeBridge(config) {
         const NativeWorker = win.Worker;
         const WorkerShim = function Worker(url, options) {
             if (!new.target) throw new TypeError("Failed to construct 'Worker': Please use the 'new' operator.");
+            let absolute = '';
+            try {
+                absolute = new URL(String(url), doc ? doc.baseURI : undefined).href;
+            } catch {
+                absolute = '';
+            }
+            // Chrome 155 fails every module worker whose script is a blob: URL of an opaque origin (a plain `error`
+            // event, even for inline Blob code) but runs one from a data: URL, which may import http and blob URLs.
+            if (options && options.type === 'module' && /^(https?|blob):/i.test(absolute)) {
+                return new NativeWorker('data:text/javascript,' + encodeURIComponent('import ' + JSON.stringify(absolute) + ';'), options);
+            }
             try {
                 return new NativeWorker(url, options);
             } catch (error) {
-                let absolute = '';
-                try {
-                    absolute = new URL(String(url), doc ? doc.baseURI : undefined).href;
-                } catch {
-                    throw error;
-                }
                 if (!/^https?:/i.test(absolute)) throw error;
-                const isModule = options && options.type === 'module';
-                const bootstrap = isModule ? 'import ' + JSON.stringify(absolute) + ';' : 'importScripts(' + JSON.stringify(absolute) + ');';
+                const bootstrap = 'importScripts(' + JSON.stringify(absolute) + ');';
                 const blobUrl = win.URL.createObjectURL(new win.Blob([bootstrap], { type: 'text/javascript' }));
                 return new NativeWorker(blobUrl, options);
             }

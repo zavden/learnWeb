@@ -455,3 +455,27 @@ test('the ResizeObserver loop error reaches page listeners but is not printed, l
     await settle();
     assert.deepEqual(frame.posted.map((message) => message.text), ['handler: ResizeObserver loop completed with undelivered notifications.']);
 });
+
+test('in opaque (card) copies, module workers start from a data: URL and classic http workers through importScripts', async () => {
+    // Like Chrome in a sandboxed srcdoc: a classic worker from an http URL throws at once; Blob URLs are allowed.
+    const fakeWorker = `
+        globalThis.__workers = [];
+        globalThis.Blob = function Blob(parts) { this.text = parts.join(''); };
+        URL.createObjectURL = (blob) => 'blob:null/' + blob.text;
+        globalThis.Worker = function Worker(url, options) {
+            if (/^http/.test(new URL(String(url), document.baseURI).href)) throw new Error('SecurityError: cannot be accessed from origin null');
+            __workers.push({ url: String(url), type: options && options.type });
+        };`;
+    const frame = await runExample(`
+        new Worker('pool/worker.js', { type: 'module' });
+        new Worker('blob:null/inline-code', { type: 'module' });
+        new Worker('classic.js');
+        new Worker('blob:null/classic-code');`, { beforeScripts: fakeWorker });
+    const base = 'http://localhost:3001/preview/ch/sec/top/id/';
+    assert.deepEqual(Array.from(frame.sandbox.__workers, ({ url, type }) => [decodeURIComponent(url), type]), [
+        [`data:text/javascript,import "${base}pool/worker.js";`, 'module'],
+        ['data:text/javascript,import "blob:null/inline-code";', 'module'],
+        [`blob:null/importScripts("${base}classic.js");`, undefined],
+        ['blob:null/classic-code', undefined],
+    ]);
+});
