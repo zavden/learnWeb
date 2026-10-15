@@ -1,0 +1,273 @@
+/* Estilos base de los documentos profesionales del módulo «Contenido y semántica».
+   El CSS se estudia en el capítulo 3: esta hoja solo hace las páginas legibles en el móvil y
+   en el escritorio. Ninguna regla cambia el significado del HTML: si la quitas, cada página
+   sigue siendo exactamente igual de comprensible para un lector de pantalla.
+   Colores comprobados con scripts/contrast.mjs: el texto supera 4,5:1 sobre su fondo. */
+
+/* 1. La página */
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.6;
+  color: #1f2937;
+  background: #ffffff;
+}
+
+/* 2. Una columna centrada para la cabecera, el contenido, las barras laterales y el pie */
+.site-header,
+.site-main,
+.site-aside,
+.site-footer {
+  max-width: 60rem;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+.site-header {
+  padding-block: 0.75rem;
+  border-bottom: 1px solid #d1d5db;
+}
+
+.site-footer {
+  margin-top: 3rem;
+  padding-block: 1.5rem;
+  border-top: 1px solid #d1d5db;
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
+/* Ancho de lectura cómodo (unas 70 letras por línea) para el texto largo */
+.prose {
+  max-width: 42rem;
+}
+
+.brand {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.brand a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* 3. Menús: listas de enlaces en fila (flex se estudia en el capítulo de CSS) */
+.menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* La página actual: el estilo lee el mismo atributo que el lector de pantalla */
+[aria-current="page"] {
+  font-weight: 700;
+  color: #1f2937;
+  text-decoration: none;
+}
+
+.breadcrumbs {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+}
+
+/* 4. Enlaces y foco del teclado */
+a {
+  color: #1d4ed8;
+}
+
+:focus-visible {
+  outline: 3px solid #b45309;
+  outline-offset: 2px;
+}
+
+/* main recibe el foco (tabindex="-1") solo para mover el punto de lectura tras el skip link */
+main:focus {
+  outline: none;
+}
+
+/* El enlace «Saltar al contenido» queda fuera de la vista hasta que recibe el foco
+   (position se estudia en el capítulo de CSS) */
+.skip-link {
+  position: absolute;
+  top: -3rem;
+  left: 1rem;
+  z-index: 1;
+  padding: 0.5rem 1rem;
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.skip-link:focus {
+  top: 1rem;
+}
+
+/* 5. Utilidades */
+
+/* Invisible en pantalla, presente en el árbol de accesibilidad (lección de accesibilidad) */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* hidden siempre oculta, aunque otra regla dé un display (módulo anterior) */
+[hidden] {
+  display: none !important;
+}
+
+.muted {
+  color: #4b5563;
+}
+
+.lead {
+  font-size: 1.15rem;
+}
+
+/* 6. Imágenes y figuras: nunca desbordan la columna; display: block quita el hueco de la
+   línea base (lección de imágenes) */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+figure {
+  margin: 1.5rem 0;
+}
+
+figure img {
+  display: block;
+}
+
+figcaption {
+  margin-top: 0.4rem;
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
+/* 7. Citas y código */
+blockquote {
+  margin: 1.5rem 0;
+  padding-left: 1rem;
+  border-left: 4px solid #1d4ed8;
+}
+
+pre {
+  overflow-x: auto;
+  padding: 1rem;
+  background: #f3f4f6;
+}
+
+code,
+kbd,
+samp {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.95em;
+}
+
+kbd {
+  padding: 0 0.3em;
+  border: 1px solid #9ca3af;
+  border-radius: 4px;
+  background: #f9fafb;
+}
+
+/* 8. Tablas. Si una tabla no cabe, su contenedor se desplaza en horizontal (overflow: CSS) */
+.table-scroll {
+  overflow-x: auto;
+  margin: 1.5rem 0;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+caption {
+  padding-bottom: 0.5rem;
+  font-weight: 700;
+  text-align: left;
+}
+
+th,
+td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #d1d5db;
+  text-align: left;
+  vertical-align: top;
+}
+
+thead th {
+  border-bottom: 2px solid #1f2937;
+}
+
+tfoot th,
+tfoot td {
+  border-top: 2px solid #1f2937;
+  font-weight: 700;
+}
+
+/* Los números, alineados a la derecha y con cifras del mismo ancho para compararlos */
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 9. Avisos */
+.note,
+.warning {
+  margin: 1.5rem 0;
+  padding: 0.75rem 1rem;
+}
+
+.note {
+  border-left: 4px solid #1d4ed8;
+  background: #eff6ff;
+}
+
+.warning {
+  border-left: 4px solid #b45309;
+  background: #fffbeb;
+}
+
+/* 10. Tarjetas en una rejilla que se adapta al ancho (grid se estudia en el capítulo de CSS).
+   Ojo: sin viñetas, Safari deja de anunciar la lista (lección de listas); se resuelve en CSS */
+.card-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 1.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  padding: 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+}
+
+.card h2,
+.card h3 {
+  margin-top: 0.5rem;
+  font-size: 1.1rem;
+}
+
+/* 11. Listas de descripción como fichas: el término en negrita y su valor debajo */
+.facts dt {
+  font-weight: 700;
+}
+
+.facts dd {
+  margin: 0 0 0.5rem;
+}
+
+/* 12. Botones */
+button {
+  font: inherit;
+  padding: 0.4rem 0.9rem;
+}

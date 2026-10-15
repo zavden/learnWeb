@@ -1,0 +1,80 @@
+/* Estilos base de los documentos profesionales del módulo.
+   El CSS se estudia en el capítulo 3: esta hoja solo hace los documentos legibles
+   en el móvil y en el escritorio, sin cambiar su estructura. */
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.6;
+  color: #1f2937;
+  background: #ffffff;
+}
+
+/* Columna de lectura centrada, con márgenes laterales en pantallas pequeñas */
+.site-header,
+main,
+.site-footer {
+  max-width: 44rem;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+.site-header {
+  padding-block: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.site-footer {
+  margin-top: 3rem;
+  padding-block: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
+/* Las imágenes nunca desbordan la columna y conservan su proporción */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+a {
+  color: #1d4ed8;
+}
+
+/* Foco del teclado siempre visible */
+:focus-visible {
+  outline: 3px solid #f59e0b;
+  outline-offset: 2px;
+}
+
+/* El enlace «Saltar al contenido» solo aparece al recibir el foco con Tab */
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: -3rem;
+  padding: 0.5rem 1rem;
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.skip-link:focus {
+  top: 1rem;
+}
+
+pre {
+  overflow-x: auto;
+  padding: 1rem;
+  background: #f3f4f6;
+}
+
+code,
+kbd {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.95em;
+}
+
+/* hidden siempre oculta, aunque otra regla dé un display (lección de integración) */
+[hidden] {
+  display: none !important;
+}

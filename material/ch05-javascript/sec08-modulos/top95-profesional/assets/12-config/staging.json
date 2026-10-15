@@ -1,0 +1,7 @@
+{
+  "shop": { "currency": "mxn" },
+  "api": { "baseUrl": "staging.cafelahuasteca.example/v1", "timeoutMs": "8000" },
+  "shipping": { "freeFromCents": -1 },
+  "payments": { "methods": ["card", "bitcoin"] },
+  "features": { "sameDayDelivery": "yes" }
+}

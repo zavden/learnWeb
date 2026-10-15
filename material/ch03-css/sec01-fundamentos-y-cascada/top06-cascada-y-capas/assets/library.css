@@ -1,0 +1,8 @@
+/* «Librería» de ejemplo para 08-importar-en-una-capa.md.
+   Usa selectores muy específicos, como muchas librerías reales. */
+#app .toolbar .btn {
+  background: #fecaca;
+  padding: 8px 14px;
+  border: 2px solid #0f172a;
+  border-radius: 6px;
+}

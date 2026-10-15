@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="48" viewBox="0 0 200 48">
+  <rect width="48" height="48" rx="10" fill="#1d4ed8"/>
+  <path d="M15 17 L9 24 L15 31 M33 17 L39 24 L33 31 M27 14 L21 34" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="60" y="32" font-family="system-ui, sans-serif" font-size="22" font-weight="700" fill="#1f2937">Web a fondo</text>
+</svg>

@@ -1,0 +1,7 @@
+{
+  "services": [
+    { "id": "web", "state": "Operativo", "uptime": 0.99982 },
+    { "id": "api", "state": "Rendimiento degradado", "uptime": 0.99693 },
+    { "id": "payments", "state": "Operativo", "uptime": 0.99995 }
+  ]
+}

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 315" role="img" aria-label="Portada del huerto comunitario">
+  <rect width="600" height="315" fill="#ecfdf5"/>
+  <rect y="230" width="600" height="85" fill="#047857"/>
+  <circle cx="300" cy="150" r="70" fill="#f59e0b"/>
+  <text x="300" y="300" text-anchor="middle" font-family="system-ui, sans-serif" font-size="28" fill="#ffffff">Huerto comunitario</text>
+</svg>

@@ -1,0 +1,9 @@
+{
+  "museum": "Museo Nacional de Arte",
+  "artworks": [
+    { "id": "velasco-1875", "title": "El valle de México desde el cerro de Santa Isabel", "artist": "José María Velasco", "year": 1875, "kind": "painting", "room": 12 },
+    { "id": "herran-1913", "title": "La ofrenda", "artist": "Saturnino Herrán", "year": "1913", "kind": "painting" },
+    { "id": "contreras-1898", "title": "Malgré tout", "artist": "Jesús F. Contreras", "year": 1898, "kind": "sculpture" },
+    { "id": "anonimo-1790", "title": "Retrato de dama", "year": 1790, "kind": "mural" }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "cartTitle": "Your cart",
+  "items.one": "{count} item",
+  "items.other": "{count} items",
+  "total": "Total: {amount}",
+  "currency": "MXN"
+}

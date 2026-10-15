@@ -1,0 +1,7 @@
+{
+  "cartTitle": "Tu carrito",
+  "items.one": "{count} producto",
+  "items.other": "{count} productos",
+  "total": "Total: {amount}",
+  "currency": "MXN"
+}

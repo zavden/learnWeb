@@ -1,0 +1,87 @@
+{
+  "page": 1,
+  "total": 25,
+  "next": "top-2.json",
+  "items": [
+    {
+      "id": "R-101",
+      "author": "Lucía M.",
+      "coffee": "Chiapas",
+      "rating": 5,
+      "text": "Notas de chocolate y una acidez muy suave.",
+      "date": "2026-10-13T15:00:00.000Z"
+    },
+    {
+      "id": "R-103",
+      "author": "Begoña R.",
+      "coffee": "Veracruz",
+      "rating": 5,
+      "text": "Lo preparo en olla con canela: delicioso.",
+      "date": "2026-10-12T21:00:00.000Z"
+    },
+    {
+      "id": "R-106",
+      "author": "Fernando G.",
+      "coffee": "Chiapas",
+      "rating": 5,
+      "text": "Dulce, con un final a caramelo.",
+      "date": "2026-10-11T18:00:00.000Z"
+    },
+    {
+      "id": "R-109",
+      "author": "Inés C.",
+      "coffee": "Puebla",
+      "rating": 5,
+      "text": "Buen café para el espresso de la mañana.",
+      "date": "2026-10-10T15:00:00.000Z"
+    },
+    {
+      "id": "R-112",
+      "author": "Luis A.",
+      "coffee": "Guerrero",
+      "rating": 5,
+      "text": "El molido medio funciona bien en la cafetera italiana.",
+      "date": "2026-10-09T12:00:00.000Z"
+    },
+    {
+      "id": "R-115",
+      "author": "Andrés P.",
+      "coffee": "Oaxaca",
+      "rating": 5,
+      "text": "Afrutado, recuerda a la mora.",
+      "date": "2026-10-08T09:00:00.000Z"
+    },
+    {
+      "id": "R-117",
+      "author": "Diego S.",
+      "coffee": "Guerrero",
+      "rating": 5,
+      "text": "Llegó en dos días y recién tostado.",
+      "date": "2026-10-07T15:00:00.000Z"
+    },
+    {
+      "id": "R-119",
+      "author": "Fernando G.",
+      "coffee": "Puebla",
+      "rating": 5,
+      "text": "Buen café para el espresso de la mañana.",
+      "date": "2026-10-06T21:00:00.000Z"
+    },
+    {
+      "id": "R-122",
+      "author": "Inés C.",
+      "coffee": "Guerrero",
+      "rating": 5,
+      "text": "El molido medio funciona bien en la cafetera italiana.",
+      "date": "2026-10-05T18:00:00.000Z"
+    },
+    {
+      "id": "R-125",
+      "author": "Luis A.",
+      "coffee": "Oaxaca",
+      "rating": 5,
+      "text": "Afrutado, recuerda a la mora.",
+      "date": "2026-10-04T15:00:00.000Z"
+    }
+  ]
+}

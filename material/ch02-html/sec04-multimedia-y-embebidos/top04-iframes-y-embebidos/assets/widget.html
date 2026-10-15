@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Estado del huerto</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #ecfdf5; color: #064e3b; }
+  .widget { padding: 1rem 1.25rem; }
+  h1 { margin: 0 0 .5rem; font-size: 1.1rem; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: .25rem .75rem; margin: 0; }
+  dt { font-weight: 600; }
+  dd { margin: 0; }
+  a { color: #047857; }
+</style>
+</head>
+<body>
+  <!-- Una página completa y autónoma, servida desde la carpeta assets/ del tema.
+       Es el documento que se embebe en 01-iframe-basico.md con <iframe src="widget.html">. -->
+  <div class="widget">
+    <h1>Estado del huerto comunitario</h1>
+    <dl>
+      <dt>Humedad</dt><dd>62 %</dd>
+      <dt>Riego</dt><dd>automático, 7:00 y 19:00</dd>
+      <dt>Parcelas libres</dt><dd>3 de 24</dd>
+    </dl>
+    <p><a href="/huerto/parcelas">Ver las parcelas libres</a></p>
+  </div>
+</body>
+</html>

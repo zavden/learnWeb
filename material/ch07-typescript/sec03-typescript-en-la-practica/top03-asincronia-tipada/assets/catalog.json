@@ -1,0 +1,5 @@
+[
+  { "sku": "MOL-01", "name": "Mole negro", "price": 165 },
+  { "sku": "CAF-02", "name": "Café de Chiapas", "price": 210 },
+  { "sku": "CHO-03", "name": "Chocolate de metate", "price": 95 }
+]

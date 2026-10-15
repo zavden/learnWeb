@@ -1,0 +1,87 @@
+{
+  "page": 2,
+  "total": 25,
+  "next": "top-3.json",
+  "items": [
+    {
+      "id": "R-102",
+      "author": "Andrés P.",
+      "coffee": "Guerrero",
+      "rating": 4,
+      "text": "El molido medio funciona bien en la cafetera italiana.",
+      "date": "2026-10-13T06:00:00.000Z"
+    },
+    {
+      "id": "R-105",
+      "author": "Elena V.",
+      "coffee": "Oaxaca",
+      "rating": 4,
+      "text": "Afrutado, recuerda a la mora.",
+      "date": "2026-10-12T03:00:00.000Z"
+    },
+    {
+      "id": "R-107",
+      "author": "Gabriela N.",
+      "coffee": "Guerrero",
+      "rating": 4,
+      "text": "Llegó en dos días y recién tostado.",
+      "date": "2026-10-11T09:00:00.000Z"
+    },
+    {
+      "id": "R-110",
+      "author": "Jorge T.",
+      "coffee": "Oaxaca",
+      "rating": 4,
+      "text": "Demasiado oscuro para mi gusto, pero aromático.",
+      "date": "2026-10-10T06:00:00.000Z"
+    },
+    {
+      "id": "R-113",
+      "author": "Mariana F.",
+      "coffee": "Veracruz",
+      "rating": 4,
+      "text": "Lo preparo en olla con canela: delicioso.",
+      "date": "2026-10-09T03:00:00.000Z"
+    },
+    {
+      "id": "R-114",
+      "author": "Lucía M.",
+      "coffee": "Puebla",
+      "rating": 4,
+      "text": "Perfecto para la cafetera de émbolo.",
+      "date": "2026-10-08T18:00:00.000Z"
+    },
+    {
+      "id": "R-118",
+      "author": "Elena V.",
+      "coffee": "Veracruz",
+      "rating": 4,
+      "text": "Un poco amargo en filtro; mejor en espresso.",
+      "date": "2026-10-07T06:00:00.000Z"
+    },
+    {
+      "id": "R-120",
+      "author": "Gabriela N.",
+      "coffee": "Oaxaca",
+      "rating": 4,
+      "text": "Demasiado oscuro para mi gusto, pero aromático.",
+      "date": "2026-10-06T12:00:00.000Z"
+    },
+    {
+      "id": "R-123",
+      "author": "Jorge T.",
+      "coffee": "Veracruz",
+      "rating": 4,
+      "text": "Lo preparo en olla con canela: delicioso.",
+      "date": "2026-10-05T09:00:00.000Z"
+    },
+    {
+      "id": "R-104",
+      "author": "Diego S.",
+      "coffee": "Puebla",
+      "rating": 3,
+      "text": "Perfecto para la cafetera de émbolo.",
+      "date": "2026-10-12T12:00:00.000Z"
+    }
+  ]
+}

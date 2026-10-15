@@ -1,0 +1,7 @@
+{
+  "shop": { "name": "Café La Huasteca", "currency": "MXN", "locale": "es-MX", "timeZone": "America/Mexico_City" },
+  "api": { "baseUrl": "http://localhost:8080/v1", "timeoutMs": 3000 },
+  "shipping": { "standardCents": 14900, "freeFromCents": 99900, "carriers": ["estafeta", "dhl"] },
+  "payments": { "methods": ["card", "oxxo"], "cardFeePercent": 3.5 },
+  "features": { "giftWrap": false, "sameDayDelivery": false }
+}

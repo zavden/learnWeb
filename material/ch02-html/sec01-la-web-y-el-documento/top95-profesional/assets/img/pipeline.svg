@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="160" viewBox="0 0 640 160">
+  <rect width="640" height="160" fill="#f8fafc"/>
+  <g font-family="system-ui, sans-serif" font-size="15" text-anchor="middle" fill="#1f2937">
+    <rect x="16" y="56" width="104" height="48" rx="8" fill="#dbeafe" stroke="#1d4ed8"/>
+    <text x="68" y="85">URL</text>
+    <rect x="168" y="56" width="104" height="48" rx="8" fill="#dbeafe" stroke="#1d4ed8"/>
+    <text x="220" y="85">HTTP</text>
+    <rect x="320" y="56" width="104" height="48" rx="8" fill="#dbeafe" stroke="#1d4ed8"/>
+    <text x="372" y="85">Parser → DOM</text>
+    <rect x="472" y="56" width="152" height="48" rx="8" fill="#dbeafe" stroke="#1d4ed8"/>
+    <text x="548" y="85">Render → píxeles</text>
+  </g>
+  <g stroke="#1d4ed8" stroke-width="2" fill="none">
+    <path d="M124 80 H162 M156 74 L162 80 L156 86"/>
+    <path d="M276 80 H314 M308 74 L314 80 L308 86"/>
+    <path d="M428 80 H466 M460 74 L466 80 L460 86"/>
+  </g>
+</svg>

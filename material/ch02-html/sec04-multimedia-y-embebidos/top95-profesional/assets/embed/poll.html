@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Encuesta vecinal</title>
+<style>
+  body { margin: 0; padding: .75rem 1rem; font-family: system-ui, sans-serif; color: #1f2937; background: #fffbeb; }
+  fieldset { border: 1px solid #b45309; border-radius: 6px; }
+  legend { font-weight: 600; }
+  label { display: block; margin: .2rem 0; }
+  button { font: inherit; margin-top: .5rem; padding: .3rem .9rem; border: 1px solid #64748b; border-radius: 6px; background: #ffffff; }
+  :focus-visible { outline: 3px solid #1d4ed8; outline-offset: 2px; }
+  p { margin: .5rem 0 0; }
+</style>
+</head>
+<body>
+  <!-- Un widget «de otra empresa» (Encuestas Vecinales): la página que lo embebe no controla
+       su código. Necesita scripts y enviar su formulario, y nada más: por eso el foro lo
+       embebe con sandbox="allow-scripts allow-forms". Sin allow-same-origin no tiene acceso a
+       cookies ni almacenamiento, así que no guarda nada en el navegador. -->
+  <form id="poll" method="post" action="https://encuestas-vecinales.example/votar">
+    <fieldset>
+      <legend>¿Qué día prefieres para el mercado de trueque?</legend>
+      <label><input type="radio" name="day" value="saturday" required> Sábado por la mañana</label>
+      <label><input type="radio" name="day" value="sunday"> Domingo por la mañana</label>
+      <label><input type="radio" name="day" value="friday"> Viernes por la tarde</label>
+    </fieldset>
+    <button type="submit">Votar</button>
+  </form>
+  <p id="thanks" role="status"></p>
+  <script>
+    // El widget envía el voto por su cuenta (aquí se simula) y da las gracias.
+    // Sin allow-forms en el sandbox, el navegador bloquearía el envío y esto nunca se ejecutaría.
+    document.getElementById('poll').addEventListener('submit', function (event) {
+      event.preventDefault();
+      var choice = event.target.querySelector('input[name="day"]:checked');
+      document.getElementById('thanks').textContent = 'Gracias: tu voto («' + choice.parentElement.textContent.trim() + '») se ha registrado.';
+    });
+  </script>
+</body>
+</html>

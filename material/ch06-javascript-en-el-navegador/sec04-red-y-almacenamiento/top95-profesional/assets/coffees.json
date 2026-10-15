@@ -1,0 +1,14 @@
+[
+  { "sku": "CAF-CHI-500", "name": "Café de Chiapas", "origin": "Chiapas", "roast": "medio", "grams": 500, "price": 210, "stock": 14 },
+  { "sku": "CAF-VER-250", "name": "Café de Coatepec", "origin": "Veracruz", "roast": "claro", "grams": 250, "price": 135, "stock": 22 },
+  { "sku": "CAF-OAX-500", "name": "Pluma Hidalgo", "origin": "Oaxaca", "roast": "medio", "grams": 500, "price": 245, "stock": 6 },
+  { "sku": "CAF-NAY-250", "name": "Café de Nayarit", "origin": "Nayarit", "roast": "oscuro", "grams": 250, "price": 128, "stock": 0 },
+  { "sku": "CAF-PUE-500", "name": "Café de Cuetzalan", "origin": "Puebla", "roast": "oscuro", "grams": 500, "price": 198, "stock": 9 },
+  { "sku": "CAF-GRO-250", "name": "Café de la Costa Chica", "origin": "Guerrero", "roast": "claro", "grams": 250, "price": 142, "stock": 11 },
+  { "sku": "CAF-HGO-500", "name": "Café de la Huasteca", "origin": "Hidalgo", "roast": "medio", "grams": 500, "price": 189, "stock": 3 },
+  { "sku": "CAF-CHI-1000", "name": "Café de Chiapas · bolsa grande", "origin": "Chiapas", "roast": "oscuro", "grams": 1000, "price": 390, "stock": 5 },
+  { "sku": "CAF-VER-500", "name": "Café de Huatusco", "origin": "Veracruz", "roast": "medio", "grams": 500, "price": 225, "stock": 8 },
+  { "sku": "CAF-OAX-250", "name": "Café de la Mixteca", "origin": "Oaxaca", "roast": "claro", "grams": 250, "price": 150, "stock": 0 },
+  { "sku": "CAF-SLP-250", "name": "Café de Xilitla", "origin": "San Luis Potosí", "roast": "oscuro", "grams": 250, "price": 139, "stock": 17 },
+  { "sku": "CAF-COL-500", "name": "Café de Colima", "origin": "Colima", "roast": "medio", "grams": 500, "price": 205, "stock": 12 }
+]

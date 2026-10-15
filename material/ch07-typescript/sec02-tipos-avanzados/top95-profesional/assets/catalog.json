@@ -1,0 +1,14 @@
+{
+  "store": "La Casa del Mole",
+  "updated": "2026-10-14",
+  "items": [
+    { "sku": "MOL-01", "name": "Mole negro", "origin": "Oaxaca", "price": 165, "stock": 12, "tags": ["mole", "picante"] },
+    { "sku": "MOL-02", "name": "Mole poblano", "origin": "Puebla", "price": 155, "stock": 0, "tags": ["mole"] },
+    { "sku": "CAF-01", "name": "Café de Chiapas", "origin": "Chiapas", "price": 210, "stock": 8, "tags": ["café", "orgánico"] },
+    { "sku": "CAF-02", "name": "Café de Veracruz", "origin": "Veracruz", "price": "195", "stock": 5, "tags": ["café"] },
+    { "sku": "CHO-01", "name": "Chocolate de metate", "origin": "Oaxaca", "price": 95, "stock": 30, "tags": ["chocolate"] },
+    { "sku": "cho-2", "name": "Chocolate con canela", "price": 105, "stock": -1, "tags": ["chocolate"] },
+    { "sku": "MEZ-01", "name": "Mezcal espadín", "origin": "Oaxaca", "price": 540, "stock": 6, "tags": ["mezcal"] },
+    { "sku": "VAI-01", "name": "Vainilla de Papantla", "origin": "Veracruz", "price": 180, "stock": 3, "tags": ["orgánico"] }
+  ]
+}

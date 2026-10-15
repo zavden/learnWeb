@@ -1,0 +1,10 @@
+{
+  "apiVersion": 2,
+  "plugins": [
+    { "id": "csv", "label": "Exportar a CSV", "entry": "./plugins/csv.js" },
+    { "id": "summary", "label": "Resumen por estado", "entry": "./plugins/summary.js" },
+    { "id": "top-products", "label": "Productos más vendidos", "entry": "./plugins/top-products.js" },
+    { "id": "legacy-pdf", "label": "PDF (versión antigua)", "entry": "./plugins/legacy-pdf.js" },
+    { "id": "chart", "label": "Gráfica de ventas (en desarrollo)", "entry": "./plugins/chart.js" }
+  ]
+}

@@ -1,0 +1,469 @@
+{
+ "currency": "MXN",
+ "stores": [
+  {
+   "id": "centro",
+   "name": "Centro"
+  },
+  {
+   "id": "coyoacan",
+   "name": "Coyoacán"
+  },
+  {
+   "id": "roma",
+   "name": "Roma"
+  }
+ ],
+ "days": [
+  {
+   "date": "2026-09-15",
+   "centro": {
+    "sales": 5130,
+    "tickets": 54
+   },
+   "coyoacan": {
+    "sales": 4510,
+    "tickets": 45
+   },
+   "roma": {
+    "sales": 3220,
+    "tickets": 35
+   }
+  },
+  {
+   "date": "2026-09-16",
+   "centro": {
+    "sales": 5490,
+    "tickets": 53
+   },
+   "coyoacan": {
+    "sales": 4030,
+    "tickets": 45
+   },
+   "roma": {
+    "sales": 3130,
+    "tickets": 31
+   }
+  },
+  {
+   "date": "2026-09-17",
+   "centro": {
+    "sales": 5030,
+    "tickets": 56
+   },
+   "coyoacan": {
+    "sales": 3890,
+    "tickets": 41
+   },
+   "roma": {
+    "sales": 3500,
+    "tickets": 33
+   }
+  },
+  {
+   "date": "2026-09-18",
+   "centro": {
+    "sales": 6360,
+    "tickets": 72
+   },
+   "coyoacan": {
+    "sales": 4700,
+    "tickets": 50
+   },
+   "roma": {
+    "sales": 4680,
+    "tickets": 44
+   }
+  },
+  {
+   "date": "2026-09-19",
+   "centro": {
+    "sales": 8540,
+    "tickets": 83
+   },
+   "coyoacan": {
+    "sales": 5820,
+    "tickets": 62
+   },
+   "roma": {
+    "sales": 5090,
+    "tickets": 54
+   }
+  },
+  {
+   "date": "2026-09-20",
+   "centro": {
+    "sales": 7910,
+    "tickets": 75
+   },
+   "coyoacan": {
+    "sales": 5860,
+    "tickets": 55
+   },
+   "roma": {
+    "sales": 4560,
+    "tickets": 51
+   }
+  },
+  {
+   "date": "2026-09-21",
+   "centro": {
+    "sales": 4940,
+    "tickets": 48
+   },
+   "coyoacan": {
+    "sales": 4610,
+    "tickets": 48
+   },
+   "roma": {
+    "sales": 4100,
+    "tickets": 40
+   }
+  },
+  {
+   "date": "2026-09-22",
+   "centro": {
+    "sales": 5400,
+    "tickets": 57
+   },
+   "coyoacan": {
+    "sales": 3700,
+    "tickets": 34
+   },
+   "roma": {
+    "sales": 3260,
+    "tickets": 30
+   }
+  },
+  {
+   "date": "2026-09-23",
+   "centro": {
+    "sales": 5720,
+    "tickets": 61
+   },
+   "coyoacan": {
+    "sales": 4290,
+    "tickets": 47
+   },
+   "roma": {
+    "sales": 4110,
+    "tickets": 41
+   }
+  },
+  {
+   "date": "2026-09-24",
+   "centro": {
+    "sales": 5780,
+    "tickets": 56
+   },
+   "coyoacan": {
+    "sales": 4430,
+    "tickets": 46
+   },
+   "roma": {
+    "sales": 3600,
+    "tickets": 35
+   }
+  },
+  {
+   "date": "2026-09-25",
+   "centro": {
+    "sales": 6740,
+    "tickets": 68
+   },
+   "coyoacan": {
+    "sales": 5430,
+    "tickets": 51
+   },
+   "roma": {
+    "sales": 4160,
+    "tickets": 47
+   }
+  },
+  {
+   "date": "2026-09-26",
+   "centro": {
+    "sales": 6810,
+    "tickets": 76
+   },
+   "coyoacan": {
+    "sales": 7080,
+    "tickets": 66
+   },
+   "roma": {
+    "sales": 4710,
+    "tickets": 52
+   }
+  },
+  {
+   "date": "2026-09-27",
+   "centro": {
+    "sales": 7510,
+    "tickets": 75
+   },
+   "coyoacan": {
+    "sales": 5840,
+    "tickets": 55
+   },
+   "roma": {
+    "sales": 5840,
+    "tickets": 66
+   }
+  },
+  {
+   "date": "2026-09-28",
+   "centro": {
+    "sales": 5930,
+    "tickets": 59
+   },
+   "coyoacan": {
+    "sales": 4800,
+    "tickets": 52
+   },
+   "roma": {
+    "sales": 3710,
+    "tickets": 37
+   }
+  },
+  {
+   "date": "2026-09-29",
+   "centro": {
+    "sales": 4450,
+    "tickets": 42
+   },
+   "coyoacan": {
+    "sales": 4770,
+    "tickets": 44
+   },
+   "roma": {
+    "sales": 3920,
+    "tickets": 44
+   }
+  },
+  {
+   "date": "2026-09-30",
+   "centro": {
+    "sales": 5910,
+    "tickets": 55
+   },
+   "coyoacan": {
+    "sales": 4270,
+    "tickets": 44
+   },
+   "roma": {
+    "sales": 3060,
+    "tickets": 33
+   }
+  },
+  {
+   "date": "2026-10-01",
+   "centro": {
+    "sales": 5710,
+    "tickets": 54
+   },
+   "coyoacan": {
+    "sales": 4370,
+    "tickets": 48
+   },
+   "roma": {
+    "sales": 3170,
+    "tickets": 32
+   }
+  },
+  {
+   "date": "2026-10-02",
+   "centro": {
+    "sales": 7160,
+    "tickets": 68
+   },
+   "coyoacan": {
+    "sales": 4730,
+    "tickets": 50
+   },
+   "roma": {
+    "sales": 4590,
+    "tickets": 44
+   }
+  },
+  {
+   "date": "2026-10-03",
+   "centro": {
+    "sales": 6850,
+    "tickets": 68
+   },
+   "coyoacan": {
+    "sales": 7050,
+    "tickets": 79
+   },
+   "roma": {
+    "sales": 5300,
+    "tickets": 58
+   }
+  },
+  {
+   "date": "2026-10-04",
+   "centro": {
+    "sales": 7830,
+    "tickets": 78
+   },
+   "coyoacan": {
+    "sales": 5680,
+    "tickets": 61
+   },
+   "roma": {
+    "sales": 4940,
+    "tickets": 54
+   }
+  },
+  {
+   "date": "2026-10-05",
+   "centro": {
+    "sales": 5830,
+    "tickets": 61
+   },
+   "coyoacan": {
+    "sales": 3730,
+    "tickets": 39
+   },
+   "roma": {
+    "sales": 3450,
+    "tickets": 32
+   }
+  },
+  {
+   "date": "2026-10-06",
+   "centro": {
+    "sales": 5730,
+    "tickets": 57
+   },
+   "coyoacan": {
+    "sales": 4620,
+    "tickets": 48
+   },
+   "roma": {
+    "sales": 3330,
+    "tickets": 34
+   }
+  },
+  {
+   "date": "2026-10-07",
+   "centro": {
+    "sales": 4780,
+    "tickets": 54
+   },
+   "coyoacan": {
+    "sales": 3790,
+    "tickets": 35
+   },
+   "roma": {
+    "sales": 3210,
+    "tickets": 31
+   }
+  },
+  {
+   "date": "2026-10-08",
+   "centro": {
+    "sales": 5960,
+    "tickets": 66
+   },
+   "coyoacan": {
+    "sales": 3870,
+    "tickets": 42
+   },
+   "roma": {
+    "sales": 3400,
+    "tickets": 32
+   }
+  },
+  {
+   "date": "2026-10-09",
+   "centro": {
+    "sales": 5470,
+    "tickets": 58
+   },
+   "coyoacan": {
+    "sales": 4450,
+    "tickets": 45
+   },
+   "roma": {
+    "sales": 4420,
+    "tickets": 41
+   }
+  },
+  {
+   "date": "2026-10-10",
+   "centro": {
+    "sales": 7230,
+    "tickets": 74
+   },
+   "coyoacan": {
+    "sales": 6390,
+    "tickets": 63
+   },
+   "roma": {
+    "sales": 5810,
+    "tickets": 59
+   }
+  },
+  {
+   "date": "2026-10-11",
+   "centro": {
+    "sales": 7330,
+    "tickets": 72
+   },
+   "coyoacan": {
+    "sales": 6700,
+    "tickets": 74
+   },
+   "roma": {
+    "sales": 4960,
+    "tickets": 51
+   }
+  },
+  {
+   "date": "2026-10-12",
+   "centro": {
+    "sales": 5080,
+    "tickets": 56
+   },
+   "coyoacan": {
+    "sales": 3870,
+    "tickets": 41
+   },
+   "roma": {
+    "sales": 3140,
+    "tickets": 32
+   }
+  },
+  {
+   "date": "2026-10-13",
+   "centro": {
+    "sales": 5140,
+    "tickets": 56
+   },
+   "coyoacan": {
+    "sales": 3940,
+    "tickets": 42
+   },
+   "roma": {
+    "sales": 3790,
+    "tickets": 37
+   }
+  },
+  {
+   "date": "2026-10-14",
+   "centro": {
+    "sales": 4910,
+    "tickets": 54
+   },
+   "coyoacan": {
+    "sales": 3940,
+    "tickets": 37
+   },
+   "roma": {
+    "sales": 4070,
+    "tickets": 38
+   }
+  }
+ ]
+}

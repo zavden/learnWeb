@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="160" viewBox="0 0 480 160">
+  <!-- Archivo de ejemplo para image-set(): el «1x». Un rótulo grande dice cuál eligió el navegador. -->
+  <rect width="480" height="160" fill="#fef3c7"/>
+  <text x="240" y="78" font-family="system-ui, sans-serif" font-size="44" font-weight="700" fill="#92400e" text-anchor="middle">Archivo 1x</text>
+  <text x="240" y="120" font-family="system-ui, sans-serif" font-size="22" fill="#92400e" text-anchor="middle">480 × 160 · para pantallas de densidad 1</text>
+</svg>

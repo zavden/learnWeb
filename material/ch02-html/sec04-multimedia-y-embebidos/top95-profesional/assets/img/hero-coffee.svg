@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400">
+  <rect width="800" height="400" fill="#fef3c7"/>
+  <circle cx="620" cy="90" r="160" fill="#fde68a"/>
+  <!-- saco de café -->
+  <path d="M120 360 C100 250 130 170 200 150 L330 150 C400 170 430 250 410 360 Z" fill="#92400e"/>
+  <path d="M190 150 C200 120 330 120 340 150" fill="none" stroke="#78350f" stroke-width="10"/>
+  <!-- granos -->
+  <g fill="#451a03">
+    <ellipse cx="500" cy="330" rx="26" ry="18" transform="rotate(-25 500 330)"/>
+    <ellipse cx="560" cy="350" rx="26" ry="18" transform="rotate(15 560 350)"/>
+    <ellipse cx="620" cy="320" rx="26" ry="18" transform="rotate(-10 620 320)"/>
+    <ellipse cx="680" cy="352" rx="26" ry="18" transform="rotate(30 680 352)"/>
+  </g>
+  <g stroke="#a16207" stroke-width="4" fill="none">
+    <path d="M488 318 C500 328 506 338 512 342"/>
+    <path d="M548 344 C560 348 566 356 572 358"/>
+    <path d="M608 312 C620 318 628 326 632 330"/>
+    <path d="M668 346 C680 350 686 358 692 360"/>
+  </g>
+</svg>

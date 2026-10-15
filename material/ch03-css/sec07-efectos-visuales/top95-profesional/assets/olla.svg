@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="220" viewBox="0 0 240 220">
+  <!-- Olla de barro con el fondo transparente -->
+  <path d="M58 70 Q40 72 34 88 Q30 100 44 104" fill="none" stroke="#7c2d12" stroke-width="10" stroke-linecap="round"/>
+  <path d="M182 70 Q200 72 206 88 Q210 100 196 104" fill="none" stroke="#7c2d12" stroke-width="10" stroke-linecap="round"/>
+  <path d="M60 60 H180 Q214 120 186 186 Q168 212 120 212 Q72 212 54 186 Q26 120 60 60 Z" fill="#c2410c"/>
+  <path d="M68 96 Q120 112 172 96" fill="none" stroke="#fdba74" stroke-width="5" stroke-linecap="round"/>
+  <path d="M64 128 Q120 146 176 128" fill="none" stroke="#fdba74" stroke-width="5" stroke-linecap="round"/>
+  <g fill="#fdba74">
+    <circle cx="90" cy="112" r="4"/><circle cx="120" cy="116" r="4"/><circle cx="150" cy="112" r="4"/>
+  </g>
+  <rect x="52" y="46" width="136" height="18" rx="9" fill="#9a3412"/>
+  <ellipse cx="96" cy="150" rx="10" ry="22" fill="#ea580c" opacity="0.5"/>
+</svg>

@@ -1,0 +1,17 @@
+/* Hoja de estilos compartida por los ejemplos de integración (el CSS se estudia en el capítulo 3) */
+body {
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+.site-header {
+  padding-bottom: 8px;
+  border-bottom: 4px solid #1d4ed8;
+}
+
+.pattern {
+  padding: 16px;
+  border: 1px solid #555;
+  /* Ruta relativa al propio CSS (…/css/styles.css): sube una carpeta para llegar a img/ */
+  background-image: url(../img/pattern.svg);
+}

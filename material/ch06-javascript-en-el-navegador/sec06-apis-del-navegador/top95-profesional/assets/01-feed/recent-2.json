@@ -1,0 +1,87 @@
+{
+  "page": 2,
+  "total": 25,
+  "next": "recent-3.json",
+  "items": [
+    {
+      "id": "R-111",
+      "author": "Karla D.",
+      "coffee": "Chiapas",
+      "rating": 3,
+      "text": "Notas de chocolate y una acidez muy suave.",
+      "date": "2026-10-09T21:00:00.000Z"
+    },
+    {
+      "id": "R-112",
+      "author": "Luis A.",
+      "coffee": "Guerrero",
+      "rating": 5,
+      "text": "El molido medio funciona bien en la cafetera italiana.",
+      "date": "2026-10-09T12:00:00.000Z"
+    },
+    {
+      "id": "R-113",
+      "author": "Mariana F.",
+      "coffee": "Veracruz",
+      "rating": 4,
+      "text": "Lo preparo en olla con canela: delicioso.",
+      "date": "2026-10-09T03:00:00.000Z"
+    },
+    {
+      "id": "R-114",
+      "author": "Lucía M.",
+      "coffee": "Puebla",
+      "rating": 4,
+      "text": "Perfecto para la cafetera de émbolo.",
+      "date": "2026-10-08T18:00:00.000Z"
+    },
+    {
+      "id": "R-115",
+      "author": "Andrés P.",
+      "coffee": "Oaxaca",
+      "rating": 5,
+      "text": "Afrutado, recuerda a la mora.",
+      "date": "2026-10-08T09:00:00.000Z"
+    },
+    {
+      "id": "R-116",
+      "author": "Begoña R.",
+      "coffee": "Chiapas",
+      "rating": 3,
+      "text": "Dulce, con un final a caramelo.",
+      "date": "2026-10-08T00:00:00.000Z"
+    },
+    {
+      "id": "R-117",
+      "author": "Diego S.",
+      "coffee": "Guerrero",
+      "rating": 5,
+      "text": "Llegó en dos días y recién tostado.",
+      "date": "2026-10-07T15:00:00.000Z"
+    },
+    {
+      "id": "R-118",
+      "author": "Elena V.",
+      "coffee": "Veracruz",
+      "rating": 4,
+      "text": "Un poco amargo en filtro; mejor en espresso.",
+      "date": "2026-10-07T06:00:00.000Z"
+    },
+    {
+      "id": "R-119",
+      "author": "Fernando G.",
+      "coffee": "Puebla",
+      "rating": 5,
+      "text": "Buen café para el espresso de la mañana.",
+      "date": "2026-10-06T21:00:00.000Z"
+    },
+    {
+      "id": "R-120",
+      "author": "Gabriela N.",
+      "coffee": "Oaxaca",
+      "rating": 4,
+      "text": "Demasiado oscuro para mi gusto, pero aromático.",
+      "date": "2026-10-06T12:00:00.000Z"
+    }
+  ]
+}

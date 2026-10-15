@@ -1,0 +1,7 @@
+[
+  { "sku": "CAF-500", "name": "Café de Chiapas · 500 g", "price": 210 },
+  { "sku": "CAF-250", "name": "Café de Veracruz · 250 g", "price": 135 },
+  { "sku": "CAC-250", "name": "Cacao de Tabasco · 250 g", "price": 145 },
+  { "sku": "CAJ-370", "name": "Cajeta de Celaya · 370 g", "price": 98 },
+  { "sku": "VAI-030", "name": "Vainilla de Papantla · 3 vainas", "price": 160 }
+]

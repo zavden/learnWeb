@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="140" viewBox="0 0 120 140">
+  <!-- Fondo transparente: solo hay píxeles donde está el dibujo -->
+  <g fill="#16a34a">
+    <ellipse cx="33" cy="44" rx="14" ry="22" transform="rotate(-28 33 44)"/>
+    <ellipse cx="87" cy="40" rx="14" ry="22" transform="rotate(28 87 40)"/>
+    <ellipse cx="60" cy="20" rx="10" ry="15"/>
+  </g>
+  <ellipse cx="60" cy="64" rx="23" ry="34" fill="#15803d"/>
+  <g fill="#f472b6">
+    <circle cx="60" cy="5" r="5"/>
+    <circle cx="22" cy="22" r="4.5"/>
+    <circle cx="99" cy="18" r="4.5"/>
+  </g>
+  <g fill="#dcfce7">
+    <circle cx="52" cy="50" r="1.6"/><circle cx="68" cy="56" r="1.6"/><circle cx="55" cy="72" r="1.6"/>
+    <circle cx="66" cy="84" r="1.6"/><circle cx="31" cy="42" r="1.4"/><circle cx="88" cy="38" r="1.4"/>
+    <circle cx="60" cy="22" r="1.4"/>
+  </g>
+  <rect x="26" y="94" width="68" height="10" rx="3" fill="#9a3412"/>
+  <path d="M31 104 H89 L83 136 H37 Z" fill="#c2410c"/>
+</svg>

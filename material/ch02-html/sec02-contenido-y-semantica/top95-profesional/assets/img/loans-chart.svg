@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="300" viewBox="0 0 720 300" font-family="system-ui, sans-serif">
+  <rect width="720" height="300" fill="#ffffff"/>
+  <text x="20" y="32" font-size="18" font-weight="700" fill="#1f2937">Préstamos en 2025 por biblioteca</text>
+  <g font-size="15" fill="#1f2937">
+    <text x="20" y="84">Central</text>
+    <text x="20" y="144">Barrio del Molino</text>
+    <text x="20" y="204">La Vega</text>
+    <text x="20" y="264">Bibliobús</text>
+  </g>
+  <g fill="#1d4ed8">
+    <rect x="160" y="62" width="480" height="32"/>
+    <rect x="160" y="122" width="215" height="32"/>
+    <rect x="160" y="182" width="145" height="32"/>
+    <rect x="160" y="242" width="63" height="32"/>
+  </g>
+  <g font-size="15" fill="#1f2937">
+    <text x="648" y="84">15 860</text>
+    <text x="383" y="144">7110</text>
+    <text x="313" y="204">4780</text>
+    <text x="231" y="264">2070</text>
+  </g>
+</svg>

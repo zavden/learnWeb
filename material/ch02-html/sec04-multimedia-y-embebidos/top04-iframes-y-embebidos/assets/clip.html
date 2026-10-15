@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Clip embebido con sonido</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
+  video { display: block; width: 100%; height: auto; }
+  p { margin: 0; padding: .4rem .6rem; font-size: .85rem; }
+</style>
+</head>
+<body>
+  <!-- Página autónoma (assets/) con un vídeo CON SONIDO que intenta empezar solo: autoplay sin
+       muted. Se embebe dos veces en 07-allow-autoplay.md, con allow="autoplay" y sin él.
+       El clip es instrumental (una melodía de 12 s, sin voces); controls permite pararlo. -->
+  <video autoplay controls playsinline width="320" height="180">
+    <source src="life.webm" type="video/webm">
+    <source src="life.mp4" type="video/mp4">
+  </video>
+  <p><output id="status">…</output></p>
+  <script>
+    // Adelanto: JavaScript se explica en su capítulo. A los 1,5 s informa de si el vídeo arrancó.
+    var clip = document.querySelector('video');
+    var statusEl = document.getElementById('status');
+    setTimeout(function () {
+      statusEl.textContent = clip.paused
+        ? '⏸ bloqueado: sin permiso para sonar solo'
+        : '▶ reproduciéndose con sonido';
+    }, 1500);
+  </script>
+</body>
+</html>
