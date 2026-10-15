@@ -19,7 +19,8 @@ export function parseVerifyParams(search = '') {
         const value = Number.parseInt(params.get(name) || '', 10);
         return Number.isFinite(value) ? Math.min(Math.max(value, 200), 2400) : fallback;
     };
-    return { path, ms, only, logs: isOn('logs'), show: isOn('show'), width: size('w', 480), height: size('h', 270) };
+    // card=1 runs each example like a gallery/theory card: a srcdoc copy with sandbox="allow-scripts" only.
+    return { path, ms, only, logs: isOn('logs'), show: isOn('show'), card: isOn('card'), width: size('w', 480), height: size('h', 270) };
 }
 
 // Topic paths ("ch/sec/top") under a chapter, section or topic path, in tree order.

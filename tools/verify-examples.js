@@ -1,5 +1,6 @@
 // Runtime verification harness for course examples (dev tool, not linked from the app).
 // Usage: http://localhost:5174/tools/verify-examples.html?path=ch02-html/sec01-...&ms=1500&only=03-
+// (&logs=1 console lines, &show=1&w=&h= keep the last frame on screen, &card=1 run like a gallery card)
 //
 // Runs every example of a chapter/section/topic through the real preview pipeline, one at a time in a
 // single iframe, and collects compile diagnostics plus runtime problems reported by the preview bridge.
@@ -24,6 +25,8 @@ import {
 
 const FRAME_ALLOW = 'fullscreen *; clipboard-read *; clipboard-write *; autoplay *; geolocation *; camera *; microphone *; display-capture *; screen-wake-lock *; web-share *; gamepad *; picture-in-picture *';
 const READY_GRACE_MS = 3000;
+// Gallery and inline theory cards: srcdoc copies without allow-forms/popups/downloads (origin "null").
+const CARD_SANDBOX = 'allow-scripts';
 
 const elements = {
     status: document.getElementById('verify-status'),
@@ -150,6 +153,15 @@ async function verifyCompiled(documentModel, topicPath, state) {
         suppressDialogs: true,
     };
 
+    if (state.card) {
+        state.iframe.removeAttribute('allow');
+        state.iframe.removeAttribute('allowfullscreen');
+        state.iframe.setAttribute('sandbox', CARD_SANDBOX);
+        state.iframe.srcdoc = renderCompiledExampleDocument(result.compiledDocument, topicPath, diagnostics, renderOptions);
+        state.mode = 'card';
+        return problemsFromCompileDiagnostics(diagnostics);
+    }
+
     const hostedHtml = renderCompiledExampleDocument(result.compiledDocument, topicPath, diagnostics, { ...renderOptions, hosted: true });
     const hostedUrl = await publishPreviewDocument({ html: hostedHtml, renderId: state.renderId, topicPath });
 
@@ -167,12 +179,13 @@ async function verifyCompiled(documentModel, topicPath, state) {
     return problemsFromCompileDiagnostics(diagnostics);
 }
 
-async function verifyExample(topicPath, file, ms, { logs = false, show = false } = {}) {
+async function verifyExample(topicPath, file, ms, { logs = false, show = false, card = false } = {}) {
     const startedAt = performance.now();
     teardownFrame();
     renderSequence += 1;
     const state = {
         iframe: createFrame(),
+        card,
         messages: [],
         mode: '',
         ready: false,
@@ -223,7 +236,7 @@ async function verifyExample(topicPath, file, ms, { logs = false, show = false }
 }
 
 async function run() {
-    const { path, ms, only, logs, show, width, height } = parseVerifyParams(window.location.search);
+    const { path, ms, only, logs, show, card, width, height } = parseVerifyParams(window.location.search);
     if (show) {
         elements.frameHost.style.width = `${width}px`;
         elements.frameHost.style.height = `${height}px`;
@@ -259,7 +272,7 @@ async function run() {
         if (stopRequested) break;
         const { topicPath, file } = queue[index];
         setStatus(`Running ${index + 1}/${queue.length}: ${topicPath}/${file}`);
-        const result = await verifyExample(topicPath, file, ms, { logs, show });
+        const result = await verifyExample(topicPath, file, ms, { logs, show, card });
         window.__verifyResults.push(result);
         appendRow(result);
         renderSummary();
