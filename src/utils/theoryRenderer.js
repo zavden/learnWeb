@@ -720,10 +720,11 @@ export function renderTheoryExportDocument(content = '', options = {}) {
         const iframe = document.createElement('iframe');
         iframe.sandbox = 'allow-scripts';
         iframe.loading = 'lazy';
-        iframe.srcdoc = previewSrcdoc;
         slot.classList.remove('is-empty');
         slot.innerHTML = '';
         slot.appendChild(iframe);
+        // Load the copy once the frame has a size (a card that boots first can see a 0×0 viewport).
+        requestAnimationFrame(() => requestAnimationFrame(() => { iframe.srcdoc = previewSrcdoc; }));
       });
 
       document.addEventListener('click', (event) => {
@@ -1226,10 +1227,11 @@ export function renderTheoryPreviewDocument(content = '', options = {}) {
         const iframe = document.createElement('iframe');
         iframe.sandbox = 'allow-scripts';
         iframe.loading = 'lazy';
-        iframe.srcdoc = previewSrcdoc;
         slot.classList.remove('is-empty');
         slot.innerHTML = '';
         slot.appendChild(iframe);
+        // Load the copy once the frame has a size (a card that boots first can see a 0×0 viewport).
+        requestAnimationFrame(() => requestAnimationFrame(() => { iframe.srcdoc = previewSrcdoc; }));
       });
 
       document.addEventListener('click', (event) => {

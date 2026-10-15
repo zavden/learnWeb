@@ -6,6 +6,7 @@ import {
     hasExampleEditorialMetadata,
 } from '../utils/exampleEditorial.js';
 import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../utils/exampleRenderer.js';
+import { loadSrcdocWhenLaidOut } from '../utils/renderer/previewHost.js';
 import { highlightCode } from '../utils/theoryRenderer.js';
 import { createRequestGate } from './editor/dirtyTracker.js';
 import { showToast } from './editor/toast.js';
@@ -491,9 +492,9 @@ export class Gallery {
         const iframe = document.createElement('iframe');
         iframe.sandbox = 'allow-scripts';
         iframe.setAttribute('tabindex', '-1');
-        iframe.srcdoc = record.srcdoc;
         preview.insertBefore(iframe, preview.firstChild);
         record.iframe = iframe;
+        loadSrcdocWhenLaidOut(iframe, record.srcdoc, () => record.iframe === iframe);
     }
 
     _unmountPreview(record) {

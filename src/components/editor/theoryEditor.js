@@ -3,6 +3,7 @@ import { getTheoryDocumentContent, isTheoryDocument } from '../../utils/theoryDo
 import { modifyTopicMain, fetchExamples, fetchExample } from '../../utils/api.js';
 import { compileExample } from '../../utils/compileClient.js';
 import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../../utils/exampleRenderer.js';
+import { loadSrcdocWhenLaidOut } from '../../utils/renderer/previewHost.js';
 
 export const theoryEditorMixin = {
     getDocumentTarget() {
@@ -199,8 +200,9 @@ export const theoryEditorMixin = {
             const iframe = document.createElement('iframe');
             iframe.sandbox = 'allow-scripts';
 
+            let srcdoc;
             if (isShaderDocument(documentModel)) {
-                iframe.srcdoc = renderShaderExampleDocument(documentModel, {
+                srcdoc = renderShaderExampleDocument(documentModel, {
                     diagnostics: documentModel.diagnostics || [],
                     renderId: 0,
                     shaderControls: { paused: true, stillFrame: true },
@@ -209,7 +211,7 @@ export const theoryEditorMixin = {
             } else {
                 const result = await compileExample({ document: documentModel });
                 if (requestId !== this._exerciseEmbedRequestId) return;
-                iframe.srcdoc = renderCompiledExampleDocument(
+                srcdoc = renderCompiledExampleDocument(
                     result.compiledDocument,
                     this.currentTopicPath,
                     result.compileDiagnostics || [],
@@ -219,6 +221,7 @@ export const theoryEditorMixin = {
             if (requestId !== this._exerciseEmbedRequestId || !previewElement.isConnected) return;
             previewElement.innerHTML = '';
             previewElement.appendChild(iframe);
+            loadSrcdocWhenLaidOut(iframe, srcdoc);
         } catch (error) {
             console.error(`Failed to load preview for ${filename}`, error);
             previewElement.innerHTML = '<span class="exercise-embed-card-loading">Preview unavailable</span>';

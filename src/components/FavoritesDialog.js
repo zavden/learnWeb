@@ -1,6 +1,7 @@
 import { fetchExample } from '../utils/api.js';
 import { compileExample } from '../utils/compileClient.js';
 import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../utils/exampleRenderer.js';
+import { loadSrcdocWhenLaidOut } from '../utils/renderer/previewHost.js';
 import { getExampleStage, isShaderDocument, parseExampleDocument } from '../utils/markdown.js';
 
 const EXAMPLE_STAGE_META = {
@@ -88,8 +89,9 @@ export class FavoritesDialog {
                     iframe.sandbox = 'allow-scripts';
                     iframe.loading = 'lazy';
 
+                    let srcdoc;
                     if (isShaderDocument(documentModel)) {
-                        iframe.srcdoc = renderShaderExampleDocument(documentModel, {
+                        srcdoc = renderShaderExampleDocument(documentModel, {
                             diagnostics: documentModel.diagnostics || [],
                             renderId: 0,
                             shaderControls: {
@@ -100,7 +102,7 @@ export class FavoritesDialog {
                         });
                     } else {
                         const result = await compileExample({ document: documentModel });
-                        iframe.srcdoc = renderCompiledExampleDocument(
+                        srcdoc = renderCompiledExampleDocument(
                             result.compiledDocument,
                             entry.topicPath,
                             result.compileDiagnostics || []
@@ -108,6 +110,7 @@ export class FavoritesDialog {
                     }
 
                     preview.appendChild(iframe);
+                    loadSrcdocWhenLaidOut(iframe, srcdoc);
                 }
             } catch (error) {
                 console.error(`Failed to load favorite preview for ${entry.path}`, error);

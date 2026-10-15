@@ -15,6 +15,15 @@ export const HOSTED_PREVIEW_SANDBOX = 'allow-scripts allow-same-origin allow-for
 // granted to them.
 export const SRCDOC_PREVIEW_SANDBOX = 'allow-scripts allow-forms allow-modals allow-popups allow-downloads allow-pointer-lock';
 
+// Sandboxed srcdoc cards run in their own renderer process. A copy that starts loading before its frame has a
+// size in this page can run its scripts with a 0×0 viewport (measured in Chrome 155: `canvas.clientWidth` was 0,
+// so a WebGL card drew into a 1×1 buffer). Attach the frame first and load the copy two frames later.
+export function loadSrcdocWhenLaidOut(iframe, html, shouldLoad = () => true) {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (iframe.isConnected && shouldLoad()) iframe.srcdoc = html;
+    }));
+}
+
 export function isHostedPreviewAvailable() {
     return Date.now() >= unavailableUntil;
 }
