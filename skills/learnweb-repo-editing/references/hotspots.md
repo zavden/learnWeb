@@ -60,7 +60,7 @@ All editor/* modules are mixins applied via `Object.assign(Editor.prototype, ...
 - `src/utils/exampleRenderer.js` — facade re-exporting from renderer/
 - `src/utils/renderer/documentRenderer.js` — preview document generation (no injected styles, escaped inline code, script kind)
 - `src/utils/renderer/previewHost.js` — hosted preview: documents are POSTed to `/api/preview-documents` and loaded from `http://<host>:3001/preview/...` (real origin: storage, forms, anchors, workers); falls back to srcdoc
-- `src/utils/renderer/runtimeBridgeRuntime.js` — the in-page runtime (console inspector with expandable `[[Prototype]]` trees, error mapping, form-submit logging, storage shims for srcdoc); errors are titled by their name like Chrome 155 (DOM errors too, never `DOMException:`) and the ResizeObserver loop error is not reported
+- `src/utils/renderer/runtimeBridgeRuntime.js` — the in-page runtime (console inspector with expandable `[[Prototype]]` trees, error mapping, form-submit logging, storage shims for srcdoc, a `Worker` wrapper for srcdoc that starts module workers from a `data:` URL and classic http workers through `importScripts`); errors are titled by their name like Chrome 155 (DOM errors too, never `DOMException:`) and the ResizeObserver loop error is not reported
 - `src/utils/renderer/runtimeBridge.js` — builds the bridge script injected in `<head>` on a single line
 - `src/utils/renderer/scriptKind.js` — classic vs module script detection
 - `src/utils/renderer/sourceMap.js` — inline source-map decoding for TypeScript line mapping
@@ -112,7 +112,7 @@ If a request changes example format or metadata behavior, start here.
 
 ### Gallery
 
-- `src/components/Gallery.js` (console-only examples show a code preview instead of an iframe)
+- `src/components/Gallery.js` (console-only examples show a code preview instead of an iframe; cards mount when visible and unmount when they scroll away). Every sandboxed card (gallery, favorites, pending, theory) attaches its iframe first and sets `srcdoc` two animation frames later (`loadSrcdocWhenLaidOut` in `previewHost.js`; inline in `theoryRenderer.js`): a card that boots before it has a size can run its scripts with a 0×0 viewport (out-of-process frame), which once left a WebGL card drawing into a 1×1 buffer
 - `src/components/AssetsDialog.js` — read-only browser for a topic's `assets/` files («Assets» button in the gallery header)
 
 Use for: example cards, hover overlays, stage badges, info visibility toggles, pending badge rendering, pending entries on startup.
@@ -189,10 +189,10 @@ Pending mirrors the Favorites architecture exactly: file-based JSON storage, ser
 - `tests/server-demo-api.test.mjs` — the course demo API
 - `tests/ui-*.test.mjs` — dirty tracking and Vim shortcut config
 
-Total: 255 tests. Run with `npm test`.
+Total: 256 tests. Run with `npm test`.
 
 ## 14. Course Content Checker
-- `tools/verify-examples.html` (+ `verify-examples.js`, `verify-core.js`) — browser harness: `http://localhost:5174/tools/verify-examples.html?path=<ch>/<sec>[&ms=1500][&only=03-]` runs examples through the real hosted preview one at a time and collects runtime problems (`window.__verifyResults`).
+- `tools/verify-examples.html` (+ `verify-examples.js`, `verify-core.js`) — browser harness: `http://localhost:5174/tools/verify-examples.html?path=<ch>/<sec>[&ms=1500][&only=03-]` runs examples through the real hosted preview one at a time and collects runtime problems (`window.__verifyResults`); `&logs=1` keeps console lines, `&show=1&w=&h=` keeps the last frame visible, `&card=1` runs them as gallery cards do (srcdoc, `sandbox="allow-scripts"`).
 
 - `scripts/check-material.mjs` — validates structure, labels, embeds, frontmatter, exercises and compiles every example of the course chapters (ch02+). Usage: `node scripts/check-material.mjs material/<chapter>/<section>`.
 

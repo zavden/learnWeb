@@ -210,6 +210,27 @@ console: true                     # whenever the example prints to the console
   up, or come with a reset button when they persist on purpose. Take error texts from Chrome, not Node:
   `response.json()` on an empty body says `Unexpected end of input`; an overwritten cookie moves to the end of
   `document.cookie`.
+- Workers: worker code (asset files, Blob strings) has no loop guard and its `console` never reaches LearnWeb's
+  console — post results to the page and log them there; `terminate()` every worker when its job ends. Don't build
+  Blob worker code from `${someFunction}` of the page: the page's compiled code carries LearnWeb's loop-guard calls,
+  which don't exist inside the worker. In cards (origin `null`) LearnWeb starts `{ type: 'module' }` workers from a
+  `data:` URL (Chrome 155 refuses module workers from opaque-origin `blob:` URLs) and classic asset workers through
+  `importScripts` (a 404 there reports a `NetworkError`), so pages that must work in cards prefer module workers or
+  classic Blob workers. Replies from several workers arrive in any order: sort or `await` them in a fixed order.
+- Timings and performance: never print a measured time as exact output. Timed lines go under
+  `// Los tiempos cambian en cada ejecución; en el M1 del curso:` with `≈` and values measured in Chrome (Chrome ran
+  several loops 3–8× slower than Node on the M1); a boolean that compares timings needs a wide margin in Chrome
+  (≥ 5× seen there, not in Node). LearnWeb's loop guard makes hot loops 4–5× slower: timed examples whose loops all
+  end use `loop_protect: false`. Benchmarks run only from buttons, ≤ 300 ms of CPU per click in Chrome.
+  `performance.now()` steps are 0.1 ms in the preview; `long-animation-frame` entries arrive with an empty
+  `scripts` list there.
+- GPU: the checker skips `renderer: shader` documents (WebGL 1, GLSL ES 1.00), so every shader is checked by eye in
+  Chrome; accents and emojis in GLSL comments are fine. Cards show a still frame (`u_time` 0, mouse at 0,0), the
+  theory dialog keeps time paused (the mouse works) and the editor starts paused until ▶. A compile error reads
+  `Fragment shader compile error` + `ERROR: 0:6: 'u_time' : undeclared identifier` in cards and dialogs, and
+  `'u_time' : undeclared identifier` plus a diagnostic on line 6 in the editor. WebGL from JS: draw once and print
+  `readPixels` of solid areas (exact); set `crossOrigin = 'anonymous'` on every image (in cards `texImage2D` throws a
+  `SecurityError` for cross-origin images).
 
 ### Runtime capabilities
 
@@ -248,6 +269,8 @@ and **no** `exercise*` keys.
    rejections, `console.error`, failed asserts and loop-guard trips (problems in `common-error`/`exercise`
    examples are marked "expected?"). Results: `window.__verifyResults`; with `&logs=1` each result also
    has `logs` (the console lines), used to check exercise self-checks (❌ before, ✅ in the solution).
+   `&card=1` runs each example the way gallery and theory cards do (a `srcdoc` copy, `sandbox="allow-scripts"`,
+   origin `null`), so card-only differences (storage, history, workers, cross-origin images) show up too.
 
 Heat rule (fanless MacBook Air M1): no `npm run build`, no headless browsers, no extra servers, no long
 loops. The checker is fine (it compiles in a memory/time-limited worker).

@@ -1,10 +1,10 @@
 # Course progress and hand-off notes
 
-Last updated: 2026-10-14 (seventh session). HTML sec01-04, the whole CSS chapter (sec01-10), Sass sec01, the whole
-JavaScript chapter (ch05 sec01-08, plus the regular-expressions topic sec02/top08), the whole ch06 (sec01-06: DOM,
-events, forms, network and storage, graphics and animation, browser APIs), ch07 sec01-02 (TypeScript fundamentals and
-advanced types) and ch08 sec01 (binary data) are complete and browser-verified (2391 examples, 103 exercises,
-checker 0/0).
+Last updated: 2026-10-15 (eighth session, PAUSED mid-session — see «Eighth session» below). HTML sec01-04, the whole
+CSS chapter (sec01-10), Sass sec01, the whole JavaScript chapter (ch05 sec01-08, plus the regular-expressions topic
+sec02/top08), the whole ch06 (sec01-06), the whole ch07 TypeScript chapter (sec01-03) and ch08 sec01 (binary data) are
+complete and browser-verified (2452 examples, 106 exercises, checker 0/0). ch08 sec02-04 have approved lessons and
+partial top90/top95 (status rows below).
 
 Read this first when resuming the course work. The syllabus is in [plan.md](plan.md), the authoring
 rules in [../SKILL.md](../SKILL.md), runtime capabilities in [runtime.md](runtime.md).
@@ -47,7 +47,11 @@ Legend: ✅ complete and verified (checker 0/0 + browser harness) · 🟡 partia
 | ch07-typescript/sec01-fundamentos-de-typescript | ✅ 6/6 | ✅ 7 + 3 exercises | ✅ 11 | 79 examples; console and type errors = ```text blocks (new «// Errores de tipos» convention); clicked through (state machine, command palette); top03/03 and top06/10 updated for strict mode (seventh session) |
 | ch07-typescript/sec02-tipos-avanzados | ✅ 6/6 | ✅ 6 + 3 exercises | ✅ 11 | 77 examples; console and type errors = ```text blocks; Equal/Expect type tests introduced in top02/01; clicked through (booking form, demo-API purchase incl. timeout, undo/redo) |
 | ch08-rumbo-a-webassembly-y-webgpu/sec01-datos-binarios | ✅ 5/5 | ✅ 6 + 4 exercises | ✅ 12 | 74 examples; JavaScript only; generated BMP/PNG/WAV/CSV assets; console = ```text blocks incl. Chrome-only APIs (toBase64/fromHex, Float16Array, Blob.bytes, crypto.subtle); clicked through (save file with CRC, seat bitset in the URL, LEB128, colour bytes) |
-| ch07 sec03, ch08 sec02-06 | ⬜ | ⬜ | ⬜ | |
+| ch07-typescript/sec03-typescript-en-la-practica | ✅ 4/4 | ✅ 6 + 3 exercises | ✅ 12 | 61 examples; console + type errors = ```text blocks, hosted AND as cards (`&card=1`); clicked through (typed DOM pages, Result fetches, router, retries, live stream, drag/keyboard reorder, debounced signup) |
+| ch08-rumbo-a-webassembly-y-webgpu/sec02-workers-y-concurrencia | ✅ 3/3 (28 ex.) | 🟡 see below | 🟡 see below | lessons approved (hosted + cards); coordinator fixed top01/10 (`onProgress?.(++finished)` never incremented); measured M1 times sent to the agent |
+| ch08-rumbo-a-webassembly-y-webgpu/sec03-rendimiento | ✅ 3/3 (30 ex.) | 🟡 see below | 🟡 see below | lessons approved; the agent applied the requested fixes (not re-checked in Chrome); coordinator fixed top03/02 (double flush) |
+| ch08-rumbo-a-webassembly-y-webgpu/sec04-graficos-en-la-gpu | ✅ 4/4 (40 ex.) | 🟡 see below | 🟡 see below | lessons approved (20 WebGL pages match hosted + cards, 15 shaders checked by eye); the agent applied the requested text fixes (not re-checked in Chrome) |
+| ch08 sec05-06 | ⬜ | ⬜ | ⬜ | |
 
 Fourth session (2026-10-13/14): «los siguientes 2 módulos completos» = CSS sec06-tipografia-y-texto + JS
 sec06-iteracion-y-metaprogramacion — done (two agents; the HTML lane waited). User rule: if the Chrome extension is
@@ -60,7 +64,7 @@ Then «haz un módulo más, haz los commits y apaga el servidor» (2026-10-14): 
 whole module (lessons + top90 + top95) in one go; first course examples that import `.js` files from `assets/` —
 done, committed and pushed (84ea2f1); dev server stopped. Fourth session ended here (2026-10-14). Fonts for CSS sec06 (OFL, woff2) are in the gitignored
 `claude_resume/fonts/` (README lists axes). Previous goal «termina el módulo 4 y haz el 5» — done. Lanes: HTML lane = HTML → Sass → TS →
-WASM/GPU; CSS lane; JS lane = JS → JS in the browser. Max 3 Opus agents at a time (or one Fable alone); the user allowed 4 in the fifth, sixth and seventh sessions — ask before going above 3.
+WASM/GPU; CSS lane; JS lane = JS → JS in the browser. Max 3 Opus agents at a time (or one Fable alone); the user allowed 4 in the fifth to eighth sessions — ask before going above 3.
 
 Fifth session (2026-10-14): «continúa con 4 módulos más, puedes crear los 4 agentes» = CSS sec08-responsive,
 CSS sec09-animacion, ch06 sec01-el-dom and ch06 sec02-eventos, four Opus xhigh agents in parallel (the user allowed 4
@@ -84,19 +88,58 @@ compile with `alwaysStrict`; the console titles DOM errors by their name and no 
 error (see below). Prompts: `claude_resume/prompts/session7-common.txt` + one assignment file per module; facts
 measured in Chrome while the agents worked were sent to them by SendMessage (listed in the notes below).
 
+Eighth session (2026-10-14/15): «continúa con 4 módulos más, puedes crear los 4 agentes» = ch07 sec03-typescript-en-la-practica,
+ch08 sec02-workers-y-concurrencia, sec03-rendimiento and sec04-graficos-en-la-gpu, four Opus xhigh agents. ch07 sec03
+finished and verified. The other three: lessons reviewed in Chrome and approved, agents were writing top90/top95 when
+the user PAUSED the session (credits); each agent finished its current file and reported (see «Paused state» below).
+App changes (committed): module workers run in cards (data: bootstrap), verify harness `&card=1`, cards load their
+srcdoc after layout (0×0 viewport race). Prompts: `claude_resume/prompts/session8-common.txt` + one assignment file per
+module (`ts-sec03-…`, `js-ch08-sec02-…`, `js-ch08-sec03-…`, `js-ch08-sec04-…`).
+
+Paused state (2026-10-15) — RESUME HERE:
+- The agents' contexts are gone after the pause: spawn FRESH agents (one per module) with session8-common.txt + the
+  module's assignment file + a follow-up note: «lessons are approved; apply the pending lesson fixes listed in
+  progress.md, then write/complete top90/top95» (list the existing top90/top95 files so they continue, not restart).
+- sec02 workers: top90 DONE (main.md, 6 examples, 3 exercises + solutions; checker 0/0; exercises ❌→✅ in a node
+  fake-Worker harness, not yet in Chrome). top95: examples 01–11 written and compiling, `main.md` MISSING (one
+  paragraph per example + ```text blocks; until then the checker reports 1 error and «not embedded» warnings);
+  optional 12th example: spreadsheet recalculation in a worker. Unchecked in Chrome: estimated «≈» times in
+  top90/top95, «Cancelar» stopping workers in top90/01 and top95/03, rAF inside a worker (top95/04), shared
+  WebAssembly memory in cards (top95/07), `CompressionStream`/`Blob.bytes()` in workers (top95/11). The agent also
+  put the measured M1 times into top01/top02 and added to top02 that methods on a detached typed array throw
+  TypeError (checked in node only — verify in Chrome).
+- sec03 performance: all lesson fixes DONE (not re-checked in Chrome): top01/05 later clicks were slower because
+  the CPU slows down after idle (reproduced in node) → a 150 ms CPU wake-up with a checkbox to turn it off + prose +
+  a new benchmark rule; top01/06 100 000 addresses (total 1038009.1 km); top01/08 1 vs 8 shapes, interleaved rounds,
+  softer wording; top01/09 1000 items, the hand loop «no faster than includes»; top02/02 threshold ≥ 3×; top03/03
+  `causa` removed (invokerType in prose); top01/04 and top03/02 work reduced (100 prices, 240 cards); measured times
+  in all ```text blocks. top90 DONE (main.md, 6 examples, 3 exercises + solutions). top95: 01–06 done (bench runner,
+  performance HUD, 100k virtual table, lazy gallery, cached client, chunked CSV), main.md is a stub (2 warnings).
+  Missing top95 ideas: 07 lifecycle scopes with a leak audit, 08 fireworks with a ring-buffer pool, 09 once-per-frame
+  store fed by the demo-API stream, 10 resource budget checker, 11 Web Vitals report sent on hide, 12 text editor
+  with live stats in idle time; then the full main.md.
+- sec04 GPU: all lesson fixes DONE (two shader-error looks explained in top01/04, top02/05 and prose; top03/02
+  `#version` log on two lines + why; top02/04 identical stripes; measured times). top90 DONE (main.md, 7 examples,
+  4 self-checking exercises + solutions; not yet checked in Chrome). top95 STARTED: `assets/gl/kit.js`,
+  `assets/gl/mat4.js`, 01-cubo-en-3d and a placeholder main.md (2 warnings). Missing top95 ideas: 02 photo editor with
+  a filter chain + before/after slider, 03 10 000-point scatter with pan/zoom, 04 Game of Life with framebuffer
+  ping-pong + CPU check, 05 photo transitions, 06 normal-map lighting, 07 GPU eyedropper, 08 GLKit error demo,
+  09 `<shader-banner>` component with context loss, 10 deep-zoom image viewer, 11 procedural sky (`renderer: shader`);
+  then the real main.md.
+- Checker at the pause: ch08 gives 1 error (sec02 top95 has no main.md yet) and 15 warnings (not-embedded top95
+  examples, short stub main.md files) — all expected until top95 is finished; every other chapter is 0/0.
+- Then review each module in Chrome (hosted + `&card=1`, click-throughs, measured «≈» times), update this file, commit
+  docs, stop the server. Then ch08 sec05 (WebAssembly) and sec06 (WebGPU) — the last two modules.
+
 Next actions when resuming (pick with the user):
 1. `npm run dev`; read this file; check the Chrome extension (tabs_context_mcp) before any review; agents are fresh
    each module (prompts: "Prompt template" below; the seventh session's shared rules (`session7-common.txt`) + per-module assignment files in
    the gitignored `claude_resume/prompts/` are the best models). Review helpers: `claude_resume/verify/`
    (`expected_from_main.py` + `cmp-main.js`, copied to `tools/_cmp.mjs` while reviewing — delete both temp files
    before committing; Vite reloads the harness page if `tools/_cmp.mjs` changes mid-run).
-2. Remaining (2026-10-14): 7 of 38 modules — ch07 sec03-typescript-en-la-practica (classes with parameter
-   properties, `querySelector<T>`/`HTMLElementTagNameMap`, typed events, `Promise<T>` + fetch validation against
-   `/api/demo/*`, `.d.ts`/`declare global`; promised by sec02: typed fetch helpers, `HTMLElementEventMap`, form state
-   bound to inputs) and ch08 sec02-06 (workers and transferables — `transfer()` detaches, promised by sec01 —,
-   performance, GPU shaders/WebGL — `u_time`, `gl.bufferData`, power-of-two textures promised —, WebAssembly — LEB128,
-   `encodeInto` into memory, i64 as BigInt promised —, WebGPU — `GPUBufferUsage` flags, alignment, `writeBuffer`,
-   shader-f16 promised). About 2 rounds: ch07 sec03 + ch08 sec02 + sec03 (+ sec04) in parallel, then sec05-06.
+2. Remaining (2026-10-15): finish ch08 sec02-04 (top90/top95 + pending lesson fixes, see «Paused state»), then ch08
+   sec05-webassembly (LEB128, `encodeInto` into memory, i64 as BigInt, wasm threads need COOP/COEP — promised) and
+   sec06-webgpu (`GPUBufferUsage` flags, alignment, `writeBuffer`, shader-f16 — promised).
 3. ch08 examples are JavaScript (decided in sec01 top01); sec04 uses `renderer: shader` examples too (see the shader
    skill); WebGPU works in the preview (runtime.md).
 4. HTML chapter tidy-up candidate (found 2026-10-14 by comparing every ```text block with Chrome): ~45 examples of
@@ -128,7 +171,22 @@ Notes carried forward:
   `ResizeObserver` callback that fills an empty row changes the observed height (loop error) — give rows a
   `min-height`; a current-section IntersectionObserver band must not be taller than the sections (min-height +
   end padding make it window-independent).
-- Tools that worked: the verify harness with `show=1` for observers/rAF; `__verifyUrls` is an object keyed by
+- Checked in Chrome 155 during the eighth session: Worker texts (`DataCloneError: Failed to execute 'postMessage' on
+  'Worker': () => 1 could not be cloned.`, `…HTMLDivElement object could not be cloned.`, `…ArrayBuffer at index 0 is
+  already detached.`, `…SharedArrayBuffer transfer requires self.crossOriginIsolated.`), `Atomics.wait` on the main
+  thread → `TypeError: Atomics.wait cannot be called in this context`, a shared `WebAssembly.Memory` gives a real
+  SharedArrayBuffer without isolation; OffscreenCanvas `InvalidStateError` texts; worker `console` never reaches
+  LearnWeb's console; a 404 worker fires a plain `Event`; `AbortSignal.timeout` → `TimeoutError: signal timed out`,
+  `abort()` → `AbortError: signal is aborted without reason`, DOMException `instanceof Error` true; performance.now
+  0.1 ms steps, `longtask`/`long-animation-frame` entries (LoAF `scripts` empty in the preview), Chrome ran several
+  hot loops 3–8× slower than Node on the M1; ANGLE/Metal GLSL error texts (int→float, undeclared, dimension mismatch,
+  `#version` not first — the token is a literal newline, `gl_FragColor`/`texture2D` in 300 es, missing precision,
+  varying mismatch), all float precisions are 32-bit on the M1, unused uniform → `null` location silently ignored,
+  uniform without program → 1282; accents/emojis in GLSL comments are fine; `.ts` assets are served as `video/mp2t`.
+  App facts: in opaque-origin cards Chrome fails module workers from `blob:` URLs (fixed: data: bootstrap); cards that
+  started loading before layout ran with a 0×0 viewport (fixed: srcdoc after two rAFs). The Chrome tool cannot take
+  screenshots while a card frame's URL is `about:srcdoc#…` (navigate the tab away afterwards).
+- Tools that worked: the verify harness with `show=1` for observers/rAF and `card=1` for gallery-card behaviour; `__verifyUrls` is an object keyed by
   example path; `computer.left_click_drag` for real DnD; never click download buttons, clipboard writes,
   geolocation, share or fullscreen on the user's machine (they act on the real system).
 - Checked in Chrome 155 during the sixth session: gallery/theory cards (`sandbox="allow-scripts"`, no `allow-forms`)
@@ -221,7 +279,7 @@ examples; missing top90/top95 show as warnings).
 1. One agent per module, two tasks: (a) lessons top01…topNN; (b) when approved, resume the same agent for
    top90-integracion + top95-profesional (it knows the lessons). Spawn a FRESH agent for the next module
    (contexts reach ~500K tokens after both tasks).
-2. Up to 3 Opus agents in parallel (user rule; 4 when the user says so, as in the fifth, sixth and seventh sessions), one per lane: HTML→Sass→TS→WASM/GPU, CSS, JS→JS-browser.
+2. Up to 3 Opus agents in parallel (user rule; 4 when the user says so, as in the fifth to eighth sessions), one per lane: HTML→Sass→TS→WASM/GPU, CSS, JS→JS-browser.
    Never more than 3; a Fable agent only alone. Agents must not run heavy commands (no build, servers,
    headless browsers); they ask the coordinator.
 3. After each task: `node scripts/check-material.mjs <section>` (0 errors / 0 warnings) and the browser
@@ -249,9 +307,9 @@ folder, no app code, no browser, heat rule); final report format.
 - `npm run dev` (vite :5174 + API on 127.0.0.1:3001). The API must be restarted after server-side changes
   (server.js, compiler, materialTree…).
 - Hosted previews are served from `http://localhost:3001/preview/...` (same hostname as the app, port 3001).
-- Tests: `npm test` (255). Build: `npm run build`.
+- Tests: `npm test` (256). Build: `npm run build`.
 
-## App changes made during the course work (committed: 7c7485d, 6a129ae, 1f74d6f, afbb2fe, 0ef4f6d, 9859213, 6920719, fa301f1, df25af1, dacd319, d63c9c9, b624886)
+## App changes made during the course work (committed: 7c7485d, 6a129ae, 1f74d6f, afbb2fe, 0ef4f6d, 9859213, 6920719, fa301f1, df25af1, dacd319, d63c9c9, b624886, 904bee9, 6641963, 3b67ba9)
 
 Security hardening of server.js; isolated compiler worker; TypeScript type checking; V8 syntax checks; loop
 guards (script block and inline <script>); hosted preview runtime with Chrome-like console; theory sanitizing,
@@ -287,6 +345,10 @@ Seventh session (d63c9c9, b624886): TypeScript scripts compile with `alwaysStric
 `"use strict";`, like `tsc --strict`; ch07 sec01 top03/03 and top06/10 updated); the console titles DOM errors by
 their name like Chrome 155 (`SyntaxError: Failed to execute …`, `Uncaught (in promise) AbortError: …`) and no longer
 prints the ResizeObserver loop error. Tests: 255.
+Eighth session (904bee9, 6641963, 3b67ba9): module workers start in cards from a `data:` URL (Chrome refuses
+opaque-origin `blob:` module workers); verify harness `&card=1`; every sandboxed card attaches its iframe and sets
+`srcdoc` two frames later (`loadSrcdocWhenLaidOut`). `claude_resume/run-example.mjs` transpiles TS with `alwaysStrict`.
+Tests: 256.
 Sixth session (df25af1, dacd319): local demo API `/api/demo/*` (`src/utils/demoApi.js`: echo with status/delay,
 slow stream, CORS modes, 404 HTML page) and Vite's own CORS middleware off (it refused srcdoc preflights); the
 theory dialog runs the hosted page (srcdoc fallback) and lists TypeScript type errors above its console; TS code
