@@ -1,0 +1,11 @@
+{
+  "store": "La Casa del Mole",
+  "updated": "2026-10-14",
+  "items": [
+    { "sku": "MOL-01", "name": "Mole negro", "price": 165, "stock": 12, "tags": ["oaxaqueño"] },
+    { "sku": "CAF-02", "name": "Café de Chiapas", "price": 210, "stock": 0, "tags": [] },
+    { "sku": "CHO-03", "name": "Chocolate de metate", "price": "95", "stock": 30, "tags": ["artesanal"] },
+    { "sku": "TAS-04", "price": 180, "stock": -2, "tags": ["ahumado", 7] },
+    { "sku": "MEZ-05", "name": "Mezcal espadín", "price": 540, "stock": 6, "tags": ["destilado"] }
+  ]
+}

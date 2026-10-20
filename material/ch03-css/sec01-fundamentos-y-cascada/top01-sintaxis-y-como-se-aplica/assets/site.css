@@ -1,0 +1,12 @@
+/* Hoja externa del ejemplo 02-tres-formas-de-incluir-css.md: la carga su <link>. */
+
+/* Base común para los tres párrafos del ejemplo */
+p {
+  padding: 8px 12px;
+  font-family: system-ui, sans-serif;
+}
+
+.from-link {
+  background: #dbeafe;
+  border-left: 6px solid #2563eb;
+}

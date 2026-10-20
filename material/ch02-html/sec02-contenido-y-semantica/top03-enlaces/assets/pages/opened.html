@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pestaña nueva</title>
+</head>
+<body>
+  <h1>Me has abierto en una pestaña nueva</h1>
+  <p><strong>window.opener:</strong> <span id="opener"></span></p>
+  <p><strong>document.referrer:</strong> <span id="referrer"></span></p>
+  <p>Cierra esta pestaña y prueba el siguiente enlace.</p>
+  <script>
+    // window.opener es la pestaña que abrió esta (o null). Con acceso a ella, esta página
+    // podría, por ejemplo, cambiar la dirección de la pestaña original.
+    document.querySelector('#opener').textContent = window.opener
+      ? 'existe → esta página tiene acceso a la pestaña que la abrió'
+      : 'null → no tiene acceso a la pestaña que la abrió';
+    // document.referrer es la URL de la página de la que vienes (la cabecera Referer)
+    document.querySelector('#referrer').textContent = document.referrer || '(vacío: no se envió)';
+  </script>
+</body>
+</html>

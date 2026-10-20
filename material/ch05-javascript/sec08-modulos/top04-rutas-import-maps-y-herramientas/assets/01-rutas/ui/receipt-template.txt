@@ -1,0 +1,3 @@
+Gracias por tu compra en Café La Huasteca.
+{lines}
+Total: {total}

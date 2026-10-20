@@ -1,0 +1,15 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Huerto comunitario de Lavapies//Agenda//ES
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:puertas-abiertas-2026@huertolavapies.example
+DTSTAMP:20261013T080000Z
+DTSTART:20261128T090000Z
+DTEND:20261128T130000Z
+SUMMARY:Jornada de puertas abiertas del huerto comunitario
+LOCATION:Calle del Olivar 24\, Madrid
+DESCRIPTION:Visitas guiadas\, taller de semilleros y sorteo de parcelas. Entrada libre.
+URL:https://huertolavapies.example/puertas-abiertas/
+END:VEVENT
+END:VCALENDAR

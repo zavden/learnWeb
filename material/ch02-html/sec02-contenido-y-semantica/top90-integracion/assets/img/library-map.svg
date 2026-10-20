@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="300" viewBox="0 0 480 300" font-family="system-ui, sans-serif">
+  <rect width="480" height="300" fill="#f1f5f9"/>
+  <path d="M0 200 H480" stroke="#cbd5e1" stroke-width="26"/>
+  <path d="M120 0 V300" stroke="#cbd5e1" stroke-width="22"/>
+  <path d="M330 0 V300" stroke="#cbd5e1" stroke-width="22"/>
+  <rect x="160" y="60" width="130" height="100" fill="#bbf7d0" stroke="#15803d" stroke-width="2"/>
+  <text x="225" y="116" font-size="15" text-anchor="middle" fill="#14532d">Plaza Mayor</text>
+  <rect x="360" y="226" width="100" height="56" fill="#e2e8f0" stroke="#475569" stroke-width="2"/>
+  <text x="410" y="259" font-size="14" text-anchor="middle" fill="#1f2937">Estación</text>
+  <path d="M410 226 V200 H225 V160" fill="none" stroke="#1d4ed8" stroke-width="4" stroke-dasharray="10 6"/>
+  <path d="M225 40 C205 40 196 56 196 68 C196 88 225 112 225 112 C225 112 254 88 254 68 C254 56 245 40 225 40 Z" fill="#b91c1c"/>
+  <circle cx="225" cy="68" r="9" fill="#ffffff"/>
+  <text x="264" y="46" font-size="15" font-weight="700" fill="#1f2937">Biblioteca</text>
+</svg>

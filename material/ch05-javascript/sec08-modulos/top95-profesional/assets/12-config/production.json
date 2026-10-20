@@ -1,0 +1,5 @@
+{
+  "api": { "baseUrl": "https://api.cafelahuasteca.example/v1", "timeoutMs": 8000 },
+  "payments": { "methods": ["card", "oxxo", "spei"] },
+  "features": { "giftWrap": true }
+}

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="200" viewBox="0 0 640 200" font-family="system-ui, sans-serif">
+  <rect width="640" height="200" fill="#ffffff"/>
+  <text x="20" y="34" font-size="18" font-weight="700" fill="#1f2937">Dureza del agua (mg/l de CaCO₃)</text>
+  <rect x="20" y="60" width="150" height="56" fill="#bfdbfe"/>
+  <rect x="170" y="60" width="150" height="56" fill="#93c5fd"/>
+  <rect x="320" y="60" width="150" height="56" fill="#60a5fa"/>
+  <rect x="470" y="60" width="150" height="56" fill="#2563eb"/>
+  <text x="95" y="94" font-size="16" text-anchor="middle" fill="#1f2937">Blanda</text>
+  <text x="245" y="94" font-size="16" text-anchor="middle" fill="#1f2937">Moderada</text>
+  <text x="395" y="94" font-size="16" text-anchor="middle" fill="#1f2937">Dura</text>
+  <text x="545" y="94" font-size="16" text-anchor="middle" fill="#ffffff">Muy dura</text>
+  <g font-size="14" fill="#374151" text-anchor="middle">
+    <text x="20" y="142" text-anchor="start">0</text>
+    <text x="170" y="142">60</text>
+    <text x="320" y="142">120</text>
+    <text x="470" y="142">180</text>
+    <text x="620" y="142" text-anchor="end">más</text>
+  </g>
+  <text x="20" y="180" font-size="13" fill="#4b5563">Clasificación habitual del Servicio Geológico de EE. UU. (USGS)</text>
+</svg>

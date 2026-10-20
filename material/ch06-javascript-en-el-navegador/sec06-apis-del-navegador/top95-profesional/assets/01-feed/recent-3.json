@@ -1,0 +1,47 @@
+{
+  "page": 3,
+  "total": 25,
+  "next": null,
+  "items": [
+    {
+      "id": "R-121",
+      "author": "Héctor L.",
+      "coffee": "Chiapas",
+      "rating": 2,
+      "text": "Notas de chocolate y una acidez muy suave.",
+      "date": "2026-10-06T03:00:00.000Z"
+    },
+    {
+      "id": "R-122",
+      "author": "Inés C.",
+      "coffee": "Guerrero",
+      "rating": 5,
+      "text": "El molido medio funciona bien en la cafetera italiana.",
+      "date": "2026-10-05T18:00:00.000Z"
+    },
+    {
+      "id": "R-123",
+      "author": "Jorge T.",
+      "coffee": "Veracruz",
+      "rating": 4,
+      "text": "Lo preparo en olla con canela: delicioso.",
+      "date": "2026-10-05T09:00:00.000Z"
+    },
+    {
+      "id": "R-124",
+      "author": "Karla D.",
+      "coffee": "Puebla",
+      "rating": 3,
+      "text": "Perfecto para la cafetera de émbolo.",
+      "date": "2026-10-05T00:00:00.000Z"
+    },
+    {
+      "id": "R-125",
+      "author": "Luis A.",
+      "coffee": "Oaxaca",
+      "rating": 5,
+      "text": "Afrutado, recuerda a la mora.",
+      "date": "2026-10-04T15:00:00.000Z"
+    }
+  ]
+}

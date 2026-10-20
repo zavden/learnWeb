@@ -1,0 +1,6 @@
+;; se-rompe.wasm: un plugin con un error: reparte el total entre 0 personas.
+(module
+  (func $perPerson (param $total i32) (param $people i32) (result i32)
+    local.get $total  local.get $people  i32.div_u)
+  (func $discount (export "discount") (param $total i32) (result i32)
+    local.get $total  i32.const 0  call $perPerson  i32.const 100  i32.div_u))

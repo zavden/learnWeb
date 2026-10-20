@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="320" viewBox="0 0 240 320" font-family="system-ui, sans-serif">
+  <rect width="240" height="320" fill="#f1f5f9"/>
+  <rect x="40" y="20" width="160" height="280" rx="14" fill="#1f2937"/>
+  <rect x="54" y="40" width="132" height="210" fill="#e5e7eb"/>
+  <g stroke="#9ca3af" stroke-width="4"><path d="M66 70 H174 M66 90 H174 M66 110 H160 M66 130 H174 M66 150 H150 M66 170 H174 M66 190 H166"/></g>
+  <text x="120" y="282" font-size="18" font-weight="700" text-anchor="middle" fill="#ffffff">6″</text>
+</svg>

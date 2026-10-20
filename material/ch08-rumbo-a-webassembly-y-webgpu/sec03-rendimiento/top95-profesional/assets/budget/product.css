@@ -1,0 +1,11 @@
+/* Hoja de estilos de la tienda del museo (ejemplo 10: un recurso más del presupuesto). */
+.product { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 34rem) { .product { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); } }
+.product-photo { display: block; inline-size: 100%; block-size: auto; border-radius: 0.5rem; background: #e2e8f0; }
+.thumbs { display: flex; gap: 0.5rem; margin: 0.5rem 0 0; padding: 0; list-style: none; }
+.thumbs img { display: block; inline-size: 4.5rem; block-size: auto; border-radius: 0.3rem; background: #e2e8f0; }
+.price { margin: 0.25rem 0; font-size: 1.4rem; font-weight: 700; }
+.stock, .reviews { margin: 0.25rem 0; color: #475569; }
+.gallery-hd { display: grid; grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr)); gap: 0.5rem; margin-top: 0.75rem; }
+.gallery-hd img { display: block; inline-size: 100%; block-size: auto; border-radius: 0.3rem; background: #e2e8f0; }
+.gallery-hd[hidden] { display: none; }

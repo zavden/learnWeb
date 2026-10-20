@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reproductor: el juego de la vida</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
+  video { display: block; width: 100%; height: auto; }
+  p { margin: 0; padding: .4rem .6rem; font-size: .85rem; }
+</style>
+</head>
+<body>
+  <!-- Reproductor propio del sitio, en la carpeta assets/: otras páginas lo embeben con un
+       iframe (las páginas profesionales de este módulo). crossorigin: si lo embebe una página con origen opaco
+       (las tarjetas de LearnWeb), los .vtt se piden con CORS. -->
+  <video controls preload="metadata" poster="../media/life-poster.jpg" width="640" height="360" crossorigin="anonymous">
+    <source src="../media/life.webm" type="video/webm">
+    <source src="../media/life.mp4" type="video/mp4">
+    <track kind="captions" src="../media/life-captions-es.vtt" srclang="es" label="Español (CC)" default>
+    <track kind="captions" src="../media/life-captions-en.vtt" srclang="en" label="English (CC)">
+  </video>
+  <p>El juego de la vida · 12 s · música sin voz</p>
+</body>
+</html>

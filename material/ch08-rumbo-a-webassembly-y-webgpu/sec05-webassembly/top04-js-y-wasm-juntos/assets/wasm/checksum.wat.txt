@@ -1,0 +1,49 @@
+;; checksum.wat: el formato de texto (WAT) de checksum.wasm, el módulo de esta lección.
+;; checksum.wasm (196 bytes) se generó con emit.js, el archivo de al lado, a partir de esta
+;; misma descripción; un ensamblador como wat2wasm daría unos bytes equivalentes.
+;; checksum.bin son los MISMOS bytes con otra extensión: el servidor lo envía como
+;; application/octet-stream, y sirve para ver el error de tipo MIME de instantiateStreaming.
+;;
+;; Las dos funciones reciben un puntero y una longitud: los bytes que hay que resumir
+;; tienen que estar ya en la memoria (la escribe JavaScript). Los bucles recorren `len`
+;; bytes: si se pasaran de la memoria, i32.load8_u atraparía, así que siempre terminan.
+
+(module
+  ;; 1 página (64 KiB) al empezar; JavaScript la hace crecer hasta 256 (16 MiB) si hace falta
+  (memory (export "memory") 1 256)
+
+  ;; FNV-1a de 32 bits: hash = (hash XOR byte) × 16777619, byte a byte.
+  ;; Devuelve un i32: en JavaScript llega con signo; `>>> 0` lo lee sin signo.
+  (func (export "fnv1a") (param $ptr i32) (param $len i32) (result i32)
+    (local $end i32) (local $hash i32)
+    local.get $ptr  local.get $len  i32.add  local.set $end
+    i32.const 0x811c9dc5  local.set $hash          ;; la base de FNV: 2166136261
+    block $done
+      loop $next
+        local.get $ptr  local.get $end  i32.ge_u  br_if $done
+        local.get $hash  local.get $ptr  i32.load8_u  i32.xor
+        i32.const 0x01000193  i32.mul  local.set $hash   ;; el primo de FNV: 16777619
+        local.get $ptr  i32.const 1  i32.add  local.set $ptr
+        br $next
+      end
+    end
+    local.get $hash)
+
+  ;; Adler-32, la suma de comprobación de zlib: a = 1 + la suma de los bytes y
+  ;; b = la suma de cada a, las dos módulo 65521; el resultado es (b << 16) | a.
+  (func (export "adler32") (param $ptr i32) (param $len i32) (result i32)
+    (local $end i32) (local $a i32) (local $b i32)
+    local.get $ptr  local.get $len  i32.add  local.set $end
+    i32.const 1  local.set $a
+    block $done
+      loop $next
+        local.get $ptr  local.get $end  i32.ge_u  br_if $done
+        local.get $a  local.get $ptr  i32.load8_u  i32.add
+        i32.const 65521  i32.rem_u  local.set $a
+        local.get $b  local.get $a  i32.add
+        i32.const 65521  i32.rem_u  local.set $b
+        local.get $ptr  i32.const 1  i32.add  local.set $ptr
+        br $next
+      end
+    end
+    local.get $b  i32.const 16  i32.shl  local.get $a  i32.or))

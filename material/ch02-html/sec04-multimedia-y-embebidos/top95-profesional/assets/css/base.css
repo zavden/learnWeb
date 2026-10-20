@@ -1,0 +1,245 @@
+/* Estilos base de las páginas profesionales del módulo «Multimedia y contenido embebido».
+   El CSS se estudia en el capítulo 3: esta hoja solo hace las páginas legibles y cómodas en el
+   móvil y en el escritorio. Ninguna regla cambia el significado del HTML: sin ella, cada página
+   sigue funcionando igual, con el teclado y con un lector de pantalla.
+   Colores comprobados con scripts/contrast.mjs: el texto supera 4,5:1 sobre su fondo y los
+   bordes de los controles, 3:1. */
+
+/* 1. La página */
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.6;
+  color: #1f2937;
+  background: #ffffff;
+}
+
+/* 2. Una columna centrada para la cabecera, el contenido y el pie */
+.site-header,
+.site-main,
+.site-footer {
+  max-width: 52rem;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+.site-header {
+  padding-block: 0.75rem;
+  border-bottom: 1px solid #d1d5db;
+}
+
+.site-footer {
+  margin-top: 3rem;
+  padding-block: 1.5rem;
+  border-top: 1px solid #d1d5db;
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
+.brand {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.brand a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* 3. Menús y filas: elementos uno al lado del otro (flex se estudia en el capítulo de CSS) */
+.menu,
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+
+[aria-current="page"] {
+  font-weight: 700;
+  color: #1f2937;
+  text-decoration: none;
+}
+
+/* 4. Enlaces y foco del teclado */
+a {
+  color: #1d4ed8;
+}
+
+:focus-visible {
+  outline: 3px solid #b45309;
+  outline-offset: 2px;
+}
+
+/* main recibe el foco (tabindex="-1") solo para mover el punto de lectura tras el skip link */
+main:focus {
+  outline: none;
+}
+
+/* «Saltar al contenido», fuera de la vista hasta que recibe el foco
+   (position se estudia en el capítulo de CSS) */
+.skip-link {
+  position: absolute;
+  top: -3rem;
+  left: 1rem;
+  z-index: 1;
+  padding: 0.5rem 1rem;
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.skip-link:focus {
+  top: 1rem;
+}
+
+/* 5. Utilidades */
+
+/* Invisible en pantalla, presente en el árbol de accesibilidad */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* El sprite de iconos no ocupa sitio: sus symbol solo se ven a través de use */
+.sprite {
+  display: none;
+}
+
+.lead {
+  font-size: 1.15rem;
+}
+
+.muted {
+  color: #4b5563;
+}
+
+.note {
+  margin: 1.5rem 0;
+  padding: 0.75rem 1rem;
+  border-left: 4px solid #1d4ed8;
+  background: #eff6ff;
+}
+
+/* 6. Multimedia: nunca más ancha que su columna, sin deformarse (width/height del HTML
+   siguen reservando la proporción) */
+video,
+img,
+canvas,
+iframe,
+svg[role="img"] {
+  max-width: 100%;
+}
+
+video,
+img,
+svg[role="img"] {
+  height: auto;
+}
+
+video {
+  display: block;
+  background: #0f172a;
+}
+
+audio {
+  width: 100%;
+  max-width: 32rem;
+}
+
+iframe {
+  display: block;
+  border: 1px solid #64748b;
+  border-radius: 8px;
+}
+
+figure {
+  margin: 1.5rem 0;
+}
+
+figcaption {
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
+/* Iconos de un sprite: del tamaño y del color del texto que los rodea (currentColor) */
+.icon {
+  width: 1.25em;
+  height: 1.25em;
+  vertical-align: -0.2em;
+  flex-shrink: 0;
+}
+
+/* 7. Tarjetas */
+.card {
+  padding: 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+}
+
+.card h2,
+.card h3 {
+  margin-top: 0;
+}
+
+/* 8. Desplegables, tablas y botones */
+details {
+  margin: 1rem 0;
+}
+
+summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+caption {
+  text-align: left;
+  font-weight: 600;
+  padding-bottom: 0.25rem;
+}
+
+th,
+td {
+  padding: 0.3rem 0.75rem;
+  border-bottom: 1px solid #d1d5db;
+  text-align: left;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+button {
+  font: inherit;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid #64748b;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #1f2937;
+  cursor: pointer;
+}
+
+.button-link {
+  display: inline-block;
+  padding: 0.35rem 0.9rem;
+  border-radius: 6px;
+  background: #1d4ed8;
+  color: #ffffff;
+  text-decoration: none;
+}

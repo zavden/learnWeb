@@ -1,0 +1,6 @@
+{
+  "new-checkout": { "enabled": true, "rollout": 50, "description": "Pago en una sola página" },
+  "gift-wrap": { "enabled": true, "rollout": 0, "allow": ["U-007"], "description": "Envolver para regalo" },
+  "recommendations": { "enabled": true, "rollout": 100, "description": "Recomendaciones personalizadas" },
+  "dark-mode": { "enabled": false, "rollout": 100, "description": "Tema oscuro" }
+}

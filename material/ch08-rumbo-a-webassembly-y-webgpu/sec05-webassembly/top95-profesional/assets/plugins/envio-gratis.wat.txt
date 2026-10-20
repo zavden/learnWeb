@@ -1,0 +1,7 @@
+;; envio-gratis.wasm: descuenta el envío ($99.00) en compras desde $999.00. No importa nada.
+(module
+  (func $discount (export "discount") (param $total i32) (result i32)
+    i32.const 9900                          ;; si se cumple la condición
+    i32.const 0                             ;; si no
+    local.get $total  i32.const 99900  i32.ge_u
+    select))

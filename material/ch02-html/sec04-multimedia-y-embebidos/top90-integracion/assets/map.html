@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapa: cómo llegar al huerto comunitario</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #f8fafc; color: #1e293b; }
+  svg { display: block; width: 100%; height: auto; }
+  p { margin: 0; padding: .4rem .6rem; font-size: .85rem; }
+  .street { fill: #475569; font-size: 11px; }
+</style>
+</head>
+<body>
+  <!-- Un mapa sencillo hecho con SVG, pensado para embeberse con un iframe.
+       Informativo: role="img" con title y desc; la dirección, además, en texto. -->
+  <svg viewBox="0 0 480 260" role="img" aria-labelledby="map-title" aria-describedby="map-desc">
+    <title id="map-title">Mapa del entorno del huerto comunitario</title>
+    <desc id="map-desc">El huerto está en la esquina de la calle del Olivar con la calle de la Fe, junto a la plaza de Lavapiés, a dos minutos del metro.</desc>
+    <rect width="480" height="260" fill="#e2e8f0"/>
+    <!-- calles -->
+    <g stroke="#ffffff" stroke-width="18" stroke-linecap="square">
+      <line x1="0" y1="90" x2="480" y2="90"/>
+      <line x1="300" y1="0" x2="300" y2="260"/>
+      <line x1="80" y1="0" x2="140" y2="260"/>
+    </g>
+    <!-- plaza y huerto -->
+    <rect x="320" y="110" width="140" height="130" rx="6" fill="#bbf7d0"/>
+    <circle cx="210" cy="190" r="40" fill="#cbd5e1"/>
+    <!-- marcador del huerto -->
+    <path d="M390 120 C378 120 370 129 370 140 C370 156 390 176 390 176 C390 176 410 156 410 140 C410 129 402 120 390 120 Z" fill="#b91c1c"/>
+    <circle cx="390" cy="140" r="6" fill="#ffffff"/>
+    <g class="street">
+      <text x="10" y="80">Calle del Olivar</text>
+      <text x="306" y="20">Calle de la Fe</text>
+      <text x="168" y="248">Plaza de Lavapiés</text>
+      <text x="340" y="232">Huerto</text>
+    </g>
+  </svg>
+  <p>Calle del Olivar, 24 · Metro Lavapiés (línea 3)</p>
+</body>
+</html>

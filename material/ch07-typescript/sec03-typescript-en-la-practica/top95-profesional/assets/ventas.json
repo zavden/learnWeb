@@ -1,0 +1,12 @@
+{
+  "shop": "Café La Parroquia · Veracruz",
+  "months": [
+    {"month": "2026-04", "units": 1820, "revenue": 81900},
+    {"month": "2026-05", "units": 1975, "revenue": 88875},
+    {"month": "2026-06", "units": 2140, "revenue": 96300},
+    {"month": "2026-07", "units": 2390, "revenue": 114720},
+    {"month": "2026-08", "units": 2265, "revenue": 108720},
+    {"month": "2026-09", "units": 2010, "revenue": 104520},
+    {"month": "2026-10", "units": 2410, "revenue": 106040}
+  ]
+}

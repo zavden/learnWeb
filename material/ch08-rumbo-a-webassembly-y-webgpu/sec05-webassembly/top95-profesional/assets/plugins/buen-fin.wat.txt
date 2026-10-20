@@ -1,0 +1,11 @@
+;; buen-fin.wasm: 10 % de descuento en compras desde $1,000.00 (100000 centavos).
+;; Avisa con env.log(puntero, longitud): el texto está en su propia memoria.
+(module
+  (import "env" "log" (func $log (param i32 i32)))
+  (memory (export "memory") 1)
+  (data (i32.const 0) "Buen Fin: 10 % de descuento desde $1,000")
+  (func $discount (export "discount") (param $total i32) (result i32)
+    local.get $total  i32.const 100000  i32.lt_u
+    if  i32.const 0  return  end            ;; menos de $1,000: sin descuento
+    i32.const 0  i32.const 40  call $log
+    local.get $total  i32.const 10  i32.div_u))

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+  <rect width="640" height="360" fill="#fef3c7"/>
+  <rect y="270" width="640" height="90" fill="#d6d3d1"/>
+  <g>
+    <path d="M30 120 H210 L190 160 H50 Z" fill="#b91c1c"/><rect x="50" y="160" width="140" height="110" fill="#fff7ed" stroke="#78350f" stroke-width="4"/>
+    <path d="M230 110 H410 L390 150 H250 Z" fill="#15803d"/><rect x="250" y="150" width="140" height="120" fill="#fff7ed" stroke="#78350f" stroke-width="4"/>
+    <path d="M430 120 H610 L590 160 H450 Z" fill="#1d4ed8"/><rect x="450" y="160" width="140" height="110" fill="#fff7ed" stroke="#78350f" stroke-width="4"/>
+  </g>
+  <g><circle cx="80" cy="250" r="14" fill="#dc2626"/><circle cx="110" cy="252" r="14" fill="#dc2626"/><circle cx="140" cy="250" r="14" fill="#ea580c"/>
+  <circle cx="290" cy="250" r="16" fill="#65a30d"/><circle cx="325" cy="250" r="16" fill="#65a30d"/><circle cx="360" cy="252" r="14" fill="#facc15"/>
+  <ellipse cx="500" cy="252" rx="22" ry="12" fill="#a16207"/><ellipse cx="545" cy="252" rx="22" ry="12" fill="#a16207"/></g>
+</svg>

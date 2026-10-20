@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contacto · Biblioteca Municipal</title>
+</head>
+<body>
+  <h1>Contacto</h1>
+  <p>Biblioteca Municipal · Calle Mayor, 12 · 28013 Madrid</p>
+  <p>Esta es otra página: el enlace relativo <code>pages/contact.html</code> te ha traído hasta aquí.</p>
+  <p>URL de esta página: <code id="url"></code></p>
+  <!-- history.back() vuelve a la página anterior (JavaScript, más adelante) -->
+  <p><button type="button" onclick="history.back()">← Volver</button></p>
+  <script>
+    document.querySelector('#url').textContent = location.href;
+  </script>
+</body>
+</html>

@@ -1,0 +1,1201 @@
+date,city,product,units,amount
+2026-10-01,CDMX,Café de Chiapas,1,85.00
+2026-10-02,Monterrey,Miel de Yucatán,4,488.00
+2026-10-03,Mérida,Chocolate de Oaxaca,2,318.00
+2026-10-04,Guadalajara,Cajeta de Celaya,5,980.00
+2026-10-05,Puebla,Vainilla de Papantla,3,699.00
+2026-10-06,CDMX,Mole poblano,1,270.00
+2026-10-07,Monterrey,Café de Chiapas,4,1228.00
+2026-10-08,Mérida,Miel de Yucatán,2,688.00
+2026-10-09,Guadalajara,Chocolate de Oaxaca,5,1905.00
+2026-10-10,Puebla,Cajeta de Celaya,3,1254.00
+2026-10-11,CDMX,Vainilla de Papantla,1,455.00
+2026-10-12,Monterrey,Mole poblano,4,368.00
+2026-10-13,Mérida,Café de Chiapas,2,258.00
+2026-10-14,Guadalajara,Miel de Yucatán,5,830.00
+2026-10-15,Puebla,Chocolate de Oaxaca,3,609.00
+2026-10-16,CDMX,Cajeta de Celaya,1,240.00
+2026-10-17,Monterrey,Vainilla de Papantla,4,1108.00
+2026-10-18,Mérida,Mole poblano,2,628.00
+2026-10-19,Guadalajara,Café de Chiapas,5,1755.00
+2026-10-20,Puebla,Miel de Yucatán,3,1164.00
+2026-10-21,CDMX,Chocolate de Oaxaca,1,425.00
+2026-10-22,Monterrey,Cajeta de Celaya,4,1848.00
+2026-10-23,Mérida,Vainilla de Papantla,2,198.00
+2026-10-24,Guadalajara,Mole poblano,5,680.00
+2026-10-25,Puebla,Café de Chiapas,3,519.00
+2026-10-26,CDMX,Miel de Yucatán,1,210.00
+2026-10-27,Monterrey,Chocolate de Oaxaca,4,988.00
+2026-10-28,Mérida,Cajeta de Celaya,2,568.00
+2026-10-29,Guadalajara,Vainilla de Papantla,5,1605.00
+2026-10-30,Puebla,Mole poblano,3,1074.00
+2026-10-31,CDMX,Café de Chiapas,1,395.00
+2026-10-01,Monterrey,Miel de Yucatán,4,1728.00
+2026-10-02,Mérida,Chocolate de Oaxaca,2,938.00
+2026-10-03,Guadalajara,Cajeta de Celaya,5,530.00
+2026-10-04,Puebla,Vainilla de Papantla,3,429.00
+2026-10-05,CDMX,Mole poblano,1,180.00
+2026-10-06,Monterrey,Café de Chiapas,4,868.00
+2026-10-07,Mérida,Miel de Yucatán,2,508.00
+2026-10-08,Guadalajara,Chocolate de Oaxaca,5,1455.00
+2026-10-09,Puebla,Cajeta de Celaya,3,984.00
+2026-10-10,CDMX,Vainilla de Papantla,1,365.00
+2026-10-11,Monterrey,Mole poblano,4,1608.00
+2026-10-12,Mérida,Café de Chiapas,2,878.00
+2026-10-13,Guadalajara,Miel de Yucatán,5,2380.00
+2026-10-14,Puebla,Chocolate de Oaxaca,3,339.00
+2026-10-15,CDMX,Cajeta de Celaya,1,150.00
+2026-10-16,Monterrey,Vainilla de Papantla,4,748.00
+2026-10-17,Mérida,Mole poblano,2,448.00
+2026-10-18,Guadalajara,Café de Chiapas,5,1305.00
+2026-10-19,Puebla,Miel de Yucatán,3,894.00
+2026-10-20,CDMX,Chocolate de Oaxaca,1,335.00
+2026-10-21,Monterrey,Cajeta de Celaya,4,1488.00
+2026-10-22,Mérida,Vainilla de Papantla,2,818.00
+2026-10-23,Guadalajara,Mole poblano,5,2230.00
+2026-10-24,Puebla,Café de Chiapas,3,1449.00
+2026-10-25,CDMX,Miel de Yucatán,1,120.00
+2026-10-26,Monterrey,Chocolate de Oaxaca,4,628.00
+2026-10-27,Mérida,Cajeta de Celaya,2,388.00
+2026-10-28,Guadalajara,Vainilla de Papantla,5,1155.00
+2026-10-29,Puebla,Mole poblano,3,804.00
+2026-10-30,CDMX,Café de Chiapas,1,305.00
+2026-10-31,Monterrey,Miel de Yucatán,4,1368.00
+2026-10-01,Mérida,Chocolate de Oaxaca,2,758.00
+2026-10-02,Guadalajara,Cajeta de Celaya,5,2080.00
+2026-10-03,Puebla,Vainilla de Papantla,3,1359.00
+2026-10-04,CDMX,Mole poblano,1,90.00
+2026-10-05,Monterrey,Café de Chiapas,4,508.00
+2026-10-06,Mérida,Miel de Yucatán,2,328.00
+2026-10-07,Guadalajara,Chocolate de Oaxaca,5,1005.00
+2026-10-08,Puebla,Cajeta de Celaya,3,714.00
+2026-10-09,CDMX,Vainilla de Papantla,1,275.00
+2026-10-10,Monterrey,Mole poblano,4,1248.00
+2026-10-11,Mérida,Café de Chiapas,2,698.00
+2026-10-12,Guadalajara,Miel de Yucatán,5,1930.00
+2026-10-13,Puebla,Chocolate de Oaxaca,3,1269.00
+2026-10-14,CDMX,Cajeta de Celaya,1,460.00
+2026-10-15,Monterrey,Vainilla de Papantla,4,388.00
+2026-10-16,Mérida,Mole poblano,2,268.00
+2026-10-17,Guadalajara,Café de Chiapas,5,855.00
+2026-10-18,Puebla,Miel de Yucatán,3,624.00
+2026-10-19,CDMX,Chocolate de Oaxaca,1,245.00
+2026-10-20,Monterrey,Cajeta de Celaya,4,1128.00
+2026-10-21,Mérida,Vainilla de Papantla,2,638.00
+2026-10-22,Guadalajara,Mole poblano,5,1780.00
+2026-10-23,Puebla,Café de Chiapas,3,1179.00
+2026-10-24,CDMX,Miel de Yucatán,1,430.00
+2026-10-25,Monterrey,Chocolate de Oaxaca,4,1868.00
+2026-10-26,Mérida,Cajeta de Celaya,2,208.00
+2026-10-27,Guadalajara,Vainilla de Papantla,5,705.00
+2026-10-28,Puebla,Mole poblano,3,534.00
+2026-10-29,CDMX,Café de Chiapas,1,215.00
+2026-10-30,Monterrey,Miel de Yucatán,4,1008.00
+2026-10-31,Mérida,Chocolate de Oaxaca,2,578.00
+2026-10-01,Guadalajara,Cajeta de Celaya,5,1630.00
+2026-10-02,Puebla,Vainilla de Papantla,3,1089.00
+2026-10-03,CDMX,Mole poblano,1,400.00
+2026-10-04,Monterrey,Café de Chiapas,4,1748.00
+2026-10-05,Mérida,Miel de Yucatán,2,948.00
+2026-10-06,Guadalajara,Chocolate de Oaxaca,5,555.00
+2026-10-07,Puebla,Cajeta de Celaya,3,444.00
+2026-10-08,CDMX,Vainilla de Papantla,1,185.00
+2026-10-09,Monterrey,Mole poblano,4,888.00
+2026-10-10,Mérida,Café de Chiapas,2,518.00
+2026-10-11,Guadalajara,Miel de Yucatán,5,1480.00
+2026-10-12,Puebla,Chocolate de Oaxaca,3,999.00
+2026-10-13,CDMX,Cajeta de Celaya,1,370.00
+2026-10-14,Monterrey,Vainilla de Papantla,4,1628.00
+2026-10-15,Mérida,Mole poblano,2,888.00
+2026-10-16,Guadalajara,Café de Chiapas,5,2405.00
+2026-10-17,Puebla,Miel de Yucatán,3,354.00
+2026-10-18,CDMX,Chocolate de Oaxaca,1,155.00
+2026-10-19,Monterrey,Cajeta de Celaya,4,768.00
+2026-10-20,Mérida,Vainilla de Papantla,2,458.00
+2026-10-21,Guadalajara,Mole poblano,5,1330.00
+2026-10-22,Puebla,Café de Chiapas,3,909.00
+2026-10-23,CDMX,Miel de Yucatán,1,340.00
+2026-10-24,Monterrey,Chocolate de Oaxaca,4,1508.00
+2026-10-25,Mérida,Cajeta de Celaya,2,828.00
+2026-10-26,Guadalajara,Vainilla de Papantla,5,2255.00
+2026-10-27,Puebla,Mole poblano,3,264.00
+2026-10-28,CDMX,Café de Chiapas,1,125.00
+2026-10-29,Monterrey,Miel de Yucatán,4,648.00
+2026-10-30,Mérida,Chocolate de Oaxaca,2,398.00
+2026-10-31,Guadalajara,Cajeta de Celaya,5,1180.00
+2026-10-01,Puebla,Vainilla de Papantla,3,819.00
+2026-10-02,CDMX,Mole poblano,1,310.00
+2026-10-03,Monterrey,Café de Chiapas,4,1388.00
+2026-10-04,Mérida,Miel de Yucatán,2,768.00
+2026-10-05,Guadalajara,Chocolate de Oaxaca,5,2105.00
+2026-10-06,Puebla,Cajeta de Celaya,3,1374.00
+2026-10-07,CDMX,Vainilla de Papantla,1,95.00
+2026-10-08,Monterrey,Mole poblano,4,528.00
+2026-10-09,Mérida,Café de Chiapas,2,338.00
+2026-10-10,Guadalajara,Miel de Yucatán,5,1030.00
+2026-10-11,Puebla,Chocolate de Oaxaca,3,729.00
+2026-10-12,CDMX,Cajeta de Celaya,1,280.00
+2026-10-13,Monterrey,Vainilla de Papantla,4,1268.00
+2026-10-14,Mérida,Mole poblano,2,708.00
+2026-10-15,Guadalajara,Café de Chiapas,5,1955.00
+2026-10-16,Puebla,Miel de Yucatán,3,1284.00
+2026-10-17,CDMX,Chocolate de Oaxaca,1,465.00
+2026-10-18,Monterrey,Cajeta de Celaya,4,408.00
+2026-10-19,Mérida,Vainilla de Papantla,2,278.00
+2026-10-20,Guadalajara,Mole poblano,5,880.00
+2026-10-21,Puebla,Café de Chiapas,3,639.00
+2026-10-22,CDMX,Miel de Yucatán,1,250.00
+2026-10-23,Monterrey,Chocolate de Oaxaca,4,1148.00
+2026-10-24,Mérida,Cajeta de Celaya,2,648.00
+2026-10-25,Guadalajara,Vainilla de Papantla,5,1805.00
+2026-10-26,Puebla,Mole poblano,3,1194.00
+2026-10-27,CDMX,Café de Chiapas,1,435.00
+2026-10-28,Monterrey,Miel de Yucatán,4,1888.00
+2026-10-29,Mérida,Chocolate de Oaxaca,2,218.00
+2026-10-30,Guadalajara,Cajeta de Celaya,5,730.00
+2026-10-31,Puebla,Vainilla de Papantla,3,549.00
+2026-10-01,CDMX,Mole poblano,1,220.00
+2026-10-02,Monterrey,Café de Chiapas,4,1028.00
+2026-10-03,Mérida,Miel de Yucatán,2,588.00
+2026-10-04,Guadalajara,Chocolate de Oaxaca,5,1655.00
+2026-10-05,Puebla,Cajeta de Celaya,3,1104.00
+2026-10-06,CDMX,Vainilla de Papantla,1,405.00
+2026-10-07,Monterrey,Mole poblano,4,1768.00
+2026-10-08,Mérida,Café de Chiapas,2,958.00
+2026-10-09,Guadalajara,Miel de Yucatán,5,580.00
+2026-10-10,Puebla,Chocolate de Oaxaca,3,459.00
+2026-10-11,CDMX,Cajeta de Celaya,1,190.00
+2026-10-12,Monterrey,Vainilla de Papantla,4,908.00
+2026-10-13,Mérida,Mole poblano,2,528.00
+2026-10-14,Guadalajara,Café de Chiapas,5,1505.00
+2026-10-15,Puebla,Miel de Yucatán,3,1014.00
+2026-10-16,CDMX,Chocolate de Oaxaca,1,375.00
+2026-10-17,Monterrey,Cajeta de Celaya,4,1648.00
+2026-10-18,Mérida,Vainilla de Papantla,2,898.00
+2026-10-19,Guadalajara,Mole poblano,5,430.00
+2026-10-20,Puebla,Café de Chiapas,3,369.00
+2026-10-21,CDMX,Miel de Yucatán,1,160.00
+2026-10-22,Monterrey,Chocolate de Oaxaca,4,788.00
+2026-10-23,Mérida,Cajeta de Celaya,2,468.00
+2026-10-24,Guadalajara,Vainilla de Papantla,5,1355.00
+2026-10-25,Puebla,Mole poblano,3,924.00
+2026-10-26,CDMX,Café de Chiapas,1,345.00
+2026-10-27,Monterrey,Miel de Yucatán,4,1528.00
+2026-10-28,Mérida,Chocolate de Oaxaca,2,838.00
+2026-10-29,Guadalajara,Cajeta de Celaya,5,2280.00
+2026-10-30,Puebla,Vainilla de Papantla,3,279.00
+2026-10-31,CDMX,Mole poblano,1,130.00
+2026-10-01,Monterrey,Café de Chiapas,4,668.00
+2026-10-02,Mérida,Miel de Yucatán,2,408.00
+2026-10-03,Guadalajara,Chocolate de Oaxaca,5,1205.00
+2026-10-04,Puebla,Cajeta de Celaya,3,834.00
+2026-10-05,CDMX,Vainilla de Papantla,1,315.00
+2026-10-06,Monterrey,Mole poblano,4,1408.00
+2026-10-07,Mérida,Café de Chiapas,2,778.00
+2026-10-08,Guadalajara,Miel de Yucatán,5,2130.00
+2026-10-09,Puebla,Chocolate de Oaxaca,3,1389.00
+2026-10-10,CDMX,Cajeta de Celaya,1,100.00
+2026-10-11,Monterrey,Vainilla de Papantla,4,548.00
+2026-10-12,Mérida,Mole poblano,2,348.00
+2026-10-13,Guadalajara,Café de Chiapas,5,1055.00
+2026-10-14,Puebla,Miel de Yucatán,3,744.00
+2026-10-15,CDMX,Chocolate de Oaxaca,1,285.00
+2026-10-16,Monterrey,Cajeta de Celaya,4,1288.00
+2026-10-17,Mérida,Vainilla de Papantla,2,718.00
+2026-10-18,Guadalajara,Mole poblano,5,1980.00
+2026-10-19,Puebla,Café de Chiapas,3,1299.00
+2026-10-20,CDMX,Miel de Yucatán,1,470.00
+2026-10-21,Monterrey,Chocolate de Oaxaca,4,428.00
+2026-10-22,Mérida,Cajeta de Celaya,2,288.00
+2026-10-23,Guadalajara,Vainilla de Papantla,5,905.00
+2026-10-24,Puebla,Mole poblano,3,654.00
+2026-10-25,CDMX,Café de Chiapas,1,255.00
+2026-10-26,Monterrey,Miel de Yucatán,4,1168.00
+2026-10-27,Mérida,Chocolate de Oaxaca,2,658.00
+2026-10-28,Guadalajara,Cajeta de Celaya,5,1830.00
+2026-10-29,Puebla,Vainilla de Papantla,3,1209.00
+2026-10-30,CDMX,Mole poblano,1,440.00
+2026-10-31,Monterrey,Café de Chiapas,4,1908.00
+2026-10-01,Mérida,Miel de Yucatán,2,228.00
+2026-10-02,Guadalajara,Chocolate de Oaxaca,5,755.00
+2026-10-03,Puebla,Cajeta de Celaya,3,564.00
+2026-10-04,CDMX,Vainilla de Papantla,1,225.00
+2026-10-05,Monterrey,Mole poblano,4,1048.00
+2026-10-06,Mérida,Café de Chiapas,2,598.00
+2026-10-07,Guadalajara,Miel de Yucatán,5,1680.00
+2026-10-08,Puebla,Chocolate de Oaxaca,3,1119.00
+2026-10-09,CDMX,Cajeta de Celaya,1,410.00
+2026-10-10,Monterrey,Vainilla de Papantla,4,1788.00
+2026-10-11,Mérida,Mole poblano,2,968.00
+2026-10-12,Guadalajara,Café de Chiapas,5,605.00
+2026-10-13,Puebla,Miel de Yucatán,3,474.00
+2026-10-14,CDMX,Chocolate de Oaxaca,1,195.00
+2026-10-15,Monterrey,Cajeta de Celaya,4,928.00
+2026-10-16,Mérida,Vainilla de Papantla,2,538.00
+2026-10-17,Guadalajara,Mole poblano,5,1530.00
+2026-10-18,Puebla,Café de Chiapas,3,1029.00
+2026-10-19,CDMX,Miel de Yucatán,1,380.00
+2026-10-20,Monterrey,Chocolate de Oaxaca,4,1668.00
+2026-10-21,Mérida,Cajeta de Celaya,2,908.00
+2026-10-22,Guadalajara,Vainilla de Papantla,5,455.00
+2026-10-23,Puebla,Mole poblano,3,384.00
+2026-10-24,CDMX,Café de Chiapas,1,165.00
+2026-10-25,Monterrey,Miel de Yucatán,4,808.00
+2026-10-26,Mérida,Chocolate de Oaxaca,2,478.00
+2026-10-27,Guadalajara,Cajeta de Celaya,5,1380.00
+2026-10-28,Puebla,Vainilla de Papantla,3,939.00
+2026-10-29,CDMX,Mole poblano,1,350.00
+2026-10-30,Monterrey,Café de Chiapas,4,1548.00
+2026-10-31,Mérida,Miel de Yucatán,2,848.00
+2026-10-01,Guadalajara,Chocolate de Oaxaca,5,2305.00
+2026-10-02,Puebla,Cajeta de Celaya,3,294.00
+2026-10-03,CDMX,Vainilla de Papantla,1,135.00
+2026-10-04,Monterrey,Mole poblano,4,688.00
+2026-10-05,Mérida,Café de Chiapas,2,418.00
+2026-10-06,Guadalajara,Miel de Yucatán,5,1230.00
+2026-10-07,Puebla,Chocolate de Oaxaca,3,849.00
+2026-10-08,CDMX,Cajeta de Celaya,1,320.00
+2026-10-09,Monterrey,Vainilla de Papantla,4,1428.00
+2026-10-10,Mérida,Mole poblano,2,788.00
+2026-10-11,Guadalajara,Café de Chiapas,5,2155.00
+2026-10-12,Puebla,Miel de Yucatán,3,1404.00
+2026-10-13,CDMX,Chocolate de Oaxaca,1,105.00
+2026-10-14,Monterrey,Cajeta de Celaya,4,568.00
+2026-10-15,Mérida,Vainilla de Papantla,2,358.00
+2026-10-16,Guadalajara,Mole poblano,5,1080.00
+2026-10-17,Puebla,Café de Chiapas,3,759.00
+2026-10-18,CDMX,Miel de Yucatán,1,290.00
+2026-10-19,Monterrey,Chocolate de Oaxaca,4,1308.00
+2026-10-20,Mérida,Cajeta de Celaya,2,728.00
+2026-10-21,Guadalajara,Vainilla de Papantla,5,2005.00
+2026-10-22,Puebla,Mole poblano,3,1314.00
+2026-10-23,CDMX,Café de Chiapas,1,475.00
+2026-10-24,Monterrey,Miel de Yucatán,4,448.00
+2026-10-25,Mérida,Chocolate de Oaxaca,2,298.00
+2026-10-26,Guadalajara,Cajeta de Celaya,5,930.00
+2026-10-27,Puebla,Vainilla de Papantla,3,669.00
+2026-10-28,CDMX,Mole poblano,1,260.00
+2026-10-29,Monterrey,Café de Chiapas,4,1188.00
+2026-10-30,Mérida,Miel de Yucatán,2,668.00
+2026-10-31,Guadalajara,Chocolate de Oaxaca,5,1855.00
+2026-10-01,Puebla,Cajeta de Celaya,3,1224.00
+2026-10-02,CDMX,Vainilla de Papantla,1,445.00
+2026-10-03,Monterrey,Mole poblano,4,1928.00
+2026-10-04,Mérida,Café de Chiapas,2,238.00
+2026-10-05,Guadalajara,Miel de Yucatán,5,780.00
+2026-10-06,Puebla,Chocolate de Oaxaca,3,579.00
+2026-10-07,CDMX,Cajeta de Celaya,1,230.00
+2026-10-08,Monterrey,Vainilla de Papantla,4,1068.00
+2026-10-09,Mérida,Mole poblano,2,608.00
+2026-10-10,Guadalajara,Café de Chiapas,5,1705.00
+2026-10-11,Puebla,Miel de Yucatán,3,1134.00
+2026-10-12,CDMX,Chocolate de Oaxaca,1,415.00
+2026-10-13,Monterrey,Cajeta de Celaya,4,1808.00
+2026-10-14,Mérida,Vainilla de Papantla,2,178.00
+2026-10-15,Guadalajara,Mole poblano,5,630.00
+2026-10-16,Puebla,Café de Chiapas,3,489.00
+2026-10-17,CDMX,Miel de Yucatán,1,200.00
+2026-10-18,Monterrey,Chocolate de Oaxaca,4,948.00
+2026-10-19,Mérida,Cajeta de Celaya,2,548.00
+2026-10-20,Guadalajara,Vainilla de Papantla,5,1555.00
+2026-10-21,Puebla,Mole poblano,3,1044.00
+2026-10-22,CDMX,Café de Chiapas,1,385.00
+2026-10-23,Monterrey,Miel de Yucatán,4,1688.00
+2026-10-24,Mérida,Chocolate de Oaxaca,2,918.00
+2026-10-25,Guadalajara,Cajeta de Celaya,5,480.00
+2026-10-26,Puebla,Vainilla de Papantla,3,399.00
+2026-10-27,CDMX,Mole poblano,1,170.00
+2026-10-28,Monterrey,Café de Chiapas,4,828.00
+2026-10-29,Mérida,Miel de Yucatán,2,488.00
+2026-10-30,Guadalajara,Chocolate de Oaxaca,5,1405.00
+2026-10-31,Puebla,Cajeta de Celaya,3,954.00
+2026-10-01,CDMX,Vainilla de Papantla,1,355.00
+2026-10-02,Monterrey,Mole poblano,4,1568.00
+2026-10-03,Mérida,Café de Chiapas,2,858.00
+2026-10-04,Guadalajara,Miel de Yucatán,5,2330.00
+2026-10-05,Puebla,Chocolate de Oaxaca,3,309.00
+2026-10-06,CDMX,Cajeta de Celaya,1,140.00
+2026-10-07,Monterrey,Vainilla de Papantla,4,708.00
+2026-10-08,Mérida,Mole poblano,2,428.00
+2026-10-09,Guadalajara,Café de Chiapas,5,1255.00
+2026-10-10,Puebla,Miel de Yucatán,3,864.00
+2026-10-11,CDMX,Chocolate de Oaxaca,1,325.00
+2026-10-12,Monterrey,Cajeta de Celaya,4,1448.00
+2026-10-13,Mérida,Vainilla de Papantla,2,798.00
+2026-10-14,Guadalajara,Mole poblano,5,2180.00
+2026-10-15,Puebla,Café de Chiapas,3,1419.00
+2026-10-16,CDMX,Miel de Yucatán,1,110.00
+2026-10-17,Monterrey,Chocolate de Oaxaca,4,588.00
+2026-10-18,Mérida,Cajeta de Celaya,2,368.00
+2026-10-19,Guadalajara,Vainilla de Papantla,5,1105.00
+2026-10-20,Puebla,Mole poblano,3,774.00
+2026-10-21,CDMX,Café de Chiapas,1,295.00
+2026-10-22,Monterrey,Miel de Yucatán,4,1328.00
+2026-10-23,Mérida,Chocolate de Oaxaca,2,738.00
+2026-10-24,Guadalajara,Cajeta de Celaya,5,2030.00
+2026-10-25,Puebla,Vainilla de Papantla,3,1329.00
+2026-10-26,CDMX,Mole poblano,1,480.00
+2026-10-27,Monterrey,Café de Chiapas,4,468.00
+2026-10-28,Mérida,Miel de Yucatán,2,308.00
+2026-10-29,Guadalajara,Chocolate de Oaxaca,5,955.00
+2026-10-30,Puebla,Cajeta de Celaya,3,684.00
+2026-10-31,CDMX,Vainilla de Papantla,1,265.00
+2026-10-01,Monterrey,Mole poblano,4,1208.00
+2026-10-02,Mérida,Café de Chiapas,2,678.00
+2026-10-03,Guadalajara,Miel de Yucatán,5,1880.00
+2026-10-04,Puebla,Chocolate de Oaxaca,3,1239.00
+2026-10-05,CDMX,Cajeta de Celaya,1,450.00
+2026-10-06,Monterrey,Vainilla de Papantla,4,348.00
+2026-10-07,Mérida,Mole poblano,2,248.00
+2026-10-08,Guadalajara,Café de Chiapas,5,805.00
+2026-10-09,Puebla,Miel de Yucatán,3,594.00
+2026-10-10,CDMX,Chocolate de Oaxaca,1,235.00
+2026-10-11,Monterrey,Cajeta de Celaya,4,1088.00
+2026-10-12,Mérida,Vainilla de Papantla,2,618.00
+2026-10-13,Guadalajara,Mole poblano,5,1730.00
+2026-10-14,Puebla,Café de Chiapas,3,1149.00
+2026-10-15,CDMX,Miel de Yucatán,1,420.00
+2026-10-16,Monterrey,Chocolate de Oaxaca,4,1828.00
+2026-10-17,Mérida,Cajeta de Celaya,2,188.00
+2026-10-18,Guadalajara,Vainilla de Papantla,5,655.00
+2026-10-19,Puebla,Mole poblano,3,504.00
+2026-10-20,CDMX,Café de Chiapas,1,205.00
+2026-10-21,Monterrey,Miel de Yucatán,4,968.00
+2026-10-22,Mérida,Chocolate de Oaxaca,2,558.00
+2026-10-23,Guadalajara,Cajeta de Celaya,5,1580.00
+2026-10-24,Puebla,Vainilla de Papantla,3,1059.00
+2026-10-25,CDMX,Mole poblano,1,390.00
+2026-10-26,Monterrey,Café de Chiapas,4,1708.00
+2026-10-27,Mérida,Miel de Yucatán,2,928.00
+2026-10-28,Guadalajara,Chocolate de Oaxaca,5,505.00
+2026-10-29,Puebla,Cajeta de Celaya,3,414.00
+2026-10-30,CDMX,Vainilla de Papantla,1,175.00
+2026-10-31,Monterrey,Mole poblano,4,848.00
+2026-10-01,Mérida,Café de Chiapas,2,498.00
+2026-10-02,Guadalajara,Miel de Yucatán,5,1430.00
+2026-10-03,Puebla,Chocolate de Oaxaca,3,969.00
+2026-10-04,CDMX,Cajeta de Celaya,1,360.00
+2026-10-05,Monterrey,Vainilla de Papantla,4,1588.00
+2026-10-06,Mérida,Mole poblano,2,868.00
+2026-10-07,Guadalajara,Café de Chiapas,5,2355.00
+2026-10-08,Puebla,Miel de Yucatán,3,324.00
+2026-10-09,CDMX,Chocolate de Oaxaca,1,145.00
+2026-10-10,Monterrey,Cajeta de Celaya,4,728.00
+2026-10-11,Mérida,Vainilla de Papantla,2,438.00
+2026-10-12,Guadalajara,Mole poblano,5,1280.00
+2026-10-13,Puebla,Café de Chiapas,3,879.00
+2026-10-14,CDMX,Miel de Yucatán,1,330.00
+2026-10-15,Monterrey,Chocolate de Oaxaca,4,1468.00
+2026-10-16,Mérida,Cajeta de Celaya,2,808.00
+2026-10-17,Guadalajara,Vainilla de Papantla,5,2205.00
+2026-10-18,Puebla,Mole poblano,3,1434.00
+2026-10-19,CDMX,Café de Chiapas,1,115.00
+2026-10-20,Monterrey,Miel de Yucatán,4,608.00
+2026-10-21,Mérida,Chocolate de Oaxaca,2,378.00
+2026-10-22,Guadalajara,Cajeta de Celaya,5,1130.00
+2026-10-23,Puebla,Vainilla de Papantla,3,789.00
+2026-10-24,CDMX,Mole poblano,1,300.00
+2026-10-25,Monterrey,Café de Chiapas,4,1348.00
+2026-10-26,Mérida,Miel de Yucatán,2,748.00
+2026-10-27,Guadalajara,Chocolate de Oaxaca,5,2055.00
+2026-10-28,Puebla,Cajeta de Celaya,3,1344.00
+2026-10-29,CDMX,Vainilla de Papantla,1,85.00
+2026-10-30,Monterrey,Mole poblano,4,488.00
+2026-10-31,Mérida,Café de Chiapas,2,318.00
+2026-10-01,Guadalajara,Miel de Yucatán,5,980.00
+2026-10-02,Puebla,Chocolate de Oaxaca,3,699.00
+2026-10-03,CDMX,Cajeta de Celaya,1,270.00
+2026-10-04,Monterrey,Vainilla de Papantla,4,1228.00
+2026-10-05,Mérida,Mole poblano,2,688.00
+2026-10-06,Guadalajara,Café de Chiapas,5,1905.00
+2026-10-07,Puebla,Miel de Yucatán,3,1254.00
+2026-10-08,CDMX,Chocolate de Oaxaca,1,455.00
+2026-10-09,Monterrey,Cajeta de Celaya,4,368.00
+2026-10-10,Mérida,Vainilla de Papantla,2,258.00
+2026-10-11,Guadalajara,Mole poblano,5,830.00
+2026-10-12,Puebla,Café de Chiapas,3,609.00
+2026-10-13,CDMX,Miel de Yucatán,1,240.00
+2026-10-14,Monterrey,Chocolate de Oaxaca,4,1108.00
+2026-10-15,Mérida,Cajeta de Celaya,2,628.00
+2026-10-16,Guadalajara,Vainilla de Papantla,5,1755.00
+2026-10-17,Puebla,Mole poblano,3,1164.00
+2026-10-18,CDMX,Café de Chiapas,1,425.00
+2026-10-19,Monterrey,Miel de Yucatán,4,1848.00
+2026-10-20,Mérida,Chocolate de Oaxaca,2,198.00
+2026-10-21,Guadalajara,Cajeta de Celaya,5,680.00
+2026-10-22,Puebla,Vainilla de Papantla,3,519.00
+2026-10-23,CDMX,Mole poblano,1,210.00
+2026-10-24,Monterrey,Café de Chiapas,4,988.00
+2026-10-25,Mérida,Miel de Yucatán,2,568.00
+2026-10-26,Guadalajara,Chocolate de Oaxaca,5,1605.00
+2026-10-27,Puebla,Cajeta de Celaya,3,1074.00
+2026-10-28,CDMX,Vainilla de Papantla,1,395.00
+2026-10-29,Monterrey,Mole poblano,4,1728.00
+2026-10-30,Mérida,Café de Chiapas,2,938.00
+2026-10-31,Guadalajara,Miel de Yucatán,5,530.00
+2026-10-01,Puebla,Chocolate de Oaxaca,3,429.00
+2026-10-02,CDMX,Cajeta de Celaya,1,180.00
+2026-10-03,Monterrey,Vainilla de Papantla,4,868.00
+2026-10-04,Mérida,Mole poblano,2,508.00
+2026-10-05,Guadalajara,Café de Chiapas,5,1455.00
+2026-10-06,Puebla,Miel de Yucatán,3,984.00
+2026-10-07,CDMX,Chocolate de Oaxaca,1,365.00
+2026-10-08,Monterrey,Cajeta de Celaya,4,1608.00
+2026-10-09,Mérida,Vainilla de Papantla,2,878.00
+2026-10-10,Guadalajara,Mole poblano,5,2380.00
+2026-10-11,Puebla,Café de Chiapas,3,339.00
+2026-10-12,CDMX,Miel de Yucatán,1,150.00
+2026-10-13,Monterrey,Chocolate de Oaxaca,4,748.00
+2026-10-14,Mérida,Cajeta de Celaya,2,448.00
+2026-10-15,Guadalajara,Vainilla de Papantla,5,1305.00
+2026-10-16,Puebla,Mole poblano,3,894.00
+2026-10-17,CDMX,Café de Chiapas,1,335.00
+2026-10-18,Monterrey,Miel de Yucatán,4,1488.00
+2026-10-19,Mérida,Chocolate de Oaxaca,2,818.00
+2026-10-20,Guadalajara,Cajeta de Celaya,5,2230.00
+2026-10-21,Puebla,Vainilla de Papantla,3,1449.00
+2026-10-22,CDMX,Mole poblano,1,120.00
+2026-10-23,Monterrey,Café de Chiapas,4,628.00
+2026-10-24,Mérida,Miel de Yucatán,2,388.00
+2026-10-25,Guadalajara,Chocolate de Oaxaca,5,1155.00
+2026-10-26,Puebla,Cajeta de Celaya,3,804.00
+2026-10-27,CDMX,Vainilla de Papantla,1,305.00
+2026-10-28,Monterrey,Mole poblano,4,1368.00
+2026-10-29,Mérida,Café de Chiapas,2,758.00
+2026-10-30,Guadalajara,Miel de Yucatán,5,2080.00
+2026-10-31,Puebla,Chocolate de Oaxaca,3,1359.00
+2026-10-01,CDMX,Cajeta de Celaya,1,90.00
+2026-10-02,Monterrey,Vainilla de Papantla,4,508.00
+2026-10-03,Mérida,Mole poblano,2,328.00
+2026-10-04,Guadalajara,Café de Chiapas,5,1005.00
+2026-10-05,Puebla,Miel de Yucatán,3,714.00
+2026-10-06,CDMX,Chocolate de Oaxaca,1,275.00
+2026-10-07,Monterrey,Cajeta de Celaya,4,1248.00
+2026-10-08,Mérida,Vainilla de Papantla,2,698.00
+2026-10-09,Guadalajara,Mole poblano,5,1930.00
+2026-10-10,Puebla,Café de Chiapas,3,1269.00
+2026-10-11,CDMX,Miel de Yucatán,1,460.00
+2026-10-12,Monterrey,Chocolate de Oaxaca,4,388.00
+2026-10-13,Mérida,Cajeta de Celaya,2,268.00
+2026-10-14,Guadalajara,Vainilla de Papantla,5,855.00
+2026-10-15,Puebla,Mole poblano,3,624.00
+2026-10-16,CDMX,Café de Chiapas,1,245.00
+2026-10-17,Monterrey,Miel de Yucatán,4,1128.00
+2026-10-18,Mérida,Chocolate de Oaxaca,2,638.00
+2026-10-19,Guadalajara,Cajeta de Celaya,5,1780.00
+2026-10-20,Puebla,Vainilla de Papantla,3,1179.00
+2026-10-21,CDMX,Mole poblano,1,430.00
+2026-10-22,Monterrey,Café de Chiapas,4,1868.00
+2026-10-23,Mérida,Miel de Yucatán,2,208.00
+2026-10-24,Guadalajara,Chocolate de Oaxaca,5,705.00
+2026-10-25,Puebla,Cajeta de Celaya,3,534.00
+2026-10-26,CDMX,Vainilla de Papantla,1,215.00
+2026-10-27,Monterrey,Mole poblano,4,1008.00
+2026-10-28,Mérida,Café de Chiapas,2,578.00
+2026-10-29,Guadalajara,Miel de Yucatán,5,1630.00
+2026-10-30,Puebla,Chocolate de Oaxaca,3,1089.00
+2026-10-31,CDMX,Cajeta de Celaya,1,400.00
+2026-10-01,Monterrey,Vainilla de Papantla,4,1748.00
+2026-10-02,Mérida,Mole poblano,2,948.00
+2026-10-03,Guadalajara,Café de Chiapas,5,555.00
+2026-10-04,Puebla,Miel de Yucatán,3,444.00
+2026-10-05,CDMX,Chocolate de Oaxaca,1,185.00
+2026-10-06,Monterrey,Cajeta de Celaya,4,888.00
+2026-10-07,Mérida,Vainilla de Papantla,2,518.00
+2026-10-08,Guadalajara,Mole poblano,5,1480.00
+2026-10-09,Puebla,Café de Chiapas,3,999.00
+2026-10-10,CDMX,Miel de Yucatán,1,370.00
+2026-10-11,Monterrey,Chocolate de Oaxaca,4,1628.00
+2026-10-12,Mérida,Cajeta de Celaya,2,888.00
+2026-10-13,Guadalajara,Vainilla de Papantla,5,2405.00
+2026-10-14,Puebla,Mole poblano,3,354.00
+2026-10-15,CDMX,Café de Chiapas,1,155.00
+2026-10-16,Monterrey,Miel de Yucatán,4,768.00
+2026-10-17,Mérida,Chocolate de Oaxaca,2,458.00
+2026-10-18,Guadalajara,Cajeta de Celaya,5,1330.00
+2026-10-19,Puebla,Vainilla de Papantla,3,909.00
+2026-10-20,CDMX,Mole poblano,1,340.00
+2026-10-21,Monterrey,Café de Chiapas,4,1508.00
+2026-10-22,Mérida,Miel de Yucatán,2,828.00
+2026-10-23,Guadalajara,Chocolate de Oaxaca,5,2255.00
+2026-10-24,Puebla,Cajeta de Celaya,3,264.00
+2026-10-25,CDMX,Vainilla de Papantla,1,125.00
+2026-10-26,Monterrey,Mole poblano,4,648.00
+2026-10-27,Mérida,Café de Chiapas,2,398.00
+2026-10-28,Guadalajara,Miel de Yucatán,5,1180.00
+2026-10-29,Puebla,Chocolate de Oaxaca,3,819.00
+2026-10-30,CDMX,Cajeta de Celaya,1,310.00
+2026-10-31,Monterrey,Vainilla de Papantla,4,1388.00
+2026-10-01,Mérida,Mole poblano,2,768.00
+2026-10-02,Guadalajara,Café de Chiapas,5,2105.00
+2026-10-03,Puebla,Miel de Yucatán,3,1374.00
+2026-10-04,CDMX,Chocolate de Oaxaca,1,95.00
+2026-10-05,Monterrey,Cajeta de Celaya,4,528.00
+2026-10-06,Mérida,Vainilla de Papantla,2,338.00
+2026-10-07,Guadalajara,Mole poblano,5,1030.00
+2026-10-08,Puebla,Café de Chiapas,3,729.00
+2026-10-09,CDMX,Miel de Yucatán,1,280.00
+2026-10-10,Monterrey,Chocolate de Oaxaca,4,1268.00
+2026-10-11,Mérida,Cajeta de Celaya,2,708.00
+2026-10-12,Guadalajara,Vainilla de Papantla,5,1955.00
+2026-10-13,Puebla,Mole poblano,3,1284.00
+2026-10-14,CDMX,Café de Chiapas,1,465.00
+2026-10-15,Monterrey,Miel de Yucatán,4,408.00
+2026-10-16,Mérida,Chocolate de Oaxaca,2,278.00
+2026-10-17,Guadalajara,Cajeta de Celaya,5,880.00
+2026-10-18,Puebla,Vainilla de Papantla,3,639.00
+2026-10-19,CDMX,Mole poblano,1,250.00
+2026-10-20,Monterrey,Café de Chiapas,4,1148.00
+2026-10-21,Mérida,Miel de Yucatán,2,648.00
+2026-10-22,Guadalajara,Chocolate de Oaxaca,5,1805.00
+2026-10-23,Puebla,Cajeta de Celaya,3,1194.00
+2026-10-24,CDMX,Vainilla de Papantla,1,435.00
+2026-10-25,Monterrey,Mole poblano,4,1888.00
+2026-10-26,Mérida,Café de Chiapas,2,218.00
+2026-10-27,Guadalajara,Miel de Yucatán,5,730.00
+2026-10-28,Puebla,Chocolate de Oaxaca,3,549.00
+2026-10-29,CDMX,Cajeta de Celaya,1,220.00
+2026-10-30,Monterrey,Vainilla de Papantla,4,1028.00
+2026-10-31,Mérida,Mole poblano,2,588.00
+2026-10-01,Guadalajara,Café de Chiapas,5,1655.00
+2026-10-02,Puebla,Miel de Yucatán,3,1104.00
+2026-10-03,CDMX,Chocolate de Oaxaca,1,405.00
+2026-10-04,Monterrey,Cajeta de Celaya,4,1768.00
+2026-10-05,Mérida,Vainilla de Papantla,2,958.00
+2026-10-06,Guadalajara,Mole poblano,5,580.00
+2026-10-07,Puebla,Café de Chiapas,3,459.00
+2026-10-08,CDMX,Miel de Yucatán,1,190.00
+2026-10-09,Monterrey,Chocolate de Oaxaca,4,908.00
+2026-10-10,Mérida,Cajeta de Celaya,2,528.00
+2026-10-11,Guadalajara,Vainilla de Papantla,5,1505.00
+2026-10-12,Puebla,Mole poblano,3,1014.00
+2026-10-13,CDMX,Café de Chiapas,1,375.00
+2026-10-14,Monterrey,Miel de Yucatán,4,1648.00
+2026-10-15,Mérida,Chocolate de Oaxaca,2,898.00
+2026-10-16,Guadalajara,Cajeta de Celaya,5,430.00
+2026-10-17,Puebla,Vainilla de Papantla,3,369.00
+2026-10-18,CDMX,Mole poblano,1,160.00
+2026-10-19,Monterrey,Café de Chiapas,4,788.00
+2026-10-20,Mérida,Miel de Yucatán,2,468.00
+2026-10-21,Guadalajara,Chocolate de Oaxaca,5,1355.00
+2026-10-22,Puebla,Cajeta de Celaya,3,924.00
+2026-10-23,CDMX,Vainilla de Papantla,1,345.00
+2026-10-24,Monterrey,Mole poblano,4,1528.00
+2026-10-25,Mérida,Café de Chiapas,2,838.00
+2026-10-26,Guadalajara,Miel de Yucatán,5,2280.00
+2026-10-27,Puebla,Chocolate de Oaxaca,3,279.00
+2026-10-28,CDMX,Cajeta de Celaya,1,130.00
+2026-10-29,Monterrey,Vainilla de Papantla,4,668.00
+2026-10-30,Mérida,Mole poblano,2,408.00
+2026-10-31,Guadalajara,Café de Chiapas,5,1205.00
+2026-10-01,Puebla,Miel de Yucatán,3,834.00
+2026-10-02,CDMX,Chocolate de Oaxaca,1,315.00
+2026-10-03,Monterrey,Cajeta de Celaya,4,1408.00
+2026-10-04,Mérida,Vainilla de Papantla,2,778.00
+2026-10-05,Guadalajara,Mole poblano,5,2130.00
+2026-10-06,Puebla,Café de Chiapas,3,1389.00
+2026-10-07,CDMX,Miel de Yucatán,1,100.00
+2026-10-08,Monterrey,Chocolate de Oaxaca,4,548.00
+2026-10-09,Mérida,Cajeta de Celaya,2,348.00
+2026-10-10,Guadalajara,Vainilla de Papantla,5,1055.00
+2026-10-11,Puebla,Mole poblano,3,744.00
+2026-10-12,CDMX,Café de Chiapas,1,285.00
+2026-10-13,Monterrey,Miel de Yucatán,4,1288.00
+2026-10-14,Mérida,Chocolate de Oaxaca,2,718.00
+2026-10-15,Guadalajara,Cajeta de Celaya,5,1980.00
+2026-10-16,Puebla,Vainilla de Papantla,3,1299.00
+2026-10-17,CDMX,Mole poblano,1,470.00
+2026-10-18,Monterrey,Café de Chiapas,4,428.00
+2026-10-19,Mérida,Miel de Yucatán,2,288.00
+2026-10-20,Guadalajara,Chocolate de Oaxaca,5,905.00
+2026-10-21,Puebla,Cajeta de Celaya,3,654.00
+2026-10-22,CDMX,Vainilla de Papantla,1,255.00
+2026-10-23,Monterrey,Mole poblano,4,1168.00
+2026-10-24,Mérida,Café de Chiapas,2,658.00
+2026-10-25,Guadalajara,Miel de Yucatán,5,1830.00
+2026-10-26,Puebla,Chocolate de Oaxaca,3,1209.00
+2026-10-27,CDMX,Cajeta de Celaya,1,440.00
+2026-10-28,Monterrey,Vainilla de Papantla,4,1908.00
+2026-10-29,Mérida,Mole poblano,2,228.00
+2026-10-30,Guadalajara,Café de Chiapas,5,755.00
+2026-10-31,Puebla,Miel de Yucatán,3,564.00
+2026-10-01,CDMX,Chocolate de Oaxaca,1,225.00
+2026-10-02,Monterrey,Cajeta de Celaya,4,1048.00
+2026-10-03,Mérida,Vainilla de Papantla,2,598.00
+2026-10-04,Guadalajara,Mole poblano,5,1680.00
+2026-10-05,Puebla,Café de Chiapas,3,1119.00
+2026-10-06,CDMX,Miel de Yucatán,1,410.00
+2026-10-07,Monterrey,Chocolate de Oaxaca,4,1788.00
+2026-10-08,Mérida,Cajeta de Celaya,2,968.00
+2026-10-09,Guadalajara,Vainilla de Papantla,5,605.00
+2026-10-10,Puebla,Mole poblano,3,474.00
+2026-10-11,CDMX,Café de Chiapas,1,195.00
+2026-10-12,Monterrey,Miel de Yucatán,4,928.00
+2026-10-13,Mérida,Chocolate de Oaxaca,2,538.00
+2026-10-14,Guadalajara,Cajeta de Celaya,5,1530.00
+2026-10-15,Puebla,Vainilla de Papantla,3,1029.00
+2026-10-16,CDMX,Mole poblano,1,380.00
+2026-10-17,Monterrey,Café de Chiapas,4,1668.00
+2026-10-18,Mérida,Miel de Yucatán,2,908.00
+2026-10-19,Guadalajara,Chocolate de Oaxaca,5,455.00
+2026-10-20,Puebla,Cajeta de Celaya,3,384.00
+2026-10-21,CDMX,Vainilla de Papantla,1,165.00
+2026-10-22,Monterrey,Mole poblano,4,808.00
+2026-10-23,Mérida,Café de Chiapas,2,478.00
+2026-10-24,Guadalajara,Miel de Yucatán,5,1380.00
+2026-10-25,Puebla,Chocolate de Oaxaca,3,939.00
+2026-10-26,CDMX,Cajeta de Celaya,1,350.00
+2026-10-27,Monterrey,Vainilla de Papantla,4,1548.00
+2026-10-28,Mérida,Mole poblano,2,848.00
+2026-10-29,Guadalajara,Café de Chiapas,5,2305.00
+2026-10-30,Puebla,Miel de Yucatán,3,294.00
+2026-10-31,CDMX,Chocolate de Oaxaca,1,135.00
+2026-10-01,Monterrey,Cajeta de Celaya,4,688.00
+2026-10-02,Mérida,Vainilla de Papantla,2,418.00
+2026-10-03,Guadalajara,Mole poblano,5,1230.00
+2026-10-04,Puebla,Café de Chiapas,3,849.00
+2026-10-05,CDMX,Miel de Yucatán,1,320.00
+2026-10-06,Monterrey,Chocolate de Oaxaca,4,1428.00
+2026-10-07,Mérida,Cajeta de Celaya,2,788.00
+2026-10-08,Guadalajara,Vainilla de Papantla,5,2155.00
+2026-10-09,Puebla,Mole poblano,3,1404.00
+2026-10-10,CDMX,Café de Chiapas,1,105.00
+2026-10-11,Monterrey,Miel de Yucatán,4,568.00
+2026-10-12,Mérida,Chocolate de Oaxaca,2,358.00
+2026-10-13,Guadalajara,Cajeta de Celaya,5,1080.00
+2026-10-14,Puebla,Vainilla de Papantla,3,759.00
+2026-10-15,CDMX,Mole poblano,1,290.00
+2026-10-16,Monterrey,Café de Chiapas,4,1308.00
+2026-10-17,Mérida,Miel de Yucatán,2,728.00
+2026-10-18,Guadalajara,Chocolate de Oaxaca,5,2005.00
+2026-10-19,Puebla,Cajeta de Celaya,3,1314.00
+2026-10-20,CDMX,Vainilla de Papantla,1,475.00
+2026-10-21,Monterrey,Mole poblano,4,448.00
+2026-10-22,Mérida,Café de Chiapas,2,298.00
+2026-10-23,Guadalajara,Miel de Yucatán,5,930.00
+2026-10-24,Puebla,Chocolate de Oaxaca,3,669.00
+2026-10-25,CDMX,Cajeta de Celaya,1,260.00
+2026-10-26,Monterrey,Vainilla de Papantla,4,1188.00
+2026-10-27,Mérida,Mole poblano,2,668.00
+2026-10-28,Guadalajara,Café de Chiapas,5,1855.00
+2026-10-29,Puebla,Miel de Yucatán,3,1224.00
+2026-10-30,CDMX,Chocolate de Oaxaca,1,445.00
+2026-10-31,Monterrey,Cajeta de Celaya,4,1928.00
+2026-10-01,Mérida,Vainilla de Papantla,2,238.00
+2026-10-02,Guadalajara,Mole poblano,5,780.00
+2026-10-03,Puebla,Café de Chiapas,3,579.00
+2026-10-04,CDMX,Miel de Yucatán,1,230.00
+2026-10-05,Monterrey,Chocolate de Oaxaca,4,1068.00
+2026-10-06,Mérida,Cajeta de Celaya,2,608.00
+2026-10-07,Guadalajara,Vainilla de Papantla,5,1705.00
+2026-10-08,Puebla,Mole poblano,3,1134.00
+2026-10-09,CDMX,Café de Chiapas,1,415.00
+2026-10-10,Monterrey,Miel de Yucatán,4,1808.00
+2026-10-11,Mérida,Chocolate de Oaxaca,2,178.00
+2026-10-12,Guadalajara,Cajeta de Celaya,5,630.00
+2026-10-13,Puebla,Vainilla de Papantla,3,489.00
+2026-10-14,CDMX,Mole poblano,1,200.00
+2026-10-15,Monterrey,Café de Chiapas,4,948.00
+2026-10-16,Mérida,Miel de Yucatán,2,548.00
+2026-10-17,Guadalajara,Chocolate de Oaxaca,5,1555.00
+2026-10-18,Puebla,Cajeta de Celaya,3,1044.00
+2026-10-19,CDMX,Vainilla de Papantla,1,385.00
+2026-10-20,Monterrey,Mole poblano,4,1688.00
+2026-10-21,Mérida,Café de Chiapas,2,918.00
+2026-10-22,Guadalajara,Miel de Yucatán,5,480.00
+2026-10-23,Puebla,Chocolate de Oaxaca,3,399.00
+2026-10-24,CDMX,Cajeta de Celaya,1,170.00
+2026-10-25,Monterrey,Vainilla de Papantla,4,828.00
+2026-10-26,Mérida,Mole poblano,2,488.00
+2026-10-27,Guadalajara,Café de Chiapas,5,1405.00
+2026-10-28,Puebla,Miel de Yucatán,3,954.00
+2026-10-29,CDMX,Chocolate de Oaxaca,1,355.00
+2026-10-30,Monterrey,Cajeta de Celaya,4,1568.00
+2026-10-31,Mérida,Vainilla de Papantla,2,858.00
+2026-10-01,Guadalajara,Mole poblano,5,2330.00
+2026-10-02,Puebla,Café de Chiapas,3,309.00
+2026-10-03,CDMX,Miel de Yucatán,1,140.00
+2026-10-04,Monterrey,Chocolate de Oaxaca,4,708.00
+2026-10-05,Mérida,Cajeta de Celaya,2,428.00
+2026-10-06,Guadalajara,Vainilla de Papantla,5,1255.00
+2026-10-07,Puebla,Mole poblano,3,864.00
+2026-10-08,CDMX,Café de Chiapas,1,325.00
+2026-10-09,Monterrey,Miel de Yucatán,4,1448.00
+2026-10-10,Mérida,Chocolate de Oaxaca,2,798.00
+2026-10-11,Guadalajara,Cajeta de Celaya,5,2180.00
+2026-10-12,Puebla,Vainilla de Papantla,3,1419.00
+2026-10-13,CDMX,Mole poblano,1,110.00
+2026-10-14,Monterrey,Café de Chiapas,4,588.00
+2026-10-15,Mérida,Miel de Yucatán,2,368.00
+2026-10-16,Guadalajara,Chocolate de Oaxaca,5,1105.00
+2026-10-17,Puebla,Cajeta de Celaya,3,774.00
+2026-10-18,CDMX,Vainilla de Papantla,1,295.00
+2026-10-19,Monterrey,Mole poblano,4,1328.00
+2026-10-20,Mérida,Café de Chiapas,2,738.00
+2026-10-21,Guadalajara,Miel de Yucatán,5,2030.00
+2026-10-22,Puebla,Chocolate de Oaxaca,3,1329.00
+2026-10-23,CDMX,Cajeta de Celaya,1,480.00
+2026-10-24,Monterrey,Vainilla de Papantla,4,468.00
+2026-10-25,Mérida,Mole poblano,2,308.00
+2026-10-26,Guadalajara,Café de Chiapas,5,955.00
+2026-10-27,Puebla,Miel de Yucatán,3,684.00
+2026-10-28,CDMX,Chocolate de Oaxaca,1,265.00
+2026-10-29,Monterrey,Cajeta de Celaya,4,1208.00
+2026-10-30,Mérida,Vainilla de Papantla,2,678.00
+2026-10-31,Guadalajara,Mole poblano,5,1880.00
+2026-10-01,Puebla,Café de Chiapas,3,1239.00
+2026-10-02,CDMX,Miel de Yucatán,1,450.00
+2026-10-03,Monterrey,Chocolate de Oaxaca,4,348.00
+2026-10-04,Mérida,Cajeta de Celaya,2,248.00
+2026-10-05,Guadalajara,Vainilla de Papantla,5,805.00
+2026-10-06,Puebla,Mole poblano,3,594.00
+2026-10-07,CDMX,Café de Chiapas,1,235.00
+2026-10-08,Monterrey,Miel de Yucatán,4,1088.00
+2026-10-09,Mérida,Chocolate de Oaxaca,2,618.00
+2026-10-10,Guadalajara,Cajeta de Celaya,5,1730.00
+2026-10-11,Puebla,Vainilla de Papantla,3,1149.00
+2026-10-12,CDMX,Mole poblano,1,420.00
+2026-10-13,Monterrey,Café de Chiapas,4,1828.00
+2026-10-14,Mérida,Miel de Yucatán,2,188.00
+2026-10-15,Guadalajara,Chocolate de Oaxaca,5,655.00
+2026-10-16,Puebla,Cajeta de Celaya,3,504.00
+2026-10-17,CDMX,Vainilla de Papantla,1,205.00
+2026-10-18,Monterrey,Mole poblano,4,968.00
+2026-10-19,Mérida,Café de Chiapas,2,558.00
+2026-10-20,Guadalajara,Miel de Yucatán,5,1580.00
+2026-10-21,Puebla,Chocolate de Oaxaca,3,1059.00
+2026-10-22,CDMX,Cajeta de Celaya,1,390.00
+2026-10-23,Monterrey,Vainilla de Papantla,4,1708.00
+2026-10-24,Mérida,Mole poblano,2,928.00
+2026-10-25,Guadalajara,Café de Chiapas,5,505.00
+2026-10-26,Puebla,Miel de Yucatán,3,414.00
+2026-10-27,CDMX,Chocolate de Oaxaca,1,175.00
+2026-10-28,Monterrey,Cajeta de Celaya,4,848.00
+2026-10-29,Mérida,Vainilla de Papantla,2,498.00
+2026-10-30,Guadalajara,Mole poblano,5,1430.00
+2026-10-31,Puebla,Café de Chiapas,3,969.00
+2026-10-01,CDMX,Miel de Yucatán,1,360.00
+2026-10-02,Monterrey,Chocolate de Oaxaca,4,1588.00
+2026-10-03,Mérida,Cajeta de Celaya,2,868.00
+2026-10-04,Guadalajara,Vainilla de Papantla,5,2355.00
+2026-10-05,Puebla,Mole poblano,3,324.00
+2026-10-06,CDMX,Café de Chiapas,1,145.00
+2026-10-07,Monterrey,Miel de Yucatán,4,728.00
+2026-10-08,Mérida,Chocolate de Oaxaca,2,438.00
+2026-10-09,Guadalajara,Cajeta de Celaya,5,1280.00
+2026-10-10,Puebla,Vainilla de Papantla,3,879.00
+2026-10-11,CDMX,Mole poblano,1,330.00
+2026-10-12,Monterrey,Café de Chiapas,4,1468.00
+2026-10-13,Mérida,Miel de Yucatán,2,808.00
+2026-10-14,Guadalajara,Chocolate de Oaxaca,5,2205.00
+2026-10-15,Puebla,Cajeta de Celaya,3,1434.00
+2026-10-16,CDMX,Vainilla de Papantla,1,115.00
+2026-10-17,Monterrey,Mole poblano,4,608.00
+2026-10-18,Mérida,Café de Chiapas,2,378.00
+2026-10-19,Guadalajara,Miel de Yucatán,5,1130.00
+2026-10-20,Puebla,Chocolate de Oaxaca,3,789.00
+2026-10-21,CDMX,Cajeta de Celaya,1,300.00
+2026-10-22,Monterrey,Vainilla de Papantla,4,1348.00
+2026-10-23,Mérida,Mole poblano,2,748.00
+2026-10-24,Guadalajara,Café de Chiapas,5,2055.00
+2026-10-25,Puebla,Miel de Yucatán,3,1344.00
+2026-10-26,CDMX,Chocolate de Oaxaca,1,85.00
+2026-10-27,Monterrey,Cajeta de Celaya,4,488.00
+2026-10-28,Mérida,Vainilla de Papantla,2,318.00
+2026-10-29,Guadalajara,Mole poblano,5,980.00
+2026-10-30,Puebla,Café de Chiapas,3,699.00
+2026-10-31,CDMX,Miel de Yucatán,1,270.00
+2026-10-01,Monterrey,Chocolate de Oaxaca,4,1228.00
+2026-10-02,Mérida,Cajeta de Celaya,2,688.00
+2026-10-03,Guadalajara,Vainilla de Papantla,5,1905.00
+2026-10-04,Puebla,Mole poblano,3,1254.00
+2026-10-05,CDMX,Café de Chiapas,1,455.00
+2026-10-06,Monterrey,Miel de Yucatán,4,368.00
+2026-10-07,Mérida,Chocolate de Oaxaca,2,258.00
+2026-10-08,Guadalajara,Cajeta de Celaya,5,830.00
+2026-10-09,Puebla,Vainilla de Papantla,3,609.00
+2026-10-10,CDMX,Mole poblano,1,240.00
+2026-10-11,Monterrey,Café de Chiapas,4,1108.00
+2026-10-12,Mérida,Miel de Yucatán,2,628.00
+2026-10-13,Guadalajara,Chocolate de Oaxaca,5,1755.00
+2026-10-14,Puebla,Cajeta de Celaya,3,1164.00
+2026-10-15,CDMX,Vainilla de Papantla,1,425.00
+2026-10-16,Monterrey,Mole poblano,4,1848.00
+2026-10-17,Mérida,Café de Chiapas,2,198.00
+2026-10-18,Guadalajara,Miel de Yucatán,5,680.00
+2026-10-19,Puebla,Chocolate de Oaxaca,3,519.00
+2026-10-20,CDMX,Cajeta de Celaya,1,210.00
+2026-10-21,Monterrey,Vainilla de Papantla,4,988.00
+2026-10-22,Mérida,Mole poblano,2,568.00
+2026-10-23,Guadalajara,Café de Chiapas,5,1605.00
+2026-10-24,Puebla,Miel de Yucatán,3,1074.00
+2026-10-25,CDMX,Chocolate de Oaxaca,1,395.00
+2026-10-26,Monterrey,Cajeta de Celaya,4,1728.00
+2026-10-27,Mérida,Vainilla de Papantla,2,938.00
+2026-10-28,Guadalajara,Mole poblano,5,530.00
+2026-10-29,Puebla,Café de Chiapas,3,429.00
+2026-10-30,CDMX,Miel de Yucatán,1,180.00
+2026-10-31,Monterrey,Chocolate de Oaxaca,4,868.00
+2026-10-01,Mérida,Cajeta de Celaya,2,508.00
+2026-10-02,Guadalajara,Vainilla de Papantla,5,1455.00
+2026-10-03,Puebla,Mole poblano,3,984.00
+2026-10-04,CDMX,Café de Chiapas,1,365.00
+2026-10-05,Monterrey,Miel de Yucatán,4,1608.00
+2026-10-06,Mérida,Chocolate de Oaxaca,2,878.00
+2026-10-07,Guadalajara,Cajeta de Celaya,5,2380.00
+2026-10-08,Puebla,Vainilla de Papantla,3,339.00
+2026-10-09,CDMX,Mole poblano,1,150.00
+2026-10-10,Monterrey,Café de Chiapas,4,748.00
+2026-10-11,Mérida,Miel de Yucatán,2,448.00
+2026-10-12,Guadalajara,Chocolate de Oaxaca,5,1305.00
+2026-10-13,Puebla,Cajeta de Celaya,3,894.00
+2026-10-14,CDMX,Vainilla de Papantla,1,335.00
+2026-10-15,Monterrey,Mole poblano,4,1488.00
+2026-10-16,Mérida,Café de Chiapas,2,818.00
+2026-10-17,Guadalajara,Miel de Yucatán,5,2230.00
+2026-10-18,Puebla,Chocolate de Oaxaca,3,1449.00
+2026-10-19,CDMX,Cajeta de Celaya,1,120.00
+2026-10-20,Monterrey,Vainilla de Papantla,4,628.00
+2026-10-21,Mérida,Mole poblano,2,388.00
+2026-10-22,Guadalajara,Café de Chiapas,5,1155.00
+2026-10-23,Puebla,Miel de Yucatán,3,804.00
+2026-10-24,CDMX,Chocolate de Oaxaca,1,305.00
+2026-10-25,Monterrey,Cajeta de Celaya,4,1368.00
+2026-10-26,Mérida,Vainilla de Papantla,2,758.00
+2026-10-27,Guadalajara,Mole poblano,5,2080.00
+2026-10-28,Puebla,Café de Chiapas,3,1359.00
+2026-10-29,CDMX,Miel de Yucatán,1,90.00
+2026-10-30,Monterrey,Chocolate de Oaxaca,4,508.00
+2026-10-31,Mérida,Cajeta de Celaya,2,328.00
+2026-10-01,Guadalajara,Vainilla de Papantla,5,1005.00
+2026-10-02,Puebla,Mole poblano,3,714.00
+2026-10-03,CDMX,Café de Chiapas,1,275.00
+2026-10-04,Monterrey,Miel de Yucatán,4,1248.00
+2026-10-05,Mérida,Chocolate de Oaxaca,2,698.00
+2026-10-06,Guadalajara,Cajeta de Celaya,5,1930.00
+2026-10-07,Puebla,Vainilla de Papantla,3,1269.00
+2026-10-08,CDMX,Mole poblano,1,460.00
+2026-10-09,Monterrey,Café de Chiapas,4,388.00
+2026-10-10,Mérida,Miel de Yucatán,2,268.00
+2026-10-11,Guadalajara,Chocolate de Oaxaca,5,855.00
+2026-10-12,Puebla,Cajeta de Celaya,3,624.00
+2026-10-13,CDMX,Vainilla de Papantla,1,245.00
+2026-10-14,Monterrey,Mole poblano,4,1128.00
+2026-10-15,Mérida,Café de Chiapas,2,638.00
+2026-10-16,Guadalajara,Miel de Yucatán,5,1780.00
+2026-10-17,Puebla,Chocolate de Oaxaca,3,1179.00
+2026-10-18,CDMX,Cajeta de Celaya,1,430.00
+2026-10-19,Monterrey,Vainilla de Papantla,4,1868.00
+2026-10-20,Mérida,Mole poblano,2,208.00
+2026-10-21,Guadalajara,Café de Chiapas,5,705.00
+2026-10-22,Puebla,Miel de Yucatán,3,534.00
+2026-10-23,CDMX,Chocolate de Oaxaca,1,215.00
+2026-10-24,Monterrey,Cajeta de Celaya,4,1008.00
+2026-10-25,Mérida,Vainilla de Papantla,2,578.00
+2026-10-26,Guadalajara,Mole poblano,5,1630.00
+2026-10-27,Puebla,Café de Chiapas,3,1089.00
+2026-10-28,CDMX,Miel de Yucatán,1,400.00
+2026-10-29,Monterrey,Chocolate de Oaxaca,4,1748.00
+2026-10-30,Mérida,Cajeta de Celaya,2,948.00
+2026-10-31,Guadalajara,Vainilla de Papantla,5,555.00
+2026-10-01,Puebla,Mole poblano,3,444.00
+2026-10-02,CDMX,Café de Chiapas,1,185.00
+2026-10-03,Monterrey,Miel de Yucatán,4,888.00
+2026-10-04,Mérida,Chocolate de Oaxaca,2,518.00
+2026-10-05,Guadalajara,Cajeta de Celaya,5,1480.00
+2026-10-06,Puebla,Vainilla de Papantla,3,999.00
+2026-10-07,CDMX,Mole poblano,1,370.00
+2026-10-08,Monterrey,Café de Chiapas,4,1628.00
+2026-10-09,Mérida,Miel de Yucatán,2,888.00
+2026-10-10,Guadalajara,Chocolate de Oaxaca,5,2405.00
+2026-10-11,Puebla,Cajeta de Celaya,3,354.00
+2026-10-12,CDMX,Vainilla de Papantla,1,155.00
+2026-10-13,Monterrey,Mole poblano,4,768.00
+2026-10-14,Mérida,Café de Chiapas,2,458.00
+2026-10-15,Guadalajara,Miel de Yucatán,5,1330.00
+2026-10-16,Puebla,Chocolate de Oaxaca,3,909.00
+2026-10-17,CDMX,Cajeta de Celaya,1,340.00
+2026-10-18,Monterrey,Vainilla de Papantla,4,1508.00
+2026-10-19,Mérida,Mole poblano,2,828.00
+2026-10-20,Guadalajara,Café de Chiapas,5,2255.00
+2026-10-21,Puebla,Miel de Yucatán,3,264.00
+2026-10-22,CDMX,Chocolate de Oaxaca,1,125.00
+2026-10-23,Monterrey,Cajeta de Celaya,4,648.00
+2026-10-24,Mérida,Vainilla de Papantla,2,398.00
+2026-10-25,Guadalajara,Mole poblano,5,1180.00
+2026-10-26,Puebla,Café de Chiapas,3,819.00
+2026-10-27,CDMX,Miel de Yucatán,1,310.00
+2026-10-28,Monterrey,Chocolate de Oaxaca,4,1388.00
+2026-10-29,Mérida,Cajeta de Celaya,2,768.00
+2026-10-30,Guadalajara,Vainilla de Papantla,5,2105.00
+2026-10-31,Puebla,Mole poblano,3,1374.00
+2026-10-01,CDMX,Café de Chiapas,1,95.00
+2026-10-02,Monterrey,Miel de Yucatán,4,528.00
+2026-10-03,Mérida,Chocolate de Oaxaca,2,338.00
+2026-10-04,Guadalajara,Cajeta de Celaya,5,1030.00
+2026-10-05,Puebla,Vainilla de Papantla,3,729.00
+2026-10-06,CDMX,Mole poblano,1,280.00
+2026-10-07,Monterrey,Café de Chiapas,4,1268.00
+2026-10-08,Mérida,Miel de Yucatán,2,708.00
+2026-10-09,Guadalajara,Chocolate de Oaxaca,5,1955.00
+2026-10-10,Puebla,Cajeta de Celaya,3,1284.00
+2026-10-11,CDMX,Vainilla de Papantla,1,465.00
+2026-10-12,Monterrey,Mole poblano,4,408.00
+2026-10-13,Mérida,Café de Chiapas,2,278.00
+2026-10-14,Guadalajara,Miel de Yucatán,5,880.00
+2026-10-15,Puebla,Chocolate de Oaxaca,3,639.00
+2026-10-16,CDMX,Cajeta de Celaya,1,250.00
+2026-10-17,Monterrey,Vainilla de Papantla,4,1148.00
+2026-10-18,Mérida,Mole poblano,2,648.00
+2026-10-19,Guadalajara,Café de Chiapas,5,1805.00
+2026-10-20,Puebla,Miel de Yucatán,3,1194.00
+2026-10-21,CDMX,Chocolate de Oaxaca,1,435.00
+2026-10-22,Monterrey,Cajeta de Celaya,4,1888.00
+2026-10-23,Mérida,Vainilla de Papantla,2,218.00
+2026-10-24,Guadalajara,Mole poblano,5,730.00
+2026-10-25,Puebla,Café de Chiapas,3,549.00
+2026-10-26,CDMX,Miel de Yucatán,1,220.00
+2026-10-27,Monterrey,Chocolate de Oaxaca,4,1028.00
+2026-10-28,Mérida,Cajeta de Celaya,2,588.00
+2026-10-29,Guadalajara,Vainilla de Papantla,5,1655.00
+2026-10-30,Puebla,Mole poblano,3,1104.00
+2026-10-31,CDMX,Café de Chiapas,1,405.00
+2026-10-01,Monterrey,Miel de Yucatán,4,1768.00
+2026-10-02,Mérida,Chocolate de Oaxaca,2,958.00
+2026-10-03,Guadalajara,Cajeta de Celaya,5,580.00
+2026-10-04,Puebla,Vainilla de Papantla,3,459.00
+2026-10-05,CDMX,Mole poblano,1,190.00
+2026-10-06,Monterrey,Café de Chiapas,4,908.00
+2026-10-07,Mérida,Miel de Yucatán,2,528.00
+2026-10-08,Guadalajara,Chocolate de Oaxaca,5,1505.00
+2026-10-09,Puebla,Cajeta de Celaya,3,1014.00
+2026-10-10,CDMX,Vainilla de Papantla,1,375.00
+2026-10-11,Monterrey,Mole poblano,4,1648.00
+2026-10-12,Mérida,Café de Chiapas,2,898.00
+2026-10-13,Guadalajara,Miel de Yucatán,5,430.00
+2026-10-14,Puebla,Chocolate de Oaxaca,3,369.00
+2026-10-15,CDMX,Cajeta de Celaya,1,160.00
+2026-10-16,Monterrey,Vainilla de Papantla,4,788.00
+2026-10-17,Mérida,Mole poblano,2,468.00
+2026-10-18,Guadalajara,Café de Chiapas,5,1355.00
+2026-10-19,Puebla,Miel de Yucatán,3,924.00
+2026-10-20,CDMX,Chocolate de Oaxaca,1,345.00
+2026-10-21,Monterrey,Cajeta de Celaya,4,1528.00
+2026-10-22,Mérida,Vainilla de Papantla,2,838.00
+2026-10-23,Guadalajara,Mole poblano,5,2280.00
+2026-10-24,Puebla,Café de Chiapas,3,279.00
+2026-10-25,CDMX,Miel de Yucatán,1,130.00
+2026-10-26,Monterrey,Chocolate de Oaxaca,4,668.00
+2026-10-27,Mérida,Cajeta de Celaya,2,408.00
+2026-10-28,Guadalajara,Vainilla de Papantla,5,1205.00
+2026-10-29,Puebla,Mole poblano,3,834.00
+2026-10-30,CDMX,Café de Chiapas,1,315.00
+2026-10-31,Monterrey,Miel de Yucatán,4,1408.00
+2026-10-01,Mérida,Chocolate de Oaxaca,2,778.00
+2026-10-02,Guadalajara,Cajeta de Celaya,5,2130.00
+2026-10-03,Puebla,Vainilla de Papantla,3,1389.00
+2026-10-04,CDMX,Mole poblano,1,100.00
+2026-10-05,Monterrey,Café de Chiapas,4,548.00
+2026-10-06,Mérida,Miel de Yucatán,2,348.00
+2026-10-07,Guadalajara,Chocolate de Oaxaca,5,1055.00
+2026-10-08,Puebla,Cajeta de Celaya,3,744.00
+2026-10-09,CDMX,Vainilla de Papantla,1,285.00
+2026-10-10,Monterrey,Mole poblano,4,1288.00
+2026-10-11,Mérida,Café de Chiapas,2,718.00
+2026-10-12,Guadalajara,Miel de Yucatán,5,1980.00
+2026-10-13,Puebla,Chocolate de Oaxaca,3,1299.00
+2026-10-14,CDMX,Cajeta de Celaya,1,470.00
+2026-10-15,Monterrey,Vainilla de Papantla,4,428.00
+2026-10-16,Mérida,Mole poblano,2,288.00
+2026-10-17,Guadalajara,Café de Chiapas,5,905.00
+2026-10-18,Puebla,Miel de Yucatán,3,654.00
+2026-10-19,CDMX,Chocolate de Oaxaca,1,255.00
+2026-10-20,Monterrey,Cajeta de Celaya,4,1168.00
+2026-10-21,Mérida,Vainilla de Papantla,2,658.00
+2026-10-22,Guadalajara,Mole poblano,5,1830.00
+2026-10-23,Puebla,Café de Chiapas,3,1209.00
+2026-10-24,CDMX,Miel de Yucatán,1,440.00
+2026-10-25,Monterrey,Chocolate de Oaxaca,4,1908.00
+2026-10-26,Mérida,Cajeta de Celaya,2,228.00
+2026-10-27,Guadalajara,Vainilla de Papantla,5,755.00
+2026-10-28,Puebla,Mole poblano,3,564.00
+2026-10-29,CDMX,Café de Chiapas,1,225.00
+2026-10-30,Monterrey,Miel de Yucatán,4,1048.00
+2026-10-31,Mérida,Chocolate de Oaxaca,2,598.00
+2026-10-01,Guadalajara,Cajeta de Celaya,5,1680.00
+2026-10-02,Puebla,Vainilla de Papantla,3,1119.00
+2026-10-03,CDMX,Mole poblano,1,410.00
+2026-10-04,Monterrey,Café de Chiapas,4,1788.00
+2026-10-05,Mérida,Miel de Yucatán,2,968.00
+2026-10-06,Guadalajara,Chocolate de Oaxaca,5,605.00
+2026-10-07,Puebla,Cajeta de Celaya,3,474.00
+2026-10-08,CDMX,Vainilla de Papantla,1,195.00
+2026-10-09,Monterrey,Mole poblano,4,928.00
+2026-10-10,Mérida,Café de Chiapas,2,538.00
+2026-10-11,Guadalajara,Miel de Yucatán,5,1530.00
+2026-10-12,Puebla,Chocolate de Oaxaca,3,1029.00
+2026-10-13,CDMX,Cajeta de Celaya,1,380.00
+2026-10-14,Monterrey,Vainilla de Papantla,4,1668.00
+2026-10-15,Mérida,Mole poblano,2,908.00
+2026-10-16,Guadalajara,Café de Chiapas,5,455.00
+2026-10-17,Puebla,Miel de Yucatán,3,384.00
+2026-10-18,CDMX,Chocolate de Oaxaca,1,165.00
+2026-10-19,Monterrey,Cajeta de Celaya,4,808.00
+2026-10-20,Mérida,Vainilla de Papantla,2,478.00
+2026-10-21,Guadalajara,Mole poblano,5,1380.00
+2026-10-22,Puebla,Café de Chiapas,3,939.00
+2026-10-23,CDMX,Miel de Yucatán,1,350.00
+2026-10-24,Monterrey,Chocolate de Oaxaca,4,1548.00
+2026-10-25,Mérida,Cajeta de Celaya,2,848.00
+2026-10-26,Guadalajara,Vainilla de Papantla,5,2305.00
+2026-10-27,Puebla,Mole poblano,3,294.00
+2026-10-28,CDMX,Café de Chiapas,1,135.00
+2026-10-29,Monterrey,Miel de Yucatán,4,688.00
+2026-10-30,Mérida,Chocolate de Oaxaca,2,418.00
+2026-10-31,Guadalajara,Cajeta de Celaya,5,1230.00
+2026-10-01,Puebla,Vainilla de Papantla,3,849.00
+2026-10-02,CDMX,Mole poblano,1,320.00
+2026-10-03,Monterrey,Café de Chiapas,4,1428.00
+2026-10-04,Mérida,Miel de Yucatán,2,788.00
+2026-10-05,Guadalajara,Chocolate de Oaxaca,5,2155.00
+2026-10-06,Puebla,Cajeta de Celaya,3,1404.00
+2026-10-07,CDMX,Vainilla de Papantla,1,105.00
+2026-10-08,Monterrey,Mole poblano,4,568.00
+2026-10-09,Mérida,Café de Chiapas,2,358.00
+2026-10-10,Guadalajara,Miel de Yucatán,5,1080.00
+2026-10-11,Puebla,Chocolate de Oaxaca,3,759.00
+2026-10-12,CDMX,Cajeta de Celaya,1,290.00
+2026-10-13,Monterrey,Vainilla de Papantla,4,1308.00
+2026-10-14,Mérida,Mole poblano,2,728.00
+2026-10-15,Guadalajara,Café de Chiapas,5,2005.00
+2026-10-16,Puebla,Miel de Yucatán,3,1314.00
+2026-10-17,CDMX,Chocolate de Oaxaca,1,475.00
+2026-10-18,Monterrey,Cajeta de Celaya,4,448.00
+2026-10-19,Mérida,Vainilla de Papantla,2,298.00
+2026-10-20,Guadalajara,Mole poblano,5,930.00
+2026-10-21,Puebla,Café de Chiapas,3,669.00
+2026-10-22,CDMX,Miel de Yucatán,1,260.00
+2026-10-23,Monterrey,Chocolate de Oaxaca,4,1188.00
+2026-10-24,Mérida,Cajeta de Celaya,2,668.00
+2026-10-25,Guadalajara,Vainilla de Papantla,5,1855.00
+2026-10-26,Puebla,Mole poblano,3,1224.00
+2026-10-27,CDMX,Café de Chiapas,1,445.00
+2026-10-28,Monterrey,Miel de Yucatán,4,1928.00
+2026-10-29,Mérida,Chocolate de Oaxaca,2,238.00
+2026-10-30,Guadalajara,Cajeta de Celaya,5,780.00
+2026-10-31,Puebla,Vainilla de Papantla,3,579.00
+2026-10-01,CDMX,Mole poblano,1,230.00
+2026-10-02,Monterrey,Café de Chiapas,4,1068.00
+2026-10-03,Mérida,Miel de Yucatán,2,608.00
+2026-10-04,Guadalajara,Chocolate de Oaxaca,5,1705.00
+2026-10-05,Puebla,Cajeta de Celaya,3,1134.00
+2026-10-06,CDMX,Vainilla de Papantla,1,415.00
+2026-10-07,Monterrey,Mole poblano,4,1808.00
+2026-10-08,Mérida,Café de Chiapas,2,178.00
+2026-10-09,Guadalajara,Miel de Yucatán,5,630.00
+2026-10-10,Puebla,Chocolate de Oaxaca,3,489.00
+2026-10-11,CDMX,Cajeta de Celaya,1,200.00
+2026-10-12,Monterrey,Vainilla de Papantla,4,948.00
+2026-10-13,Mérida,Mole poblano,2,548.00
+2026-10-14,Guadalajara,Café de Chiapas,5,1555.00
+2026-10-15,Puebla,Miel de Yucatán,3,1044.00
+2026-10-16,CDMX,Chocolate de Oaxaca,1,385.00
+2026-10-17,Monterrey,Cajeta de Celaya,4,1688.00
+2026-10-18,Mérida,Vainilla de Papantla,2,918.00
+2026-10-19,Guadalajara,Mole poblano,5,480.00
+2026-10-20,Puebla,Café de Chiapas,3,399.00
+2026-10-21,CDMX,Miel de Yucatán,1,170.00
+2026-10-22,Monterrey,Chocolate de Oaxaca,4,828.00
+2026-10-23,Mérida,Cajeta de Celaya,2,488.00
+2026-10-24,Guadalajara,Vainilla de Papantla,5,1405.00
+2026-10-25,Puebla,Mole poblano,3,954.00
+2026-10-26,CDMX,Café de Chiapas,1,355.00
+2026-10-27,Monterrey,Miel de Yucatán,4,1568.00
+2026-10-28,Mérida,Chocolate de Oaxaca,2,858.00
+2026-10-29,Guadalajara,Cajeta de Celaya,5,2330.00
+2026-10-30,Puebla,Vainilla de Papantla,3,309.00
+2026-10-31,CDMX,Mole poblano,1,140.00
+2026-10-01,Monterrey,Café de Chiapas,4,708.00
+2026-10-02,Mérida,Miel de Yucatán,2,428.00
+2026-10-03,Guadalajara,Chocolate de Oaxaca,5,1255.00
+2026-10-04,Puebla,Cajeta de Celaya,3,864.00
+2026-10-05,CDMX,Vainilla de Papantla,1,325.00
+2026-10-06,Monterrey,Mole poblano,4,1448.00
+2026-10-07,Mérida,Café de Chiapas,2,798.00
+2026-10-08,Guadalajara,Miel de Yucatán,5,2180.00
+2026-10-09,Puebla,Chocolate de Oaxaca,3,1419.00
+2026-10-10,CDMX,Cajeta de Celaya,1,110.00
+2026-10-11,Monterrey,Vainilla de Papantla,4,588.00
+2026-10-12,Mérida,Mole poblano,2,368.00
+2026-10-13,Guadalajara,Café de Chiapas,5,1105.00
+2026-10-14,Puebla,Miel de Yucatán,3,774.00
+2026-10-15,CDMX,Chocolate de Oaxaca,1,295.00
+2026-10-16,Monterrey,Cajeta de Celaya,4,1328.00
+2026-10-17,Mérida,Vainilla de Papantla,2,738.00
+2026-10-18,Guadalajara,Mole poblano,5,2030.00
+2026-10-19,Puebla,Café de Chiapas,3,1329.00
+2026-10-20,CDMX,Miel de Yucatán,1,480.00
+2026-10-21,Monterrey,Chocolate de Oaxaca,4,468.00
+2026-10-22,Mérida,Cajeta de Celaya,2,308.00
+2026-10-23,Guadalajara,Vainilla de Papantla,5,955.00
+2026-10-24,Puebla,Mole poblano,3,684.00
+2026-10-25,CDMX,Café de Chiapas,1,265.00
+2026-10-26,Monterrey,Miel de Yucatán,4,1208.00
+2026-10-27,Mérida,Chocolate de Oaxaca,2,678.00
+2026-10-28,Guadalajara,Cajeta de Celaya,5,1880.00
+2026-10-29,Puebla,Vainilla de Papantla,3,1239.00
+2026-10-30,CDMX,Mole poblano,1,450.00
+2026-10-31,Monterrey,Café de Chiapas,4,348.00
+2026-10-01,Mérida,Miel de Yucatán,2,248.00
+2026-10-02,Guadalajara,Chocolate de Oaxaca,5,805.00
+2026-10-03,Puebla,Cajeta de Celaya,3,594.00
+2026-10-04,CDMX,Vainilla de Papantla,1,235.00
+2026-10-05,Monterrey,Mole poblano,4,1088.00
+2026-10-06,Mérida,Café de Chiapas,2,618.00
+2026-10-07,Guadalajara,Miel de Yucatán,5,1730.00
+2026-10-08,Puebla,Chocolate de Oaxaca,3,1149.00
+2026-10-09,CDMX,Cajeta de Celaya,1,420.00
+2026-10-10,Monterrey,Vainilla de Papantla,4,1828.00
+2026-10-11,Mérida,Mole poblano,2,188.00
+2026-10-12,Guadalajara,Café de Chiapas,5,655.00
+2026-10-13,Puebla,Miel de Yucatán,3,504.00
+2026-10-14,CDMX,Chocolate de Oaxaca,1,205.00
+2026-10-15,Monterrey,Cajeta de Celaya,4,968.00
+2026-10-16,Mérida,Vainilla de Papantla,2,558.00
+2026-10-17,Guadalajara,Mole poblano,5,1580.00
+2026-10-18,Puebla,Café de Chiapas,3,1059.00
+2026-10-19,CDMX,Miel de Yucatán,1,390.00
+2026-10-20,Monterrey,Chocolate de Oaxaca,4,1708.00
+2026-10-21,Mérida,Cajeta de Celaya,2,928.00
+2026-10-22,Guadalajara,Vainilla de Papantla,5,505.00
+2026-10-23,Puebla,Mole poblano,3,414.00
+2026-10-24,CDMX,Café de Chiapas,1,175.00
+2026-10-25,Monterrey,Miel de Yucatán,4,848.00
+2026-10-26,Mérida,Chocolate de Oaxaca,2,498.00
+2026-10-27,Guadalajara,Cajeta de Celaya,5,1430.00
+2026-10-28,Puebla,Vainilla de Papantla,3,969.00
+2026-10-29,CDMX,Mole poblano,1,360.00
+2026-10-30,Monterrey,Café de Chiapas,4,1588.00
+2026-10-31,Mérida,Miel de Yucatán,2,868.00
+2026-10-01,Guadalajara,Chocolate de Oaxaca,5,2355.00
+2026-10-02,Puebla,Cajeta de Celaya,3,324.00
+2026-10-03,CDMX,Vainilla de Papantla,1,145.00
+2026-10-04,Monterrey,Mole poblano,4,728.00
+2026-10-05,Mérida,Café de Chiapas,2,438.00
+2026-10-06,Guadalajara,Miel de Yucatán,5,1280.00
+2026-10-07,Puebla,Chocolate de Oaxaca,3,879.00
+2026-10-08,CDMX,Cajeta de Celaya,1,330.00
+2026-10-09,Monterrey,Vainilla de Papantla,4,1468.00
+2026-10-10,Mérida,Mole poblano,2,808.00
+2026-10-11,Guadalajara,Café de Chiapas,5,2205.00
+2026-10-12,Puebla,Miel de Yucatán,3,1434.00
+2026-10-13,CDMX,Chocolate de Oaxaca,1,115.00
+2026-10-14,Monterrey,Cajeta de Celaya,4,608.00
+2026-10-15,Mérida,Vainilla de Papantla,2,378.00
+2026-10-16,Guadalajara,Mole poblano,5,1130.00
+2026-10-17,Puebla,Café de Chiapas,3,789.00
+2026-10-18,CDMX,Miel de Yucatán,1,300.00
+2026-10-19,Monterrey,Chocolate de Oaxaca,4,1348.00
+2026-10-20,Mérida,Cajeta de Celaya,2,748.00
+2026-10-21,Guadalajara,Vainilla de Papantla,5,2055.00
+2026-10-22,Puebla,Mole poblano,3,1344.00
