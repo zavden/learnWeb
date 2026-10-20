@@ -1,10 +1,10 @@
 # Course progress and hand-off notes
 
-Last updated: 2026-10-20 (eighth session, resumed after the pause and finished — see «Eighth session» below). HTML
-sec01-04, the whole CSS chapter (sec01-10), Sass sec01, the whole JavaScript chapter (ch05 sec01-08, plus the
-regular-expressions topic sec02/top08), the whole ch06 (sec01-06), the whole ch07 TypeScript chapter (sec01-03) and
-ch08 sec01-04 (binary data, workers, performance, GPU graphics) are complete and browser-verified (2624 examples,
-116 exercises, checker 0/0). Only ch08 sec05 (WebAssembly) and sec06 (WebGPU) are left.
+Last updated: 2026-10-20 (ninth session — the COURSE IS COMPLETE, see «Ninth session» below). Every module of
+plan.md is written and browser-verified: HTML sec01-04, CSS sec01-10, Sass sec01, JavaScript ch05 sec01-08 (+ the
+regular-expressions topic sec02/top08), ch06 sec01-06, TypeScript ch07 sec01-03 and ch08 sec01-06 (binary data,
+workers, performance, GPU graphics, WebAssembly, WebGPU) — 2745 examples, 124 exercises, checker 0/0 in every
+chapter. Only optional tidy-ups remain (see «Next actions»).
 
 Read this first when resuming the course work. The syllabus is in [plan.md](plan.md), the authoring
 rules in [../SKILL.md](../SKILL.md), runtime capabilities in [runtime.md](runtime.md).
@@ -51,7 +51,8 @@ Legend: ✅ complete and verified (checker 0/0 + browser harness) · 🟡 partia
 | ch08-rumbo-a-webassembly-y-webgpu/sec02-workers-y-concurrencia | ✅ 3/3 (28 ex.) | ✅ 6 + 3 exercises | ✅ 12 | 52 examples; console = ```text blocks hosted AND as cards (shared WebAssembly memory, CompressionStream and rAF inside workers all work in cards); clicked through (Cancelar in top90/01 and top95/03, regex timeout, 200 000-row table, worker spreadsheet with cycle + goal seek); fixed top95/09 (spacer rows had the 32 px row height), detached-array error texts made exact |
 | ch08-rumbo-a-webassembly-y-webgpu/sec03-rendimiento | ✅ 3/3 (30 ex.) | ✅ 6 + 3 exercises | ✅ 12 | 54 examples; console = ```text blocks hosted AND as cards; every «≈» re-measured with REAL clicks (see the notes); fixed top90/01 (300 rows took 450-780 ms per click → 150 rows), top01/09 (the hand loop is ~3.5× SLOWER than includes in Chrome), top95/06 (yields to a frame so the bar paints and Cancelar works), top95/10 (unread fetch body = no Resource Timing entry), top95/11 (demo controls don't count as interactions), top95/12 (chapter ×4 so 🐛 really makes long tasks) |
 | ch08-rumbo-a-webassembly-y-webgpu/sec04-graficos-en-la-gpu | ✅ 4/4 (40 ex.) | ✅ 7 + 4 exercises | ✅ 11 | 66 examples; console = ```text blocks hosted AND as cards (readPixels values, WebGL2 error texts with `highp`, context loss/restore); clicked through every top90/top95 page by keyboard and mouse; shaders checked by eye; no changes needed in top95 |
-| ch08 sec05-06 | ⬜ | ⬜ | ⬜ | |
+| ch08-rumbo-a-webassembly-y-webgpu/sec05-webassembly | ✅ 4/4 | ✅ 6 + 4 exercises | ✅ 11 | 63 examples; modules assembled in JS (`emit.js`, a WAT-subset assembler `wat.js` in top95, `.wasm` assets from `claude_resume/wasm/build.mjs`); console = ```text blocks hosted AND as cards; clicked through (formula compiler, Life in memory, WAT assembler, `.wasm` inspector, stack stepper, plugin host, Monte Carlo i64, SIMD brightness, Mandelbrot in a worker); «≈» measured with real clicks (JS and wasm TIE on FNV-1a over 4 MiB) |
+| ch08-rumbo-a-webassembly-y-webgpu/sec06-webgpu | ✅ 4/4 (top04 = course ending) | ✅ 5 + 4 exercises | ✅ 10 | 58 examples; console = ```text blocks hosted AND as cards (only top90/05 differs in cards: a Blob worker has no WebGPU there — explained); clicked through (compute filter chain, Life, cube with depth, histogram, OffscreenCanvas worker, kit with device-loss recovery, photo editor, fractal float32 limit, terrain, bitonic sort, matmul, heatmap, image diff, particles, sensor dashboard); coordinator fixed top01/08 (`uncapturederror` needs GPU activity; doubled-quote labels) |
 
 Fourth session (2026-10-13/14): «los siguientes 2 módulos completos» = CSS sec06-tipografia-y-texto + JS
 sec06-iteracion-y-metaprogramacion — done (two agents; the HTML lane waited). User rule: if the Chrome extension is
@@ -100,13 +101,18 @@ module (`ts-sec03-…`, `js-ch08-sec02-…`, `js-ch08-sec03-…`, `js-ch08-sec04
 (from sec04 top95 «Para seguir»): sec05 shares an ArrayBuffer's memory with WebAssembly; sec06 WebGPU = explicit
 objects, clear validation messages, compute shaders.
 
+Ninth session (2026-10-20): «haz los 2 [últimos módulos] con 2 agentes» = ch08 sec05-webassembly and sec06-webgpu,
+two Opus xhigh agents (prompts `session9-common.txt` + `js-ch08-sec05-webassembly-lessons.txt` /
+`js-ch08-sec06-webgpu-lessons.txt`, with WebAssembly/WebGPU facts measured in Chrome before spawning), lessons →
+Chrome review → top90/top95 → Chrome review — all done, committed; dev server stopped. The course is complete.
+
 Next actions when resuming (pick with the user):
 1. `npm run dev`; read this file; check the Chrome extension (tabs_context_mcp) before any review; agents are fresh
    each module (prompts: "Prompt template" below; the seventh session's shared rules (`session7-common.txt`) + per-module assignment files in
    the gitignored `claude_resume/prompts/` are the best models). Review helpers: `claude_resume/verify/`
    (`expected_from_main.py` + `cmp-main.js`, copied to `tools/_cmp.mjs` while reviewing — delete both temp files
    before committing; Vite reloads the harness page if `tools/_cmp.mjs` changes mid-run).
-2. Remaining (2026-10-20): ch08
+2. DONE (2026-10-20): ch08
    sec05-webassembly (LEB128, `encodeInto` into memory, i64 as BigInt, wasm threads need COOP/COEP — promised) and
    sec06-webgpu (`GPUBufferUsage` flags, alignment, `writeBuffer`, shader-f16 — promised).
 3. ch08 examples are JavaScript (decided in sec01 top01); sec04 uses `renderer: shader` examples too (see the shader
