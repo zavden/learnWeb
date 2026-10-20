@@ -105,6 +105,11 @@ Ninth session (2026-10-20): «haz los 2 [últimos módulos] con 2 agentes» = ch
 two Opus xhigh agents (prompts `session9-common.txt` + `js-ch08-sec05-webassembly-lessons.txt` /
 `js-ch08-sec06-webgpu-lessons.txt`, with WebAssembly/WebGPU facts measured in Chrome before spawning), lessons →
 Chrome review → top90/top95 → Chrome review — all done, committed; dev server stopped. The course is complete.
+Branches (2026-10-20): `master` was fast-forwarded to the work branch (the course stays gitignored there, by the
+user's choice). Branch `course` = master + one commit that force-adds material/ch02-ch08 (all 39 modules); the older
+`curso33` holds the 33 modules of 2026-10-15. Never `git checkout course`/`curso33` in the working tree that holds the
+untracked course folders (switching back deletes them): update those branches with a temporary index
+(`GIT_INDEX_FILE=… git read-tree <base>; git add -f material/ch0…; git write-tree; git commit-tree; git update-ref`).
 
 Next actions when resuming (pick with the user):
 1. `npm run dev`; read this file; check the Chrome extension (tabs_context_mcp) before any review; agents are fresh
