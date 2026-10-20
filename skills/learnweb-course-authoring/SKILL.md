@@ -218,8 +218,8 @@ console: true                     # whenever the example prints to the console
   `importScripts` (a 404 there reports a `NetworkError`), so pages that must work in cards prefer module workers or
   classic Blob workers. Replies from several workers arrive in any order: sort or `await` them in a fixed order.
 - Timings and performance: never print a measured time as exact output. Timed lines go under
-  `// Los tiempos cambian en cada ejecución; en el M1 del curso:` with `≈` and values measured in Chrome (Chrome ran
-  several loops 3–8× slower than Node on the M1); a boolean that compares timings needs a wide margin in Chrome
+  `// Los tiempos cambian en cada ejecución; en el M1 del curso:` with `≈` and values measured in Chrome with REAL
+  clicks (clicks fired from the Chrome tool's JavaScript run the page 3-5× slower); a boolean that compares timings needs a wide margin in Chrome
   (≥ 5× seen there, not in Node). LearnWeb's loop guard makes hot loops 4–5× slower: timed examples whose loops all
   end use `loop_protect: false`. Benchmarks run only from buttons, ≤ 300 ms of CPU per click in Chrome.
   `performance.now()` steps are 0.1 ms in the preview; `long-animation-frame` entries arrive with an empty
@@ -271,6 +271,8 @@ and **no** `exercise*` keys.
    has `logs` (the console lines), used to check exercise self-checks (❌ before, ✅ in the solution).
    `&card=1` runs each example the way gallery and theory cards do (a `srcdoc` copy, `sandbox="allow-scripts"`,
    origin `null`), so card-only differences (storage, history, workers, cross-origin images) show up too.
+   Measure «≈» lines and anything timed with real clicks/keys (`computer` actions), not `element.click()` from
+   `javascript_tool`; Event Timing demos must also tolerate automated clicks lasting 48-72 ms.
 
 Heat rule (fanless MacBook Air M1): no `npm run build`, no headless browsers, no extra servers, no long
 loops. The checker is fine (it compiles in a memory/time-limited worker).

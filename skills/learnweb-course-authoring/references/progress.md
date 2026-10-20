@@ -1,10 +1,10 @@
 # Course progress and hand-off notes
 
-Last updated: 2026-10-15 (eighth session, PAUSED mid-session — see «Eighth session» below). HTML sec01-04, the whole
-CSS chapter (sec01-10), Sass sec01, the whole JavaScript chapter (ch05 sec01-08, plus the regular-expressions topic
-sec02/top08), the whole ch06 (sec01-06), the whole ch07 TypeScript chapter (sec01-03) and ch08 sec01 (binary data) are
-complete and browser-verified (2452 examples, 106 exercises, checker 0/0). ch08 sec02-04 have approved lessons and
-partial top90/top95 (status rows below).
+Last updated: 2026-10-20 (eighth session, resumed after the pause and finished — see «Eighth session» below). HTML
+sec01-04, the whole CSS chapter (sec01-10), Sass sec01, the whole JavaScript chapter (ch05 sec01-08, plus the
+regular-expressions topic sec02/top08), the whole ch06 (sec01-06), the whole ch07 TypeScript chapter (sec01-03) and
+ch08 sec01-04 (binary data, workers, performance, GPU graphics) are complete and browser-verified (2624 examples,
+116 exercises, checker 0/0). Only ch08 sec05 (WebAssembly) and sec06 (WebGPU) are left.
 
 Read this first when resuming the course work. The syllabus is in [plan.md](plan.md), the authoring
 rules in [../SKILL.md](../SKILL.md), runtime capabilities in [runtime.md](runtime.md).
@@ -48,9 +48,9 @@ Legend: ✅ complete and verified (checker 0/0 + browser harness) · 🟡 partia
 | ch07-typescript/sec02-tipos-avanzados | ✅ 6/6 | ✅ 6 + 3 exercises | ✅ 11 | 77 examples; console and type errors = ```text blocks; Equal/Expect type tests introduced in top02/01; clicked through (booking form, demo-API purchase incl. timeout, undo/redo) |
 | ch08-rumbo-a-webassembly-y-webgpu/sec01-datos-binarios | ✅ 5/5 | ✅ 6 + 4 exercises | ✅ 12 | 74 examples; JavaScript only; generated BMP/PNG/WAV/CSV assets; console = ```text blocks incl. Chrome-only APIs (toBase64/fromHex, Float16Array, Blob.bytes, crypto.subtle); clicked through (save file with CRC, seat bitset in the URL, LEB128, colour bytes) |
 | ch07-typescript/sec03-typescript-en-la-practica | ✅ 4/4 | ✅ 6 + 3 exercises | ✅ 12 | 61 examples; console + type errors = ```text blocks, hosted AND as cards (`&card=1`); clicked through (typed DOM pages, Result fetches, router, retries, live stream, drag/keyboard reorder, debounced signup) |
-| ch08-rumbo-a-webassembly-y-webgpu/sec02-workers-y-concurrencia | ✅ 3/3 (28 ex.) | 🟡 see below | 🟡 see below | lessons approved (hosted + cards); coordinator fixed top01/10 (`onProgress?.(++finished)` never incremented); measured M1 times sent to the agent |
-| ch08-rumbo-a-webassembly-y-webgpu/sec03-rendimiento | ✅ 3/3 (30 ex.) | 🟡 see below | 🟡 see below | lessons approved; the agent applied the requested fixes (not re-checked in Chrome); coordinator fixed top03/02 (double flush) |
-| ch08-rumbo-a-webassembly-y-webgpu/sec04-graficos-en-la-gpu | ✅ 4/4 (40 ex.) | 🟡 see below | 🟡 see below | lessons approved (20 WebGL pages match hosted + cards, 15 shaders checked by eye); the agent applied the requested text fixes (not re-checked in Chrome) |
+| ch08-rumbo-a-webassembly-y-webgpu/sec02-workers-y-concurrencia | ✅ 3/3 (28 ex.) | ✅ 6 + 3 exercises | ✅ 12 | 52 examples; console = ```text blocks hosted AND as cards (shared WebAssembly memory, CompressionStream and rAF inside workers all work in cards); clicked through (Cancelar in top90/01 and top95/03, regex timeout, 200 000-row table, worker spreadsheet with cycle + goal seek); fixed top95/09 (spacer rows had the 32 px row height), detached-array error texts made exact |
+| ch08-rumbo-a-webassembly-y-webgpu/sec03-rendimiento | ✅ 3/3 (30 ex.) | ✅ 6 + 3 exercises | ✅ 12 | 54 examples; console = ```text blocks hosted AND as cards; every «≈» re-measured with REAL clicks (see the notes); fixed top90/01 (300 rows took 450-780 ms per click → 150 rows), top01/09 (the hand loop is ~3.5× SLOWER than includes in Chrome), top95/06 (yields to a frame so the bar paints and Cancelar works), top95/10 (unread fetch body = no Resource Timing entry), top95/11 (demo controls don't count as interactions), top95/12 (chapter ×4 so 🐛 really makes long tasks) |
+| ch08-rumbo-a-webassembly-y-webgpu/sec04-graficos-en-la-gpu | ✅ 4/4 (40 ex.) | ✅ 7 + 4 exercises | ✅ 11 | 66 examples; console = ```text blocks hosted AND as cards (readPixels values, WebGL2 error texts with `highp`, context loss/restore); clicked through every top90/top95 page by keyboard and mouse; shaders checked by eye; no changes needed in top95 |
 | ch08 sec05-06 | ⬜ | ⬜ | ⬜ | |
 
 Fourth session (2026-10-13/14): «los siguientes 2 módulos completos» = CSS sec06-tipografia-y-texto + JS
@@ -88,48 +88,17 @@ compile with `alwaysStrict`; the console titles DOM errors by their name and no 
 error (see below). Prompts: `claude_resume/prompts/session7-common.txt` + one assignment file per module; facts
 measured in Chrome while the agents worked were sent to them by SendMessage (listed in the notes below).
 
-Eighth session (2026-10-14/15): «continúa con 4 módulos más, puedes crear los 4 agentes» = ch07 sec03-typescript-en-la-practica,
-ch08 sec02-workers-y-concurrencia, sec03-rendimiento and sec04-graficos-en-la-gpu, four Opus xhigh agents. ch07 sec03
-finished and verified. The other three: lessons reviewed in Chrome and approved, agents were writing top90/top95 when
-the user PAUSED the session (credits); each agent finished its current file and reported (see «Paused state» below).
-App changes (committed): module workers run in cards (data: bootstrap), verify harness `&card=1`, cards load their
-srcdoc after layout (0×0 viewport race). Prompts: `claude_resume/prompts/session8-common.txt` + one assignment file per
-module (`ts-sec03-…`, `js-ch08-sec02-…`, `js-ch08-sec03-…`, `js-ch08-sec04-…`).
-
-Paused state (2026-10-15) — RESUME HERE:
-- The agents' contexts are gone after the pause: spawn FRESH agents (one per module) with session8-common.txt + the
-  module's assignment file + a follow-up note: «lessons are approved; apply the pending lesson fixes listed in
-  progress.md, then write/complete top90/top95» (list the existing top90/top95 files so they continue, not restart).
-- sec02 workers: top90 DONE (main.md, 6 examples, 3 exercises + solutions; checker 0/0; exercises ❌→✅ in a node
-  fake-Worker harness, not yet in Chrome). top95: examples 01–11 written and compiling, `main.md` MISSING (one
-  paragraph per example + ```text blocks; until then the checker reports 1 error and «not embedded» warnings);
-  optional 12th example: spreadsheet recalculation in a worker. Unchecked in Chrome: estimated «≈» times in
-  top90/top95, «Cancelar» stopping workers in top90/01 and top95/03, rAF inside a worker (top95/04), shared
-  WebAssembly memory in cards (top95/07), `CompressionStream`/`Blob.bytes()` in workers (top95/11). The agent also
-  put the measured M1 times into top01/top02 and added to top02 that methods on a detached typed array throw
-  TypeError (checked in node only — verify in Chrome).
-- sec03 performance: all lesson fixes DONE (not re-checked in Chrome): top01/05 later clicks were slower because
-  the CPU slows down after idle (reproduced in node) → a 150 ms CPU wake-up with a checkbox to turn it off + prose +
-  a new benchmark rule; top01/06 100 000 addresses (total 1038009.1 km); top01/08 1 vs 8 shapes, interleaved rounds,
-  softer wording; top01/09 1000 items, the hand loop «no faster than includes»; top02/02 threshold ≥ 3×; top03/03
-  `causa` removed (invokerType in prose); top01/04 and top03/02 work reduced (100 prices, 240 cards); measured times
-  in all ```text blocks. top90 DONE (main.md, 6 examples, 3 exercises + solutions). top95: 01–06 done (bench runner,
-  performance HUD, 100k virtual table, lazy gallery, cached client, chunked CSV), main.md is a stub (2 warnings).
-  Missing top95 ideas: 07 lifecycle scopes with a leak audit, 08 fireworks with a ring-buffer pool, 09 once-per-frame
-  store fed by the demo-API stream, 10 resource budget checker, 11 Web Vitals report sent on hide, 12 text editor
-  with live stats in idle time; then the full main.md.
-- sec04 GPU: all lesson fixes DONE (two shader-error looks explained in top01/04, top02/05 and prose; top03/02
-  `#version` log on two lines + why; top02/04 identical stripes; measured times). top90 DONE (main.md, 7 examples,
-  4 self-checking exercises + solutions; not yet checked in Chrome). top95 STARTED: `assets/gl/kit.js`,
-  `assets/gl/mat4.js`, 01-cubo-en-3d and a placeholder main.md (2 warnings). Missing top95 ideas: 02 photo editor with
-  a filter chain + before/after slider, 03 10 000-point scatter with pan/zoom, 04 Game of Life with framebuffer
-  ping-pong + CPU check, 05 photo transitions, 06 normal-map lighting, 07 GPU eyedropper, 08 GLKit error demo,
-  09 `<shader-banner>` component with context loss, 10 deep-zoom image viewer, 11 procedural sky (`renderer: shader`);
-  then the real main.md.
-- Checker at the pause: ch08 gives 1 error (sec02 top95 has no main.md yet) and 15 warnings (not-embedded top95
-  examples, short stub main.md files) — all expected until top95 is finished; every other chapter is 0/0.
-- Then review each module in Chrome (hosted + `&card=1`, click-throughs, measured «≈» times), update this file, commit
-  docs, stop the server. Then ch08 sec05 (WebAssembly) and sec06 (WebGPU) — the last two modules.
+Eighth session (2026-10-14/15, resumed 2026-10-20): «continúa con 4 módulos más, puedes crear los 4 agentes» =
+ch07 sec03-typescript-en-la-practica, ch08 sec02-workers-y-concurrencia, sec03-rendimiento and sec04-graficos-en-la-gpu,
+four Opus xhigh agents. ch07 sec03 was finished and verified before the user PAUSED the session (credits, 2026-10-15).
+On 2026-10-20 three FRESH agents (one per ch08 module, spawn note in `claude_resume/prompts/session8-resume-ch08.txt`)
+finished top95 while the coordinator re-checked top90 and the paused lesson fixes in Chrome; then every top95 page
+was reviewed hosted + `&card=1` and clicked through — all done, committed; dev server stopped. App changes (committed
+before the pause): module workers run in cards (data: bootstrap), verify harness `&card=1`, cards load their srcdoc
+after layout (0×0 viewport race). Prompts: `claude_resume/prompts/session8-common.txt` + one assignment file per
+module (`ts-sec03-…`, `js-ch08-sec02-…`, `js-ch08-sec03-…`, `js-ch08-sec04-…`). Promises made to the last two modules
+(from sec04 top95 «Para seguir»): sec05 shares an ArrayBuffer's memory with WebAssembly; sec06 WebGPU = explicit
+objects, clear validation messages, compute shaders.
 
 Next actions when resuming (pick with the user):
 1. `npm run dev`; read this file; check the Chrome extension (tabs_context_mcp) before any review; agents are fresh
@@ -137,7 +106,7 @@ Next actions when resuming (pick with the user):
    the gitignored `claude_resume/prompts/` are the best models). Review helpers: `claude_resume/verify/`
    (`expected_from_main.py` + `cmp-main.js`, copied to `tools/_cmp.mjs` while reviewing — delete both temp files
    before committing; Vite reloads the harness page if `tools/_cmp.mjs` changes mid-run).
-2. Remaining (2026-10-15): finish ch08 sec02-04 (top90/top95 + pending lesson fixes, see «Paused state»), then ch08
+2. Remaining (2026-10-20): ch08
    sec05-webassembly (LEB128, `encodeInto` into memory, i64 as BigInt, wasm threads need COOP/COEP — promised) and
    sec06-webgpu (`GPUBufferUsage` flags, alignment, `writeBuffer`, shader-f16 — promised).
 3. ch08 examples are JavaScript (decided in sec01 top01); sec04 uses `renderer: shader` examples too (see the shader
@@ -186,6 +155,22 @@ Notes carried forward:
   App facts: in opaque-origin cards Chrome fails module workers from `blob:` URLs (fixed: data: bootstrap); cards that
   started loading before layout ran with a 0×0 viewport (fixed: srcdoc after two rAFs). The Chrome tool cannot take
   screenshots while a card frame's URL is `about:srcdoc#…` (navigate the tab away afterwards).
+- Checked in Chrome 155 when the eighth session resumed (2026-10-20): **clicks fired from the Chrome tool's
+  `javascript_tool` (`button.click()` inside an evaluate) run the page's JS 3-5× slower than real clicks
+  (`computer.left_click`)** — e.g. a forced-layout loop 110 ms → 450 ms, a hot loop 0.3 → 1.5 ms — so measure every
+  «≈» with real clicks (the old «Chrome is 3-8× slower than Node» was partly this). Real CDP clicks still give event
+  durations of 48-72 ms even for a radio button: Event Timing / INP demos must not rely on clicks staying < 40 ms.
+  The CPU wake-up (sec03 top01/05) is real with real clicks: after ~4 s idle the first batches are 2-3× slower.
+  A `fetch` whose body is never read gets NO Resource Timing entry; in gallery cards (origin null) Resource Timing
+  lists more entries and hides more sizes. Lazy images inside `content-visibility: auto` cards: 2 of 15 load in a
+  480 × 330 card, all 15 in a full tab. `scheduler.yield()` continuations also delay input: a chunked job with a
+  progress bar and «Cancelar» must yield to a frame (rAF + setTimeout). Detached typed arrays: `reduce` →
+  `TypeError: Cannot perform %TypedArray%.prototype.reduce on a detached ArrayBuffer`; `map`/`join`/`fill` → «…on a
+  detached or out-of-bounds ArrayBuffer»; `for…of`/spread name `values`; index reads give `undefined`, length 0.
+  `tbody tr { block-size }` is also a minimum height for virtual-list spacer rows (give them `block-size: auto`).
+  WebGL2 GLSL error texts on the M1 say `highp` (`cannot convert from 'const int' to 'highp float'`,
+  `'glow' : syntax error`, `cannot convert from 'const 2-component vector of float' to 'highp 3-component vector of
+  float'`). In a 480 × 330 frame `scheduler.yield()` chunking blocked timers ≈ 230 ms (same as no chunking).
 - Tools that worked: the verify harness with `show=1` for observers/rAF and `card=1` for gallery-card behaviour; `__verifyUrls` is an object keyed by
   example path; `computer.left_click_drag` for real DnD; never click download buttons, clipboard writes,
   geolocation, share or fullscreen on the user's machine (they act on the real system).
