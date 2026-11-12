@@ -6,12 +6,83 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { renderCompiledExampleDocument } from '../src/utils/exampleRenderer.ts';
 import { compileScript } from '../src/utils/compiler/scriptCompiler.ts';
+import type {
+    ConsolePart,
+    ConsoleTable,
+    PropertyKeyToken,
+    RemoteValue,
+    RuntimeBridgeMessageKind,
+    RuntimeLocation,
+    RuntimeStackFrame,
+} from '../src/types/runtime.ts';
 
-function createFrame({ beforeScripts = '' } = {}) {
-    const posted = [];
-    const listeners = {};
+/**
+ * A posted message as the assertions read it: they pick fields without narrowing on `kind` first, so
+ * this view declares every field they read. The real shapes: RuntimeBridgeMessage (src/types/runtime.ts).
+ */
+interface PostedMessage {
+    kind: RuntimeBridgeMessageKind;
+    level: string;
+    method?: string;
+    text: string;
+    location: RuntimeLocation;
+    groups: number[];
+    groupId?: number;
+    table: ConsoleTable;
+    stackFrames: RuntimeStackFrame[];
+    errorName?: string;
+    parts: ConsolePart[];
+    properties: PostedProperty[];
+    value: RemoteValue;
+    ok: boolean;
+}
+
+/** An inspector row as the assertions read it (the real shape: InspectorProperty). */
+interface PostedProperty {
+    name: string;
+    value: RemoteValue;
+    internal?: boolean;
+    accessor?: boolean;
+    owner?: number;
+    key?: PropertyKeyToken;
+    receiver?: number;
+}
+
+/** The fake events the tests dispatch: plain objects with just the fields the runtime reads. */
+type FakeEvent = Record<string, unknown>;
+type Listener = (event: FakeEvent) => void;
+
+interface ResourceEntry {
+    name: string;
+    initiatorType: string;
+    responseStatus: number;
+}
+
+/** The vm context standing in for the preview window (a type alias, so it is a valid vm context). */
+type Sandbox = {
+    console: Record<string, () => void>;
+    location: { href: string; hash: string };
+    setTimeout: typeof setTimeout;
+    clearTimeout: typeof clearTimeout;
+    performance: { now: () => number; getEntriesByType: () => ResourceEntry[] };
+    URL: typeof URL;
+    URLSearchParams: typeof URLSearchParams;
+    window?: Sandbox;
+    parent?: { postMessage: (message: PostedMessage) => void };
+    addEventListener?: (type: string, listener: Listener) => void;
+    removeEventListener?: (type: string, listener: Listener) => void;
+    document?: { addEventListener: (type: string, listener: Listener) => void; baseURI: string; querySelector: () => null };
+    /** Set by the fake Worker of the worker test. */
+    __workers?: { url: string; type: string | undefined }[];
+};
+
+type Frame = ReturnType<typeof createFrame>;
+
+function createFrame({ beforeScripts = '' }: { beforeScripts?: string } = {}) {
+    const posted: PostedMessage[] = [];
+    const listeners: Record<string, Listener[]> = {};
     const noop = () => {};
-    const sandbox = {
+    const sandbox: Sandbox = {
         console: Object.fromEntries(['log', 'info', 'warn', 'error', 'debug', 'table', 'dir', 'dirxml', 'group', 'groupCollapsed', 'groupEnd', 'count', 'countReset', 'time', 'timeLog', 'timeEnd', 'assert', 'trace', 'clear'].map((name) => [name, noop])),
         location: { href: 'about:srcdoc', hash: '' },
         setTimeout,
@@ -20,13 +91,13 @@ function createFrame({ beforeScripts = '' } = {}) {
         URL,
         URLSearchParams,
     };
-    const resourceEntries = [];
-    const documentListeners = {};
+    const resourceEntries: ResourceEntry[] = [];
+    const documentListeners: Record<string, Listener[]> = {};
     sandbox.window = sandbox;
     // Like window.postMessage: messages are structured-cloned (also normalises vm realms).
     const frameState = { ready: 0 };
     sandbox.parent = {
-        postMessage: (message) => {
+        postMessage: (message: PostedMessage) => {
             if (message.kind === 'runtime-ready') {
                 frameState.ready += 1;
                 return;
@@ -34,16 +105,16 @@ function createFrame({ beforeScripts = '' } = {}) {
             posted.push(structuredClone(message));
         },
     };
-    sandbox.addEventListener = (type, listener) => {
+    sandbox.addEventListener = (type: string, listener: Listener) => {
         (listeners[type] ||= []).push(listener);
     };
-    sandbox.removeEventListener = (type, listener) => {
+    sandbox.removeEventListener = (type: string, listener: Listener) => {
         const list = listeners[type] || [];
         const index = list.indexOf(listener);
         if (index >= 0) list.splice(index, 1);
     };
     sandbox.document = {
-        addEventListener: (type, listener) => (documentListeners[type] ||= []).push(listener),
+        addEventListener: (type: string, listener: Listener) => (documentListeners[type] ||= []).push(listener),
         baseURI: 'http://localhost:3001/preview/ch/sec/top/id/index.html',
         querySelector: () => null,
     };
@@ -57,19 +128,19 @@ function createFrame({ beforeScripts = '' } = {}) {
         listeners,
         resourceEntries,
         sandbox,
-        dispatchOnDocument(type, event) {
+        dispatchOnDocument(type: string, event: FakeEvent) {
             (documentListeners[type] || []).forEach((listener) => listener(event));
         },
-        dispatch(type, event) {
+        dispatch(type: string, event: FakeEvent) {
             (listeners[type] || []).forEach((listener) => listener(event));
         },
-        command(data) {
+        command(data: Record<string, unknown>) {
             this.dispatch('message', { source: parentWindow, data: { source: 'learncode-console-command', ...data } });
         },
     };
 }
 
-function runDocument(frame, html) {
+function runDocument(frame: Frame, html: string) {
     const pattern = /<script(\s[^>]*)?>([\s\S]*?)<\/script>/gi;
     let match;
     while ((match = pattern.exec(html))) {
@@ -81,7 +152,7 @@ function runDocument(frame, html) {
             new vm.Script(match[2], { filename: 'about:srcdoc', lineOffset, columnOffset }).runInContext(frame.sandbox);
         } catch (error) {
             // Like a browser ErrorEvent: syntax errors only carry the document position.
-            const header = String(error.stack || '').split('\n')[0].match(/^(.*):(\d+)$/);
+            const header = String((error as Error).stack || '').split('\n')[0].match(/^(.*):(\d+)$/);
             frame.dispatch('error', {
                 message: `Uncaught ${error}`,
                 error,
@@ -95,7 +166,13 @@ function runDocument(frame, html) {
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
 
-async function runExample(js, { html = '<p>x</p>', options = {}, beforeScripts = '' } = {}) {
+interface RunExampleOptions {
+    html?: string;
+    options?: { consoleEnabled?: boolean; suppressDialogs?: boolean };
+    beforeScripts?: string;
+}
+
+async function runExample(js: string, { html = '<p>x</p>', options = {}, beforeScripts = '' }: RunExampleOptions = {}) {
     const document = renderCompiledExampleDocument({
         html,
         js: `${js}\n//# sourceURL=script.js`,
@@ -108,7 +185,7 @@ async function runExample(js, { html = '<p>x</p>', options = {}, beforeScripts =
     return frame;
 }
 
-const texts = (frame, kind = 'console') => frame.posted.filter((message) => message.kind === kind).map((message) => message.text);
+const texts = (frame: Frame, kind: string = 'console'): string[] => frame.posted.filter((message) => message.kind === kind).map((message) => message.text);
 
 test('console values are formatted like Chrome DevTools', async () => {
     const frame = await runExample([
@@ -143,7 +220,7 @@ test('console helpers: table, count, time, group, assert, trace, clear', async (
         'console.trace(); console.debug("dbg"); console.clear();',
     ].join('\n'));
 
-    const table = frame.posted.find((message) => message.method === 'table').table;
+    const table = frame.posted.find((message) => message.method === 'table')!.table;
     assert.deepEqual(table.header, ['(index)', 'a', 'b', 'c']);
     assert.deepEqual(table.rows, [['0', '1', "'x'", ''], ['1', '2', '', 'true']]);
 
@@ -153,36 +230,36 @@ test('console helpers: table, count, time, group, assert, trace, clear', async (
     assert.ok(all.some((text) => /^t: [\d.]+ ms$/.test(text)));
     assert.ok(all.includes("Timer 't' does not exist"));
 
-    const group = frame.posted.find((message) => message.method === 'group');
-    const inside = frame.posted.find((message) => message.text === 'inside');
-    const outside = frame.posted.find((message) => message.text === 'outside');
+    const group = frame.posted.find((message) => message.method === 'group')!;
+    const inside = frame.posted.find((message) => message.text === 'inside')!;
+    const outside = frame.posted.find((message) => message.text === 'outside')!;
     assert.deepEqual(inside.groups, [group.groupId]);
     assert.deepEqual(outside.groups, []);
 
-    const assertion = frame.posted.find((message) => message.method === 'assert');
+    const assertion = frame.posted.find((message) => message.method === 'assert')!;
     assert.equal(assertion.level, 'error');
     assert.equal(assertion.text, 'Assertion failed: math is broken');
     assert.equal(assertion.stackFrames[0].path, 'script.js');
     assert.equal(assertion.stackFrames[0].line, 5);
     assert.ok(!all.includes('hidden'));
 
-    const trace = frame.posted.find((message) => message.method === 'trace');
+    const trace = frame.posted.find((message) => message.method === 'trace')!;
     assert.equal(trace.stackFrames[0].line, 6);
-    assert.equal(frame.posted.find((message) => message.method === 'debug').level, 'debug');
+    assert.equal(frame.posted.find((message) => message.method === 'debug')!.level, 'debug');
     assert.ok(frame.posted.some((message) => message.kind === 'console-clear'));
 });
 
 test('runtime errors map to the learner line (no wrapper offset)', async () => {
     const frame = await runExample('const a = 1;\nconsole.log(a);\nnull.boom;');
     assert.equal(frame.state.ready, 1, 'runtime announces itself once');
-    const error = frame.posted.find((message) => message.kind === 'runtime-error');
+    const error = frame.posted.find((message) => message.kind === 'runtime-error')!;
     assert.equal(error.text, "Uncaught TypeError: Cannot read properties of null (reading 'boom')");
     assert.deepEqual([error.location.path, error.location.line], ['script.js', 3]);
 });
 
 test('syntax errors use the document position mapped back to the editor line', async () => {
     const frame = await runExample('const a = 1;\nconsole.log(a);\nconst b = ;');
-    const error = frame.posted.find((message) => message.kind === 'runtime-error');
+    const error = frame.posted.find((message) => message.kind === 'runtime-error')!;
     assert.equal(error.errorName, 'SyntaxError');
     assert.deepEqual([error.location.path, error.location.line], ['script.js', 3]);
 });
@@ -203,7 +280,7 @@ test('TypeScript errors resolve through the inline source map', async () => {
     const frame = createFrame();
     runDocument(frame, document);
     await settle();
-    const error = frame.posted.find((message) => message.kind === 'runtime-error');
+    const error = frame.posted.find((message) => message.kind === 'runtime-error')!;
     assert.deepEqual([error.location.path, error.location.line], ['script.ts', 4]);
 });
 
@@ -214,11 +291,11 @@ test('inspector expands objects lazily, follows the prototype chain and invokes 
         "console.log(new Dog('rex'), new Map([['k', 1]]), Promise.resolve(42));",
     ].join('\n'));
     const [dog, map, promise] = frame.posted[0].parts.filter((part) => part.kind === 'value').map((part) => part.value);
-    const ask = async (data) => {
+    const ask = async (data: Record<string, unknown>): Promise<PostedMessage> => {
         const before = frame.posted.length;
         frame.command({ renderId: 9, requestId: before, ...data });
         await settle();
-        return frame.posted.slice(before).find((message) => message.kind === 'inspect-result');
+        return frame.posted.slice(before).find((message) => message.kind === 'inspect-result')!;
     };
 
     let result = await ask({ action: 'inspect', handle: dog.handle });
@@ -229,13 +306,13 @@ test('inspector expands objects lazily, follows the prototype chain and invokes 
     assert.deepEqual(result.properties.map((property) => property.name), ['constructor', 'loud', '[[Prototype]]']);
     assert.equal(result.properties[2].value.preview, 'Animal.prototype');
 
-    const getter = result.properties.find((property) => property.name === 'loud');
+    const getter = result.properties.find((property) => property.name === 'loud')!;
     assert.equal(getter.accessor, true);
     result = await ask({ action: 'get-property', owner: getter.owner, key: getter.key, receiver: getter.receiver });
     assert.equal(result.value.preview, "'REX'");
 
     result = await ask({ action: 'inspect', handle: map.handle });
-    const entries = result.properties.find((property) => property.name === '[[Entries]]');
+    const entries = result.properties.find((property) => property.name === '[[Entries]]')!;
     result = await ask({ action: 'inspect', handle: entries.value.handle });
     assert.equal(result.properties[0].value.preview, "{'k' => 1}");
 
@@ -263,11 +340,11 @@ test('REPL evaluates in the page global scope', async () => {
 
 test('forms: unhandled submits are blocked and logged; method=dialog passes through', async () => {
     const frame = await runExample('', { beforeScripts: 'globalThis.FormData = class { constructor() {} entries() { return [["email", "a@b.c"], ["tag", "x"], ["tag", "y"]][Symbol.iterator](); } };' });
-    const makeForm = (method, action = '/save', enctype = null) => ({
+    const makeForm = (method: string, action: string | null = '/save', enctype: string | null = null) => ({
         tagName: 'FORM',
-        getAttribute: (name) => ({ method, action, enctype })[name] ?? null,
+        getAttribute: (name: string) => ({ method, action, enctype } as Record<string, string | null>)[name] ?? null,
     });
-    const submit = (form, defaultPrevented = false) => {
+    const submit = (form: object, defaultPrevented = false) => {
         let prevented = false;
         frame.dispatch('submit', { target: form, submitter: null, defaultPrevented, preventDefault() { prevented = true; } });
         return prevented;
@@ -275,19 +352,19 @@ test('forms: unhandled submits are blocked and logged; method=dialog passes thro
 
     assert.equal(submit(makeForm('post')), true);
     await settle();
-    assert.equal(frame.posted.at(-1).text, "Form submitted (navigation blocked in preview): POST /save (application/x-www-form-urlencoded) {email: 'a@b.c', tag: Array(2)}");
+    assert.equal(frame.posted.at(-1)!.text, "Form submitted (navigation blocked in preview): POST /save (application/x-www-form-urlencoded) {email: 'a@b.c', tag: Array(2)}");
 
     submit(makeForm('POST', '/upload', 'multipart/form-data'));
     await settle();
-    assert.match(frame.posted.at(-1).text, /: POST \/upload \(multipart\/form-data\) \{/);
+    assert.match(frame.posted.at(-1)!.text, /: POST \/upload \(multipart\/form-data\) \{/);
 
     // GET replaces the query of the action and keeps its fragment; an invalid method means GET.
     submit(makeForm('put', '/search?old=1#results'));
     await settle();
-    assert.match(frame.posted.at(-1).text, /: GET \/search\?email=a%40b\.c&tag=x&tag=y#results \{/);
+    assert.match(frame.posted.at(-1)!.text, /: GET \/search\?email=a%40b\.c&tag=x&tag=y#results \{/);
     submit(makeForm('get', null));
     await settle();
-    assert.match(frame.posted.at(-1).text, /: GET \(this page\)\?email=a%40b\.c&tag=x&tag=y \{/);
+    assert.match(frame.posted.at(-1)!.text, /: GET \(this page\)\?email=a%40b\.c&tag=x&tag=y \{/);
 
     assert.equal(submit(makeForm('dialog')), false);
 
@@ -304,13 +381,13 @@ test('forms: files are logged with their name, size and type', async () => {
         ].join('\n'),
     });
     frame.dispatch('submit', {
-        target: { tagName: 'FORM', getAttribute: (name) => ({ method: 'post', action: '/apply', enctype: 'multipart/form-data' })[name] ?? null },
+        target: { tagName: 'FORM', getAttribute: (name: string) => ({ method: 'post', action: '/apply', enctype: 'multipart/form-data' } as Record<string, string>)[name] ?? null },
         submitter: null,
         defaultPrevented: false,
         preventDefault() {},
     });
     await settle();
-    assert.equal(frame.posted.at(-1).text, "Form submitted (navigation blocked in preview): POST /apply (multipart/form-data) {cv: 'File \"cv.pdf\" (24 KB, application/pdf)', photo: 'File (no file chosen)'}");
+    assert.equal(frame.posted.at(-1)!.text, "Form submitted (navigation blocked in preview): POST /apply (multipart/form-data) {cv: 'File \"cv.pdf\" (24 KB, application/pdf)', photo: 'File (no file chosen)'}");
 });
 
 test('dialogs are replaced by notices during live edits, in order', async () => {
@@ -432,7 +509,7 @@ test('DOM values print like Chrome: elements as HTML, short forms, array-like li
 
 test('page error listeners run before LearnWeb reports the error, and preventDefault() hides the report', async () => {
     const frame = await runExample("addEventListener('error', (event) => { console.log('handler: ' + event.message); if (event.message === 'silencio') event.preventDefault(); });");
-    const fire = (message) => frame.dispatch('error', {
+    const fire = (message: string) => frame.dispatch('error', {
         message,
         error: new Error(message),
         defaultPrevented: false,
@@ -472,7 +549,7 @@ test('in opaque (card) copies, module workers start from a data: URL and classic
         new Worker('classic.js');
         new Worker('blob:null/classic-code');`, { beforeScripts: fakeWorker });
     const base = 'http://localhost:3001/preview/ch/sec/top/id/';
-    assert.deepEqual(Array.from(frame.sandbox.__workers, ({ url, type }) => [decodeURIComponent(url), type]), [
+    assert.deepEqual(Array.from(frame.sandbox.__workers!, ({ url, type }) => [decodeURIComponent(url), type]), [
         [`data:text/javascript,import "${base}pool/worker.js";`, 'module'],
         ['data:text/javascript,import "blob:null/inline-code";', 'module'],
         [`blob:null/importScripts("${base}classic.js");`, undefined],

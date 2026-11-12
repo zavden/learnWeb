@@ -1,8 +1,20 @@
-// Preview runtime bridge.
+// Preview runtime bridge: the code that runs inside every preview iframe.
 //
 // IMPORTANT: `learncodeRuntimeBridge` is serialized with Function.prototype.toString() and evaluated
-// inside the preview iframe (see runtimeBridge.js). It must stay completely self-contained: no imports,
-// no references to anything declared outside the function body.
+// inside the preview iframe with `(0,eval)` (see runtimeBridge.ts, which builds the one-line <script>
+// that installs it). It must stay completely self-contained:
+// - At runtime the function may not reference anything declared outside its body (no imported values,
+//   no module-level constants or helpers), and may not use syntax for which a compiler emits a helper
+//   outside the function. In the browser its text is what esbuild (through Vite) emits for this file;
+//   under Node (tests, scripts/snapshot-material.ts) it is this source with the types blanked out. Both
+//   must be valid JavaScript on their own (tests/runtime-bridge.test.ts runs the Node text in a vm context).
+// - Types are free: the `import type` below and the module-scope types disappear, and so do the
+//   annotations and assertions inside the function (an assertion that needed parentheses, `(x as T).y`,
+//   leaves them behind in the Node text, which is harmless).
+// - It runs in a foreign window, so its globals are described by local types (`RuntimeWindow`), never
+//   by `declare global` (that would change the app's own `window` type: this repository is one program).
+// - The protocol it speaks with the app (config, messages, commands) is documented in
+//   src/types/runtime.ts; any change to a message is a change for every receiver listed there.
 //
 // Responsibilities:
 // - Chrome-like console capture (log/info/debug/warn/error/table/dir/group/count/time/assert/trace/clear)
@@ -10,11 +22,240 @@
 // - Runtime error / unhandled rejection reporting with stack frames mapped back to editor files/lines.
 // - REPL commands, form-submit capture, dialog suppression during live editing, and storage/link/worker
 //   shims for opaque-origin (srcdoc) previews.
-export function learncodeRuntimeBridge(config) {
+// - The global loop guard used by inline <script> tags (a copy of src/utils/compiler/loopGuard.ts's helper).
+//
+// User values are `unknown` throughout: the inspector code accepts anything (proxies, objects from other
+// realms, objects whose getters throw) and reads them through natives captured before user code runs.
+
+import type {
+    ConsoleCommandMessage,
+    ConsoleEvalCommand,
+    ConsoleGetPropertyCommand,
+    ConsoleInspectCommand,
+    ConsoleLevel,
+    ConsoleMessageMethod,
+    ConsolePart,
+    ConsoleTable,
+    InspectFailure,
+    InspectorProperty,
+    InspectResponse,
+    PrimitiveValueKind,
+    PropertyKeyToken,
+    RemoteValue,
+    RuntimeBridgeConfig,
+    RuntimeBridgeMessage,
+    RuntimeBridgeMessageKind,
+    RuntimeLocation,
+    RuntimeStackFrame,
+    SourceRange,
+    ValueKind,
+} from '../../types/runtime.ts';
+import type { DistributiveOmit } from '../../types/utility.ts';
+
+/**
+ * The global loop guard (`window.__lwLoop`). Its state lives on the function object itself; the fields
+ * are unset until the first call, which `!g.on` detects.
+ */
+interface LoopGuard {
+    (line: number): boolean;
+    /** 1 while the current task is being timed; a MessageChannel message resets it once the page yields. */
+    on: number;
+    /** Guard calls in the current task (the clock is only read every 64 calls). */
+    n: number;
+    /** performance.now() when the current task started looping. */
+    t: number;
+    ch?: MessageChannel;
+    /** Message of the RangeError the guarded loop throws. */
+    msg: string;
+}
+
+/**
+ * `window` of the preview as the runtime uses it: the hooks it installs (the install marker under a
+ * symbol, the loop guard) and globals looked up by name (`win[name]`).
+ */
+type RuntimeWindow = Window & typeof globalThis & {
+    __lwLoop?: LoopGuard;
+    [key: string]: unknown;
+    [key: symbol]: unknown;
+};
+
+/** PropertyDescriptor with `unknown` where lib.d.ts says `any`. */
+interface Descriptor {
+    value?: unknown;
+    get?: (this: unknown) => unknown;
+    set?: (this: unknown, value: unknown) => void;
+    enumerable?: boolean;
+    configurable?: boolean;
+    writable?: boolean;
+}
+
+/**
+ * An unbound native getter or method (the `size` getter of Map.prototype, Date.prototype.getTime…)
+ * called as `native.call(value)` on any value: it throws when the value lacks the internal slot, which
+ * is how the runtime brand-checks values that might be proxies or fakes.
+ */
+type NativeMethod<T> = (this: unknown) => T;
+
+/** The `console` object, patched method by method. */
+type PatchableConsole = Console & Record<string, unknown>;
+
+/** A console method as the patch sees it. */
+type ConsoleFunction = (...args: unknown[]) => unknown;
+
+/** Implementation of one console method: receives the call's arguments as an array. */
+type ConsoleImplementation = (args: unknown[]) => void;
+
+/** Position returned by applySourceMap (spread over the frame being mapped). */
+interface MappedPosition {
+    path: string;
+    line: number;
+    column: number | null;
+    mapped?: true;
+}
+
+/** How a value is previewed: as a top-level console argument, a property row, or a [[Prototype]] row. */
+type PreviewMode = 'top' | 'prop' | 'proto';
+
+/** A top-level promise in a message: its preview is `token` until the message is sent. */
+interface PromiseToken {
+    token: string;
+    promise: object;
+}
+
+/** State shared while one message is formatted. */
+interface FormatContext {
+    /** Top-level promises whose preview waits for one microtask (see enqueue). */
+    promises: PromiseToken[];
+    /** console.dir: nodes are shown as objects, not as markup. */
+    dir?: boolean;
+}
+
+/** Last known state of a logged promise. */
+interface PromiseRecord {
+    state: 'pending' | 'fulfilled' | 'rejected';
+    value: unknown;
+}
+
+/** Map and Set, the collections whose entries the inspector lists. */
+type CollectionKind = 'map' | 'set';
+
+/** `this` of EntriesView: the [[Entries]] list of a Map or Set, expanded lazily. */
+interface EntriesViewData {
+    kind: CollectionKind;
+    owner: unknown;
+}
+
+/** `this` of EntryView: one `key => value` entry of a Map. */
+interface EntryViewData {
+    key: unknown;
+    value: unknown;
+}
+
+// `new` on the runtime's function-style constructors: TypeScript only gives construct signatures to classes.
+type EntriesViewConstructor = new (kind: CollectionKind, owner: unknown) => EntriesViewData;
+type EntryViewConstructor = new (key: unknown, value: unknown) => EntryViewData;
+
+/**
+ * Any message the runtime sends, with the text fields finalizePromiseTokens and send() read
+ * declared on every kind.
+ */
+type OutgoingMessage = RuntimeBridgeMessage & { text?: string; values?: string[]; parts?: ConsolePart[] };
+
+/** A message waiting in the outbox (see enqueue). */
+interface OutboxItem {
+    message: OutgoingMessage;
+    ready: boolean;
+    promises: PromiseToken[];
+}
+
+/** The message type of a kind. */
+type MessageOf<K extends RuntimeBridgeMessageKind> = Extract<RuntimeBridgeMessage, { kind: K }>;
+
+/** What createMessage's caller provides for a kind: everything but the envelope, kind and level. */
+type MessageExtra<K extends RuntimeBridgeMessageKind> = DistributiveOmit<MessageOf<K>, 'source' | 'renderId' | 'kind' | 'level' | 'timestamp'>;
+
+/** Result of safeGet(): the value, or what the getter / proxy trap threw. */
+type SafeGetResult = { ok: true; value: unknown; error?: undefined } | { ok: false; error: unknown; value?: undefined };
+
+/** A `[key, value]` pair from Map.prototype.entries. */
+type MapEntry = [key: unknown, value: unknown];
+
+/** An inspector row while inspectProperties fills it in; it ends up a value row or an accessor row. */
+interface PropertyRowDraft {
+    name: string;
+    enumerable: boolean;
+    value?: RemoteValue;
+    accessor?: true;
+    hasGetter?: boolean;
+    key?: PropertyKeyToken;
+    owner?: number;
+    receiver?: number;
+}
+
+/** Mapped frames and raw stack text of an error. */
+interface ErrorStack {
+    frames: RuntimeStackFrame[];
+    stackText: string;
+}
+
+/** Options of emit(): how a console call becomes a 'console' message. */
+interface EmitOptions {
+    method?: ConsoleMessageMethod;
+    groupId?: number;
+    collapsed?: boolean;
+    table?: ConsoleTable | null;
+    /** Attach the caller's stack frames (console.assert, console.trace). */
+    withStack?: boolean;
+}
+
+/**
+ * The node fields the previews read. All optional: a logged "node" may be a fake or come from another
+ * realm, and every read is wrapped in try/catch.
+ */
+interface NodeLike {
+    nodeType?: number;
+    nodeName?: string;
+    localName?: string;
+    namespaceURI?: string | null;
+    id?: unknown;
+    className?: unknown;
+    attributes?: ArrayLike<{ name: string; value: string }>;
+    childNodes: ArrayLike<NodeLike>;
+    /** <template> contents. */
+    content?: { childNodes: ArrayLike<NodeLike> };
+    shadowRoot?: NodeLike | null;
+    /** Text and comment nodes. */
+    data?: string;
+    /** Doctype. */
+    name?: string;
+    /** Shadow roots. */
+    mode?: unknown;
+    host?: unknown;
+}
+
+/** One row of console.table before the selected columns are known. */
+interface TableRow {
+    key: string;
+    cells: Record<string, string>;
+    value: string;
+    mapKey: string;
+}
+
+/** Values of a submitted form: a field submitted several times becomes an array. */
+type FormSubmission = Record<string, unknown>;
+
+/** Events whose window listeners the runtime keeps last (see keepReportsLast). */
+type ReporterTable = Record<string, EventListener>;
+
+/**
+ * Install the preview runtime in the current window (a no-op if it is already installed).
+ * `config` comes from the renderer as JSON; anything that is not an object means "all defaults".
+ */
+export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | undefined): void {
     'use strict';
 
-    const cfg = config && typeof config === 'object' ? config : {};
-    const win = window;
+    const cfg: RuntimeBridgeConfig = config && typeof config === 'object' ? config : {};
+    const win = window as RuntimeWindow;
     const doc = typeof document !== 'undefined' ? document : null;
     const INSTALL_KEY = Symbol.for('learncode.runtimeBridge');
     if (win[INSTALL_KEY]) return;
@@ -25,11 +266,12 @@ export function learncodeRuntimeBridge(config) {
     }
 
     // Global loop guard for the guards LearnWeb inserts into loops of inline <script> tags
-    // (src/utils/compiler/loopGuard.js; keep the 1200 ms limit and the message in sync). The script
+    // (src/utils/compiler/loopGuard.ts; keep the 1200 ms limit and the message in sync). The script
     // block appends its own copy, which simply replaces this one.
     if (typeof win.__lwLoop !== 'function') {
-        win.__lwLoop = function __lwLoop(line) {
-            const g = win.__lwLoop;
+        win.__lwLoop = function __lwLoop(line: number): boolean {
+            // The guard reads its state from whatever function is installed now (normally itself).
+            const g = win.__lwLoop!;
             if (!g.on) {
                 g.on = 1;
                 g.n = 0;
@@ -45,7 +287,7 @@ export function learncodeRuntimeBridge(config) {
             g.on = 0;
             g.msg = 'Possible infinite loop at line ' + line + ': it kept running for more than 1.2s without letting the page update, so LearnWeb stopped it. (Add "loop_protect: false" to the example frontmatter to disable this guard.)';
             return true;
-        };
+        } as LoopGuard;
     }
 
     const RENDER_ID = cfg.renderId == null ? 0 : cfg.renderId;
@@ -73,35 +315,37 @@ export function learncodeRuntimeBridge(config) {
         'ArrayBuffer', 'SharedArrayBuffer', 'DataView', 'Iterator', 'AsyncIterator', 'DisposableStack', 'AsyncDisposableStack',
     ]);
 
-    // Natives captured before user code can patch them.
+    // Natives captured before user code can patch them. They are typed for how the runtime calls them:
+    // on arbitrary values (`unknown`), relying on the native to throw when the value is not of its kind.
+    // The `!` on descriptors: these accessors exist in every engine the preview runs in.
     const ObjectPrototype = Object.prototype;
     const objToString = Object.prototype.toString;
     const hasOwn = Object.prototype.hasOwnProperty;
-    const getProto = Object.getPrototypeOf;
-    const getOwnDesc = Object.getOwnPropertyDescriptor;
-    const ownKeys = Reflect.ownKeys;
-    const reflectGet = Reflect.get;
+    const getProto = Object.getPrototypeOf as (value: unknown) => object | null;
+    const getOwnDesc = Object.getOwnPropertyDescriptor as (target: unknown, key: PropertyKey) => Descriptor | undefined;
+    const ownKeys = Reflect.ownKeys as (target: unknown) => (string | symbol)[];
+    const reflectGet = Reflect.get as (target: unknown, key: PropertyKey, receiver?: unknown) => unknown;
     const fnToString = Function.prototype.toString;
     const isArray = Array.isArray;
     const arrayFrom = Array.from;
     const NativeError = Error;
     const NativePromise = Promise;
-    const promiseThen = Promise.prototype.then;
+    const promiseThen = Promise.prototype.then as (this: unknown, onFulfilled: (value: unknown) => void, onRejected?: (reason: unknown) => void) => unknown;
     const NativeMap = Map;
     const NativeWeakMap = WeakMap;
-    const mapSize = getOwnDesc(Map.prototype, 'size').get;
-    const setSize = getOwnDesc(Set.prototype, 'size').get;
-    const mapEntries = Map.prototype.entries;
-    const setValues = Set.prototype.values;
+    const mapSize = getOwnDesc(Map.prototype, 'size')!.get as NativeMethod<number>;
+    const setSize = getOwnDesc(Set.prototype, 'size')!.get as NativeMethod<number>;
+    const mapEntries = Map.prototype.entries as NativeMethod<IterableIterator<[unknown, unknown]>>;
+    const setValues = Set.prototype.values as NativeMethod<IterableIterator<unknown>>;
     const weakMapHas = WeakMap.prototype.has;
     const weakSetHas = WeakSet.prototype.has;
     const dateGetTime = Date.prototype.getTime;
     const dateToString = Date.prototype.toString;
     const regexpToString = RegExp.prototype.toString;
     const typedArrayProto = getProto(Uint8Array.prototype);
-    const typedArrayLength = getOwnDesc(typedArrayProto, 'length').get;
-    const typedArrayTag = getOwnDesc(typedArrayProto, Symbol.toStringTag).get;
-    const arrayBufferByteLength = getOwnDesc(ArrayBuffer.prototype, 'byteLength').get;
+    const typedArrayLength = getOwnDesc(typedArrayProto, 'length')!.get as NativeMethod<number>;
+    const typedArrayTag = getOwnDesc(typedArrayProto, Symbol.toStringTag)!.get as NativeMethod<string | undefined>;
+    const arrayBufferByteLength = getOwnDesc(ArrayBuffer.prototype, 'byteLength')!.get as NativeMethod<number>;
     const symbolToString = Symbol.prototype.toString;
     const nativeSetTimeout = typeof win.setTimeout === 'function' ? win.setTimeout.bind(win) : null;
     const nowMs = () => (win.performance && typeof win.performance.now === 'function' ? win.performance.now() : Date.now());
@@ -109,10 +353,13 @@ export function learncodeRuntimeBridge(config) {
     const DOC_PATH = normalizePath(win.location ? String(win.location.href || '') : '');
 
     // ─── Messaging ─────────────────────────────────────────
+    // Every message goes through enqueue() (ordered, see below) or straight to send() (replies and
+    // the ready signal). Message shapes: src/types/runtime.ts.
 
-    const outbox = [];
+    const outbox: OutboxItem[] = [];
 
-    function send(message) {
+    /** Post a message to the parent, retrying without rich parts if it cannot be cloned. */
+    function send(message: OutgoingMessage): void {
         try {
             parentWin.postMessage(message, '*');
         } catch {
@@ -128,7 +375,12 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
-    function createMessage(kind, level, extra) {
+    /**
+     * Build a message of the given kind with the common envelope (source, renderId, timestamp). The
+     * parameter types check each call against src/types/runtime.ts; TypeScript cannot follow the spread
+     * of a generic union, hence the cast.
+     */
+    function createMessage<K extends RuntimeBridgeMessageKind>(kind: K, level: MessageOf<K>['level'], extra: MessageExtra<K>): MessageOf<K> {
         return {
             source: MESSAGE_SOURCE,
             renderId: RENDER_ID,
@@ -136,14 +388,14 @@ export function learncodeRuntimeBridge(config) {
             level,
             timestamp: Date.now(),
             ...extra,
-        };
+        } as unknown as MessageOf<K>;
     }
 
     // Messages are delivered in order. A message containing a top-level Promise waits for one microtask
     // checkpoint so its preview reflects the state the promise had when it was logged.
-    function enqueue(message, ctx) {
+    function enqueue(message: OutgoingMessage, ctx?: FormatContext): void {
         const promises = ctx && ctx.promises ? ctx.promises : [];
-        const item = { message, ready: promises.length === 0, promises };
+        const item: OutboxItem = { message, ready: promises.length === 0, promises };
         if (item.ready && outbox.length === 0) {
             send(message);
             return;
@@ -157,16 +409,17 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
-    function drainOutbox() {
+    function drainOutbox(): void {
         while (outbox.length > 0 && outbox[0].ready) {
-            const item = outbox.shift();
+            const item = outbox.shift()!;
             if (item.promises.length > 0) finalizePromiseTokens(item.message, item.promises);
             send(item.message);
         }
     }
 
-    function finalizePromiseTokens(message, promises) {
-        const replaceTokens = (text) => {
+    /** Replace the placeholder tokens of logged promises with their state now (`Promise {<fulfilled>: 1}`). */
+    function finalizePromiseTokens(message: OutgoingMessage, promises: PromiseToken[]): void {
+        const replaceTokens = (text: unknown): string => {
             let next = String(text);
             promises.forEach((entry) => {
                 if (next.includes(entry.token)) next = next.split(entry.token).join(promiseStatePreview(entry.promise));
@@ -184,12 +437,14 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
+    // Flood control: at most FLOOD_LIMIT console messages per second; the rest are counted and
+    // reported by one warning when the second ends.
     let floodWindowStart = 0;
     let floodCount = 0;
     let floodDropped = 0;
     let floodTimer = 0;
 
-    function reportDroppedMessages() {
+    function reportDroppedMessages(): void {
         if (!floodDropped) return;
         const dropped = floodDropped;
         floodDropped = 0;
@@ -205,7 +460,7 @@ export function learncodeRuntimeBridge(config) {
         }));
     }
 
-    function allowConsoleMessage() {
+    function allowConsoleMessage(): boolean {
         const time = Date.now();
         if (time - floodWindowStart >= 1000) {
             reportDroppedMessages();
@@ -226,7 +481,8 @@ export function learncodeRuntimeBridge(config) {
 
     // ─── Stack frames and source mapping ───────────────────
 
-    function normalizePath(value) {
+    /** Path of a URL as editor files and ranges name it: `http://host/a/b.js` → `a/b.js`; srcdoc documents are `about:srcdoc`. */
+    function normalizePath(value: unknown): string {
         let text = String(value || '').trim();
         if (!text) return '';
 
@@ -245,7 +501,8 @@ export function learncodeRuntimeBridge(config) {
         return text.replace(/^\/+/, '');
     }
 
-    function parseStackFrames(stack) {
+    /** Parse a V8 (`at fn (path:line:col)`) or Firefox/Safari (`fn@path:line:col`) stack into frames. */
+    function parseStackFrames(stack: unknown): RuntimeStackFrame[] {
         return String(stack || '')
             .split('\n')
             .map((line) => line.trim())
@@ -265,14 +522,15 @@ export function learncodeRuntimeBridge(config) {
                 }
                 return null;
             })
-            .filter(Boolean);
+            .filter(Boolean) as RuntimeStackFrame[];
     }
 
-    function isDocumentPath(path) {
+    function isDocumentPath(path: string): boolean {
         return path === DOC_PATH || path === 'about:srcdoc' || path === '';
     }
 
-    function applySourceMap(range, line, column) {
+    /** Map a line of a range to its editor file, through the range's source map when it has one. */
+    function applySourceMap(range: SourceRange, line: number, column: number | null): MappedPosition {
         const lineMap = Array.isArray(range.lineMap) ? range.lineMap : null;
         if (!lineMap) {
             return { path: range.path, line, column, mapped: true };
@@ -292,7 +550,7 @@ export function learncodeRuntimeBridge(config) {
 
     // `absolute`: the line/column are relative to the whole HTML document (ErrorEvent, inline handlers).
     // Otherwise lines are relative to the script element (stack frames of scripts with a sourceURL).
-    function mapFrame(frame, absolute) {
+    function mapFrame(frame: RuntimeStackFrame | null, absolute: boolean): RuntimeStackFrame | null {
         if (!frame) return null;
         const path = frame.path || '';
         if (path === RUNTIME_NAME || path.endsWith('/' + RUNTIME_NAME)) return null;
@@ -320,11 +578,11 @@ export function learncodeRuntimeBridge(config) {
         return { ...frame };
     }
 
-    function mapFrames(frames, absolute) {
-        return frames.map((frame) => mapFrame(frame, absolute)).filter(Boolean);
+    function mapFrames(frames: RuntimeStackFrame[], absolute: boolean): RuntimeStackFrame[] {
+        return frames.map((frame) => mapFrame(frame, absolute)).filter(Boolean) as RuntimeStackFrame[];
     }
 
-    function captureCallerFrames() {
+    function captureCallerFrames(): RuntimeStackFrame[] {
         try {
             return mapFrames(parseStackFrames(new NativeError().stack), false);
         } catch {
@@ -332,14 +590,15 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
-    function primaryLocation(frames) {
+    function primaryLocation(frames: RuntimeStackFrame[]): RuntimeLocation | null {
         const frame = frames.find((entry) => entry && entry.path && entry.line);
         return frame ? { path: frame.path, line: frame.line, column: frame.column || null } : null;
     }
 
     // ─── Value classification ──────────────────────────────
 
-    function brand(getter, value) {
+    /** True when `getter` accepts `value` as its receiver, i.e. the value has that native's internal slot. */
+    function brand(getter: NativeMethod<unknown>, value: unknown): boolean {
         try {
             getter.call(value);
             return true;
@@ -348,7 +607,7 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
-    function safeTag(value) {
+    function safeTag(value: unknown): string {
         try {
             return objToString.call(value);
         } catch {
@@ -356,7 +615,7 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
-    function isClassFunction(value) {
+    function isClassFunction(value: unknown): boolean {
         try {
             return /^class[\s{]/.test(fnToString.call(value));
         } catch {
@@ -364,7 +623,7 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
-    function isDomNode(value) {
+    function isDomNode(value: unknown): boolean {
         try {
             return typeof win.Node === 'function' && value instanceof win.Node;
         } catch {
@@ -373,15 +632,15 @@ export function learncodeRuntimeBridge(config) {
     }
 
     // NodeList, HTMLCollection and DOMTokenList print like arrays in Chrome: `NodeList(3) [li, li, li]`.
-    function isDomList(value) {
+    function isDomList(value: unknown): boolean {
         try {
-            return ['NodeList', 'HTMLCollection', 'DOMTokenList'].some((name) => typeof win[name] === 'function' && value instanceof win[name]);
+            return ['NodeList', 'HTMLCollection', 'DOMTokenList'].some((name) => typeof win[name] === 'function' && value instanceof (win[name] as Function));
         } catch {
             return false;
         }
     }
 
-    function isNativeFunction(fn) {
+    function isNativeFunction(fn: unknown): boolean {
         if (typeof fn !== 'function') return false;
         try {
             return /\{\s*\[native code\]\s*\}\s*$/.test(fnToString.call(fn));
@@ -392,12 +651,12 @@ export function learncodeRuntimeBridge(config) {
 
     // Objects made by the browser (events, DOMRect, AbortSignal…): their data lives in native accessors on
     // the prototype chain, which Chrome reads for its previews. Also true for subclasses written in JS.
-    function isPlatformObject(value) {
+    function isPlatformObject(value: unknown): boolean {
         let proto = safeProto(value);
         let guard = 0;
         while (proto && guard < 50) {
             guard += 1;
-            let descriptor = null;
+            let descriptor: Descriptor | null | undefined = null;
             try {
                 descriptor = getOwnDesc(proto, 'constructor');
             } catch {
@@ -417,13 +676,14 @@ export function learncodeRuntimeBridge(config) {
         return false;
     }
 
-    function nativeGetter(descriptor) {
+    // Truthy for an accessor whose getter is native code (falsy, possibly null, otherwise).
+    function nativeGetter(descriptor: Descriptor | null | undefined): boolean | null | undefined {
         return descriptor && !('value' in descriptor) && isNativeFunction(descriptor.get);
     }
 
     // Native accessors of the prototype chain, nearest prototype first, skipping shadowed names.
-    function platformAccessorKeys(value, seen, limit) {
-        const keys = [];
+    function platformAccessorKeys(value: unknown, seen: Set<string | symbol>, limit: number): string[] {
+        const keys: string[] = [];
         let proto = safeProto(value);
         let guard = 0;
         while (proto && proto !== ObjectPrototype && guard < 50 && keys.length < limit) {
@@ -431,7 +691,7 @@ export function learncodeRuntimeBridge(config) {
             for (const key of safeKeys(proto)) {
                 if (typeof key === 'symbol' || key === 'constructor' || seen.has(key)) continue;
                 seen.add(key);
-                let descriptor = null;
+                let descriptor: Descriptor | null | undefined = null;
                 try {
                     descriptor = getOwnDesc(proto, key);
                 } catch {
@@ -448,15 +708,15 @@ export function learncodeRuntimeBridge(config) {
 
     // Preview entries of a platform object: own enumerable properties (native getters read), then the
     // native accessors of its prototypes. `skipKeys` hides keys an array-like preview already shows.
-    function platformPreviewItems(value, skipKeys) {
-        const items = [];
-        const seen = new Set(skipKeys || []);
+    function platformPreviewItems(value: unknown, skipKeys?: string[]): string[] {
+        const items: string[] = [];
+        const seen = new Set<string | symbol>(skipKeys || []);
         const limit = PREVIEW_PROPS + 1;
         for (const key of safeKeys(value)) {
             if (items.length >= limit) break;
             if (typeof key === 'symbol' || seen.has(key) || isIndexKey(key)) continue;
             seen.add(key);
-            let descriptor = null;
+            let descriptor: Descriptor | null | undefined = null;
             try {
                 descriptor = getOwnDesc(value, key);
             } catch {
@@ -483,7 +743,8 @@ export function learncodeRuntimeBridge(config) {
         return items;
     }
 
-    function classify(value) {
+    /** The kind of any value, deciding how it is previewed (see ValueKind in src/types/runtime.ts). */
+    function classify(value: unknown): ValueKind {
         if (value === null) return 'null';
         const type = typeof value;
         if (type !== 'object' && type !== 'function') return type;
@@ -537,8 +798,9 @@ export function learncodeRuntimeBridge(config) {
         return 'object';
     }
 
-    function boxedPrimitive(value) {
-        const candidates = [Number.prototype.valueOf, String.prototype.valueOf, Boolean.prototype.valueOf];
+    // The primitive inside a Number/String/Boolean/BigInt/Symbol wrapper object, or undefined.
+    function boxedPrimitive(value: unknown): { value: unknown } | undefined {
+        const candidates: NativeMethod<unknown>[] = [Number.prototype.valueOf, String.prototype.valueOf, Boolean.prototype.valueOf];
         if (typeof BigInt === 'function') candidates.push(BigInt.prototype.valueOf);
         candidates.push(Symbol.prototype.valueOf);
         for (const valueOf of candidates) {
@@ -551,11 +813,12 @@ export function learncodeRuntimeBridge(config) {
         return undefined;
     }
 
-    function isErrorValue(value) {
+    function isErrorValue(value: unknown): boolean {
         return value !== null && typeof value === 'object' && classify(value) === 'error';
     }
 
-    function safeGet(target, key, receiver) {
+    /** Read a property without letting a throwing getter or proxy trap escape. */
+    function safeGet(target: unknown, key: PropertyKey, receiver?: unknown): SafeGetResult {
         try {
             return { ok: true, value: reflectGet(target, key, receiver === undefined ? target : receiver) };
         } catch (error) {
@@ -563,7 +826,7 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
-    function safeProto(value) {
+    function safeProto(value: unknown): object | null | undefined {
         try {
             return getProto(value);
         } catch {
@@ -572,16 +835,17 @@ export function learncodeRuntimeBridge(config) {
     }
 
     // Module namespace objects: null prototype, frozen shape and the 'Module' tag.
-    function isModuleNamespace(value) {
+    function isModuleNamespace(value: unknown): boolean {
         return safeTag(value) === '[object Module]';
     }
 
-    function constructorName(value) {
+    // Name of the nearest constructor on the prototype chain ('' if none has a name).
+    function constructorName(value: unknown): string {
         let proto = safeProto(value);
         let guard = 0;
         while (proto && guard < 50) {
             guard += 1;
-            let descriptor = null;
+            let descriptor: Descriptor | null | undefined = null;
             try {
                 descriptor = getOwnDesc(proto, 'constructor');
             } catch {
@@ -596,7 +860,7 @@ export function learncodeRuntimeBridge(config) {
         return '';
     }
 
-    function functionName(fn) {
+    function functionName(fn: unknown): string {
         try {
             const descriptor = getOwnDesc(fn, 'name');
             return descriptor && typeof descriptor.value === 'string' ? descriptor.value : '';
@@ -605,7 +869,8 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
-    function prototypeOwner(value) {
+    // The constructor whose `prototype` this object is (so `Person.prototype` can be labelled), or null.
+    function prototypeOwner(value: unknown): Function | null {
         try {
             const descriptor = getOwnDesc(value, 'constructor');
             const ctor = descriptor && 'value' in descriptor ? descriptor.value : null;
@@ -619,7 +884,7 @@ export function learncodeRuntimeBridge(config) {
         return null;
     }
 
-    function safeKeys(value) {
+    function safeKeys(value: unknown): (string | symbol)[] {
         try {
             return ownKeys(value);
         } catch {
@@ -627,15 +892,16 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
-    function isIndexKey(key) {
+    function isIndexKey(key: PropertyKey): boolean {
         return typeof key === 'string' && /^(?:0|[1-9]\d*)$/.test(key) && Number(key) < 4294967295;
     }
 
-    function previewKeys(value, { includeIndices = true } = {}) {
+    // Keys a preview lists: enumerable own keys, or every own key of a `X.prototype` object.
+    function previewKeys(value: unknown, { includeIndices = true }: { includeIndices?: boolean } = {}): (string | symbol)[] {
         const includeHidden = Boolean(prototypeOwner(value));
         return safeKeys(value).filter((key) => {
             if (!includeIndices && isIndexKey(key)) return false;
-            let descriptor = null;
+            let descriptor: Descriptor | null | undefined = null;
             try {
                 descriptor = getOwnDesc(value, key);
             } catch {
@@ -648,12 +914,13 @@ export function learncodeRuntimeBridge(config) {
 
     // ─── Formatting ────────────────────────────────────────
 
-    function truncate(text, limit) {
+    function truncate(text: unknown, limit: number): string {
         const value = String(text);
         return value.length > limit ? value.slice(0, limit) + '…' : value;
     }
 
-    function quoteString(text, limit = STRING_PREVIEW) {
+    // A string literal as Chrome shows it: single quotes unless the text contains one (and no double quote).
+    function quoteString(text: unknown, limit: number = STRING_PREVIEW): string {
         const value = truncate(text, limit);
         const quote = value.includes("'") && !value.includes('"') ? '"' : "'";
         const escaped = value
@@ -665,7 +932,7 @@ export function learncodeRuntimeBridge(config) {
         return quote + escaped + quote;
     }
 
-    function symbolText(symbol) {
+    function symbolText(symbol: unknown): string {
         try {
             return symbolToString.call(symbol);
         } catch {
@@ -673,14 +940,14 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
-    function formatKey(key) {
+    function formatKey(key: string | symbol): string {
         if (typeof key === 'symbol') return '[' + symbolText(key) + ']';
         // Any valid identifier stays unquoted, like Chrome: {café: 12}, {año: 2024}.
         if (/^[\p{ID_Start}$_][\p{ID_Continue}$\u200C\u200D]*$/u.test(key) || isIndexKey(key)) return key;
         return quoteString(key);
     }
 
-    function formatPrimitive(value, kind, quoted) {
+    function formatPrimitive(value: unknown, kind: ValueKind, quoted: boolean): string {
         switch (kind) {
             case 'string': return quoted ? quoteString(value) : truncate(value, TOP_STRING_LIMIT);
             case 'number': return Object.is(value, -0) ? '-0' : String(value);
@@ -693,12 +960,13 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
-    function isPrimitiveKind(kind) {
+    function isPrimitiveKind(kind: ValueKind): kind is PrimitiveValueKind {
         return kind === 'string' || kind === 'number' || kind === 'bigint' || kind === 'boolean'
             || kind === 'undefined' || kind === 'null' || kind === 'symbol';
     }
 
-    function errorHeadline(error) {
+    /** `Name: message` of an error (never throws, whatever `error` is). */
+    function errorHeadline(error: unknown): string {
         const nameResult = safeGet(error, 'name');
         const messageResult = safeGet(error, 'message');
         // DOM errors too are titled by their name, as Chrome 155 does: `SyntaxError: Failed to execute
@@ -708,7 +976,7 @@ export function learncodeRuntimeBridge(config) {
         return message ? name + ': ' + message : name;
     }
 
-    function dateText(value) {
+    function dateText(value: unknown): string {
         try {
             return dateToString.call(value);
         } catch {
@@ -716,7 +984,7 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
-    function regexpText(value) {
+    function regexpText(value: unknown): string {
         try {
             return regexpToString.call(value);
         } catch {
@@ -724,12 +992,12 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
-    function lengthOf(value) {
+    function lengthOf(value: unknown): number {
         const result = safeGet(value, 'length');
         return result.ok && typeof result.value === 'number' ? result.value : 0;
     }
 
-    function typedArrayInfo(value) {
+    function typedArrayInfo(value: unknown): { name: string; length: number } {
         try {
             return { name: typedArrayTag.call(value) || 'TypedArray', length: typedArrayLength.call(value) };
         } catch {
@@ -737,7 +1005,7 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
-    function byteLengthOf(value) {
+    function byteLengthOf(value: unknown): number {
         try {
             return arrayBufferByteLength.call(value);
         } catch {
@@ -747,7 +1015,7 @@ export function learncodeRuntimeBridge(config) {
     }
 
     // Short form used inside arrays, objects and collections, like Chrome: `li#first.item`, `text`, `comment`.
-    function nodeLabel(node) {
+    function nodeLabel(node: NodeLike): string {
         try {
             const type = node.nodeType;
             if (type === 1) {
@@ -765,18 +1033,18 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
-    function collapseSpace(text) {
+    function collapseSpace(text: unknown): string {
         return String(text).replace(/\s+/g, ' ');
     }
 
     // Child nodes Chrome's Elements tree shows (it hides whitespace-only text).
-    function visibleChildNodes(node) {
-        const result = [];
+    function visibleChildNodes(node: NodeLike): NodeLike[] {
+        const result: NodeLike[] = [];
         try {
             const source = node.localName === 'template' && node.content ? node.content.childNodes : node.childNodes;
             for (let index = 0; index < source.length; index += 1) {
                 const child = source[index];
-                if (child.nodeType === 3 && !/\S/.test(child.data)) continue;
+                if (child.nodeType === 3 && !/\S/.test(child.data!)) continue; // text nodes have data
                 result.push(child);
             }
             if (node.shadowRoot) result.push(node.shadowRoot);
@@ -787,7 +1055,7 @@ export function learncodeRuntimeBridge(config) {
     }
 
     // A logged node, like a collapsed row of Chrome's Elements tree: `<li class="item">Pan</li>`, `<ul id="menu">…</ul>`.
-    function nodeTitle(node) {
+    function nodeTitle(node: NodeLike): string {
         try {
             const type = node.nodeType;
             if (type === 1) {
@@ -819,7 +1087,8 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
-    function functionSignature(fn) {
+    // Collapsed form of a function: `ƒ name(a, b)`, `async ƒ* gen()`, `class Person`, or an arrow's source.
+    function functionSignature(fn: unknown): string {
         if (isClassFunction(fn)) return 'class ' + (functionName(fn) || '(anonymous)');
         let source = '';
         try {
@@ -836,7 +1105,8 @@ export function learncodeRuntimeBridge(config) {
         return (isAsync ? 'async ' : '') + (isGenerator ? 'ƒ* ' : 'ƒ ') + (functionName(fn) || '') + '(' + params + ')';
     }
 
-    function functionSource(fn) {
+    // Source of a function logged at top level, with `function` written as `ƒ` like Chrome.
+    function functionSource(fn: unknown): string {
         let source = '';
         try {
             source = fnToString.call(fn);
@@ -846,13 +1116,13 @@ export function learncodeRuntimeBridge(config) {
         source = truncate(source, 4000);
         if (/^class[\s{]/.test(source)) return source;
         if (/^(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/.test(source)) return source;
-        const replaced = source.replace(/^(async\s+)?function\b\s*(\*)?\s*/, (match, asyncPrefix, star) => (asyncPrefix ? 'async ' : '') + (star ? 'ƒ* ' : 'ƒ '));
+        const replaced = source.replace(/^(async\s+)?function\b\s*(\*)?\s*/, (match: string, asyncPrefix: string | undefined, star: string | undefined) => (asyncPrefix ? 'async ' : '') + (star ? 'ƒ* ' : 'ƒ '));
         if (replaced !== source) return replaced;
         return 'ƒ ' + source;
     }
 
     // Compact preview used inside other previews: `{…}`, `Array(3)`, `ƒ`, `'text'`.
-    function shortPreview(value) {
+    function shortPreview(value: unknown): string {
         const kind = classify(value);
         if (isPrimitiveKind(kind)) return formatPrimitive(value, kind, true);
         switch (kind) {
@@ -883,7 +1153,7 @@ export function learncodeRuntimeBridge(config) {
                 return boxedTypeName(boxed && boxed.value);
             }
             case 'window': return 'Window';
-            case 'node': return nodeLabel(value);
+            case 'node': return nodeLabel(value as NodeLike);
             case 'domlist': return (constructorName(value) || 'NodeList') + '(' + lengthOf(value) + ')';
             default: {
                 const proto = safeProto(value);
@@ -896,7 +1166,7 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
-    function boxedTypeName(primitive) {
+    function boxedTypeName(primitive: unknown): string {
         switch (typeof primitive) {
             case 'number': return 'Number';
             case 'string': return 'String';
@@ -907,8 +1177,9 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
-    function propertyPreview(target, key) {
-        let descriptor = null;
+    // Preview of an own property without running getters: `(...)` for accessors.
+    function propertyPreview(target: unknown, key: PropertyKey): string {
+        let descriptor: Descriptor | null | undefined = null;
         try {
             descriptor = getOwnDesc(target, key);
         } catch {
@@ -919,8 +1190,8 @@ export function learncodeRuntimeBridge(config) {
         return shortPreview(descriptor.value);
     }
 
-    function collectionItems(value, kind) {
-        const items = [];
+    function collectionItems(value: unknown, kind: CollectionKind): string[] {
+        const items: string[] = [];
         let total = 0;
         try {
             if (kind === 'map') {
@@ -943,8 +1214,9 @@ export function learncodeRuntimeBridge(config) {
         return items;
     }
 
-    function arrayLikePreviewItems(value, length) {
-        const items = [];
+    // Items of an array-like, with runs of holes collapsed like Chrome: `empty × 2`.
+    function arrayLikePreviewItems(value: unknown, length: number): string[] {
+        const items: string[] = [];
         const limit = Math.min(length, PREVIEW_ITEMS);
         let holes = 0;
         const flushHoles = () => {
@@ -971,19 +1243,19 @@ export function learncodeRuntimeBridge(config) {
         return items;
     }
 
-    function objectEntriesPreview(value, keys) {
+    function objectEntriesPreview(value: unknown, keys: (string | symbol)[]): string[] {
         const items = keys.slice(0, PREVIEW_PROPS).map((key) => formatKey(key) + ': ' + propertyPreview(value, key));
         if (keys.length > PREVIEW_PROPS) items.push('…');
         return items;
     }
 
     // DevTools writes the length only from 2 items on: `[5]`, `[]`, `(2) [5, 6]`, `NodeList [li]`.
-    function arrayLengthText(length) {
+    function arrayLengthText(length: number): string {
         return length > 1 ? '(' + length + ')' : '';
     }
 
     // One-level preview used for top-level console arguments and expanded property rows.
-    function fullPreview(value, ctx, mode) {
+    function fullPreview(value: unknown, ctx: FormatContext | null | undefined, mode: PreviewMode): string {
         const kind = classify(value);
         if (isPrimitiveKind(kind)) return formatPrimitive(value, kind, true);
         switch (kind) {
@@ -1004,7 +1276,7 @@ export function learncodeRuntimeBridge(config) {
                 const info = typedArrayInfo(value);
                 return info.name + arrayLengthText(info.length) + ' [' + arrayLikePreviewItems(value, info.length).join(', ') + ']';
             }
-            case 'node': return mode === 'top' && !(ctx && ctx.dir) ? nodeTitle(value) : nodeLabel(value);
+            case 'node': return mode === 'top' && !(ctx && ctx.dir) ? nodeTitle(value as NodeLike) : nodeLabel(value as NodeLike);
             case 'domlist': {
                 const length = lengthOf(value);
                 const items = arrayLikePreviewItems(value, length);
@@ -1016,7 +1288,7 @@ export function learncodeRuntimeBridge(config) {
             case 'weakmap': return 'WeakMap {}';
             case 'weakset': return 'WeakSet {}';
             case 'weakref': return 'WeakRef {}';
-            case 'promise': return promisePreview(value, ctx, mode);
+            case 'promise': return promisePreview(value as object, ctx, mode);
             case 'boxed': {
                 const boxed = boxedPrimitive(value);
                 const primitive = boxed ? boxed.value : undefined;
@@ -1049,10 +1321,11 @@ export function learncodeRuntimeBridge(config) {
 
     // ─── Promises ──────────────────────────────────────────
 
-    const promiseStates = new NativeWeakMap();
+    const promiseStates = new NativeWeakMap<object, PromiseRecord>();
     let promiseTokenSeq = 0;
 
-    function trackPromise(promise) {
+    /** Start observing a promise's state (once per promise) and return its live record. */
+    function trackPromise(promise: object): PromiseRecord {
         let record = promiseStates.get(promise);
         if (record) return record;
         record = { state: 'pending', value: undefined };
@@ -1073,13 +1346,14 @@ export function learncodeRuntimeBridge(config) {
         return record;
     }
 
-    function promiseStatePreview(promise) {
-        const record = promiseStates.get(promise) || { state: 'pending' };
+    function promiseStatePreview(promise: object): string {
+        const record: { state: PromiseRecord['state']; value?: unknown } = promiseStates.get(promise) || { state: 'pending' };
         if (record.state === 'pending') return 'Promise {<pending>}';
         return 'Promise {<' + record.state + '>: ' + shortPreview(record.value) + '}';
     }
 
-    function promisePreview(promise, ctx, mode) {
+    // A top-level promise gets a placeholder token, replaced by its state when the message is sent.
+    function promisePreview(promise: object, ctx: FormatContext | null | undefined, mode: PreviewMode): string {
         if (mode === 'top' && ctx && Array.isArray(ctx.promises)) {
             trackPromise(promise);
             promiseTokenSeq += 1;
@@ -1093,23 +1367,29 @@ export function learncodeRuntimeBridge(config) {
 
     // ─── Handles for lazy expansion ────────────────────────
 
-    const handles = new NativeMap();
-    const handleIds = new NativeWeakMap();
-    const symbolKeys = new NativeMap();
+    // Handle id → object. Typed by what it is queried with: whatever ids the parent sends back.
+    const handles = new NativeMap<unknown, unknown>();
+    const handleIds = new NativeWeakMap<object, number>();
+    // Symbol id (PropertyKeyToken.symbol) → symbol.
+    const symbolKeys = new NativeMap<unknown, symbol>();
     let nextHandle = 1;
     let nextSymbolKey = 1;
 
-    function EntriesView(kind, owner) {
+    function EntriesView(this: EntriesViewData, kind: CollectionKind, owner: unknown): void {
         this.kind = kind;
         this.owner = owner;
     }
 
-    function EntryView(key, value) {
+    function EntryView(this: EntryViewData, key: unknown, value: unknown): void {
         this.key = key;
         this.value = value;
     }
 
-    function handleFor(value, dedupe = true) {
+    /**
+     * Handle of an object for later expansion (undefined for primitives and once MAX_HANDLES is reached).
+     * `dedupe: false` for the inspector's throwaway views, which must not be found again by identity.
+     */
+    function handleFor(value: unknown, dedupe: boolean = true): number | undefined {
         if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return undefined;
         if (dedupe) {
             const existing = handleIds.get(value);
@@ -1123,7 +1403,7 @@ export function learncodeRuntimeBridge(config) {
         return id;
     }
 
-    function keyToken(key) {
+    function keyToken(key: string | symbol): PropertyKeyToken {
         if (typeof key !== 'symbol') return { string: String(key) };
         const id = nextSymbolKey;
         nextSymbolKey += 1;
@@ -1131,18 +1411,22 @@ export function learncodeRuntimeBridge(config) {
         return { symbol: id };
     }
 
-    function resolveKeyToken(token) {
+    function resolveKeyToken(token: PropertyKeyToken | null | undefined): string | symbol | undefined {
         if (token && typeof token.string === 'string') return token.string;
         if (token && symbolKeys.has(token.symbol)) return symbolKeys.get(token.symbol);
         return undefined;
     }
 
-    function describe(value, mode, ctx) {
+    /**
+     * The inspector serializer: turn any value into the RemoteValue the app renders (preview text, kind,
+     * and a handle when it can be expanded later). `ctx` collects the top-level promises of a message.
+     */
+    function describe(value: unknown, mode: PreviewMode, ctx?: FormatContext | null): RemoteValue {
         const kind = classify(value);
         if (isPrimitiveKind(kind)) {
             return { type: kind, subtype: kind, preview: formatPrimitive(value, kind, true) };
         }
-        const descriptor = {
+        const descriptor: RemoteValue = {
             type: typeof value === 'function' ? 'function' : 'object',
             subtype: kind,
             preview: mode === 'proto' ? prototypeLabel(value) : fullPreview(value, ctx, mode),
@@ -1152,27 +1436,35 @@ export function learncodeRuntimeBridge(config) {
         return descriptor;
     }
 
-    function prototypeLabel(value) {
+    // `Person.prototype` for a constructor's prototype object, else the short preview.
+    function prototypeLabel(value: unknown): string {
         const owner = prototypeOwner(value);
         const ownerName = owner ? functionName(owner) : '';
         if (ownerName) return ownerName + '.prototype';
         return shortPreview(value);
     }
 
-    function inspectProperties(target, receiverHandle) {
-        const properties = [];
+    /**
+     * The rows of an expanded object, like Chrome's object tree: own properties (accessors left unread
+     * unless they are native getters of a browser object), the internal slots of its kind, then
+     * [[Prototype]]. Also expands the inspector's own views: a [[Entries]] list and a Map entry.
+     * `receiverHandle` is the object accessors should run on (see InspectorAccessorProperty.receiver).
+     */
+    function inspectProperties(target: unknown, receiverHandle: number): InspectorProperty[] {
+        const properties: InspectorProperty[] = [];
 
+        // (The casts: `instanceof` on a function-style constructor narrows to `{}`.)
         if (target instanceof EntriesView) {
             let index = 0;
             try {
-                const iterator = target.kind === 'map' ? mapEntries.call(target.owner) : setValues.call(target.owner);
+                const iterator = (target as EntriesViewData).kind === 'map' ? mapEntries.call((target as EntriesViewData).owner) : setValues.call((target as EntriesViewData).owner);
                 for (let step = iterator.next(); !step.done; step = iterator.next()) {
                     if (index >= EXPAND_LIMIT) {
                         properties.push({ name: '…', more: true });
                         break;
                     }
-                    if (target.kind === 'map') {
-                        const entry = new EntryView(step.value[0], step.value[1]);
+                    if ((target as EntriesViewData).kind === 'map') {
+                        const entry = new (EntryView as unknown as EntryViewConstructor)((step.value as MapEntry)[0], (step.value as MapEntry)[1]);
                         properties.push({
                             name: String(index),
                             value: {
@@ -1194,21 +1486,21 @@ export function learncodeRuntimeBridge(config) {
         }
 
         if (target instanceof EntryView) {
-            properties.push({ name: 'key', value: describe(target.key, 'prop') });
-            properties.push({ name: 'value', value: describe(target.value, 'prop') });
+            properties.push({ name: 'key', value: describe((target as EntryViewData).key, 'prop') });
+            properties.push({ name: 'value', value: describe((target as EntryViewData).value, 'prop') });
             return properties;
         }
 
         const kind = classify(target);
         const platform = kind === 'node' || kind === 'domlist' || (kind === 'object' && isPlatformObject(target));
-        let keys = [];
+        let keys: (string | symbol)[] = [];
         try {
             keys = ownKeys(target);
         } catch (error) {
             properties.push({ name: '[[Exception]]', internal: true, value: { type: 'string', preview: errorHeadline(error) } });
         }
         // Browser objects keep their data in native accessors: Chrome lists them with their values.
-        const readNative = (key) => {
+        const readNative = (key: string | symbol): RemoteValue => {
             const result = safeGet(target, key);
             return result.ok
                 ? describe(result.value, 'prop')
@@ -1221,7 +1513,7 @@ export function learncodeRuntimeBridge(config) {
                 properties.push({ name: '…', more: true, preview: (keys.length - count) + ' more' });
                 break;
             }
-            let descriptor = null;
+            let descriptor: Descriptor | null | undefined = null;
             try {
                 descriptor = getOwnDesc(target, key);
             } catch {
@@ -1229,7 +1521,7 @@ export function learncodeRuntimeBridge(config) {
             }
             if (!descriptor) continue;
             count += 1;
-            const item = {
+            const item: PropertyRowDraft = {
                 name: typeof key === 'symbol' ? '[' + symbolText(key) + ']' : key,
                 enumerable: Boolean(descriptor.enumerable),
             };
@@ -1244,7 +1536,7 @@ export function learncodeRuntimeBridge(config) {
                 item.owner = handleFor(target);
                 item.receiver = receiverHandle;
             }
-            properties.push(item);
+            properties.push(item as InspectorProperty);
         }
 
         if (platform) {
@@ -1259,7 +1551,7 @@ export function learncodeRuntimeBridge(config) {
             properties.push({
                 name: '[[Entries]]',
                 internal: true,
-                value: { type: 'object', subtype: 'entries', preview: 'Array(' + size + ')', handle: handleFor(new EntriesView(kind, target), false) },
+                value: { type: 'object', subtype: 'entries', preview: 'Array(' + size + ')', handle: handleFor(new (EntriesView as unknown as EntriesViewConstructor)(kind, target), false) },
             });
         }
         if (kind === 'boxed') {
@@ -1268,7 +1560,7 @@ export function learncodeRuntimeBridge(config) {
         }
         if (kind === 'weakref') {
             const deref = safeGet(target, 'deref');
-            let referent;
+            let referent: unknown;
             try {
                 referent = typeof deref.value === 'function' ? deref.value.call(target) : undefined;
             } catch {
@@ -1278,7 +1570,7 @@ export function learncodeRuntimeBridge(config) {
         }
         if (kind === 'arraybuffer') {
             try {
-                const bytes = new Uint8Array(target, 0, Math.min(byteLengthOf(target), 64));
+                const bytes = new Uint8Array(target as ArrayBufferLike, 0, Math.min(byteLengthOf(target), 64));
                 const hex = arrayFrom(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(' ');
                 properties.push({ name: '[[Uint8Contents]]', internal: true, value: { type: 'string', preview: '<' + hex + (byteLengthOf(target) > 64 ? ' …' : '') + '>' } });
             } catch {
@@ -1287,7 +1579,7 @@ export function learncodeRuntimeBridge(config) {
             properties.push({ name: 'byteLength', internal: true, value: describe(byteLengthOf(target), 'prop') });
         }
         if (kind === 'promise') {
-            const record = trackPromise(target);
+            const record = trackPromise(target as object);
             properties.push({ name: '[[PromiseState]]', internal: true, value: { type: 'string', preview: "'" + record.state + "'" } });
             if (record.state !== 'pending') {
                 properties.push({ name: '[[PromiseResult]]', internal: true, value: describe(record.value, 'prop') });
@@ -1302,14 +1594,15 @@ export function learncodeRuntimeBridge(config) {
         return properties;
     }
 
-    async function handleInspect(data) {
+    /** Answer an 'inspect' command (a promise is given three microtasks to settle first). */
+    async function handleInspect(data: ConsoleInspectCommand): Promise<InspectResponse> {
         if (!handles.has(data.handle)) {
             return { ok: false, error: 'This object is no longer available (the preview was re-rendered).' };
         }
         const target = handles.get(data.handle);
-        const receiverHandle = handles.has(data.receiver) ? data.receiver : data.handle;
+        const receiverHandle = handles.has(data.receiver) ? data.receiver! : data.handle; // has() found it: defined
         if (classify(target) === 'promise') {
-            trackPromise(target);
+            trackPromise(target as object);
             await null;
             await null;
             await null;
@@ -1317,7 +1610,8 @@ export function learncodeRuntimeBridge(config) {
         return { ok: true, properties: inspectProperties(target, receiverHandle) };
     }
 
-    function handleGetProperty(data) {
+    /** Answer a 'get-property' command: run the getter with the receiver as `this`. */
+    function handleGetProperty(data: ConsoleGetPropertyCommand): InspectResponse {
         if (!handles.has(data.owner)) {
             return { ok: false, error: 'This object is no longer available (the preview was re-rendered).' };
         }
@@ -1334,11 +1628,15 @@ export function learncodeRuntimeBridge(config) {
 
     // ─── Console formatting ────────────────────────────────
 
-    function formatArgs(args, ctx) {
-        const parts = [];
+    /**
+     * Turn console arguments into parts the way Chrome does: a leading string with `%` is a format
+     * (`%s %d %i %f %o %O %c`, `%%`), remaining strings are text and anything else an inspectable value.
+     */
+    function formatArgs(args: unknown[], ctx: FormatContext): ConsolePart[] {
+        const parts: ConsolePart[] = [];
         let rest = args;
 
-        const pushText = (text, style) => {
+        const pushText = (text: string, style?: string): void => {
             if (text === '') return;
             const last = parts[parts.length - 1];
             if (last && last.kind === 'text' && (last.style || '') === (style || '')) {
@@ -1385,9 +1683,9 @@ export function learncodeRuntimeBridge(config) {
                 if (spec === 's') {
                     buffer += typeof arg === 'string' ? arg : shortPreview(arg).replace(/^'(.*)'$/s, '$1');
                 } else if (spec === 'd' || spec === 'i') {
-                    buffer += typeof arg === 'bigint' ? String(arg) + 'n' : typeof arg === 'symbol' ? 'NaN' : String(Number.parseInt(arg, 10));
+                    buffer += typeof arg === 'bigint' ? String(arg) + 'n' : typeof arg === 'symbol' ? 'NaN' : String(Number.parseInt(arg as string, 10)); // parseInt coerces any value, as %d does
                 } else if (spec === 'f') {
-                    buffer += typeof arg === 'symbol' ? 'NaN' : String(Number.parseFloat(arg));
+                    buffer += typeof arg === 'symbol' ? 'NaN' : String(Number.parseFloat(arg as string)); // likewise
                 } else if (spec === 'o' || spec === 'O') {
                     flush();
                     parts.push({ kind: 'value', value: describe(arg, 'top', ctx) });
@@ -1413,11 +1711,11 @@ export function learncodeRuntimeBridge(config) {
         return parts;
     }
 
-    function partsText(parts) {
+    function partsText(parts: ConsolePart[]): string {
         return parts.map((part) => (part.kind === 'text' ? part.text : part.value ? part.value.preview : '')).join('');
     }
 
-    function ownEnumerableKeys(value) {
+    function ownEnumerableKeys(value: unknown): string[] {
         return safeKeys(value).filter((key) => {
             if (typeof key === 'symbol') return false;
             try {
@@ -1426,13 +1724,14 @@ export function learncodeRuntimeBridge(config) {
             } catch {
                 return false;
             }
-        });
+        }) as string[]; // symbols were filtered out
     }
 
-    function buildTable(data, columnsArg) {
+    /** console.table: rows from an object's own enumerable properties or a Map/Set's entries, cells as previews. */
+    function buildTable(data: unknown, columnsArg: unknown): ConsoleTable | null {
         if (data === null || (typeof data !== 'object' && typeof data !== 'function')) return null;
         const kind = classify(data);
-        let entries = [];
+        let entries: [key: string, value: unknown, mapKey?: unknown][] = [];
         if (kind === 'map') {
             try {
                 entries = arrayFrom(mapEntries.call(data)).map((entry, index) => [String(index), entry[1], entry[0]]);
@@ -1454,12 +1753,12 @@ export function learncodeRuntimeBridge(config) {
 
         const truncated = entries.length > 1000;
         entries = entries.slice(0, 1000);
-        const columns = [];
-        const columnSet = new Set();
+        const columns: string[] = [];
+        const columnSet = new Set<string>();
         let hasValueColumn = false;
         const hasKeyColumn = kind === 'map';
         const rows = entries.map(([key, value, mapKey]) => {
-            const row = { key, cells: {}, value: '', mapKey: hasKeyColumn ? shortPreview(mapKey) : '' };
+            const row: TableRow = { key, cells: {}, value: '', mapKey: hasKeyColumn ? shortPreview(mapKey) : '' };
             if (value !== null && (typeof value === 'object' || typeof value === 'function') && classify(value) !== 'date' && classify(value) !== 'regexp') {
                 ownEnumerableKeys(value).forEach((columnKey) => {
                     if (!columnSet.has(columnKey)) {
@@ -1496,7 +1795,7 @@ export function learncodeRuntimeBridge(config) {
         };
     }
 
-    function describeErrorStack(error) {
+    function describeErrorStack(error: unknown): ErrorStack {
         const stackResult = safeGet(error, 'stack');
         const stackText = stackResult.ok && typeof stackResult.value === 'string' ? stackResult.value : '';
         return { frames: mapFrames(parseStackFrames(stackText), false), stackText };
@@ -1504,23 +1803,29 @@ export function learncodeRuntimeBridge(config) {
 
     // ─── Console capture ───────────────────────────────────
 
-    const consoleObject = win.console || {};
-    const originals = {};
-    const groupStack = [];
-    const counters = new NativeMap();
-    const timers = new NativeMap();
+    const consoleObject = (win.console || {}) as PatchableConsole;
+    const originals: Record<string, ConsoleFunction | null> = {};
+    // Ids of the open console.group()s, outermost first.
+    const groupStack: number[] = [];
+    const counters = new NativeMap<string, number>();
+    const timers = new NativeMap<string, number>();
     let groupSequence = 0;
 
-    function emit(level, args, extra) {
-        const options = extra || {};
+    /**
+     * Send one console call as a 'console' message: format the arguments, attach the caller's location
+     * (and stack for assert/trace, or the first Error argument's stack). Gated by CONSOLE_ENABLED (errors
+     * always pass) and by the flood limit.
+     */
+    function emit(level: ConsoleLevel, args: unknown[], extra?: EmitOptions): void {
+        const options: EmitOptions = extra || {};
         if (!CONSOLE_ENABLED && level !== 'error') return;
         if (!allowConsoleMessage()) return;
 
-        const ctx = { promises: [], dir: options.method === 'dir' };
+        const ctx: FormatContext = { promises: [], dir: options.method === 'dir' };
         const parts = formatArgs(args, ctx);
         const callerFrames = captureCallerFrames();
         const firstError = args.find((arg) => isErrorValue(arg));
-        let stackFrames = [];
+        let stackFrames: RuntimeStackFrame[] = [];
         let stackText = '';
         if (firstError) {
             const described = describeErrorStack(firstError);
@@ -1549,19 +1854,20 @@ export function learncodeRuntimeBridge(config) {
         enqueue(message, ctx);
     }
 
-    function emitText(level, text, method) {
+    function emitText(level: ConsoleLevel, text: string, method: ConsoleMessageMethod): void {
         emit(level, [text], { method });
     }
 
-    function formatDuration(ms) {
+    function formatDuration(ms: number): string {
         return Number(ms.toFixed(3)) + ' ms';
     }
 
-    function labelOf(args) {
+    function labelOf(args: unknown[]): string {
         return args.length > 0 && args[0] !== undefined ? String(args[0]) : 'default';
     }
 
-    const consoleImplementations = {
+    // What each console method does besides calling the original (see the patch below).
+    const consoleImplementations: Record<string, ConsoleImplementation> = {
         log: (args) => emit('log', args, { method: 'log' }),
         info: (args) => emit('info', args, { method: 'info' }),
         debug: (args) => emit('debug', args, { method: 'debug' }),
@@ -1617,7 +1923,7 @@ export function learncodeRuntimeBridge(config) {
                 emitText('warn', "Timer '" + label + "' does not exist", 'timeLog');
                 return;
             }
-            emit('log', [label + ': ' + formatDuration(nowMs() - timers.get(label)), ...args.slice(1)], { method: 'timeLog' });
+            emit('log', [label + ': ' + formatDuration(nowMs() - timers.get(label)!), ...args.slice(1)], { method: 'timeLog' });
         },
         timeEnd: (args) => {
             const label = labelOf(args);
@@ -1625,14 +1931,14 @@ export function learncodeRuntimeBridge(config) {
                 emitText('warn', "Timer '" + label + "' does not exist", 'timeEnd');
                 return;
             }
-            const elapsed = nowMs() - timers.get(label);
+            const elapsed = nowMs() - timers.get(label)!; // has() checked above
             timers.delete(label);
             emitText('log', label + ': ' + formatDuration(elapsed), 'timeEnd');
         },
         assert: (args) => {
             if (args[0]) return;
             const rest = args.slice(1);
-            let payload;
+            let payload: unknown[];
             if (rest.length === 0) payload = ['Assertion failed: console.assert'];
             else if (typeof rest[0] === 'string') payload = ['Assertion failed: ' + rest[0], ...rest.slice(1)];
             else payload = ['Assertion failed:', ...rest];
@@ -1645,12 +1951,14 @@ export function learncodeRuntimeBridge(config) {
         },
     };
 
+    // The console patch: every method above is replaced by a wrapper that reports the call, then runs
+    // the original (so the browser's own DevTools still see it). Reporting never throws into user code.
     Object.keys(consoleImplementations).forEach((method) => {
-        const original = typeof consoleObject[method] === 'function' ? consoleObject[method].bind(consoleObject) : null;
+        const original: ConsoleFunction | null = typeof consoleObject[method] === 'function' ? consoleObject[method].bind(consoleObject) : null;
         originals[method] = original;
         const implementation = consoleImplementations[method];
         try {
-            consoleObject[method] = function (...args) {
+            consoleObject[method] = function (...args: unknown[]) {
                 try {
                     implementation(args);
                 } catch {
@@ -1665,13 +1973,14 @@ export function learncodeRuntimeBridge(config) {
 
     // ─── Errors ────────────────────────────────────────────
 
-    function describeThrown(value, prefix) {
+    // `Uncaught TypeError: …`, `Uncaught "text"`, `Uncaught (in promise) {code: 7}`.
+    function describeThrown(value: unknown, prefix: string): string {
         if (isErrorValue(value)) return prefix + ' ' + errorHeadline(value);
         if (typeof value === 'string') return prefix + ' ' + JSON.stringify(value);
         return prefix + ' ' + fullPreview(value, null, 'prop');
     }
 
-    function errorNameOf(value) {
+    function errorNameOf(value: unknown): string {
         if (!isErrorValue(value)) return '';
         const result = safeGet(value, 'name');
         return result.ok && typeof result.value === 'string' ? result.value : 'Error';
@@ -1679,13 +1988,17 @@ export function learncodeRuntimeBridge(config) {
 
     // Chrome reports an uncaught error only after the page's own `error` listeners ran, and not at all when one
     // of them called preventDefault() (or `onerror` returned true): these listeners are kept last (see below).
-    function onWindowError(event) {
+    /**
+     * The error reporter: turn an uncaught error (ErrorEvent at window) into a 'runtime-error' message,
+     * with the stack mapped to editor files, or the event's document position when there is no usable stack.
+     */
+    function onWindowError(event: ErrorEvent): void {
         if (!event || typeof event.message !== 'string' || event.defaultPrevented) return;
-        const error = event.error;
+        const error: unknown = event.error;
         // Chrome fires this one at window (pages can listen for it) but never prints it in the console.
         if ((error === undefined || error === null) && event.message.startsWith('ResizeObserver loop')) return;
-        let message;
-        let frames = [];
+        let message: string;
+        let frames: RuntimeStackFrame[] = [];
         let stackText = '';
 
         if (isErrorValue(error)) {
@@ -1735,22 +2048,23 @@ export function learncodeRuntimeBridge(config) {
     // A <script> whose src (or a module it imports) fails to load fires a plain `error` event at the element,
     // never at window, so the learner saw nothing. Chrome's console shows the failed request: do the same,
     // finding it in the resource timings (asset routes send Timing-Allow-Origin, so srcdoc copies see it too).
-    const reportedFailures = new Set();
-    const HTTP_STATUS_TEXT = { 400: 'Bad Request', 403: 'Forbidden', 404: 'Not Found', 500: 'Internal Server Error' };
-    function failedScriptRequests() {
-        let entries = [];
+    const reportedFailures = new Set<string>();
+    const HTTP_STATUS_TEXT: Record<number, string> = { 400: 'Bad Request', 403: 'Forbidden', 404: 'Not Found', 500: 'Internal Server Error' };
+    function failedScriptRequests(): PerformanceResourceTiming[] {
+        let entries: PerformanceResourceTiming[] = [];
         try {
-            entries = win.performance.getEntriesByType('resource');
+            entries = win.performance.getEntriesByType('resource') as PerformanceResourceTiming[];
         } catch {
             return [];
         }
         return entries.filter((entry) => entry.initiatorType === 'script' && entry.responseStatus >= 400 && !reportedFailures.has(entry.name));
     }
-    function shortUrl(url) {
+    function shortUrl(url: string): string {
         const base = String((doc && doc.baseURI) || '').replace(/[^/]*$/, '');
         return base && url.startsWith(base) ? url.slice(base.length) : url;
     }
-    function reportLoadFailure(text) {
+    /** Report a script that failed to load as a 'runtime-error' (errorName 'NetworkError'). */
+    function reportLoadFailure(text: string): void {
         enqueue(createMessage('runtime-error', 'error', {
             errorName: 'NetworkError',
             parts: [{ kind: 'text', text }],
@@ -1767,7 +2081,7 @@ export function learncodeRuntimeBridge(config) {
     }
     if (doc && typeof doc.addEventListener === 'function') {
         doc.addEventListener('error', (event) => {
-            const target = event && event.target;
+            const target = event && event.target as HTMLScriptElement | null; // only <script> targets pass the check
             if (!target || target.tagName !== 'SCRIPT') return;
             const failed = failedScriptRequests();
             if (failed.length === 0) {
@@ -1783,11 +2097,12 @@ export function learncodeRuntimeBridge(config) {
         }, true);
     }
 
-    function onUnhandledRejection(event) {
+    /** The rejection reporter: an unhandled rejection becomes an 'unhandled-rejection' message. */
+    function onUnhandledRejection(event: PromiseRejectionEvent): void {
         if (event && event.defaultPrevented) return;
-        const reason = event ? event.reason : undefined;
+        const reason: unknown = event ? event.reason : undefined;
         const message = describeThrown(reason, 'Uncaught (in promise)');
-        const described = isErrorValue(reason) ? describeErrorStack(reason) : { frames: [], stackText: '' };
+        const described: ErrorStack = isErrorValue(reason) ? describeErrorStack(reason) : { frames: [], stackText: '' };
         const location = primaryLocation(described.frames);
         enqueue(createMessage('unhandled-rejection', 'error', {
             errorName: errorNameOf(reason),
@@ -1808,11 +2123,11 @@ export function learncodeRuntimeBridge(config) {
     // Listeners run in registration order, so the page's `error`/`unhandledrejection` listeners (and `onerror`)
     // would run after LearnWeb's. Re-adding ours after each one the page adds keeps them last, like Chrome's report.
     (function keepReportsLast() {
-        const reporters = { error: onWindowError, unhandledrejection: onUnhandledRejection };
+        const reporters: ReporterTable = { error: onWindowError as EventListener, unhandledrejection: onUnhandledRejection as EventListener };
         const add = win.addEventListener;
         const remove = win.removeEventListener;
         if (typeof add !== 'function' || typeof remove !== 'function') return;
-        const moveLast = (type) => {
+        const moveLast = (type: string): void => {
             remove.call(win, type, reporters[type]);
             add.call(win, type, reporters[type]);
         };
@@ -1820,7 +2135,7 @@ export function learncodeRuntimeBridge(config) {
             Object.defineProperty(win, 'addEventListener', {
                 configurable: true,
                 writable: true,
-                value: function addEventListener(type, listener, options) {
+                value: function addEventListener(this: unknown, type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) {
                     const target = this == null ? win : this;
                     const result = add.call(target, type, listener, options);
                     if (target === win && hasOwn.call(reporters, type) && listener !== reporters[type]) moveLast(type);
@@ -1831,7 +2146,7 @@ export function learncodeRuntimeBridge(config) {
             // Keep the native method.
         }
         ['error', 'unhandledrejection'].forEach((type) => {
-            let descriptor = null;
+            let descriptor: Descriptor | null | undefined = null;
             try {
                 descriptor = getOwnDesc(win, 'on' + type);
             } catch {
@@ -1843,8 +2158,8 @@ export function learncodeRuntimeBridge(config) {
                     configurable: true,
                     enumerable: descriptor.enumerable,
                     get: descriptor.get,
-                    set: function (value) {
-                        descriptor.set.call(this == null ? win : this, value);
+                    set: function (this: unknown, value: unknown) {
+                        descriptor!.set!.call(this == null ? win : this, value); // checked above
                         moveLast(type);
                     },
                 });
@@ -1856,7 +2171,8 @@ export function learncodeRuntimeBridge(config) {
 
     // ─── Parent commands (REPL + inspector) ────────────────
 
-    function runCommand(data) {
+    /** Run a REPL line in the page's global scope and report its value (or what it threw). */
+    function runCommand(data: ConsoleEvalCommand): void {
         let source = String(data.command || '');
         if (/^\s*\{[\s\S]*\}\s*$/.test(source)) {
             try {
@@ -1869,8 +2185,8 @@ export function learncodeRuntimeBridge(config) {
         }
 
         try {
-            const result = (0, eval)(source);
-            const ctx = { promises: [] };
+            const result: unknown = (0, eval)(source);
+            const ctx: FormatContext = { promises: [] };
             const value = describe(result, 'top', ctx);
             const text = value.preview;
             enqueue(createMessage('command-result', 'info', {
@@ -1882,7 +2198,7 @@ export function learncodeRuntimeBridge(config) {
             }), ctx);
         } catch (error) {
             const message = describeThrown(error, 'Uncaught');
-            const described = isErrorValue(error) ? describeErrorStack(error) : { frames: [], stackText: '' };
+            const described: ErrorStack = isErrorValue(error) ? describeErrorStack(error) : { frames: [], stackText: '' };
             enqueue(createMessage('command-error', 'error', {
                 commandId: data.commandId || null,
                 parts: [{ kind: 'text', text: message }],
@@ -1895,43 +2211,47 @@ export function learncodeRuntimeBridge(config) {
         }
     }
 
+    // Commands from the app (ConsoleCommandMessage): only from the parent window and for this render.
+    // The data is untrusted until `source` and `renderId` match; after that its shape is trusted, and
+    // `action` (default 'eval') says which command it is.
     win.addEventListener('message', (event) => {
         if (event.source !== parentWin) return;
-        const data = event.data || {};
+        const data: ConsoleCommandMessage = event.data || {};
         if (data.source !== COMMAND_SOURCE || data.renderId !== RENDER_ID) return;
         const action = data.action || 'eval';
 
         if (action === 'eval') {
-            runCommand(data);
+            runCommand(data as ConsoleEvalCommand);
             return;
         }
 
         if (action === 'inspect') {
-            handleInspect(data)
-                .catch((error) => ({ ok: false, error: errorHeadline(error) }))
-                .then((result) => send(createMessage('inspect-result', 'info', { requestId: data.requestId, ...result })));
+            handleInspect(data as ConsoleInspectCommand)
+                .catch((error: unknown): InspectFailure => ({ ok: false, error: errorHeadline(error) }))
+                .then((result) => send(createMessage('inspect-result', 'info', { requestId: (data as ConsoleInspectCommand).requestId, ...result })));
             return;
         }
 
         if (action === 'get-property') {
-            let result;
+            let result: InspectResponse;
             try {
-                result = handleGetProperty(data);
+                result = handleGetProperty(data as ConsoleGetPropertyCommand);
             } catch (error) {
                 result = { ok: false, error: errorHeadline(error) };
             }
-            send(createMessage('inspect-result', 'info', { requestId: data.requestId, ...result }));
+            send(createMessage('inspect-result', 'info', { requestId: (data as ConsoleGetPropertyCommand).requestId, ...result }));
         }
     });
 
     // ─── Forms ─────────────────────────────────────────────
 
+    // A submit nobody handled would navigate the preview away: block it and log what would have been sent.
     win.addEventListener('submit', (event) => {
         if (event.defaultPrevented) return;
-        const form = event.target;
+        const form = event.target as HTMLFormElement | null; // checked to be a <form> below
         if (!form || String(form.tagName || '').toUpperCase() !== 'FORM') return;
         const submitter = event.submitter || null;
-        const attribute = (element, name) => (element && typeof element.getAttribute === 'function' ? element.getAttribute(name) : null);
+        const attribute = (element: Element | null, name: string): string | null => (element && typeof element.getAttribute === 'function' ? element.getAttribute(name) : null);
         // Attributes, not form.method/form.action: a control named "method" or "action" shadows those properties.
         const rawMethod = String(attribute(submitter, 'formmethod') || attribute(form, 'method') || 'get').toLowerCase();
         const method = ['get', 'post', 'dialog'].includes(rawMethod) ? rawMethod : 'get';
@@ -1940,7 +2260,7 @@ export function learncodeRuntimeBridge(config) {
         event.preventDefault();
         if (!CONSOLE_ENABLED) return;
 
-        let entries = [];
+        let entries: [string, FormDataEntryValue][] = [];
         try {
             entries = arrayFrom(new FormData(form, submitter || undefined).entries());
         } catch {
@@ -1951,13 +2271,13 @@ export function learncodeRuntimeBridge(config) {
             }
         }
         // Files are shown as the browser would describe them; a GET only sends their names.
-        const describeFile = (file) => {
+        const describeFile = (file: File): string => {
             if (!file || !file.name) return 'File (no file chosen)';
             const size = file.size >= 1024 ? Math.round(file.size / 1024) + ' KB' : file.size + ' bytes';
             return 'File "' + file.name + '" (' + size + (file.type ? ', ' + file.type : '') + ')';
         };
-        const isFile = (value) => typeof win.File === 'function' && value instanceof win.File;
-        const data = {};
+        const isFile = (value: unknown): value is File => typeof win.File === 'function' && value instanceof win.File;
+        const data: FormSubmission = {};
         entries.forEach(([name, rawValue]) => {
             const value = isFile(rawValue) ? describeFile(rawValue) : rawValue;
             if (hasOwn.call(data, name)) {
@@ -1996,11 +2316,11 @@ export function learncodeRuntimeBridge(config) {
     // page when the site refuses to be framed). Such links open in a new tab instead.
     win.addEventListener('click', (event) => {
         if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-        const anchor = event.target && typeof event.target.closest === 'function' ? event.target.closest('a[href]') : null;
+        const anchor = event.target && typeof (event.target as Element).closest === 'function' ? (event.target as Element).closest<HTMLAnchorElement>('a[href]') : null;
         if (!anchor || anchor.hasAttribute('download')) return;
         const target = String(anchor.getAttribute('target') || '').toLowerCase();
         if (target && target !== '_self' && target !== '_top' && target !== '_parent') return;
-        let url = null;
+        let url: URL | null = null;
         try {
             url = new URL(anchor.href, doc ? doc.baseURI : undefined);
         } catch {
@@ -2019,17 +2339,17 @@ export function learncodeRuntimeBridge(config) {
     // ─── Dialogs during live editing ───────────────────────
 
     if (cfg.suppressDialogs) {
-        const describeDialogArgs = (args) => args.map((arg) => (typeof arg === 'string' ? JSON.stringify(arg) : shortPreview(arg))).join(', ');
-        const notify = (name, args, result) => {
+        const describeDialogArgs = (args: unknown[]): string => args.map((arg) => (typeof arg === 'string' ? JSON.stringify(arg) : shortPreview(arg))).join(', ');
+        const notify = (name: string, args: unknown[], result?: string): void => {
             const text = name + '(' + describeDialogArgs(args) + ') skipped while editing'
                 + (result === undefined ? '' : ' (returned ' + result + ')')
                 + ' — press ⟳ Refresh to run it with dialogs.';
             enqueue(createMessage('dialog-suppressed', 'info', { text, values: [text], parts: [{ kind: 'text', text }], groups: [], location: primaryLocation(captureCallerFrames()) }));
         };
         try {
-            win.alert = function alert(...args) { notify('alert', args); };
-            win.confirm = function confirm(...args) { notify('confirm', args, 'false'); return false; };
-            win.prompt = function prompt(...args) { notify('prompt', args, 'null'); return null; };
+            win.alert = function alert(...args: unknown[]) { notify('alert', args); };
+            win.confirm = function confirm(...args: unknown[]) { notify('confirm', args, 'false'); return false; };
+            win.prompt = function prompt(...args: unknown[]) { notify('prompt', args, 'null'); return null; };
         } catch {
             // Ignore.
         }
@@ -2037,19 +2357,20 @@ export function learncodeRuntimeBridge(config) {
 
     // ─── Opaque-origin shims (srcdoc previews: gallery, theory, fallback) ───
 
-    function createMemoryStorage() {
-        const data = new NativeMap();
+    /** An in-memory Storage (as a Proxy, so `storage.key = value` and Object.keys(storage) work too). */
+    function createMemoryStorage(): Storage {
+        const data = new NativeMap<string, string>();
         const proto = {};
         Object.defineProperties(proto, {
-            getItem: { value: function getItem(key) { const name = String(key); return data.has(name) ? data.get(name) : null; } },
-            setItem: { value: function setItem(key, value) { data.set(String(key), String(value)); } },
-            removeItem: { value: function removeItem(key) { data.delete(String(key)); } },
+            getItem: { value: function getItem(key: unknown) { const name = String(key); return data.has(name) ? data.get(name) : null; } },
+            setItem: { value: function setItem(key: unknown, value: unknown) { data.set(String(key), String(value)); } },
+            removeItem: { value: function removeItem(key: unknown) { data.delete(String(key)); } },
             clear: { value: function clear() { data.clear(); } },
-            key: { value: function key(index) { const keys = arrayFrom(data.keys()); return index >= 0 && index < keys.length ? keys[index] : null; } },
+            key: { value: function key(index: number) { const keys = arrayFrom(data.keys()); return index >= 0 && index < keys.length ? keys[index] : null; } },
             length: { get() { return data.size; } },
             [Symbol.toStringTag]: { value: 'Storage' },
         });
-        return new Proxy(Object.create(proto), {
+        return new Proxy(Object.create(proto) as Storage, {
             get(target, key, receiver) {
                 if (typeof key === 'symbol' || key in proto) return Reflect.get(proto, key, receiver);
                 return data.has(key) ? data.get(key) : undefined;
@@ -2078,6 +2399,7 @@ export function learncodeRuntimeBridge(config) {
         });
     }
 
+    // Opaque origins throw on any access to localStorage/sessionStorage: give the page working in-memory ones.
     ['localStorage', 'sessionStorage'].forEach((name) => {
         let available = true;
         try {
@@ -2102,12 +2424,12 @@ export function learncodeRuntimeBridge(config) {
             cookieAvailable = false;
         }
         if (!cookieAvailable) {
-            const jar = new NativeMap();
+            const jar = new NativeMap<string, string>();
             try {
                 Object.defineProperty(doc, 'cookie', {
                     configurable: true,
                     get: () => arrayFrom(jar.entries()).map(([name, value]) => (name ? name + '=' + value : value)).join('; '),
-                    set: (input) => {
+                    set: (input: unknown) => {
                         const segments = String(input).split(';');
                         const pair = segments.shift() || '';
                         const separator = pair.indexOf('=');
@@ -2134,7 +2456,7 @@ export function learncodeRuntimeBridge(config) {
         // With <base href> pointing at the assets folder, `href="#id"` would navigate the frame away.
         doc.addEventListener('click', (event) => {
             if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-            const target = event.target && typeof event.target.closest === 'function' ? event.target.closest('a[href]') : null;
+            const target = event.target && typeof (event.target as Element).closest === 'function' ? (event.target as Element).closest('a[href]') : null;
             if (!target) return;
             const href = target.getAttribute('href') || '';
             if (href[0] !== '#') return;
@@ -2143,7 +2465,7 @@ export function learncodeRuntimeBridge(config) {
             try {
                 win.location.hash = fragment;
             } catch {
-                let element = null;
+                let element: HTMLElement | null = null;
                 try {
                     element = doc.getElementById(decodeURIComponent(fragment)) || doc.getElementsByName(decodeURIComponent(fragment))[0] || null;
                 } catch {
@@ -2160,7 +2482,7 @@ export function learncodeRuntimeBridge(config) {
     if (OPAQUE_MODE && typeof win.Worker === 'function' && typeof win.Blob === 'function' && win.URL && typeof win.URL.createObjectURL === 'function') {
         // An opaque origin cannot start a worker from an http URL; bootstrap it from a blob instead.
         const NativeWorker = win.Worker;
-        const WorkerShim = function Worker(url, options) {
+        const WorkerShim = function Worker(url: string | URL, options?: WorkerOptions): Worker {
             if (!new.target) throw new TypeError("Failed to construct 'Worker': Please use the 'new' operator.");
             let absolute = '';
             try {
@@ -2184,7 +2506,7 @@ export function learncodeRuntimeBridge(config) {
         };
         WorkerShim.prototype = NativeWorker.prototype;
         try {
-            win.Worker = WorkerShim;
+            win.Worker = WorkerShim as unknown as typeof NativeWorker; // a function used with `new`
         } catch {
             // Ignore.
         }
