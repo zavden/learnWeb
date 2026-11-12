@@ -1,4 +1,21 @@
+// The local API of LearnWeb: an Express 4 server on 127.0.0.1:3001 (`node server.ts`, started next to
+// Vite by `npm run dev`). Vite proxies `/api` to it, so the app talks to it same-origin.
+//
+// It reads and writes the repository: the material tree, theory (`main.md`) and examples of a topic,
+// topic assets, the dotfiles (`.favorites`, `.pending`, `.hiddens`, `.vim_enable`, `.clipboard_default`)
+// and `vim-shortcuts.yaml`. It also compiles examples (`/api/compile`, in a worker thread) and hosts the
+// rendered preview documents (`/api/preview-documents`, `/preview/...`) on this origin, which is
+// cross-origin to the app on purpose. Payload shapes are in src/types/api.ts.
+//
+// Security: pages running learner code can reach this server, so every path that comes from a URL or
+// a body goes through `resolveInside` / `assertPlainSegment` / `resolveTopicDir` / `resolveExampleFile`
+// (a refusal is a `PathError`, answered by `sendRouteError`), and requests from foreign origins are
+// refused before any route runs (the only cross-origin exceptions are read-only topic assets and the
+// demo API). Keep those checks, the body limit, the status codes and the headers exactly as they are.
+// The whole server lives in this one file; routes are grouped by section comment.
+
 import express from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
@@ -31,6 +48,44 @@ import {
 import { loadVimShortcutConfig } from './src/editor/vimShortcutConfig.ts';
 import { buildMaterialTree, readHiddenState, setChapterHidden } from './src/utils/materialTree.ts';
 import { createDemoApiRouter } from './src/utils/demoApi.ts';
+import { errorMessage } from './src/utils/errors.ts';
+import type {
+    ClipboardDefaultState,
+    CreateExampleResponse,
+    CreateFolderResponse,
+    CreateItemRequest,
+    EditorFlagRequest,
+    ExampleDeleteResponse,
+    ExampleModifyRequest,
+    ExampleModifyResponse,
+    ExamplePathRequest,
+    ExampleReadResponse,
+    ExampleRenameRequest,
+    ExampleRenameResponse,
+    ExampleSaveRequest,
+    ExampleSaveResponse,
+    ExamplesListResponse,
+    FavoriteChangeResponse,
+    FavoritesResponse,
+    HiddenStateResponse,
+    PendingChangeResponse,
+    PendingResponse,
+    PreviewDocumentRequest,
+    PreviewDocumentResponse,
+    SetChapterHiddenRequest,
+    SetChapterHiddenResponse,
+    TopicAsset,
+    TopicAssetsResponse,
+    TopicMainResponse,
+    TopicMainWriteRequest,
+    TopicMainWriteResponse,
+    TreeResponse,
+    VimDefaultState,
+    VimShortcutsResponse,
+} from './src/types/api.ts';
+import type { CompileErrorResponse, CompileRequest, CompileResponse, CompileResult } from './src/types/compile.ts';
+import type { ExampleDocument } from './src/types/document.ts';
+import type { ExampleListState } from './src/types/material.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,10 +111,13 @@ const appCors = cors({
     },
 });
 // The demo API of the network lessons (fetch, CORS, streams) is open to any origin: it reads no
-// files and only echoes the request back. It sets its own CORS headers (see src/utils/demoApi.js).
+// files and only echoes the request back. It sets its own CORS headers (see src/utils/demoApi.ts).
 app.use('/api/demo', createDemoApiRouter());
 
-app.use((req, res, next) => {
+// Origin gate, ahead of every other route: read-only asset requests get open CORS; any other request
+// that carries a non-local Origin header is refused with 403; the rest gets CORS headers for the
+// local app origins only.
+app.use((req: Request, res: Response, next: NextFunction) => {
     if ((req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') && ASSET_ROUTE_PATTERN.test(req.path)) {
         // Lets the preview runtime read the status of a failed asset request (a 404 module import) in
         // its resource timings, also from sandboxed srcdoc copies.
@@ -74,14 +132,44 @@ app.use((req, res, next) => {
 
     return appCors(req, res, next);
 });
+// Bodies are JSON; 20 MB leaves room for whole example documents and rendered preview HTML.
 app.use(express.json({ limit: '20mb' }));
 
+// ─── Request types ──────────────────────────────────────
+
+/** Route parameters that name a topic: `/api/topic/:ch/:sec/:top/...`. */
+interface TopicParams {
+    ch: string;
+    sec: string;
+    top: string;
+}
+
+/** A topic route that ends in `*` (the example or asset file name): Express exposes the capture as `params[0]`. */
+interface TopicWildcardParams extends TopicParams {
+    0: string;
+}
+
+/** `/preview/:ch/:sec/:top/:id/*`. */
+interface PreviewParams extends TopicWildcardParams {
+    id: string;
+}
+
+/** Routes without parameters. */
+type NoParams = Record<string, never>;
+
+// Request bodies are untrusted JSON: every field may be missing or have another type, so the payload
+// types of src/types/api.ts are used as `Partial` and each handler keeps checking what it reads.
+
+// ─── Compile cache ──────────────────────────────────────
+
 const COMPILE_CACHE_MAX_ENTRIES = 120;
-const compileCache = new Map();
+/** Least recently used first (a hit re-inserts its key); holds the response payloads of `/api/compile`. */
+const compileCache = new Map<string, CompileResponse>();
 
 // ─── Helpers ────────────────────────────────────────────
 
-function slugify(name) {
+/** Folder-name slug: ASCII lowercase letters and digits joined by single dashes. */
+function slugify(name?: string | null): string {
     return String(name || '')
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
@@ -90,16 +178,21 @@ function slugify(name) {
         .replace(/(^-|-$)/g, '');
 }
 
+/** A request that names a path outside what it may touch; `sendRouteError` answers it with `status`. */
 class PathError extends Error {
-    constructor(message, status = 400) {
+    readonly status: number;
+
+    constructor(message: string, status = 400) {
         super(message);
         this.status = status;
     }
 }
 
-// Resolve `segments` under `baseDir` and refuse anything that escapes it (`..`, absolute paths,
-// encoded separators decoded by Express, etc.).
-function resolveInside(baseDir, ...segments) {
+/**
+ * Resolves `segments` under `baseDir` and refuses anything that escapes it (`..`, absolute paths,
+ * encoded separators decoded by Express, etc.) with a `PathError('Invalid path')`.
+ */
+function resolveInside(baseDir: string, ...segments: string[]): string {
     const base = path.resolve(baseDir);
     const target = path.resolve(base, ...segments.map((segment) => String(segment ?? '')));
     if (target !== base && !target.startsWith(base + path.sep)) {
@@ -108,7 +201,8 @@ function resolveInside(baseDir, ...segments) {
     return target;
 }
 
-function assertPlainSegment(value, label = 'segment') {
+/** A single path segment: not empty, not `.` or `..`, no separator and no NUL. Anything else throws a `PathError` ("Invalid <label>"). */
+function assertPlainSegment(value: unknown, label = 'segment'): string {
     const segment = String(value ?? '');
     if (!segment || segment === '.' || segment === '..' || /[\\/\0]/.test(segment)) {
         throw new PathError(`Invalid ${label}`);
@@ -116,7 +210,8 @@ function assertPlainSegment(value, label = 'segment') {
     return segment;
 }
 
-function resolveTopicDir(params = {}) {
+/** Absolute folder of the topic named by the route params; every segment is validated. */
+function resolveTopicDir(params: Partial<TopicParams> = {}): string {
     return resolveInside(
         MATERIAL_DIR,
         assertPlainSegment(params.ch, 'chapter'),
@@ -125,7 +220,8 @@ function resolveTopicDir(params = {}) {
     );
 }
 
-function resolveExampleFile(params = {}, filename = '') {
+/** Absolute path of an example file of the topic; only plain `.md` file names are accepted. */
+function resolveExampleFile(params: Partial<TopicParams> = {}, filename: unknown = ''): string {
     const name = assertPlainSegment(filename, 'filename');
     if (!name.toLowerCase().endsWith('.md')) {
         throw new PathError('Examples must be .md files');
@@ -133,34 +229,51 @@ function resolveExampleFile(params = {}, filename = '') {
     return resolveInside(resolveTopicDir(params), 'examples', name);
 }
 
-function sendRouteError(res, err) {
+/** Answers a failed route: the `PathError` status, or 500, with the error message. */
+function sendRouteError(res: Response, err: unknown): void {
     const status = err instanceof PathError ? err.status : 500;
-    res.status(status).json({ error: err?.message || 'Unexpected error' });
+    const message = typeof err === 'object' && err !== null && 'message' in err ? err.message : undefined;
+    res.status(status).json({ error: message || 'Unexpected error' });
 }
 
-function toMaterialRelativePath(absolutePath) {
+/** Repository-relative path with `/` separators, the form `.favorites` and `.pending` store. */
+function toMaterialRelativePath(absolutePath: string): string {
     return path.relative(path.dirname(MATERIAL_DIR), absolutePath).split(path.sep).join('/');
 }
 
-function forgetExampleReferences(absolutePath, replacementPath = '') {
+/** A state dotfile (`.favorites`, `.pending`) with the functions that read and edit it. */
+type ExampleListStore = [
+    stateFile: string,
+    readState: (stateFile: string) => ExampleListState,
+    removeEntry: (stateFile: string, relativePath: string) => ExampleListState,
+    addEntry: (stateFile: string, relativePath: string) => ExampleListState,
+];
+
+/**
+ * After an example file is deleted or renamed, drops it from the favorites and pending lists (and
+ * lists `replacementPath` instead when it was renamed). A failure is logged, never thrown.
+ */
+function forgetExampleReferences(absolutePath: string, replacementPath = ''): void {
     const relativePath = toMaterialRelativePath(absolutePath);
     const replacement = replacementPath ? toMaterialRelativePath(replacementPath) : '';
 
-    for (const [stateFile, readState, removeEntry, addEntry] of [
+    const stores: ExampleListStore[] = [
         [FAVORITES_FILE, readFavoritesState, removeFavorite, addFavorite],
         [PENDING_FILE, readPendingState, removePending, addPending],
-    ]) {
+    ];
+    for (const [stateFile, readState, removeEntry, addEntry] of stores) {
         try {
             if (!readState(stateFile).items.includes(relativePath)) continue;
             removeEntry(stateFile, relativePath);
             if (replacement) addEntry(stateFile, replacement);
         } catch (err) {
-            console.warn(`Could not update ${path.basename(stateFile)}:`, err.message);
+            console.warn(`Could not update ${path.basename(stateFile)}:`, errorMessage(err));
         }
     }
 }
 
-function getNextNumber(entries, prefix) {
+/** Two-digit number after the highest `<prefix>NN-` entry (`ch`, `sec`, `top`): the next folder number. */
+function getNextNumber(entries: string[], prefix: string): string {
     let max = 0;
     for (const entry of entries) {
         const m = entry.match(new RegExp(`^${prefix}(\\d+)-`));
@@ -169,22 +282,25 @@ function getNextNumber(entries, prefix) {
     return String(max + 1).padStart(2, '0');
 }
 
-function ensureDir(dirPath) {
+/** Creates the folder (and its parents) when it is missing. */
+function ensureDir(dirPath: string): void {
     if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
     }
 }
 
-function getCachedCompileResponse(cacheKey) {
+/** A copy of the cached response (and marks it most recently used), or null. */
+function getCachedCompileResponse(cacheKey: string): CompileResponse | null {
     if (!compileCache.has(cacheKey)) return null;
 
-    const cached = compileCache.get(cacheKey);
+    const cached = compileCache.get(cacheKey)!; // `has` was just checked
     compileCache.delete(cacheKey);
     compileCache.set(cacheKey, cached);
     return cloneSerializable(cached);
 }
 
-function setCachedCompileResponse(cacheKey, responsePayload) {
+/** Stores a copy of the response, evicting the least recently used entries beyond `COMPILE_CACHE_MAX_ENTRIES`. */
+function setCachedCompileResponse(cacheKey: string, responsePayload: CompileResponse): void {
     if (compileCache.has(cacheKey)) {
         compileCache.delete(cacheKey);
     }
@@ -192,7 +308,7 @@ function setCachedCompileResponse(cacheKey, responsePayload) {
     compileCache.set(cacheKey, cloneSerializable(responsePayload));
 
     while (compileCache.size > COMPILE_CACHE_MAX_ENTRIES) {
-        const oldestKey = compileCache.keys().next().value;
+        const oldestKey = compileCache.keys().next().value!; // the loop condition guarantees an entry
         compileCache.delete(oldestKey);
     }
 }
@@ -207,21 +323,23 @@ app.get('/api/tree', (req, res) => {
             includeHidden,
         });
 
-        res.json(tree);
+        res.json(tree satisfies TreeResponse);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: errorMessage(err) });
     }
 });
+
+// ─── Hidden chapters (`.hiddens`) ───────────────────────
 
 app.get('/api/tree/hidden-state', (req, res) => {
     try {
-        res.json(readHiddenState(HIDDEN_STATE_FILE));
+        res.json(readHiddenState(HIDDEN_STATE_FILE) satisfies HiddenStateResponse);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: errorMessage(err) });
     }
 });
 
-app.patch('/api/tree/chapters/:chapterId/hidden', (req, res) => {
+app.patch('/api/tree/chapters/:chapterId/hidden', (req: Request<{ chapterId: string }, unknown, Partial<SetChapterHiddenRequest>>, res: Response) => {
     try {
         const chapterId = String(req.params.chapterId || '').trim();
         const hidden = req.body?.hidden !== false;
@@ -247,43 +365,45 @@ app.patch('/api/tree/chapters/:chapterId/hidden', (req, res) => {
             hidden,
             hiddenState,
             tree,
-        });
+        } satisfies SetChapterHiddenResponse);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: errorMessage(err) });
     }
 });
+
+// ─── Editor defaults: Vim keys, system clipboard, Vim shortcuts ──
 
 app.get('/api/editor/vim-default', (req, res) => {
     try {
-        res.json(readVimDefaultState(VIM_DEFAULT_FILE));
+        res.json(readVimDefaultState(VIM_DEFAULT_FILE) satisfies VimDefaultState);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: errorMessage(err) });
     }
 });
 
-app.patch('/api/editor/vim-default', (req, res) => {
+app.patch('/api/editor/vim-default', (req: Request<NoParams, unknown, Partial<EditorFlagRequest>>, res: Response) => {
     try {
         const enabled = req.body?.enabled !== false;
-        res.json(writeVimDefaultState(VIM_DEFAULT_FILE, enabled));
+        res.json(writeVimDefaultState(VIM_DEFAULT_FILE, enabled) satisfies VimDefaultState);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: errorMessage(err) });
     }
 });
 
 app.get('/api/editor/clipboard-default', (req, res) => {
     try {
-        res.json(readClipboardDefaultState(CLIPBOARD_DEFAULT_FILE));
+        res.json(readClipboardDefaultState(CLIPBOARD_DEFAULT_FILE) satisfies ClipboardDefaultState);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: errorMessage(err) });
     }
 });
 
-app.patch('/api/editor/clipboard-default', (req, res) => {
+app.patch('/api/editor/clipboard-default', (req: Request<NoParams, unknown, Partial<EditorFlagRequest>>, res: Response) => {
     try {
         const enabled = req.body?.enabled !== false;
-        res.json(writeClipboardDefaultState(CLIPBOARD_DEFAULT_FILE, enabled));
+        res.json(writeClipboardDefaultState(CLIPBOARD_DEFAULT_FILE, enabled) satisfies ClipboardDefaultState);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: errorMessage(err) });
     }
 });
 
@@ -298,11 +418,13 @@ app.get('/api/editor/vim-shortcuts', (req, res) => {
             path: 'vim-shortcuts.yaml',
             source: result.source,
             warnings: result.warnings,
-        });
+        } satisfies VimShortcutsResponse);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: errorMessage(err) });
     }
 });
+
+// ─── Favorites (`.favorites`) and pending (`.pending`): lists of example paths ──
 
 app.get('/api/favorites', (req, res) => {
     try {
@@ -311,13 +433,13 @@ app.get('/api/favorites', (req, res) => {
         res.json({
             entries,
             items: state.items,
-        });
+        } satisfies FavoritesResponse);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: errorMessage(err) });
     }
 });
 
-app.post('/api/favorites', (req, res) => {
+app.post('/api/favorites', (req: Request<NoParams, unknown, Partial<ExamplePathRequest>>, res: Response) => {
     try {
         const favoritePath = String(req.body?.path || '').trim();
         const state = addFavorite(FAVORITES_FILE, favoritePath);
@@ -326,13 +448,13 @@ app.post('/api/favorites', (req, res) => {
             entries,
             items: state.items,
             path: favoritePath,
-        });
+        } satisfies FavoriteChangeResponse);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: errorMessage(err) });
     }
 });
 
-app.delete('/api/favorites', (req, res) => {
+app.delete('/api/favorites', (req: Request<NoParams, unknown, Partial<ExamplePathRequest>>, res: Response) => {
     try {
         const favoritePath = String(req.body?.path || '').trim();
         const state = removeFavorite(FAVORITES_FILE, favoritePath);
@@ -341,9 +463,9 @@ app.delete('/api/favorites', (req, res) => {
             entries,
             items: state.items,
             path: favoritePath,
-        });
+        } satisfies FavoriteChangeResponse);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: errorMessage(err) });
     }
 });
 
@@ -354,13 +476,13 @@ app.get('/api/pending', (req, res) => {
         res.json({
             entries,
             items: state.items,
-        });
+        } satisfies PendingResponse);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: errorMessage(err) });
     }
 });
 
-app.post('/api/pending', (req, res) => {
+app.post('/api/pending', (req: Request<NoParams, unknown, Partial<ExamplePathRequest>>, res: Response) => {
     try {
         const pendingPath = String(req.body?.path || '').trim();
         const state = addPending(PENDING_FILE, pendingPath);
@@ -369,13 +491,13 @@ app.post('/api/pending', (req, res) => {
             entries,
             items: state.items,
             path: pendingPath,
-        });
+        } satisfies PendingChangeResponse);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: errorMessage(err) });
     }
 });
 
-app.delete('/api/pending', (req, res) => {
+app.delete('/api/pending', (req: Request<NoParams, unknown, Partial<ExamplePathRequest>>, res: Response) => {
     try {
         const pendingPath = String(req.body?.path || '').trim();
         const state = removePending(PENDING_FILE, pendingPath);
@@ -384,25 +506,25 @@ app.delete('/api/pending', (req, res) => {
             entries,
             items: state.items,
             path: pendingPath,
-        });
+        } satisfies PendingChangeResponse);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: errorMessage(err) });
     }
 });
 
 // ─── GET /api/topic/:ch/:sec/:top/main ──────────────────
 
-app.get('/api/topic/:ch/:sec/:top/main', (req, res) => {
+app.get('/api/topic/:ch/:sec/:top/main', (req: Request<TopicParams>, res: Response) => {
     try {
         const filePath = resolveInside(resolveTopicDir(req.params), 'main.md');
         if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'main.md not found' });
-        res.json({ content: fs.readFileSync(filePath, 'utf-8') });
+        res.json({ content: fs.readFileSync(filePath, 'utf-8') } satisfies TopicMainResponse);
     } catch (err) {
         sendRouteError(res, err);
     }
 });
 
-app.patch('/api/topic/:ch/:sec/:top/main', (req, res) => {
+app.patch('/api/topic/:ch/:sec/:top/main', (req: Request<TopicParams, unknown, Partial<TopicMainWriteRequest>>, res: Response) => {
     try {
         const { content } = req.body || {};
         const dirPath = resolveTopicDir(req.params);
@@ -410,7 +532,7 @@ app.patch('/api/topic/:ch/:sec/:top/main', (req, res) => {
 
         ensureDir(dirPath);
         fs.writeFileSync(filePath, typeof content === 'string' ? content : String(content ?? ''), 'utf-8');
-        res.json({ filename: 'main.md' });
+        res.json({ filename: 'main.md' } satisfies TopicMainWriteResponse);
     } catch (err) {
         sendRouteError(res, err);
     }
@@ -420,15 +542,15 @@ app.patch('/api/topic/:ch/:sec/:top/main', (req, res) => {
 
 const exampleFilenameCollator = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
 
-app.get('/api/topic/:ch/:sec/:top/examples', (req, res) => {
+app.get('/api/topic/:ch/:sec/:top/examples', (req: Request<TopicParams>, res: Response) => {
     try {
         const dirPath = resolveInside(resolveTopicDir(req.params), 'examples');
-        if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) return res.json([]);
+        if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) return res.json([] satisfies ExamplesListResponse);
         const files = fs
             .readdirSync(dirPath)
             .filter((f) => f.toLowerCase().endsWith('.md') && f.toLowerCase() !== 'readme.md')
             .sort(exampleFilenameCollator.compare);
-        res.json(files);
+        res.json(files satisfies ExamplesListResponse);
     } catch (err) {
         sendRouteError(res, err);
     }
@@ -436,11 +558,11 @@ app.get('/api/topic/:ch/:sec/:top/examples', (req, res) => {
 
 // ─── GET /api/topic/:ch/:sec/:top/examples/:file ────────
 
-app.get('/api/topic/:ch/:sec/:top/examples/:file', (req, res) => {
+app.get('/api/topic/:ch/:sec/:top/examples/:file', (req: Request<TopicParams & { file: string }>, res: Response) => {
     try {
         const filePath = resolveExampleFile(req.params, req.params.file);
         if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
-        res.json({ content: fs.readFileSync(filePath, 'utf-8') });
+        res.json({ content: fs.readFileSync(filePath, 'utf-8') } satisfies ExampleReadResponse);
     } catch (err) {
         sendRouteError(res, err);
     }
@@ -448,7 +570,7 @@ app.get('/api/topic/:ch/:sec/:top/examples/:file', (req, res) => {
 
 // ─── POST /api/topic/:ch/:sec/:top/examples ─────────────
 
-app.post('/api/topic/:ch/:sec/:top/examples', (req, res) => {
+app.post('/api/topic/:ch/:sec/:top/examples', (req: Request<TopicParams, unknown, Partial<ExampleSaveRequest>>, res: Response) => {
     try {
         const { content } = req.body || {};
         const dirPath = resolveInside(resolveTopicDir(req.params), 'examples');
@@ -465,7 +587,7 @@ app.post('/api/topic/:ch/:sec/:top/examples', (req, res) => {
         const filename = `${month}-${day}-${year}-${hours}:${minutes}:${seconds}.md`;
 
         fs.writeFileSync(resolveInside(dirPath, filename), typeof content === 'string' ? content : '', 'utf-8');
-        res.json({ filename });
+        res.json({ filename } satisfies ExampleSaveResponse);
     } catch (err) {
         sendRouteError(res, err);
     }
@@ -473,7 +595,7 @@ app.post('/api/topic/:ch/:sec/:top/examples', (req, res) => {
 
 // ─── PATCH /api/topic/:ch/:sec/:top/examples/* ──────
 
-app.patch('/api/topic/:ch/:sec/:top/examples/*', (req, res) => {
+app.patch('/api/topic/:ch/:sec/:top/examples/*', (req: Request<TopicWildcardParams, unknown, Partial<ExampleModifyRequest>>, res: Response) => {
     try {
         const file = req.params[0]; // Capture everything after /examples/
         const { content } = req.body || {};
@@ -481,7 +603,7 @@ app.patch('/api/topic/:ch/:sec/:top/examples/*', (req, res) => {
         if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
         if (typeof content !== 'string') return res.status(400).json({ error: 'Missing content' });
         fs.writeFileSync(filePath, content, 'utf-8');
-        res.json({ filename: file });
+        res.json({ filename: file } satisfies ExampleModifyResponse);
     } catch (err) {
         sendRouteError(res, err);
     }
@@ -489,14 +611,14 @@ app.patch('/api/topic/:ch/:sec/:top/examples/*', (req, res) => {
 
 // ─── DELETE /api/topic/:ch/:sec/:top/examples/* ─────
 
-app.delete('/api/topic/:ch/:sec/:top/examples/*', (req, res) => {
+app.delete('/api/topic/:ch/:sec/:top/examples/*', (req: Request<TopicWildcardParams>, res: Response) => {
     try {
         const file = req.params[0]; // Capture everything after /examples/
         const filePath = resolveExampleFile(req.params, file);
         if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
         fs.unlinkSync(filePath);
         forgetExampleReferences(filePath);
-        res.json({ deleted: file });
+        res.json({ deleted: file } satisfies ExampleDeleteResponse);
     } catch (err) {
         sendRouteError(res, err);
     }
@@ -504,7 +626,7 @@ app.delete('/api/topic/:ch/:sec/:top/examples/*', (req, res) => {
 
 // ─── PUT /api/topic/:ch/:sec/:top/examples/* ────────
 
-app.put('/api/topic/:ch/:sec/:top/examples/*', (req, res) => {
+app.put('/api/topic/:ch/:sec/:top/examples/*', (req: Request<TopicWildcardParams, unknown, Partial<ExampleRenameRequest>>, res: Response) => {
     try {
         const file = req.params[0]; // Capture everything after /examples/
         const { newFilename } = req.body || {};
@@ -516,7 +638,7 @@ app.put('/api/topic/:ch/:sec/:top/examples/*', (req, res) => {
 
         fs.renameSync(oldPath, newPath);
         forgetExampleReferences(oldPath, newPath);
-        res.json({ oldFilename: file, newFilename });
+        res.json({ oldFilename: file, newFilename: newFilename! } satisfies ExampleRenameResponse); // resolveExampleFile rejected a missing name
     } catch (err) {
         sendRouteError(res, err);
     }
@@ -524,7 +646,7 @@ app.put('/api/topic/:ch/:sec/:top/examples/*', (req, res) => {
 
 // ─── POST /api/compile ───────────────────────────────────
 
-app.post('/api/compile', async (req, res) => {
+app.post('/api/compile', async (req: Request<NoParams, unknown, Partial<CompileRequest>>, res: Response) => {
     try {
         const sourceDocument = req.body?.document
             || parseExampleDocument(req.body?.content || '');
@@ -539,13 +661,14 @@ app.post('/api/compile', async (req, res) => {
                     cacheKey,
                     cacheStatus: 'hit',
                 },
-            });
+            } satisfies CompileResponse);
             return;
         }
 
-        // Sass/Pug/TypeScript run in a worker thread with memory and time limits (see isolatedCompiler.js).
-        const result = await compileExampleDocumentIsolated(sourceDocument);
-        const responsePayload = {
+        // Sass/Pug/TypeScript run in a worker thread with memory and time limits (see isolatedCompiler.ts).
+        // TODO(ts-migration): drop the assertion once compileExampleDocumentIsolated returns a CompileResult
+        const result = await compileExampleDocumentIsolated(sourceDocument) as CompileResult;
+        const responsePayload: CompileResponse = {
             document: sourceDocument,
             compiledDocument: result.compiledDocument,
             compileDiagnostics: result.compileDiagnostics,
@@ -560,33 +683,34 @@ app.post('/api/compile', async (req, res) => {
         res.json(responsePayload);
     } catch (err) {
         res.status(500).json({
-            error: err.message,
+            error: errorMessage(err),
             compiledDocument: { html: '', css: '', js: '' },
             compileDiagnostics: [
                 {
                     level: 'error',
                     code: 'compile-request-failed',
-                    message: err.message,
+                    message: errorMessage(err),
                 },
             ],
-        });
+        } satisfies CompileErrorResponse);
     }
 });
 
 // ─── POST /api/create ───────────────────────────────────
 
-app.post('/api/create', (req, res) => {
+app.post('/api/create', (req: Request<NoParams, unknown, Partial<CreateItemRequest>>, res: Response) => {
     try {
-        const { type, name, parentPath, sessionPreset } = req.body; // type: 'chapter' | 'section' | 'topic'
-        let targetDir;
-        let prefix;
-        const replaceTemplateTokens = (content = '') => String(content)
-            .replaceAll('__EXAMPLE_NAME__', name)
-            .replace(/Hello World/g, name)
-            .replace(/Hello from Pug/g, name)
-            .replace(/SCSS preset/g, name)
-            .replace(/Hello React/g, name)
-            .replace(/React TSX Todo/g, name);
+        const { type, name, parentPath, sessionPreset } = req.body; // type: 'chapter' | 'section' | 'topic' | 'example'
+        let targetDir: string;
+        let prefix: string;
+        // `String(name)` is what String.prototype.replace did implicitly with the replacement text.
+        const replaceTemplateTokens = (content = ''): string => String(content)
+            .replaceAll('__EXAMPLE_NAME__', String(name))
+            .replace(/Hello World/g, String(name))
+            .replace(/Hello from Pug/g, String(name))
+            .replace(/SCSS preset/g, String(name))
+            .replace(/Hello React/g, String(name))
+            .replace(/React TSX Todo/g, String(name));
 
         if (type === 'chapter') {
             targetDir = MATERIAL_DIR;
@@ -614,7 +738,7 @@ app.post('/api/create', (req, res) => {
 
             if (fs.existsSync(filePath)) return res.status(409).json({ error: 'Example already exists' });
 
-            const sourceDocument = createExampleDocumentFromPreset(sessionPreset || 'html-css-javascript');
+            const sourceDocument: ExampleDocument = createExampleDocumentFromPreset(sessionPreset || 'html-css-javascript');
             sourceDocument.blocks = sourceDocument.blocks.map((block) => ({
                 ...block,
                 content: replaceTemplateTokens(block.content),
@@ -625,7 +749,7 @@ app.post('/api/create', (req, res) => {
             }));
             const template = buildExampleDocument(sourceDocument);
             fs.writeFileSync(filePath, template, 'utf-8');
-            return res.json({ filename, path: filePath, sessionPreset: sessionPreset || 'html-css-javascript' });
+            return res.json({ filename, path: filePath, sessionPreset: sessionPreset || 'html-css-javascript' } satisfies CreateExampleResponse);
         } else {
             return res.status(400).json({ error: 'Invalid type' });
         }
@@ -652,7 +776,7 @@ app.post('/api/create', (req, res) => {
             );
         }
 
-        res.json({ folderName, path: newPath });
+        res.json({ folderName, path: newPath } satisfies CreateFolderResponse);
     } catch (err) {
         sendRouteError(res, err);
     }
@@ -660,7 +784,8 @@ app.post('/api/create', (req, res) => {
 
 // ─── Serve topic assets ─────────────────────────────────
 
-function listAssetFiles(assetsDir, prefix = '') {
+/** Paths (with `/` separators, relative to `assetsDir`) of every file below it, skipping dotfiles and dot folders. */
+function listAssetFiles(assetsDir: string, prefix = ''): string[] {
     return fs.readdirSync(assetsDir, { withFileTypes: true })
         .filter((entry) => !entry.name.startsWith('.'))
         .flatMap((entry) => {
@@ -670,16 +795,16 @@ function listAssetFiles(assetsDir, prefix = '') {
         });
 }
 
-app.get('/api/topic/:ch/:sec/:top/assets', (req, res) => {
+app.get('/api/topic/:ch/:sec/:top/assets', (req: Request<TopicParams>, res: Response) => {
     try {
         const { ch, sec, top } = req.params;
         const assetsDir = resolveInside(resolveTopicDir(req.params), 'assets');
 
         if (!fs.existsSync(assetsDir) || !fs.statSync(assetsDir).isDirectory()) {
-            return res.json([]);
+            return res.json([] satisfies TopicAssetsResponse);
         }
 
-        const assets = listAssetFiles(assetsDir)
+        const assets: TopicAsset[] = listAssetFiles(assetsDir)
             .map((relativePath) => ({
                 filename: relativePath,
                 path: relativePath,
@@ -687,13 +812,13 @@ app.get('/api/topic/:ch/:sec/:top/assets', (req, res) => {
             }))
             .sort((left, right) => left.filename.localeCompare(right.filename));
 
-        res.json(assets);
+        res.json(assets satisfies TopicAssetsResponse);
     } catch (err) {
         sendRouteError(res, err);
     }
 });
 
-app.get('/api/topic/:ch/:sec/:top/assets/*', (req, res) => {
+app.get('/api/topic/:ch/:sec/:top/assets/*', (req: Request<TopicWildcardParams>, res: Response) => {
     try {
         const assetsDir = resolveInside(resolveTopicDir(req.params), 'assets');
         const relativePath = String(req.params[0] || '');
@@ -717,17 +842,25 @@ app.get('/api/topic/:ch/:sec/:top/assets/*', (req, res) => {
 // relative URLs that resolve into the topic's assets/ folder (the document "lives" next to them).
 // Documents are kept in memory only (last PREVIEW_DOCUMENT_LIMIT renders).
 
+/** A hosted preview: the rendered HTML and the topic whose `assets/` its relative URLs reach. */
+interface PreviewDocument extends TopicParams {
+    html: string;
+}
+
 const PREVIEW_DOCUMENT_LIMIT = 24;
+/** Stands for chapter, section and topic when an example is not inside a topic: no assets are served for it. */
 const PREVIEW_PLACEHOLDER_SEGMENT = '_';
-const previewDocuments = new Map();
+/** Oldest first; keyed by the id in the preview URL. */
+const previewDocuments = new Map<string, PreviewDocument>();
 let previewDocumentCounter = 0;
 
-function getPreviewOrigin() {
+function getPreviewOrigin(): string {
     const host = !HOST || HOST === '0.0.0.0' || HOST === '::' ? '127.0.0.1' : HOST;
     return `http://${host.includes(':') ? `[${host}]` : host}:${PORT}`;
 }
 
-function parsePreviewTopic(topicPath = '') {
+/** The topic named by `chapter/section/topic`, or the placeholder segments for any other value. Throws a `PathError` for a path that escapes `material/`. */
+function parsePreviewTopic(topicPath = ''): TopicParams {
     const segments = String(topicPath || '').split('/').filter(Boolean);
     if (segments.length !== 3) {
         return { ch: PREVIEW_PLACEHOLDER_SEGMENT, sec: PREVIEW_PLACEHOLDER_SEGMENT, top: PREVIEW_PLACEHOLDER_SEGMENT };
@@ -737,7 +870,7 @@ function parsePreviewTopic(topicPath = '') {
     return { ch, sec, top };
 }
 
-app.post('/api/preview-documents', (req, res) => {
+app.post('/api/preview-documents', (req: Request<NoParams, unknown, Partial<PreviewDocumentRequest>>, res: Response) => {
     try {
         const html = req.body?.html;
         if (typeof html !== 'string') throw new PathError('Missing preview html');
@@ -747,7 +880,7 @@ app.post('/api/preview-documents', (req, res) => {
         const id = `${Date.now().toString(36)}-${previewDocumentCounter.toString(36)}`;
         previewDocuments.set(id, { html, ...topic });
         while (previewDocuments.size > PREVIEW_DOCUMENT_LIMIT) {
-            previewDocuments.delete(previewDocuments.keys().next().value);
+            previewDocuments.delete(previewDocuments.keys().next().value!); // the loop condition guarantees an entry
         }
 
         const encodedTopic = [topic.ch, topic.sec, topic.top].map(encodeURIComponent).join('/');
@@ -756,13 +889,13 @@ app.post('/api/preview-documents', (req, res) => {
             origin: getPreviewOrigin(),
             port: PORT,
             url: `/preview/${encodedTopic}/${id}/index.html`,
-        });
+        } satisfies PreviewDocumentResponse);
     } catch (err) {
         sendRouteError(res, err);
     }
 });
 
-app.get('/preview/:ch/:sec/:top/:id/*', (req, res) => {
+app.get('/preview/:ch/:sec/:top/:id/*', (req: Request<PreviewParams>, res: Response) => {
     try {
         const relativePath = String(req.params[0] || '');
         if (relativePath === '' || relativePath === 'index.html') {
@@ -798,5 +931,5 @@ const PORT = 3001;
 const HOST = process.env.LEARNWEB_API_HOST || '127.0.0.1';
 app.listen(PORT, HOST, () => {
     console.log(`📚 Learning API running on http://${HOST}:${PORT}`);
-    warmUpIsolatedCompiler().catch((err) => console.warn('Compile worker warm-up failed:', err.message));
+    warmUpIsolatedCompiler().catch((err: unknown) => console.warn('Compile worker warm-up failed:', errorMessage(err)));
 });

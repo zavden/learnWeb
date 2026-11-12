@@ -3,15 +3,23 @@
 // exercises, parse diagnostics and compile diagnostics (compiled in a memory/time-limited worker).
 //
 // Usage:
-//   node scripts/check-material.mjs [path ...]        (default: every chapter from ch02 on)
-//   node scripts/check-material.mjs material/ch03-css/sec04-flexbox --quiet
+//   node scripts/check-material.ts [path ...]        (default: every chapter from ch02 on)
+//   node scripts/check-material.ts material/ch03-css/sec04-flexbox --quiet
+//   npm run check:material -- material/ch03-css/sec04-flexbox --quiet
 //
-// Exit code 1 when any error is found.
+// Exit code 1 when any error is found. The output lines ("ERROR   file: message") and the final
+// summary line are read by the course workflow and its documentation: change them with care.
+//
+// Runs on the app's own modules (parser, metadata helpers, theory embeds, isolated compiler), so a
+// problem reported here is a problem the app would show. Examples that already have parse errors are
+// not compiled; shader examples are only parsed (they need WebGL to run).
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import type { CompileResult } from '../src/types/compile.ts';
+import type { ExampleDocument } from '../src/types/document.ts';
 import { getExampleEditorialMetadata, getExampleStage, getExerciseConfig, parseExampleDocument } from '../src/utils/markdown.ts';
 import { extractTheoryExerciseReferences } from '../src/utils/theoryExerciseEmbeds.ts';
 import { compileExampleDocumentIsolated, shutdownIsolatedCompiler } from '../src/utils/compiler/isolatedCompiler.ts';
@@ -19,22 +27,45 @@ import { compileExampleDocumentIsolated, shutdownIsolatedCompiler } from '../src
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MATERIAL_DIR = path.join(ROOT, 'material');
 const SKIPPED_CHAPTERS = new Set(['ch00-tests', 'ch01-templates']);
+// STAGES and IMPORTANCE repeat EXAMPLE_STAGE_VALUES / EXAMPLE_IMPORTANCE_VALUES of
+// src/utils/markdown/constants.ts: when the app accepts a new value, add it here too.
 const STAGES = new Set(['minimal', 'intermediate', 'common-error', 'final-solution', 'exercise', 'professional']);
 const IMPORTANCE = new Set(['trivial', 'useful', 'important', 'critical']);
 const EXAMPLE_NAME = /^\d{2}-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/;
+
+/** `info` is printed but never counted as an error or warning: it records something the lesson does on purpose (see `checkExample`). */
+type Level = 'error' | 'warning' | 'info';
+
+/** One finding; `file` is relative to the repository root. */
+interface Problem {
+    file: string;
+    level: Level;
+    message: string;
+}
+
+/** What `checkTopic` learns while it walks one topic, to cross-check the examples against `main.md`. */
+interface TopicContext {
+    /** Examples linked from the `## Bestiario` section of main.md; null when there is no such section. */
+    bestiaryLinks: Set<string> | null;
+    /** Examples with `example_stage: common-error`. */
+    commonErrors: Set<string>;
+    /** Examples named by some exercise's `exercise_solution_example`. */
+    solutions: Set<string>;
+}
 
 const args = process.argv.slice(2);
 const quiet = args.includes('--quiet');
 const targets = args.filter((arg) => !arg.startsWith('--'));
 
-const problems = [];
+const problems: Problem[] = [];
 const counters = { chapters: 0, sections: 0, topics: 0, examples: 0, exercises: 0 };
 
-function report(level, file, message) {
+function report(level: Level, file: string, message: string): void {
     problems.push({ file: path.relative(ROOT, file), level, message });
 }
 
-function listDirs(dir, prefix) {
+/** Names of the subfolders of `dir` that start with `prefix` (`ch`, `sec`, `top`), in natural order; `[]` when `dir` is missing. */
+function listDirs(dir: string, prefix: string): string[] {
     if (!fs.existsSync(dir)) return [];
     return fs.readdirSync(dir, { withFileTypes: true })
         .filter((entry) => entry.isDirectory() && entry.name.startsWith(prefix))
@@ -42,7 +73,7 @@ function listDirs(dir, prefix) {
         .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
 }
 
-function checkLabel(dir) {
+function checkLabel(dir: string): void {
     const labelFile = path.join(dir, 'label.txt');
     if (!fs.existsSync(labelFile)) {
         report('error', dir, 'missing label.txt (display name with accents)');
@@ -52,14 +83,15 @@ function checkLabel(dir) {
     if (!label) report('error', labelFile, 'label.txt is empty');
 }
 
-function isTypeErrorDemo(documentModel) {
+/** Type errors, Sass errors and deprecations are part of the lesson in these stages. */
+function isTypeErrorDemo(documentModel: ExampleDocument): boolean {
     return getExampleStage(documentModel) === 'common-error' || getExampleStage(documentModel) === 'exercise';
 }
 
-async function checkExample(topicDir, filename, context) {
+async function checkExample(topicDir: string, filename: string, context: TopicContext): Promise<void> {
     const filePath = path.join(topicDir, 'examples', filename);
     const content = fs.readFileSync(filePath, 'utf-8');
-    const documentModel = parseExampleDocument(content);
+    const documentModel: ExampleDocument = parseExampleDocument(content);
     const metadata = documentModel.metadata || {};
     const exercise = getExerciseConfig(documentModel);
     const stage = getExampleStage(documentModel);
@@ -106,7 +138,8 @@ async function checkExample(topicDir, filename, context) {
     if ((documentModel.diagnostics || []).some((diagnostic) => diagnostic.level === 'error')) return;
     if (metadata.renderer === 'shader') return;
 
-    const result = await compileExampleDocumentIsolated(documentModel);
+    // TODO(ts-migration): drop the assertion once compileExampleDocumentIsolated returns a CompileResult
+    const result = await compileExampleDocumentIsolated(documentModel) as CompileResult;
     for (const diagnostic of result.compileDiagnostics || []) {
         const where = diagnostic.line && !/\bline \d/.test(diagnostic.message || '') ? ` (line ${diagnostic.line}${diagnostic.column ? `:${diagnostic.column}` : ''})` : '';
         const message = `compile: ${diagnostic.code}: ${diagnostic.message}${where}`;
@@ -126,7 +159,12 @@ async function checkExample(topicDir, filename, context) {
     }
 }
 
-async function checkTopic(topicDir) {
+/** The stack of a thrown error (it includes the message), the string form of anything else. */
+function describeCrash(error: unknown): string {
+    return (error instanceof Error && error.stack) || String(error);
+}
+
+async function checkTopic(topicDir: string): Promise<void> {
     counters.topics += 1;
     const topicName = path.basename(topicDir);
     const mainFile = path.join(topicDir, 'main.md');
@@ -135,8 +173,8 @@ async function checkTopic(topicDir) {
         ? fs.readdirSync(examplesDir).filter((name) => name.endsWith('.md')).sort((a, b) => a.localeCompare(b, 'en', { numeric: true }))
         : [];
 
-    let referenced = new Set();
-    const context = { bestiaryLinks: null, commonErrors: new Set(), solutions: new Set() };
+    let referenced = new Set<string>();
+    const context: TopicContext = { bestiaryLinks: null, commonErrors: new Set(), solutions: new Set() };
     if (!fs.existsSync(mainFile)) {
         report('error', topicDir, 'missing main.md');
     } else {
@@ -169,7 +207,7 @@ async function checkTopic(topicDir) {
         try {
             await checkExample(topicDir, filename, context);
         } catch (error) {
-            report('error', path.join(examplesDir, filename), `checker crashed: ${error?.stack || error}`);
+            report('error', path.join(examplesDir, filename), `checker crashed: ${describeCrash(error)}`);
         }
     }
 
@@ -201,7 +239,7 @@ async function checkTopic(topicDir) {
     }
 }
 
-async function checkSection(sectionDir) {
+async function checkSection(sectionDir: string): Promise<void> {
     counters.sections += 1;
     checkLabel(sectionDir);
     const topics = listDirs(sectionDir, 'top');
@@ -210,13 +248,14 @@ async function checkSection(sectionDir) {
     for (const topic of topics) await checkTopic(path.join(sectionDir, topic));
 }
 
-async function checkChapter(chapterDir) {
+async function checkChapter(chapterDir: string): Promise<void> {
     counters.chapters += 1;
     checkLabel(chapterDir);
     for (const section of listDirs(chapterDir, 'sec')) await checkSection(path.join(chapterDir, section));
 }
 
-async function checkTarget(target) {
+/** Checks a chapter, section or topic folder, chosen by its depth under material/. */
+async function checkTarget(target: string): Promise<void> {
     const absolute = path.resolve(ROOT, target);
     const relative = path.relative(MATERIAL_DIR, absolute).split(path.sep);
     if (relative[0] === '..' || !fs.existsSync(absolute)) {
@@ -239,7 +278,7 @@ try {
     await shutdownIsolatedCompiler();
 }
 
-const order = { error: 0, warning: 1, info: 2 };
+const order: Record<Level, number> = { error: 0, warning: 1, info: 2 };
 problems.sort((a, b) => order[a.level] - order[b.level] || a.file.localeCompare(b.file));
 for (const problem of problems) {
     if (quiet && problem.level !== 'error') continue;

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    type VerifyProblem,
     buildResult,
     classifyResult,
     collectTopicPaths,
@@ -78,7 +79,7 @@ test('runtime messages become problems (uncaught, rejection, console.error, asse
 });
 
 test('classification: errors, expected stages, not-ready warnings', () => {
-    const problem = { kind: 'uncaught', message: 'x', file: 'script.js', line: 1 };
+    const problem: VerifyProblem = { kind: 'uncaught', message: 'x', file: 'script.js', line: 1 };
     assert.equal(classifyResult({ stage: '', problems: [problem] }), 'error');
     assert.equal(classifyResult({ stage: 'common-error', problems: [problem] }), 'expected');
     assert.equal(classifyResult({ stage: 'exercise', problems: [problem] }), 'expected');

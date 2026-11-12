@@ -7,10 +7,11 @@
 // change to the app must be identical unless the change was meant to alter that stage.
 //
 // Usage:
-//   node scripts/snapshot-material.mjs --out before.json            write a snapshot
-//   node scripts/snapshot-material.mjs --compare before.json        compare with a snapshot
-//   node scripts/snapshot-material.mjs [path ...]                   limit to chapters/sections/topics
-//   ... --filter 05-grid --dump out/                                also write the raw outputs
+//   node scripts/snapshot-material.ts --out before.json            write a snapshot
+//   node scripts/snapshot-material.ts --compare before.json        compare with a snapshot
+//   node scripts/snapshot-material.ts [path ...]                   limit to chapters/sections/topics
+//   ... --filter 05-grid --dump out/                               also write the raw outputs
+//   npm run snapshot:material -- --compare before.json             the same through npm
 //
 // The preview runtime (src/utils/renderer/runtimeBridgeRuntime) is replaced by a placeholder in
 // rendered documents and hashed once under "runtime#source", so editing the runtime shows up as a
@@ -18,6 +19,11 @@
 //
 // Compiles every example once in the isolated worker (one CPU core, a few minutes for the whole
 // course). Exit code 1 when --compare finds differences.
+//
+// The client modules call `fetch('/api/…')`, so this script replaces `globalThis.fetch` with a local
+// stand-in that answers only `POST /api/compile` and `GET /api/topic/.../examples/<file>` from disk
+// and the compiler; it never talks to server.ts. A snapshot entry is `<sha256 prefix>:<length>` of
+// the stage output, keyed `<topic path>/<file>#<stage>`.
 
 import crypto from 'crypto';
 import fs from 'fs';
@@ -39,6 +45,9 @@ import { buildCompiledScriptFiles, buildCompiledStyleFiles } from '../src/utils/
 import { compileExampleDocumentIsolated, shutdownIsolatedCompiler } from '../src/utils/compiler/isolatedCompiler.ts';
 import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../src/utils/exampleRenderer.ts';
 import { buildMaterialTree } from '../src/utils/materialTree.ts';
+import { errorMessage } from '../src/utils/errors.ts';
+import type { CompileRequest, CompileResponse, CompileResult } from '../src/types/compile.ts';
+import type { ExampleDocument } from '../src/types/document.ts';
 import { buildRuntimeBridgeScriptBody } from '../src/utils/renderer/runtimeBridge.ts';
 import { validateShaderPreviewDocument } from '../src/utils/shaderPreviewDiagnostics.ts';
 import { extractTheoryExerciseReferences, loadTheoryExerciseEmbeds } from '../src/utils/theoryExerciseEmbeds.ts';
@@ -47,7 +56,8 @@ import { renderTheoryExportDocument, renderTheoryHtml, renderTheoryPreviewDocume
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MATERIAL_DIR = path.join(ROOT, 'material');
 
-function readOption(args, name) {
+/** Removes `name <value>` from `args` and returns the value ('' when the option is absent). */
+function readOption(args: string[], name: string): string {
     const index = args.indexOf(name);
     if (index === -1) return '';
     const value = args[index + 1] || '';
@@ -71,15 +81,17 @@ if (!RUNTIME_SOURCE_JSON.startsWith('"') || !RUNTIME_SOURCE_JSON.endsWith('"')) 
     throw new Error('snapshot-material: the runtime bridge script no longer has the expected shape.');
 }
 
-function withoutRuntime(text) {
+function withoutRuntime(text: string): string {
     return typeof text === 'string' ? text.split(RUNTIME_SOURCE_JSON).join('"<learnweb-runtime>"') : text;
 }
 
 // ── Snapshot store ───────────────────────────────────────────────────────────────────────────────
 
-const snapshot = {};
+/** `<topic path>/<file>#<stage>` → `<hash>:<length>`. */
+const snapshot: Record<string, string> = {};
 
-function record(key, value) {
+/** Stores the hash of `value` (its JSON text unless it is a string) and, with `--dump`, the raw text. */
+function record(key: string, value: unknown): void {
     const text = typeof value === 'string' ? value : JSON.stringify(value ?? null);
     snapshot[key] = `${crypto.createHash('sha256').update(text).digest('hex').slice(0, 20)}:${text.length}`;
     if (dumpDir && (!filter || key.includes(filter))) {
@@ -89,41 +101,45 @@ function record(key, value) {
     }
 }
 
-function attempt(produce) {
+/** The result of `produce()`, or the text `ERROR: <message>` when it throws, so a failing stage is recorded instead of aborting the run. */
+function attempt<T>(produce: () => T): T | string {
     try {
         return produce();
     } catch (error) {
-        return `ERROR: ${error?.message || error}`;
+        return `ERROR: ${errorMessage(error)}`;
     }
 }
 
 // ── A local stand-in for the API (the client modules call fetch('/api/…')) ───────────────────────
 
-const compileCache = new Map();
+const compileCache = new Map<string, Promise<CompileResponse>>();
 
-function compileDocument(documentModel) {
+/** What `POST /api/compile` would answer, compiled once per distinct document. */
+function compileDocument(documentModel: ExampleDocument): Promise<CompileResponse> {
     const cacheKey = createCompileCacheKey({ document: documentModel });
     if (!compileCache.has(cacheKey)) {
-        compileCache.set(cacheKey, compileExampleDocumentIsolated(documentModel).then((result) => ({
+        // TODO(ts-migration): drop the assertion once compileExampleDocumentIsolated returns a CompileResult
+        const compiled = compileExampleDocumentIsolated(documentModel) as Promise<CompileResult>;
+        compileCache.set(cacheKey, compiled.then((result) => ({
             document: documentModel,
             compiledDocument: result.compiledDocument,
             compileDiagnostics: result.compileDiagnostics,
             compileMeta: { cacheKey, cacheStatus: 'miss' },
         })));
     }
-    return compileCache.get(cacheKey);
+    return compileCache.get(cacheKey)!; // set just above when it was missing
 }
 
-function jsonResponse(body, status = 200) {
+function jsonResponse(body: unknown, status = 200): Response {
     return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
-globalThis.fetch = async (input, init = {}) => {
+globalThis.fetch = async (input: string | URL | Request, init: RequestInit = {}): Promise<Response> => {
     const url = new URL(String(input), 'http://snapshot.invalid');
     const segments = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
 
     if (url.pathname === '/api/compile' && init.method === 'POST') {
-        const payload = JSON.parse(init.body || '{}');
+        const payload: CompileRequest = JSON.parse(String(init.body || '{}')); // the API client always sends JSON text
         return jsonResponse(await compileDocument(payload.document || parseExampleDocument(payload.content || '')));
     }
 
@@ -138,7 +154,7 @@ globalThis.fetch = async (input, init = {}) => {
 
 // ── Walk material/ ───────────────────────────────────────────────────────────────────────────────
 
-function listDirs(dir) {
+function listDirs(dir: string): string[] {
     if (!fs.existsSync(dir)) return [];
     return fs.readdirSync(dir, { withFileTypes: true })
         .filter((entry) => entry.isDirectory())
@@ -146,8 +162,15 @@ function listDirs(dir) {
         .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
 }
 
-function listTopics() {
-    const topics = [];
+/** A topic folder selected by the command-line paths. */
+interface TopicRef {
+    dir: string;
+    /** `chapter/section/topic`. */
+    topicPath: string;
+}
+
+function listTopics(): TopicRef[] {
+    const topics: TopicRef[] = [];
     for (const chapter of listDirs(MATERIAL_DIR)) {
         for (const section of listDirs(path.join(MATERIAL_DIR, chapter))) {
             for (const topic of listDirs(path.join(MATERIAL_DIR, chapter, section))) {
@@ -161,7 +184,7 @@ function listTopics() {
     return topics;
 }
 
-function listExamples(topicDir) {
+function listExamples(topicDir: string): string[] {
     const dir = path.join(topicDir, 'examples');
     if (!fs.existsSync(dir)) return [];
     return fs.readdirSync(dir)
@@ -171,10 +194,10 @@ function listExamples(topicDir) {
 
 // ── Stages ───────────────────────────────────────────────────────────────────────────────────────
 
-async function snapshotExample(topicPath, topicDir, filename) {
+async function snapshotExample(topicPath: string, topicDir: string, filename: string): Promise<void> {
     const key = `${topicPath}/examples/${filename}`;
     const content = fs.readFileSync(path.join(topicDir, 'examples', filename), 'utf-8');
-    const documentModel = parseExampleDocument(content);
+    const documentModel: ExampleDocument = parseExampleDocument(content);
 
     record(`${key}#parse`, documentModel);
     record(`${key}#meta`, attempt(() => ({
@@ -207,15 +230,16 @@ async function snapshotExample(topicPath, topicDir, filename) {
         return;
     }
 
-    let result;
+    let result: CompileResponse;
     try {
         result = await compileDocument(documentModel);
     } catch (error) {
-        record(`${key}#compile`, `ERROR: ${error?.message || error}`);
+        record(`${key}#compile`, `ERROR: ${errorMessage(error)}`);
         return;
     }
 
-    const diagnostics = result.compileDiagnostics || [];
+    // TODO(ts-migration): `never[]` is what the untyped exampleRenderer.ts infers for its `diagnostics = []` default; drop the assertion once it is typed
+    const diagnostics = (result.compileDiagnostics || []) as never[];
     const renderOptions = { consoleEnabled: true, renderId: 1, suppressDialogs: false };
     record(`${key}#compile`, { compiledDocument: result.compiledDocument, compileDiagnostics: diagnostics });
     record(`${key}#compiled-views`, attempt(() => ({
@@ -233,7 +257,7 @@ async function snapshotExample(topicPath, topicDir, filename) {
     )));
 }
 
-async function snapshotTheory(topicPath, topicDir) {
+async function snapshotTheory(topicPath: string, topicDir: string): Promise<void> {
     const file = path.join(topicDir, 'main.md');
     if (!fs.existsSync(file)) return;
 
@@ -241,13 +265,14 @@ async function snapshotTheory(topicPath, topicDir) {
     const content = fs.readFileSync(file, 'utf-8');
     record(`${key}#references`, attempt(() => extractTheoryExerciseReferences(content)));
 
-    let exerciseEmbeds = {};
+    // TODO(ts-migration): use the embed type of theoryExerciseEmbeds.ts once it is typed
+    let exerciseEmbeds: Record<string, { previewSrcdoc: string }> = {};
     try {
         exerciseEmbeds = await loadTheoryExerciseEmbeds(topicPath, content);
         for (const embed of Object.values(exerciseEmbeds)) embed.previewSrcdoc = withoutRuntime(embed.previewSrcdoc);
         record(`${key}#embeds`, exerciseEmbeds);
     } catch (error) {
-        record(`${key}#embeds`, `ERROR: ${error?.message || error}`);
+        record(`${key}#embeds`, `ERROR: ${errorMessage(error)}`);
     }
 
     record(`${key}#html`, attempt(() => renderTheoryHtml(content, { exerciseEmbeds, topicPath })));
@@ -295,9 +320,9 @@ if (outFile) {
 }
 
 if (compareFile) {
-    const expected = JSON.parse(fs.readFileSync(compareFile, 'utf-8'));
+    const expected: Record<string, string> = JSON.parse(fs.readFileSync(compareFile, 'utf-8'));
     const scoped = targets.length > 0;
-    const differences = [];
+    const differences: string[] = [];
     for (const [key, value] of Object.entries(snapshot)) {
         if (!(key in expected)) differences.push(`+ ${key} (new entry)`);
         else if (expected[key] !== value) differences.push(`≠ ${key}  ${expected[key]} → ${value}`);
@@ -311,7 +336,7 @@ if (compareFile) {
     if (differences.length === 0) {
         console.log(`Identical to ${compareFile} (${Object.keys(snapshot).length} entries compared)`);
     } else {
-        const stages = {};
+        const stages: Record<string, number> = {};
         for (const line of differences) {
             const stage = line.split(' ')[1].split('#')[1] || '?';
             stages[stage] = (stages[stage] || 0) + 1;

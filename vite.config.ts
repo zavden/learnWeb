@@ -1,3 +1,9 @@
+// Vite configuration for the dev server (`npm run dev`, port 5174) and the production build.
+//
+// The app is served by Vite and the API by server.ts on 127.0.0.1:3001; the proxy below makes `/api`
+// same-origin for the app. Nothing else is configured: the sources are TypeScript and Vite compiles
+// them directly (the type checking is `npm run typecheck`, not part of the build).
+
 import { defineConfig } from 'vite';
 
 export default defineConfig({

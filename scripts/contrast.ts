@@ -2,34 +2,41 @@
 // WCAG 2.x contrast ratio between two colors, for checking course examples.
 //
 // Usage:
-//   node scripts/contrast.mjs "#777777" "#fff"
-//   node scripts/contrast.mjs "oklch(0.45 0.12 260)" "rgb(250 250 250)"
-//   node scripts/contrast.mjs "#1f2937" "#ffffff" "#2563eb"      (every pair)
+//   node scripts/contrast.ts "#777777" "#fff"
+//   node scripts/contrast.ts "oklch(0.45 0.12 260)" "rgb(250 250 250)"
+//   node scripts/contrast.ts "#1f2937" "#ffffff" "#2563eb"      (every pair)
 //
 // Supports #rgb/#rrggbb (alpha ignored), rgb()/rgba(), hsl()/hsla() and oklch().
+//
+// Standalone CLI: nothing imports it. The command-line code at the bottom runs as soon as the module
+// loads (and exits with code 1 without arguments), so importing `contrastRatio` from elsewhere would
+// run it too. Colours travel through the module as sRGB `Rgb` triples.
 
-function clamp01(value) {
+/** [red, green, blue], each channel in 0..1 (the array is shorter than three when the input was malformed). */
+type Rgb = number[];
+
+function clamp01(value: number): number {
     return Math.min(1, Math.max(0, value));
 }
 
-function parseNumberList(body) {
+function parseNumberList(body: string): string[] {
     return body.replace(/\//g, ' ').replace(/,/g, ' ').trim().split(/\s+/);
 }
 
-function parseChannel(token, scale = 255) {
+function parseChannel(token: string, scale = 255): number {
     return token.endsWith('%') ? (parseFloat(token) / 100) : parseFloat(token) / scale;
 }
 
-function hslToRgb(h, s, l) {
+function hslToRgb(h: number, s: number, l: number): Rgb {
     const a = s * Math.min(l, 1 - l);
-    const f = (n) => {
+    const f = (n: number): number => {
         const k = (n + h / 30) % 12;
         return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
     };
     return [f(0), f(8), f(4)];
 }
 
-function oklchToRgb(L, C, H) {
+function oklchToRgb(L: number, C: number, H: number): Rgb {
     const hr = (H * Math.PI) / 180;
     const a = C * Math.cos(hr);
     const b = C * Math.sin(hr);
@@ -50,7 +57,7 @@ function oklchToRgb(L, C, H) {
     });
 }
 
-function parseColor(input) {
+function parseColor(input: string): Rgb {
     const text = String(input).trim().toLowerCase();
     let match = /^#([0-9a-f]{3,8})$/.exec(text);
     if (match) {
@@ -74,19 +81,20 @@ function parseColor(input) {
     throw new Error(`Unsupported color: ${input}`);
 }
 
-function luminance([r, g, b]) {
-    const linear = (channel) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+function luminance([r, g, b]: Rgb): number {
+    const linear = (channel: number): number => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
     return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
 }
 
-export function contrastRatio(first, second) {
+/** WCAG contrast ratio (1..21) between two CSS colours; throws on a colour syntax it does not support. */
+export function contrastRatio(first: string, second: string): number {
     const [lighter, darker] = [luminance(parseColor(first)), luminance(parseColor(second))].sort((a, b) => b - a);
     return (lighter + 0.05) / (darker + 0.05);
 }
 
 const colors = process.argv.slice(2);
 if (colors.length < 2) {
-    console.log('Usage: node scripts/contrast.mjs <color> <color> [more colors...]');
+    console.log('Usage: node scripts/contrast.ts <color> <color> [more colors...]');
     process.exit(1);
 }
 for (let i = 0; i < colors.length; i += 1) {
