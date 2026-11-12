@@ -9,7 +9,9 @@ description: Guide for editing this LearnWeb repository safely and efficiently. 
 
 Use this skill as the default orientation guide for this repository. It helps an AI route a request to the correct subsystem before editing files.
 
-Read [references/hotspots.md](references/hotspots.md) when you need the file map for a specific task.
+Read [references/hotspots.md](references/hotspots.md) when you need the file map for a specific task. For how the
+app works end to end, read [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md); for scripts, TypeScript usage,
+code conventions, testing and extension recipes, read [docs/DEVELOPMENT.md](../../docs/DEVELOPMENT.md).
 
 ## Use This Skill When
 
@@ -39,15 +41,21 @@ If the task is narrowly about content creation, prefer the specific skills:
 5. Validate at the smallest level that still proves the change:
    - content-only updates: targeted checks or no build if unnecessary
    - parser/runtime/editor changes: `npm test`
+   - any app code change: `npm run typecheck` (or `npm run check`: types, lint, formatting, tests)
+   - parser/compiler/renderer/runtime changes that must not change output: `npm run snapshot:material`
+     (`--out` before, `--compare` after)
    - UI/runtime changes: `npm run build`
 
 ## Repository Rules
 
 - `material/` is source content, not generated output.
 - `main.md` is theory. `examples/*.md` are runnable examples.
-- App code is modularized. Facades like `src/utils/markdown.js`, `src/utils/exampleCompiler.js`, and `src/utils/exampleRenderer.js` re-export from subdirectory modules (`markdown/`, `compiler/`, `renderer/`).
+- App code is strict TypeScript (`.ts`). Node runs `server.ts`, the scripts and the tests by stripping types, so only erasable syntax is allowed (no `enum`, no `namespace`), types are imported with `import type`, and imports spell the `.ts` extension. `npm run typecheck` is the only type check.
+- Types shared across areas live in `src/types/` (document model, diagnostics, compile contract, runtime protocol, API payloads, material tree, theory pages).
+- App code is modularized. `src/utils/markdown.ts` and `src/utils/exampleRenderer.ts` re-export from `markdown/` and `renderer/`; `src/utils/exampleCompiler.ts` dispatches to the compilers in `compiler/`.
 - Editor methods are split into mixins in `src/components/editor/` applied to `Editor.prototype`.
-- Preview methods are split into modules in `src/components/preview/`.
+- Preview methods are split into mixins in `src/components/preview/` applied to `Preview.prototype`.
+- The preview runtime (`src/utils/renderer/runtimeBridgeRuntime.ts`) is serialized with `Function.prototype.toString()` and must stay self-contained (type imports only).
 - Vim support is split into `src/editor/vim/`.
 - Vim shortcuts are configurable through `vim-shortcuts.yaml`.
 - Favorites are stored in `.favorites`, not in example frontmatter.

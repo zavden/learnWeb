@@ -555,7 +555,7 @@ The solution file is a separate `.md` in the same `examples/` folder, using the 
 
 - Content-only changes: open the file and verify markdown structure.
 - If the example uses compiled languages (Pug, SCSS, TypeScript, React, Vue): run `npm test` to verify parsing.
-- For broad changes: `npm test` (143 tests covering parsing, roundtrip, metadata, compilation).
+- For broad changes: `npm test` (255 tests covering parsing, roundtrip, metadata, compilation).
 - For UI changes: `npm run build`.
 
 ## Output When Finishing

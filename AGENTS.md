@@ -8,6 +8,8 @@ Este repositorio incluye guias para que cualquier agente de IA pueda trabajar co
 
 - [skills/learnweb-repo-editing/SKILL.md](skills/learnweb-repo-editing/SKILL.md) — enrutado de tareas, validacion, convenciones
 - [skills/learnweb-repo-editing/references/hotspots.md](skills/learnweb-repo-editing/references/hotspots.md) — mapa detallado de archivos y modulos
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — piezas de la app, modelo de datos, flujos de punta a punta, seguridad de los previews
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — scripts, uso de TypeScript, convenciones de codigo, testing y recetas de extension
 
 ### Creacion de contenido para material/
 
@@ -27,6 +29,8 @@ LearnWeb es una app local para aprender desarrollo web con:
 - editor con Tabs/Panels, Vim, metadata editorial, favoritos y pending
 - soporte para vanilla HTML/CSS/JS, Pug, SCSS, TypeScript, React, Vue, SVG, HTML-FULL y shaders WebGL
 
+El codigo de la app es TypeScript estricto (`.ts`): Vite compila el del navegador y Node ejecuta `server.ts`, los scripts y los tests directamente quitando los tipos (sin paso de build). Solo sintaxis borrable (sin `enum` ni `namespace`), `import type` para tipos, imports con extension `.ts`. Detalles en `docs/DEVELOPMENT.md`.
+
 ## Regla Basica De Enrutado
 
 Antes de editar, identifica el tipo de tarea:
@@ -37,15 +41,16 @@ Antes de editar, identifica el tipo de tarea:
 | Crear/editar teoria | `skills/learnweb-theory-authoring/SKILL.md` |
 | Crear/editar shaders | `skills/learnweb-shader-authoring/SKILL.md` |
 | Escribir el curso (ch02+) | `skills/learnweb-course-authoring/SKILL.md` |
-| Editor UI | `src/components/Editor.js` + `src/components/editor/` |
-| Preview/runtime | `src/components/Preview.js` + `src/utils/renderer/` |
+| Editor UI | `src/components/Editor.ts` + `src/components/editor/` |
+| Preview/runtime | `src/components/Preview.ts` + `src/utils/renderer/` |
 | Parsing/serializacion | `src/utils/markdown/` |
 | Compilacion | `src/utils/compiler/` |
-| Theory embeds | `src/utils/theoryRenderer.js`, `src/components/TheoryViewer.js` |
-| Galeria/favoritos/pending | `src/components/Gallery.js`, `src/components/FavoritesDialog.js`, `src/components/PendingDialog.js` |
-| App wiring | `src/main.js` |
-| Backend/API | `server.js`, `src/utils/api.js` |
-| Vim shortcuts | `vim-shortcuts.yaml`, `src/editor/vimShortcutConfig.js`, `src/editor/vimSupport.js` |
+| Theory embeds | `src/utils/theoryRenderer.ts`, `src/components/TheoryViewer.ts` |
+| Galeria/favoritos/pending | `src/components/Gallery.ts`, `src/components/FavoritesDialog.ts`, `src/components/PendingDialog.ts` |
+| App wiring | `src/main.ts` |
+| Backend/API | `server.ts`, `src/utils/api.ts`, tipos en `src/types/api.ts` |
+| Tipos compartidos | `src/types/` (documento, diagnosticos, compilacion, runtime, API, material, teoria) |
+| Vim shortcuts | `vim-shortcuts.yaml`, `src/editor/vimShortcutConfig.ts`, `src/editor/vimSupport.ts` |
 
 Para el mapa detallado: [hotspots.md](skills/learnweb-repo-editing/references/hotspots.md)
 
@@ -61,8 +66,10 @@ Para el mapa detallado: [hotspots.md](skills/learnweb-repo-editing/references/ho
 | Tipo de cambio | Comando |
 |----------------|---------|
 | Contenido puro (material/) | Verificacion de formato o ninguno |
-| Parser, metadata, editor, preview, backend | `npm test` (256 tests) |
-| Course content (material/ch02+) | `node scripts/check-material.mjs material/<capitulo>/<seccion>` |
+| Parser, metadata, editor, preview, backend | `npm test` (255 tests) |
+| Cualquier cambio de app code | `npm run typecheck` (o `npm run check`: tipos, lint, formato y tests) |
+| Parser, compiladores, renderers, runtime o teoria sin cambio de salida esperado | `npm run snapshot:material -- --out antes.json` antes y `-- --compare antes.json` despues |
+| Course content (material/ch02+) | `node scripts/check-material.ts material/<capitulo>/<seccion>` |
 | UI/runtime | `npm run build` |
 
 ## Al Terminar

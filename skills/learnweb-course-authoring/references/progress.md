@@ -267,7 +267,7 @@ Notes carried forward:
   (frame at 3 s); `counter.webm` / `counter.mp4` — 8 s ffmpeg `testsrc` pattern with a running counter, no
   audio (good for subtitle timing and currentTime); `melody.mp3` / `melody.ogg` (Opus) — the 12 s melody alone.
 
-To see the real state at any time: `node scripts/check-material.mjs material/<ch>/<sec>` (counts topics and
+To see the real state at any time: `node scripts/check-material.ts material/<ch>/<sec>` (counts topics and
 examples; missing top90/top95 show as warnings).
 
 ## Workflow that worked (keep it)
@@ -278,7 +278,7 @@ examples; missing top90/top95 show as warnings).
 2. Up to 3 Opus agents in parallel (user rule; 4 when the user says so, as in the fifth to eighth sessions), one per lane: HTML→Sass→TS→WASM/GPU, CSS, JS→JS-browser.
    Never more than 3; a Fable agent only alone. Agents must not run heavy commands (no build, servers,
    headless browsers); they ask the coordinator.
-3. After each task: `node scripts/check-material.mjs <section>` (0 errors / 0 warnings) and the browser
+3. After each task: `node scripts/check-material.ts <section>` (0 errors / 0 warnings) and the browser
    harness `http://localhost:5174/tools/verify-examples.html?path=<ch>/<sec>[/<topic>]&ms=1200`
    (read `window.__verifyResults`; keep browser_batch waits under ~45 s per call). For a visual check of one example,
    `&only=NN-&show=1&w=520&h=440` keeps it on screen in a frame of that size (`window.__verifyUrls` has the hosted URL
@@ -301,18 +301,18 @@ folder, no app code, no browser, heat rule); final report format.
 ## Running the app while working
 
 - `npm run dev` (vite :5174 + API on 127.0.0.1:3001). The API must be restarted after server-side changes
-  (server.js, compiler, materialTree…).
+  (server.ts, compiler, materialTree…).
 - Hosted previews are served from `http://localhost:3001/preview/...` (same hostname as the app, port 3001).
-- Tests: `npm test` (256). Build: `npm run build`.
+- Tests: `npm test` (255). Build: `npm run build`.
 
 ## App changes made during the course work (committed: 7c7485d, 6a129ae, 1f74d6f, afbb2fe, 0ef4f6d, 9859213, 6920719, fa301f1, df25af1, dacd319, d63c9c9, b624886, 904bee9, 6641963, 3b67ba9)
 
-Security hardening of server.js; isolated compiler worker; TypeScript type checking; V8 syntax checks; loop
+Security hardening of server.ts; isolated compiler worker; TypeScript type checking; V8 syntax checks; loop
 guards (script block and inline <script>); hosted preview runtime with Chrome-like console; theory sanitizing,
 example links `[x](NN-x.md)`, «▶ Run» on code embeds and a console in the theory preview dialog; gallery code
 previews for console-only examples, JS/TS type tags, `professional` stage; «Assets» browser; ↗ open-preview-in-tab;
-labels from label.txt / main.md heading; content checker (`scripts/check-material.mjs`), contrast helper
-(`scripts/contrast.mjs`) and browser harness (`tools/verify-examples.html`).
+labels from label.txt / main.md heading; content checker (`scripts/check-material.ts`), contrast helper
+(`scripts/contrast.ts`) and browser harness (`tools/verify-examples.html`).
 
 Second session (6a129ae): browser-only `let top|window|document|location` SyntaxError in the checker; faithful submit
 log (real GET URL, POST enctype, files with name/size/type); expandable values in the theory «▶ Run» console;
@@ -345,7 +345,7 @@ Eighth session (904bee9, 6641963, 3b67ba9): module workers start in cards from a
 opaque-origin `blob:` module workers); verify harness `&card=1`; every sandboxed card attaches its iframe and sets
 `srcdoc` two frames later (`loadSrcdocWhenLaidOut`). `claude_resume/run-example.mjs` transpiles TS with `alwaysStrict`.
 Tests: 256.
-Sixth session (df25af1, dacd319): local demo API `/api/demo/*` (`src/utils/demoApi.js`: echo with status/delay,
+Sixth session (df25af1, dacd319): local demo API `/api/demo/*` (`src/utils/demoApi.ts`: echo with status/delay,
 slow stream, CORS modes, 404 HTML page) and Vite's own CORS middleware off (it refused srcdoc preflights); the
 theory dialog runs the hosted page (srcdoc fallback) and lists TypeScript type errors above its console; TS code
 embeds get a `compiled.js` tab; sidebar labels drop inline-code backticks. Tests: 253.
