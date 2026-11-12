@@ -1,15 +1,165 @@
+// The console of the editor preview: the panel under the preview (#preview-console) with its entries,
+// filters, groups, font size, the object inspector (values expand on click, Chrome-style) and the REPL
+// input with per-example history. The same panel holds the shader panel for shader examples
+// (ShaderControls.ts): `_runtimeMode` ('none' | 'console' | 'shader') decides what it shows.
+//
+// A Preview mixin: src/components/Preview.ts copies these methods onto `Preview.prototype`
+// (`Object.assign`), so `this` is the Preview and all state is declared there. Preview's
+// `_handleRuntimeMessage` turns the iframe's messages (src/types/runtime.ts) into `_appendConsoleEntry`
+// calls; this file posts the REPL and inspector commands (`ConsoleCommandMessage`) to the iframe.
+//
+// Things to know before editing:
+// - Entries are rendered in batches: `_appendConsoleEntry` queues, `_flushConsoleQueue` adds the new
+//   elements at most once per frame. `_renderConsoleEntries` rebuilds everything (filters, enable/disable).
+// - The methods declared with `this: ConsoleHost` (value rendering and the inspector protocol) only use
+//   the `ConsoleHost` members. src/components/TheoryExerciseDialog.ts copies exactly those
+//   (`ConsoleHostMethodName`) onto its own prototype to get expandable values in its console: keep them
+//   free of any other Preview member. Every other method needs a whole Preview.
+// - Some `{}` parameter defaults are never used by the callers (kept from the JavaScript version); where the
+//   parameter type has required fields, the default is asserted (`{} as …`).
+
+import type { ShaderConfig, ShaderResolution } from '../../types/document.ts';
+import type {
+    ConsoleEvalCommand,
+    ConsoleGetPropertyCommand,
+    ConsoleInspectCommand,
+    ConsoleLevel,
+    ConsoleMessageMethod,
+    ConsolePart,
+    ConsoleTable,
+    InspectorProperty,
+    InspectResponse,
+    InspectResultMessage,
+    RemoteValue,
+    RuntimeBridgeMessageKind,
+} from '../../types/runtime.ts';
+import type { DistributiveOmit } from '../../types/utility.ts';
 import {
     createConsoleHistorySession,
     navigateConsoleHistory,
     rememberConsoleCommand,
     resetConsoleHistoryNavigation,
 } from '../../utils/consoleHistory.ts';
+import type { Preview } from '../Preview.ts';
+import type { NormalizedStackFrame } from './RuntimeDiagnostics.ts';
 
-// Keep the panel bounded: older entries are dropped (and counted) beyond this.
+/** Keep the panel bounded: older entries are dropped (and counted) beyond this. */
 export const MAX_CONSOLE_ENTRIES = 1000;
 
+/** What produced a console entry: the kind of the runtime message, or `command` for the echo of a REPL line. */
+export type ConsoleEntryKind = Exclude<RuntimeBridgeMessageKind, 'inspect-result' | 'runtime-ready'> | 'command';
+
+/** The console filter buttons: `debug` entries count as `log`. */
+export type ConsoleFilterLevel = Exclude<ConsoleLevel, 'debug'>;
+
+/** One entry of the console panel. */
+export interface ConsoleEntry {
+    /** A group header (`groupId`) that starts collapsed (console.groupCollapsed). */
+    collapsed: boolean;
+    /** The rendered `<div>`: `null` until the next flush or rebuild renders it, and once the entry is dropped. */
+    element: HTMLDivElement | null;
+    /** Set on console.group headers: the id that later entries list in `groups`. */
+    groupId: number | null;
+    /** Ids of the open groups this entry is nested in, outermost first. */
+    groups: number[];
+    /** Number of the entry in the current run (from 1). */
+    id: number;
+    kind: ConsoleEntryKind;
+    level: ConsoleLevel;
+    /** `path:line:column` shown at the right (`''` when unknown). */
+    location: string;
+    /** Plain text, shown when there are no `parts`. */
+    message: string;
+    /** Console method or runtime notice (`trace`, `form-submit`…), `''` for other entries. */
+    method: ConsoleMessageMethod | '';
+    /** Styled text and inspectable values; `null` when the entry is plain text. */
+    parts: ConsolePart[] | null;
+    /** Identical consecutive entries are merged and counted here (the badge). */
+    repeatedCount: number;
+    stackFrames: NormalizedStackFrame[];
+    stackText: string;
+    table: ConsoleTable | null;
+    /** The filter button that shows the entry. */
+    filterLevel: ConsoleFilterLevel;
+    /** `repeatedCount` changed since the badge was last drawn. */
+    badgeDirty?: boolean;
+    /** Dropped from the list (over MAX_CONSOLE_ENTRIES): a pending flush skips it. */
+    removed?: boolean;
+}
+
+/** What `_appendConsoleEntry` accepts: the descriptive fields of an entry, all optional. */
+export type ConsoleEntryInput = Partial<Pick<ConsoleEntry,
+    'collapsed' | 'groupId' | 'groups' | 'kind' | 'level' | 'location' | 'message' | 'method' | 'parts' | 'stackFrames' | 'stackText' | 'table'>>;
+
+/** Input of `_prepareConsoleSession`: the document about to be shown. */
+export interface ConsoleSessionOptions {
+    /** The document asks for a console (`console` metadata, or a script-only example). */
+    consoleEnabled: boolean;
+    /** Identifies the example; a new key starts a new session (console cleared, REPL history swapped, manual console off). */
+    sessionKey: string;
+    shaderEnabled?: boolean;
+    /** The document's shader resolution (`null` when it has none). */
+    shaderResolution?: ShaderResolution | null;
+    shaderConfig?: ShaderConfig | null;
+}
+
+/** Options of `_renderConsoleValue`. */
+export interface ConsoleValueOptions {
+    /** Property name to show before the value (`null`: a bare value). */
+    keyName?: string | null;
+    /** The key is an internal slot ([[Prototype]], [[Entries]]…). */
+    internal?: boolean;
+    /** The key is not enumerable. */
+    dimmed?: boolean;
+    /** Handle to send as the `receiver` when the value is expanded (see `ConsoleInspectCommand.receiver`). */
+    receiver?: number | null;
+}
+
+/** An inspector command before `_requestConsoleInspect` adds `source`, `renderId` and `requestId`. */
+export type ConsoleInspectRequest = DistributiveOmit<ConsoleInspectCommand | ConsoleGetPropertyCommand, 'source' | 'renderId' | 'requestId'>;
+
+/** An inspector request waiting for the iframe's 'inspect-result' (or for its 4 s timeout). */
+export interface PendingConsoleInspect {
+    resolve: (response: InspectResponse) => void;
+    timer: ReturnType<typeof setTimeout>;
+}
+
+/** The methods of `consoleManagerMixin` that only need a `ConsoleHost` (the ones TheoryExerciseDialog borrows). */
+export type ConsoleHostMethodName =
+    | '_createConsoleValueSpan'
+    | '_rejectPendingConsoleInspects'
+    | '_renderConsoleParts'
+    | '_renderConsoleProperty'
+    | '_renderConsoleValue'
+    | '_requestConsoleInspect'
+    | '_resolveConsoleInspect'
+    | '_sanitizeConsoleStyle';
+
+/**
+ * What the value rendering and inspector methods of the console (`ConsoleHostMethodName`) need from the
+ * object they run on. `Preview` is one; `TheoryExerciseDialog` is another: it declares these four fields
+ * and copies those methods from `consoleManagerMixin` onto its prototype.
+ */
+export interface ConsoleHost extends Pick<ConsoleManagerMixin, ConsoleHostMethodName> {
+    /** The preview iframe the inspector commands are posted to (`null`: requests fail with an error answer). */
+    readonly iframe: HTMLIFrameElement | null;
+    /** `renderId` of the document in `iframe`; stamped on every command (the runtime ignores other ids). */
+    readonly _renderToken: number;
+    /** Requests waiting for an answer, by `requestId`. */
+    readonly _consoleInspectRequests: Map<number, PendingConsoleInspect>;
+    /** Last `requestId` used. */
+    _consoleInspectSequence: number;
+}
+
+type ConsoleManagerMixin = typeof consoleManagerMixin;
+
 export const consoleManagerMixin = {
-    _prepareConsoleSession({ consoleEnabled, sessionKey, shaderEnabled = false, shaderResolution = null, shaderConfig = null }) {
+    /**
+     * Sets the console up for the document about to render: a new `sessionKey` clears the console and
+     * swaps in that example's REPL history; then picks the runtime mode (shader panel, console or none)
+     * and, for shaders, merges the document's uniforms and textures into the panel state.
+     */
+    _prepareConsoleSession({ consoleEnabled, sessionKey, shaderEnabled = false, shaderResolution = null, shaderConfig = null }: ConsoleSessionOptions): void {
         const normalizedSessionKey = String(sessionKey || '').trim() || '__draft__';
         const previousMode = this._runtimeMode;
         const shaderSessionChanged = normalizedSessionKey !== this._shaderControlSessionKey;
@@ -52,7 +202,8 @@ export const consoleManagerMixin = {
         this._syncConsoleVisibility();
     },
 
-    _resetConsoleSession() {
+    /** Back to the initial state (no document): no console, no shader panel, empty REPL history. */
+    _resetConsoleSession(): void {
         this._consoleSessionKey = '';
         this._consoleHistory = createConsoleHistorySession();
         this._runtimeMode = 'none';
@@ -73,7 +224,8 @@ export const consoleManagerMixin = {
         this._syncConsoleVisibility();
     },
 
-    _clearConsoleEntries() {
+    /** Removes every entry (the REPL history is kept). */
+    _clearConsoleEntries(): void {
         this._consoleEntries = [];
         this._consoleQueue = [];
         this._consoleSequence = 0;
@@ -82,7 +234,8 @@ export const consoleManagerMixin = {
         this._renderConsoleEntries();
     },
 
-    _restoreConsoleHistorySession(sessionKey = '') {
+    /** Loads the REPL history of an example (empty the first time) and clears the input. */
+    _restoreConsoleHistorySession(sessionKey: string = ''): void {
         const normalizedSessionKey = String(sessionKey || '').trim() || '__draft__';
         const storedSession = this._consoleHistoryBySession.get(normalizedSessionKey);
         this._consoleHistory = createConsoleHistorySession(storedSession);
@@ -92,26 +245,28 @@ export const consoleManagerMixin = {
         }
     },
 
-    _persistConsoleHistorySession() {
+    _persistConsoleHistorySession(): void {
         const normalizedSessionKey = String(this._consoleSessionKey || '').trim() || '__draft__';
         this._consoleHistoryBySession.set(normalizedSessionKey, createConsoleHistorySession(this._consoleHistory));
     },
 
-    _setConsoleInputValue(value = '') {
+    /** Sets the REPL input and puts the caret at the end. */
+    _setConsoleInputValue(value: string = ''): void {
         if (!this.consoleInput) return;
         this.consoleInput.value = value;
         const nextPosition = this.consoleInput.value.length;
         this.consoleInput.setSelectionRange(nextPosition, nextPosition);
     },
 
-    _handleConsoleInputChange() {
+    _handleConsoleInputChange(): void {
         if (!this.consoleInput) return;
 
         this._consoleHistory = resetConsoleHistoryNavigation(this._consoleHistory, this.consoleInput.value);
         this._persistConsoleHistorySession();
     },
 
-    _handleConsoleInputKeydown(event) {
+    /** ArrowUp/ArrowDown in the REPL input walk the history. */
+    _handleConsoleInputKeydown(event: KeyboardEvent): void {
         if (!this._consoleEnabled || !this.consoleInput) return;
         if (event.metaKey || event.ctrlKey || event.altKey) return;
         if (!['ArrowUp', 'ArrowDown'].includes(event.key)) return;
@@ -126,7 +281,8 @@ export const consoleManagerMixin = {
         this._setConsoleInputValue(result.value);
     },
 
-    _syncConsoleVisibility() {
+    /** Shows the panel as the console, the shader panel or nothing (`_runtimeMode`), expanded or collapsed. */
+    _syncConsoleVisibility(): void {
         if (!this.consolePanel || !this.consoleBody || !this.btnToggleConsole) return;
 
         const isConsoleMode = this._runtimeMode === 'console';
@@ -162,7 +318,8 @@ export const consoleManagerMixin = {
         }
     },
 
-    _syncConsoleOverrideButton() {
+    /** The Console button: automatic (metadata), manual on/off, or disabled (no document, shader). */
+    _syncConsoleOverrideButton(): void {
         if (!this.btnConsoleOverride) return;
 
         const isShaderMode = this._runtimeMode === 'shader';
@@ -204,7 +361,8 @@ export const consoleManagerMixin = {
         this.btnConsoleOverride.title = 'Enable console for this example only';
     },
 
-    _toggleConsoleOverride() {
+    /** Turns the manual console on or off for an example without `console` metadata, and re-renders. */
+    _toggleConsoleOverride(): void {
         if (!this._lastDocument || this._consoleMetadataEnabled || this._runtimeMode === 'shader') return;
 
         this._consoleManualOverride = !this._consoleManualOverride;
@@ -218,17 +376,22 @@ export const consoleManagerMixin = {
         this._syncConsoleVisibility();
 
         if (this._lastDocument) {
-            clearTimeout(this._debounceTimer);
+            clearTimeout(this._debounceTimer!); // `!`: see `_debounceTimer` in Preview.ts
             this._render(this._lastDocument);
         }
     },
 
-    _getConsoleFilterLevel(entry = {}) {
+    _getConsoleFilterLevel(entry: Partial<Pick<ConsoleEntry, 'level'>> = {}): ConsoleFilterLevel {
         if (entry.level === 'warn' || entry.level === 'error' || entry.level === 'info') return entry.level;
         return 'log';
     },
 
-    _appendConsoleEntry(entry = {}) {
+    /**
+     * Adds an entry (or bumps the count of an identical previous one) and schedules its rendering. Beyond
+     * MAX_CONSOLE_ENTRIES the oldest entries are dropped.
+     */
+    _appendConsoleEntry(entry: ConsoleEntryInput = {}): void {
+        // `filterLevel` is set right below (it is computed from the entry).
         const nextEntry = {
             collapsed: Boolean(entry.collapsed),
             element: null,
@@ -245,15 +408,16 @@ export const consoleManagerMixin = {
             stackFrames: Array.isArray(entry.stackFrames) ? entry.stackFrames : [],
             stackText: entry.stackText || '',
             table: entry.table || null,
-        };
+        } as ConsoleEntry;
         nextEntry.filterLevel = this._getConsoleFilterLevel(nextEntry);
         if (!nextEntry.parts && !nextEntry.message) nextEntry.message = '(empty)';
 
         const previousEntry = this._consoleEntries.at(-1);
         if (this._canMergeConsoleEntries(previousEntry, nextEntry)) {
-            previousEntry.repeatedCount += 1;
-            previousEntry.badgeDirty = true;
-            this._consoleQueue.push(previousEntry);
+            // `!`: there is no merge without a previous entry.
+            previousEntry!.repeatedCount += 1;
+            previousEntry!.badgeDirty = true;
+            this._consoleQueue.push(previousEntry!);
             this._scheduleConsoleFlush();
             return;
         }
@@ -266,7 +430,7 @@ export const consoleManagerMixin = {
         this._consoleQueue.push(nextEntry);
 
         while (this._consoleEntries.length > MAX_CONSOLE_ENTRIES) {
-            const removed = this._consoleEntries.shift();
+            const removed = this._consoleEntries.shift()!; // the list is longer than MAX_CONSOLE_ENTRIES here
             removed.removed = true;
             removed.element?.remove();
             removed.element = null;
@@ -276,7 +440,8 @@ export const consoleManagerMixin = {
         this._scheduleConsoleFlush();
     },
 
-    _canMergeConsoleEntries(previousEntry, nextEntry) {
+    /** Consecutive entries merge when they look the same and nothing in them can differ (tables, groups, objects, REPL). */
+    _canMergeConsoleEntries(previousEntry: ConsoleEntry | null | undefined, nextEntry: ConsoleEntry | null | undefined): boolean {
         if (!previousEntry || !nextEntry) return false;
         if (previousEntry.table || nextEntry.table || previousEntry.groupId || nextEntry.groupId) return false;
         if (nextEntry.kind === 'command' || nextEntry.kind === 'command-result') return false;
@@ -290,16 +455,16 @@ export const consoleManagerMixin = {
             && previousEntry.groups.join(',') === nextEntry.groups.join(',');
     },
 
-    _consoleEntryHasHandles(entry) {
+    _consoleEntryHasHandles(entry: ConsoleEntry | null | undefined): boolean {
         return Boolean(entry?.parts?.some((part) => part.kind === 'value' && part.value?.handle));
     },
 
-    _consoleEntryText(entry) {
+    _consoleEntryText(entry: ConsoleEntry | null | undefined): string {
         if (!entry?.parts) return entry?.message || '';
         return entry.parts.map((part) => (part.kind === 'text' ? part.text : part.value?.preview || '')).join('');
     },
 
-    _scheduleConsoleFlush() {
+    _scheduleConsoleFlush(): void {
         if (this._consoleFlushScheduled) return;
         this._consoleFlushScheduled = true;
         const flush = () => this._flushConsoleQueue();
@@ -312,7 +477,7 @@ export const consoleManagerMixin = {
 
     // Batched, incremental DOM updates: at most one pass per frame regardless of how many messages
     // arrived, and only new entries are created.
-    _flushConsoleQueue() {
+    _flushConsoleQueue(): void {
         this._consoleFlushScheduled = false;
         const queue = this._consoleQueue;
         this._consoleQueue = [];
@@ -344,19 +509,21 @@ export const consoleManagerMixin = {
         if (stickToBottom) output.scrollTop = output.scrollHeight;
     },
 
-    _isConsoleEntryVisible(entry) {
+    /** Passes the level filters and is not inside a collapsed group. */
+    _isConsoleEntryVisible(entry: ConsoleEntry): boolean {
         if (!this._consoleFilters.has(entry.filterLevel)) return false;
         return !entry.groups.some((groupId) => this._consoleCollapsedGroups.has(groupId));
     },
 
-    _toggleConsoleCollapsed() {
+    _toggleConsoleCollapsed(): void {
         if (this._runtimeMode === 'none') return;
 
         this._consoleCollapsed = !this._consoleCollapsed;
         this._syncConsoleVisibility();
     },
 
-    _toggleConsoleFilter(level) {
+    /** A filter button: `all` turns every level on (or all off when they already are on). */
+    _toggleConsoleFilter(level: string): void {
         if (!['all', 'log', 'info', 'warn', 'error'].includes(level)) return;
 
         if (level === 'all') {
@@ -368,16 +535,17 @@ export const consoleManagerMixin = {
             return;
         }
 
-        if (this._consoleFilters.has(level)) {
-            this._consoleFilters.delete(level);
+        // `level` is one of the four levels here (checked above; `includes` does not narrow).
+        if (this._consoleFilters.has(level as ConsoleFilterLevel)) {
+            this._consoleFilters.delete(level as ConsoleFilterLevel);
         } else {
-            this._consoleFilters.add(level);
+            this._consoleFilters.add(level as ConsoleFilterLevel);
         }
 
         this._renderConsoleEntries();
     },
 
-    _toggleConsoleGroup(entry) {
+    _toggleConsoleGroup(entry: ConsoleEntry | null | undefined): void {
         if (!entry?.groupId) return;
         if (this._consoleCollapsedGroups.has(entry.groupId)) {
             this._consoleCollapsedGroups.delete(entry.groupId);
@@ -393,12 +561,13 @@ export const consoleManagerMixin = {
         this._updateConsoleSummary();
     },
 
-    _applyConsoleFontSize() {
+    _applyConsoleFontSize(): void {
         if (!this.consolePanel) return;
         this.consolePanel.style.setProperty('--preview-console-font-size', `${this._consoleFontSize}px`);
     },
 
-    _updateConsoleFontSize(delta) {
+    /** Changes the console font size by `delta` px, within 11–18 px. */
+    _updateConsoleFontSize(delta: number): void {
         const nextSize = Math.max(11, Math.min(18, this._consoleFontSize + delta));
         if (nextSize === this._consoleFontSize) return;
 
@@ -406,7 +575,8 @@ export const consoleManagerMixin = {
         this._applyConsoleFontSize();
     },
 
-    _executeConsoleCommand() {
+    /** Sends the REPL line to the iframe (the answer arrives as a 'command-result'/'command-error' message). */
+    _executeConsoleCommand(): void {
         if (!this._consoleEnabled || !this.consoleInput) return;
 
         const command = this.consoleInput.value.trim();
@@ -439,14 +609,18 @@ export const consoleManagerMixin = {
             renderId: this._renderToken,
             command,
             commandId,
-        }, '*');
+        } satisfies ConsoleEvalCommand, '*');
 
         this._setConsoleInputValue('');
     },
 
     // ─── Inspector protocol (parent side) ─────────────────
 
-    _requestConsoleInspect(payload = {}) {
+    /**
+     * Sends an inspector command to the iframe. Resolves with its answer, or with an `ok: false` answer
+     * after 4 s, when the frame is missing, or when the preview re-renders first.
+     */
+    _requestConsoleInspect(this: ConsoleHost, payload: ConsoleInspectRequest = {} as ConsoleInspectRequest): Promise<InspectResponse> {
         const requestId = ++this._consoleInspectSequence;
         return new Promise((resolve) => {
             const timer = setTimeout(() => {
@@ -456,21 +630,23 @@ export const consoleManagerMixin = {
             this._consoleInspectRequests.set(requestId, { resolve, timer });
 
             try {
-                this.iframe.contentWindow.postMessage({
+                // `!`: a missing frame or window throws here, and the catch answers the request.
+                this.iframe!.contentWindow!.postMessage({
                     ...payload,
                     requestId,
                     renderId: this._renderToken,
                     source: 'learncode-console-command',
-                }, '*');
+                } satisfies ConsoleInspectCommand | ConsoleGetPropertyCommand, '*');
             } catch (error) {
                 clearTimeout(timer);
                 this._consoleInspectRequests.delete(requestId);
-                resolve({ ok: false, error: error?.message || 'Preview frame is not available.' });
+                resolve({ ok: false, error: (error as Error | null | undefined)?.message || 'Preview frame is not available.' });
             }
         });
     },
 
-    _resolveConsoleInspect(data = {}) {
+    /** Answers the pending request an 'inspect-result' message belongs to (ignored when it already timed out). */
+    _resolveConsoleInspect(this: ConsoleHost, data: InspectResultMessage = {} as InspectResultMessage): void {
         const request = this._consoleInspectRequests.get(data.requestId);
         if (!request) return;
         clearTimeout(request.timer);
@@ -478,7 +654,8 @@ export const consoleManagerMixin = {
         request.resolve(data);
     },
 
-    _rejectPendingConsoleInspects() {
+    /** Answers every pending request with an error (the document they were about is gone). */
+    _rejectPendingConsoleInspects(this: ConsoleHost): void {
         if (!(this._consoleInspectRequests instanceof Map)) return;
         this._consoleInspectRequests.forEach((request) => {
             clearTimeout(request.timer);
@@ -489,7 +666,8 @@ export const consoleManagerMixin = {
 
     // ─── Rendering ────────────────────────────────────────
 
-    _renderConsoleEntries() {
+    /** Rebuilds the whole list (and the filter buttons, count and empty message). */
+    _renderConsoleEntries(): void {
         if (!this.consoleOutput || !this.consoleEmpty || !this.consoleCount || !this.btnClearConsole) return;
 
         this._consoleQueue = [];
@@ -498,7 +676,7 @@ export const consoleManagerMixin = {
             const level = button.dataset.level || '';
             const active = level === 'all'
                 ? this._consoleFilters.size === 4
-                : this._consoleFilters.has(level);
+                : this._consoleFilters.has(level as ConsoleFilterLevel);
             button.classList.toggle('active', active);
         });
 
@@ -522,7 +700,8 @@ export const consoleManagerMixin = {
         this.consoleOutput.scrollTop = this.consoleOutput.scrollHeight;
     },
 
-    _updateConsoleSummary() {
+    /** Entry count (`N entries`, `visible/total visible`, dropped ones) and the empty-list message. */
+    _updateConsoleSummary(): void {
         if (!this.consoleCount || !this.btnClearConsole || !this.consoleEmpty || !this.consoleOutput) return;
 
         const total = this._consoleEntries.length;
@@ -544,15 +723,16 @@ export const consoleManagerMixin = {
         this.btnClearConsole.disabled = total === 0;
     },
 
-    _updateConsoleEntryBadge(entry) {
+    _updateConsoleEntryBadge(entry: ConsoleEntry): void {
         entry.badgeDirty = false;
-        const badge = entry.element?.querySelector('.preview-console-entry-badge');
+        const badge = entry.element?.querySelector<HTMLSpanElement>('.preview-console-entry-badge');
         if (!badge) return;
         badge.textContent = String(entry.repeatedCount);
         badge.hidden = entry.repeatedCount < 2;
     },
 
-    _createConsoleEntryElement(entry) {
+    /** The element of an entry: row (group toggle, message, repeat badge, location), table and stack. */
+    _createConsoleEntryElement(entry: ConsoleEntry): HTMLDivElement {
         const item = document.createElement('div');
         item.className = `preview-console-entry ${entry.level} kind-${entry.kind}${entry.method ? ` method-${entry.method}` : ''}`;
         item.style.setProperty('--console-indent', String(entry.groups.length));
@@ -609,7 +789,7 @@ export const consoleManagerMixin = {
             entry.stackFrames.slice(0, limit).forEach((frame) => {
                 const frameRow = document.createElement('div');
                 frameRow.className = 'preview-console-entry-stack-frame';
-                const parts = [];
+                const parts: string[] = [];
                 if (frame.functionName) parts.push(frame.functionName);
                 if (frame.path) {
                     let location = frame.path;
@@ -633,7 +813,8 @@ export const consoleManagerMixin = {
         return item;
     },
 
-    _renderConsoleParts(container, parts = []) {
+    /** Appends a console line to `container`: styled text runs and expandable values. */
+    _renderConsoleParts(this: ConsoleHost, container: HTMLElement, parts: ConsolePart[] = []): void {
         parts.forEach((part) => {
             if (part.kind === 'text') {
                 const span = document.createElement('span');
@@ -653,7 +834,11 @@ export const consoleManagerMixin = {
         });
     },
 
-    _sanitizeConsoleStyle(style = '') {
+    /**
+     * The declarations of a `%c` style that are safe to apply: typography, colors, borders, spacing and
+     * inline display only; nothing that loads URLs or runs code.
+     */
+    _sanitizeConsoleStyle(this: ConsoleHost, style: string = ''): string {
         const allowed = /^(color|background|background-color|font-weight|font-style|font-size|font-family|text-decoration|text-transform|letter-spacing|line-height|text-shadow|opacity|border-radius|border(-(top|right|bottom|left))?(-(color|width|style))?|padding(-(top|right|bottom|left))?|margin(-(top|right|bottom|left))?|display)$/i;
         return String(style)
             .split(';')
@@ -672,7 +857,8 @@ export const consoleManagerMixin = {
             .join('; ');
     },
 
-    _createConsoleValueSpan(value = {}) {
+    /** The one-line preview of a value, classed by its type (`console-number`, `console-array`…). */
+    _createConsoleValueSpan(this: ConsoleHost, value: Partial<RemoteValue> = {}): HTMLSpanElement {
         const span = document.createElement('span');
         const type = value.subtype || value.type || 'object';
         span.className = `console-value console-${type}`;
@@ -681,7 +867,11 @@ export const consoleManagerMixin = {
     },
 
     // An expandable remote object. Children are fetched from the iframe on first expansion.
-    _renderConsoleValue(value = {}, { keyName = null, internal = false, dimmed = false, receiver = null } = {}) {
+    _renderConsoleValue(
+        this: ConsoleHost,
+        value: Partial<RemoteValue> = {},
+        { keyName = null, internal = false, dimmed = false, receiver = null }: ConsoleValueOptions = {},
+    ): HTMLSpanElement {
         const keyMarkup = () => {
             if (keyName === null) return null;
             const key = document.createElement('span');
@@ -733,7 +923,7 @@ export const consoleManagerMixin = {
             children.textContent = '…';
             const response = await this._requestConsoleInspect({
                 action: 'inspect',
-                handle: value.handle,
+                handle: value.handle!, // `!`: values without a handle returned above
                 receiver: receiver || value.handle,
             });
             children.textContent = '';
@@ -770,7 +960,8 @@ export const consoleManagerMixin = {
         return node;
     },
 
-    _renderConsoleProperty(property = {}) {
+    /** One row of an expanded object: a value (expandable), a getter to invoke `(...)`, or the "more" row. */
+    _renderConsoleProperty(this: ConsoleHost, property: InspectorProperty = {} as InspectorProperty): HTMLDivElement {
         const row = document.createElement('div');
         row.className = `console-tree-row${property.internal ? ' is-internal' : ''}${property.enumerable === false && !property.internal ? ' is-dimmed' : ''}`;
 
@@ -832,7 +1023,8 @@ export const consoleManagerMixin = {
         return row;
     },
 
-    _renderConsoleTable(table = {}) {
+    /** The table of a console.table entry. */
+    _renderConsoleTable(table: Partial<ConsoleTable> = {}): HTMLDivElement {
         const wrapper = document.createElement('div');
         wrapper.className = 'preview-console-table-wrapper';
         const element = document.createElement('table');
@@ -870,4 +1062,4 @@ export const consoleManagerMixin = {
 
         return wrapper;
     },
-};
+} satisfies ThisType<Preview>;

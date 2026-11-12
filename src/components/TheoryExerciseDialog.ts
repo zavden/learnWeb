@@ -19,12 +19,11 @@ import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../u
 import { getExampleEditorialMetadata, isShaderDocument, parseExampleDocument } from '../utils/markdown.ts';
 import { HOSTED_PREVIEW_SANDBOX, markHostedPreviewUnavailable, publishPreviewDocument } from '../utils/renderer/previewHost.ts';
 import { errorMessage } from '../utils/errors.ts';
-import { consoleManagerMixin } from './preview/ConsoleManager.ts';
+import { consoleManagerMixin, type PendingConsoleInspect } from './preview/ConsoleManager.ts';
 import type { Diagnostic } from '../types/diagnostics.ts';
 import type {
     ConsoleMessage,
     ConsoleTable,
-    InspectResponse,
     PreviewFrameMessage,
     RuntimeErrorMessage,
     UnhandledRejectionMessage,
@@ -59,12 +58,6 @@ interface PreviewViewOptions {
     typeErrors?: Diagnostic[];
 }
 
-/** An object-inspector request waiting for the iframe's answer (see `_requestConsoleInspect` in ConsoleManager). */
-// TODO(ts-migration): use the pending-inspect type from src/components/preview/ConsoleManager.ts once package P exports it.
-interface PendingConsoleInspect {
-    resolve: (response: InspectResponse) => void;
-    timer: ReturnType<typeof setTimeout>;
-}
 
 /**
  * Error reports carry no console table; declared absent so `table` can be read on any message that becomes a
