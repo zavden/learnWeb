@@ -15,15 +15,17 @@ import {
 } from '../src/utils/markdown.ts';
 import { parseMetadataValue, serializeMetadataValue } from '../src/utils/markdown/core.ts';
 import { compileExampleDocument } from '../src/utils/exampleCompiler.ts';
+import type { CompileResult } from '../src/types/compile.ts';
+import type { ExampleDocument } from '../src/types/document.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const F = '```';
 
-function getCodes(documentModel) {
+function getCodes(documentModel: ExampleDocument): string[] {
     return documentModel.diagnostics.map((diagnostic) => diagnostic.code);
 }
 
-function cycle(source, times = 3) {
+function cycle(source: string, times: number = 3): string {
     let text = source;
     for (let index = 0; index < times; index += 1) {
         text = buildExampleDocument(parseExampleDocument(text));
@@ -83,8 +85,9 @@ test('"# HTML-FULL" with an html fence is an html-full block and roundtrips unch
     assert.deepEqual(getCodes(documentModel), []);
     assert.equal(buildExampleDocument(documentModel), source);
 
-    const compiled = await compileExampleDocument(documentModel);
-    assert.match(compiled.compiledDocument.fullDocumentHtml, /<p>full<\/p>/);
+    // TODO(ts-migration): drop the assertion once compileExampleDocument returns a CompileResult
+    const compiled = await compileExampleDocument(documentModel) as CompileResult;
+    assert.match(compiled.compiledDocument.fullDocumentHtml!, /<p>full<\/p>/);
 });
 
 test('html-full fences keep working and repo HTML-FULL examples render as full documents', async () => {
@@ -98,8 +101,9 @@ test('html-full fences keep working and repo HTML-FULL examples render as full d
         const repoDocument = parseExampleDocument(repoSource);
         assert.equal(repoDocument.blocks[0].type, 'html-full');
         assert.equal(buildExampleDocument(repoDocument), repoSource.trimEnd());
-        const compiled = await compileExampleDocument(repoDocument);
-        assert.ok(compiled.compiledDocument.fullDocumentHtml.length > 0);
+        // TODO(ts-migration): drop the assertion once compileExampleDocument returns a CompileResult
+        const compiled = await compileExampleDocument(repoDocument) as CompileResult;
+        assert.ok(compiled.compiledDocument.fullDocumentHtml!.length > 0);
     }
 });
 
@@ -146,12 +150,12 @@ test('content with ``` lines is wrapped in a longer fence and survives save + re
     const base = parseExampleDocument(`# HTML\n\n${F}html\n<pre id="o"></pre>\n${F}\n\n# JavaScript\n\n${F}javascript\nconsole.log(1)\n${F}\n`);
     const scriptFile = base.files.find((file) => file.language === 'javascript');
     const code = 'const md = `\n```js\nhello\n```\n`;\nconsole.log(md);';
-    const saved = buildExampleDocument(updateDocumentFileContent(base, scriptFile.id, code));
+    const saved = buildExampleDocument(updateDocumentFileContent(base, scriptFile!.id, code));
 
     assert.match(saved, /````javascript\n/);
     const reloaded = parseExampleDocument(saved);
     assert.deepEqual(getCodes(reloaded), []);
-    assert.equal(reloaded.blocks.find((block) => block.type === 'javascript').content, code);
+    assert.equal(reloaded.blocks.find((block) => block.type === 'javascript')!.content, code);
     assert.equal(buildExampleDocument(reloaded), saved);
 });
 

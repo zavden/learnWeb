@@ -1,3 +1,8 @@
+// The public API of the example document model: parse/serialize example Markdown, derived views
+// (exercise, shader, editorial, file visibility), file-type rules and the editing operations. A barrel:
+// the code lives in src/utils/markdown/ (see each module's header) and the data shapes in
+// src/types/document.ts. Import types from src/types/, not from here.
+
 export {
     LEGACY_DEFAULT_BLOCK_LANGUAGE_OPTIONS,
     SHADER_BLOCK_LANGUAGE_OPTIONS,

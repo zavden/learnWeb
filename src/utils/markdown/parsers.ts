@@ -1,8 +1,26 @@
+// The two body formats of an example: legacy blocks (`# Heading` + fenced block) and virtual files
+// (`## @file` / `## @lang` / `## @role` + fenced block). Reads them into blocks/files while collecting
+// diagnostics, and writes documents back to Markdown. Called by documentApi.ts (parse/build) and
+// documentMeta.ts; the serializers' output is what the editor saves, so it must parse back to the same
+// document (tests/document-roundtrip.test.ts).
+//
+// Unclosed fences are recovered when the next opening fence of the same kind appears at column 0: the
+// block is closed there with a `recovered-unclosed-fence` warning instead of swallowing the next block.
+
 import {
     deriveSessionId,
     getBlockDefinition,
     sortBlocks,
 } from '../../config/exampleBlocks.ts';
+import type { Diagnostic } from '../../types/diagnostics.ts';
+import type {
+    ExampleBlock,
+    ExampleDocumentInput,
+    ExampleMetadata,
+    ExampleMetadataInput,
+    UnsupportedBlock,
+    VirtualFile,
+} from '../../types/document.ts';
 import {
     REACT_MULTI_FILE_LANGUAGES,
     SUPPORTED_FRAMEWORKS,
@@ -24,15 +42,27 @@ import {
     normalizeVirtualPath,
     parseFenceOpening,
     stripSurroundingBlankLines,
+    type FenceOpening,
 } from './core.ts';
 
 const VIRTUAL_DIRECTIVE_PATTERN = /^##\s+@(file|lang|role)\s+/;
 
-function isVirtualDirectiveLine(line = '') {
+/** Result of reading one fenced block. */
+interface FencedContent {
+    /** False when the file ended without any closing fence. */
+    closed: boolean;
+    content: string;
+    /** Index of the line to continue from. */
+    nextIndex: number;
+    /** The block was closed by recovery (next opening fence, or an over-indented closing fence). */
+    recovered: boolean;
+}
+
+function isVirtualDirectiveLine(line: string = ''): boolean {
     return VIRTUAL_DIRECTIVE_PATTERN.test(line);
 }
 
-function isHtmlFullHeading(heading = '') {
+function isHtmlFullHeading(heading: string | null = ''): boolean {
     return /^html[\s_-]*full$/i.test(String(heading || '').trim());
 }
 
@@ -41,7 +71,12 @@ function isHtmlFullHeading(heading = '') {
 // same length. If a new opening fence of the same kind shows up at column 0 before that, the
 // previous block was left unclosed: the block is closed there and the trailing heading /
 // directive lines are handed back to the caller so the next block is never swallowed.
-function readFencedContent(lines, startIndex, fence, isStructureLine) {
+function readFencedContent(
+    lines: readonly string[],
+    startIndex: number,
+    fence: FenceOpening,
+    isStructureLine: (line: string) => boolean,
+): FencedContent {
     let index = startIndex;
 
     while (index < lines.length) {
@@ -102,7 +137,7 @@ function readFencedContent(lines, startIndex, fence, isStructureLine) {
     };
 }
 
-function buildFencedCode(language, content = '') {
+function buildFencedCode(language: string | undefined, content: string = ''): string {
     const fence = getFenceForContent(content);
     return `${fence}${language}
 ${content}
@@ -110,7 +145,8 @@ ${fence}`;
 }
 import { deriveFilesFromBlocks } from './documentMeta.ts';
 
-export function inferSessionIdFromDocument({ blocks = [], files = [], metadata = {} }) {
+/** The document's `sessionId` (see `ExampleDocument.sessionId`). */
+export function inferSessionIdFromDocument({ blocks = [], files = [], metadata = {} }: ExampleDocumentInput): string {
     if (blocks.length > 0) {
         return deriveSessionId(blocks);
     }
@@ -130,8 +166,18 @@ export function inferSessionIdFromDocument({ blocks = [], files = [], metadata =
     return '';
 }
 
-export function parseLegacyBlocks(lines, startIndex, diagnostics, unsupportedBlocks) {
-    const blocks = [];
+/**
+ * Reads legacy blocks from `startIndex` on: optional `# Heading`, then a fenced block, repeated. Problems are
+ * pushed to `diagnostics`; blocks in unknown languages go to `unsupportedBlocks`. Returns the blocks sorted
+ * by slot. A `# HTML-FULL` heading over an ```html fence makes an `html-full` block.
+ */
+export function parseLegacyBlocks(
+    lines: readonly string[],
+    startIndex: number,
+    diagnostics: Diagnostic[],
+    unsupportedBlocks: UnsupportedBlock[],
+): ExampleBlock[] {
+    const blocks: ExampleBlock[] = [];
     let blockIndex = 0;
     let index = startIndex;
 
@@ -145,7 +191,7 @@ export function parseLegacyBlocks(lines, startIndex, diagnostics, unsupportedBlo
         skipBlankLines();
         if (index >= lines.length) break;
 
-        let heading = null;
+        let heading: string | null = null;
         if (isHeadingLine(lines[index])) {
             heading = lines[index].replace(/^#{1,6}\s+/, '').trim();
             index += 1;
@@ -252,8 +298,18 @@ export function parseLegacyBlocks(lines, startIndex, diagnostics, unsupportedBlo
     return sortBlocks(blocks);
 }
 
-export function parseVirtualFiles(lines, startIndex, diagnostics, metadata = {}) {
-    const files = [];
+/**
+ * Reads `## @file path` sections from `startIndex` on, each with optional `## @lang` / `## @role` lines and
+ * a fenced block. Files in unsupported languages are skipped with a diagnostic. Side effect: sets
+ * `metadata.mode` to `multi-file` when it is missing.
+ */
+export function parseVirtualFiles(
+    lines: readonly string[],
+    startIndex: number,
+    diagnostics: Diagnostic[],
+    metadata: ExampleMetadata = {},
+): VirtualFile[] {
+    const files: VirtualFile[] = [];
     let index = startIndex;
 
     const skipBlankLines = () => {
@@ -358,7 +414,8 @@ export function parseVirtualFiles(lines, startIndex, diagnostics, metadata = {})
             break;
         }
 
-        const fence = parseFenceOpening(lines[index]);
+        // `!`: the loop above only stops on a fence line (checked by isFenceLine() just before).
+        const fence = parseFenceOpening(lines[index])!;
         const fenceLanguage = fence.language;
         const language = explicitLanguage || fenceLanguage;
         const fenceLineNumber = index + 1;
@@ -454,7 +511,7 @@ export function parseVirtualFiles(lines, startIndex, diagnostics, metadata = {})
 
 // Keeps the fence language the author used when it still parses back to the same block
 // type (e.g. ```html under "# HTML-FULL"); otherwise uses the canonical block type.
-function getBlockFenceLanguage(block = {}) {
+function getBlockFenceLanguage(block: Partial<ExampleBlock> = {}): string | undefined {
     const type = normalizeBlockType(block.type);
     const fenceLanguage = normalizeBlockType(block.fenceLanguage || '');
 
@@ -465,7 +522,8 @@ function getBlockFenceLanguage(block = {}) {
     return block.language || block.type;
 }
 
-export function buildLegacyMarkdown(blocks = [], metadata = {}) {
+/** Serializes a legacy document: frontmatter, then `# Heading` + fenced block per block in slot order. */
+export function buildLegacyMarkdown(blocks: readonly ExampleBlock[] = [], metadata: ExampleMetadataInput = {}): string {
     const frontmatter = buildFrontmatter(metadata);
     const content = sortBlocks(blocks)
         .map((block) => {
@@ -483,7 +541,8 @@ ${buildFencedCode(language, fileContent)}`;
     return [frontmatter, content].filter(Boolean).join('\n\n');
 }
 
-export function buildVirtualMarkdown(files = [], metadata = {}) {
+/** Serializes a virtual-files document: frontmatter, then `## @file` / `## @lang` (/ `## @role`) + fenced block per file. */
+export function buildVirtualMarkdown(files: readonly VirtualFile[] = [], metadata: ExampleMetadataInput = {}): string {
     const frontmatter = buildFrontmatter(metadata);
     const body = files
         .map((file) => {
@@ -505,10 +564,12 @@ ${buildFencedCode(file.language, file.content || '')}`;
     return [frontmatter, body].filter(Boolean).join('\n\n');
 }
 
-export function cloneFiles(files = []) {
+/** Shallow copies of the files. */
+export function cloneFiles(files: readonly VirtualFile[] = []): VirtualFile[] {
     return files.map((file) => ({ ...file }));
 }
 
-export function deriveLegacyFiles(blocks = []) {
+/** The legacy files of the blocks (sorted by slot first). */
+export function deriveLegacyFiles(blocks: readonly ExampleBlock[] = []): VirtualFile[] {
     return deriveFilesFromBlocks(sortBlocks(blocks));
 }

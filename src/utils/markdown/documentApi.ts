@@ -1,4 +1,25 @@
+// The public entry points of the example document model (re-exported by src/utils/markdown.ts):
+// parse Markdown into an `ExampleDocument`, serialize it back, keep its derived fields in sync, clone it,
+// create one from a preset, and answer the editor's questions about it (language options, entry
+// candidates, file visibility). Parsing never throws: problems become `diagnostics`.
+//
+// Documents returned here are synchronized (`synchronizeDocument()` has run, so `rendererMode`, `sessionId`
+// and, for legacy blocks, `files` match `blocks`/`files` and `metadata`), except `cloneExampleDocument()`,
+// which copies its input as it is.
+
 import { getSessionPreset } from '../../config/exampleBlocks.ts';
+import type { Diagnostic } from '../../types/diagnostics.ts';
+import type {
+    BlockAlias,
+    ExampleDocument,
+    ExampleDocumentInput,
+    FileLanguage,
+    FileVisibilityEntry,
+    FileVisibilityKey,
+    SourceFormat,
+    UnsupportedBlock,
+    VirtualFile,
+} from '../../types/document.ts';
 import {
     LEGACY_DEFAULT_BLOCK_LANGUAGE_OPTIONS,
     LEGACY_REACT_BLOCK_LANGUAGE_OPTIONS,
@@ -39,7 +60,8 @@ import {
     validateVirtualDocument,
 } from './validationDocuments.ts';
 
-export function createEmptyExampleDocument() {
+/** A new empty legacy document (no blocks, no metadata). */
+export function createEmptyExampleDocument(): ExampleDocument {
     return {
         rendererMode: 'web',
         sessionId: '',
@@ -52,7 +74,13 @@ export function createEmptyExampleDocument() {
     };
 }
 
-export function synchronizeDocument(documentModel) {
+/**
+ * A copy of the document with its derived fields recomputed: metadata normalized, legacy file edits
+ * written back into their blocks and the legacy files re-derived, then `rendererMode` and `sessionId`.
+ * Accepts partial documents (missing parts count as empty); `diagnostics`, `unsupportedBlocks` and
+ * `sourceFormat` are copied from the input as they are (absent stays absent).
+ */
+export function synchronizeDocument(documentModel: ExampleDocumentInput | null | undefined): ExampleDocument {
     const document = documentModel || createEmptyExampleDocument();
     const metadata = normalizeMetadata(document.metadata || {});
     const blocks = (document.blocks || []).map((block) => ({ ...block }));
@@ -71,6 +99,7 @@ export function synchronizeDocument(documentModel) {
 
     const synchronizedFiles = sourceFormat === 'legacy-blocks' ? deriveFilesFromBlocks(blocks) : files;
 
+    // `as`: diagnostics, unsupportedBlocks and sourceFormat come from the input (complete in practice).
     return {
         ...document,
         rendererMode: inferRendererMode({ blocks, metadata, sourceFormat }),
@@ -82,10 +111,11 @@ export function synchronizeDocument(documentModel) {
             files: synchronizedFiles,
             metadata,
         }),
-    };
+    } as ExampleDocument;
 }
 
-export function getDocumentFileVisibilityEntries(documentModel) {
+/** Every file of the (synchronized) document with its visibility key and whether `editor_hidden_files` hides it. */
+export function getDocumentFileVisibilityEntries(documentModel: ExampleDocumentInput | null | undefined): FileVisibilityEntry[] {
     const document = synchronizeDocument(documentModel);
     const files = document.files || [];
     const parsedHiddenFiles = parseEditorHiddenFilesMetadataValue(document.metadata?.editor_hidden_files);
@@ -102,13 +132,18 @@ export function getDocumentFileVisibilityEntries(documentModel) {
     });
 }
 
-export function getHiddenFileVisibilityKeys(documentModel) {
+/** Keys of the files `editor_hidden_files` hides, in file order. */
+export function getHiddenFileVisibilityKeys(documentModel: ExampleDocumentInput | null | undefined): FileVisibilityKey[] {
     return getDocumentFileVisibilityEntries(documentModel)
         .filter((entry) => entry.hidden)
         .map((entry) => entry.key);
 }
 
-export function getDocumentLanguageOptions(documentModel) {
+/**
+ * Languages the "add file" menu offers for this document: by framework for virtual files (`[]` without
+ * one), the missing shader stage for shader documents, by framework for legacy blocks.
+ */
+export function getDocumentLanguageOptions(documentModel: ExampleDocumentInput | null | undefined): (FileLanguage | BlockAlias)[] {
     const framework = String(documentModel?.metadata?.framework || '').trim().toLowerCase();
     const rendererMode = String(documentModel?.rendererMode || '').trim().toLowerCase();
 
@@ -140,7 +175,8 @@ export function getDocumentLanguageOptions(documentModel) {
     return [...LEGACY_DEFAULT_BLOCK_LANGUAGE_OPTIONS];
 }
 
-export function getDocumentEntryCandidates(documentModel) {
+/** Files that can be the entry of a React/Vue multi-file project (by language); `[]` for other documents. */
+export function getDocumentEntryCandidates(documentModel: ExampleDocumentInput | null | undefined): VirtualFile[] {
     if (documentModel?.sourceFormat !== 'virtual-files') return [];
 
     const framework = String(documentModel?.metadata?.framework || '').trim().toLowerCase();
@@ -155,7 +191,8 @@ export function getDocumentEntryCandidates(documentModel) {
     return (documentModel.files || []).filter((file) => entryLanguages.includes(file.language));
 }
 
-export function createExampleDocumentFromPreset(presetId = 'html-css-javascript') {
+/** A new document from a session preset (`SESSION_PRESETS`); unknown ids fall back to `html-css-javascript`. */
+export function createExampleDocumentFromPreset(presetId: string = 'html-css-javascript'): ExampleDocument {
     const preset = getSessionPreset(presetId);
     const metadata = normalizeMetadata(preset.metadata || {});
     const blocks = (preset.blocks || []).map((block, index) => buildBlock(block.type, block.content, null, `${block.type}-${index}`));
@@ -168,7 +205,7 @@ export function createExampleDocumentFromPreset(presetId = 'html-css-javascript'
         index,
     }));
 
-    const sourceFormat = files.length > 0 ? 'virtual-files' : 'legacy-blocks';
+    const sourceFormat: SourceFormat = files.length > 0 ? 'virtual-files' : 'legacy-blocks';
     const documentModel = {
         sessionId: '',
         metadata,
@@ -182,7 +219,8 @@ export function createExampleDocumentFromPreset(presetId = 'html-css-javascript'
     return synchronizeDocument(documentModel);
 }
 
-export function cloneExampleDocument(documentModel) {
+/** A copy that can be mutated freely (blocks, files, diagnostics shallow-copied; metadata deep-copied). Not re-synchronized. */
+export function cloneExampleDocument(documentModel: ExampleDocumentInput | null | undefined): ExampleDocument {
     if (!documentModel) {
         return createEmptyExampleDocument();
     }
@@ -199,14 +237,19 @@ export function cloneExampleDocument(documentModel) {
     };
 }
 
-export function parseExampleDocument(text = '') {
+/**
+ * Parses an example's Markdown (a BOM and CRLF line endings are accepted). The format is virtual files when
+ * the first body line is a `## @file` section, legacy blocks otherwise. Never throws: every problem is a
+ * diagnostic, and the result is synchronized.
+ */
+export function parseExampleDocument(text: string | null = ''): ExampleDocument {
     const source = String(text ?? '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
     const lines = source.split('\n');
     const { metadata, startIndex, diagnostics: frontmatterDiagnostics } = parseFrontmatter(lines);
-    const diagnostics = [...frontmatterDiagnostics];
-    const unsupportedBlocks = [];
+    const diagnostics: Diagnostic[] = [...frontmatterDiagnostics];
+    const unsupportedBlocks: UnsupportedBlock[] = [];
 
-    let format = 'legacy-blocks';
+    let format: SourceFormat = 'legacy-blocks';
     for (let index = startIndex; index < lines.length; index += 1) {
         if (/^##\s+@file\s+/.test(lines[index])) {
             format = 'virtual-files';
@@ -254,7 +297,8 @@ export function parseExampleDocument(text = '') {
     });
 }
 
-export function buildExampleDocument(documentModel) {
+/** Serializes the (synchronized) document to Markdown in its own format. */
+export function buildExampleDocument(documentModel: ExampleDocumentInput | null | undefined): string {
     const document = synchronizeDocument(documentModel);
 
     if (document.sourceFormat === 'virtual-files') {
@@ -264,6 +308,7 @@ export function buildExampleDocument(documentModel) {
     return buildLegacyMarkdown(document.blocks, document.metadata);
 }
 
-export function hasBlockingDiagnostics(documentModel) {
+/** Whether any structural diagnostic is an error (`blocking` is not consulted). */
+export function hasBlockingDiagnostics(documentModel: ExampleDocumentInput | null | undefined): boolean {
     return (documentModel?.diagnostics || []).some((diagnostic) => diagnostic.level === 'error');
 }

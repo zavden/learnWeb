@@ -1,4 +1,21 @@
+// Derived views of a document: the exercise config, the editorial metadata and stage, the shader config
+// and renderer mode, file visibility keys, and the legacy files derived from blocks. Each view re-reads
+// `metadata` on every call (nothing is cached), so they always match the document passed in. Public
+// through src/utils/markdown.ts; also used by documentApi.ts, parsers.ts and the validators.
+
 import { sortBlocks } from '../../config/exampleBlocks.ts';
+import type {
+    ExampleBlock,
+    ExampleDocumentInput,
+    ExampleEditorialMetadata,
+    ExampleMetadataInput,
+    ExampleStage,
+    ExerciseConfig,
+    FileVisibilityKey,
+    RendererMode,
+    ShaderConfig,
+    VirtualFile,
+} from '../../types/document.ts';
 import {
     EXAMPLE_STAGE_VALUES,
     EXERCISE_METADATA_KEYS,
@@ -27,7 +44,8 @@ import {
     parseShaderUniformMetadataValue,
 } from './shader.ts';
 
-export function hasExerciseMetadata(metadata = {}) {
+/** Whether any `exercise_*` key (not the `exercise` flag itself) has a value. */
+export function hasExerciseMetadata(metadata: ExampleMetadataInput = {}): boolean {
     return Array.from(EXERCISE_METADATA_KEYS).filter((key) => key !== 'exercise').some((key) => {
         const value = metadata[key];
         if (value === undefined || value === null) return false;
@@ -36,7 +54,8 @@ export function hasExerciseMetadata(metadata = {}) {
     });
 }
 
-export function getExerciseConfig(documentModel) {
+/** The exercise metadata parsed into lists (see `ExerciseConfig`); usable on any document. */
+export function getExerciseConfig(documentModel: ExampleDocumentInput | null | undefined): ExerciseConfig {
     const metadata = documentModel?.metadata || {};
     const instructions = parseExerciseTextListValue(metadata.exercise_instructions);
     const hints = parseExerciseTextListValue(metadata.exercise_hints);
@@ -71,12 +90,14 @@ export function getExerciseConfig(documentModel) {
     };
 }
 
-export function getExampleStage(documentModel) {
+/** `example_stage` when it is a valid stage, `''` otherwise. */
+export function getExampleStage(documentModel: ExampleDocumentInput | null | undefined): ExampleStage | '' {
     const stage = String(documentModel?.metadata?.example_stage || '').trim().toLowerCase();
-    return EXAMPLE_STAGE_VALUES.has(stage) ? stage : '';
+    return EXAMPLE_STAGE_VALUES.has(stage) ? stage as ExampleStage : '';
 }
 
-export function getExampleEditorialMetadata(documentModel) {
+/** Description, tags, rating and importance, normalized (invalid values read as empty). */
+export function getExampleEditorialMetadata(documentModel: ExampleDocumentInput | null | undefined): ExampleEditorialMetadata {
     const metadata = documentModel?.metadata || {};
     const parsedTags = parseExampleTagsMetadataValue(metadata.example_tags);
 
@@ -89,11 +110,13 @@ export function getExampleEditorialMetadata(documentModel) {
     };
 }
 
-export function hasShaderBlocks(blocks = []) {
+/** Whether any block is a vertex or fragment shader. */
+export function hasShaderBlocks(blocks: readonly ExampleBlock[] | null = []): boolean {
     return (blocks || []).some((block) => SHADER_BLOCK_TYPES.has(block.type));
 }
 
-export function inferRendererMode({ blocks = [], metadata = {}, sourceFormat = 'legacy-blocks' } = {}) {
+/** `shader` for legacy documents with `renderer: shader` or shader blocks; `web` otherwise (virtual files are always web). */
+export function inferRendererMode({ blocks = [], metadata = {}, sourceFormat = 'legacy-blocks' }: ExampleDocumentInput = {}): RendererMode {
     if (sourceFormat === 'legacy-blocks' && (metadata.renderer === 'shader' || hasShaderBlocks(blocks))) {
         return 'shader';
     }
@@ -101,7 +124,8 @@ export function inferRendererMode({ blocks = [], metadata = {}, sourceFormat = '
     return 'web';
 }
 
-export function getShaderConfig(documentModel) {
+/** The shader metadata parsed for the shader runtime and dialogs (see `ShaderConfig`); usable on any document. */
+export function getShaderConfig(documentModel: ExampleDocumentInput | null | undefined): ShaderConfig {
     const metadata = documentModel?.metadata || {};
     const blocks = documentModel?.blocks || [];
     const rendererMode = inferRendererMode({
@@ -140,11 +164,16 @@ export function getShaderConfig(documentModel) {
     };
 }
 
-export function isShaderDocument(documentModel) {
+/** Whether the document renders with the shader runtime. */
+export function isShaderDocument(documentModel: ExampleDocumentInput | null | undefined): boolean {
     return getShaderConfig(documentModel).enabled;
 }
 
-export function getDocumentFileVisibilityKey(file, files = []) {
+/**
+ * The file's key for `editor_hidden_files`: `file:<path>` for virtual files, `block:<type>:<n>` for the
+ * n-th legacy file of that block type among `files` (by `order` when the file is not in `files`).
+ */
+export function getDocumentFileVisibilityKey(file: VirtualFile | null | undefined, files: readonly VirtualFile[] = []): FileVisibilityKey {
     if (!file) return '';
 
     if (file.sourceKind === 'virtual') {
@@ -171,13 +200,14 @@ export function getDocumentFileVisibilityKey(file, files = []) {
     }
 
     const fallbackOrder = Number.isFinite(file?.order)
-        ? Number.parseInt(file.order, 10) + 1
+        ? Number.parseInt(String(file.order), 10) + 1
         : 1;
 
     return `block:${blockType}:${Math.max(1, fallbackOrder)}`;
 }
 
-export function deriveFilesFromBlocks(blocks = []) {
+/** One legacy file per block, in slot order, with the path and role of `LEGACY_FILE_TEMPLATES`. */
+export function deriveFilesFromBlocks(blocks: readonly ExampleBlock[] = []): VirtualFile[] {
     return sortBlocks(blocks).map((block, index) => {
         const template = LEGACY_FILE_TEMPLATES[block.type] || {
             path: `file-${index}.${block.language || block.type}`,
