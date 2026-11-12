@@ -83,7 +83,7 @@ import type {
     VimDefaultState,
     VimShortcutsResponse,
 } from './src/types/api.ts';
-import type { CompileErrorResponse, CompileRequest, CompileResponse, CompileResult } from './src/types/compile.ts';
+import type { CompileErrorResponse, CompileRequest, CompileResponse } from './src/types/compile.ts';
 import type { ExampleDocument } from './src/types/document.ts';
 import type { ExampleListState } from './src/types/material.ts';
 
@@ -666,8 +666,7 @@ app.post('/api/compile', async (req: Request<NoParams, unknown, Partial<CompileR
         }
 
         // Sass/Pug/TypeScript run in a worker thread with memory and time limits (see isolatedCompiler.ts).
-        // TODO(ts-migration): drop the assertion once compileExampleDocumentIsolated returns a CompileResult
-        const result = await compileExampleDocumentIsolated(sourceDocument) as CompileResult;
+        const result = await compileExampleDocumentIsolated(sourceDocument);
         const responsePayload: CompileResponse = {
             document: sourceDocument,
             compiledDocument: result.compiledDocument,

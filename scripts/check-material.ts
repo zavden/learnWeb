@@ -18,7 +18,6 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-import type { CompileResult } from '../src/types/compile.ts';
 import type { ExampleDocument } from '../src/types/document.ts';
 import { getExampleEditorialMetadata, getExampleStage, getExerciseConfig, parseExampleDocument } from '../src/utils/markdown.ts';
 import { extractTheoryExerciseReferences } from '../src/utils/theoryExerciseEmbeds.ts';
@@ -138,8 +137,7 @@ async function checkExample(topicDir: string, filename: string, context: TopicCo
     if ((documentModel.diagnostics || []).some((diagnostic) => diagnostic.level === 'error')) return;
     if (metadata.renderer === 'shader') return;
 
-    // TODO(ts-migration): drop the assertion once compileExampleDocumentIsolated returns a CompileResult
-    const result = await compileExampleDocumentIsolated(documentModel) as CompileResult;
+    const result = await compileExampleDocumentIsolated(documentModel);
     for (const diagnostic of result.compileDiagnostics || []) {
         const where = diagnostic.line && !/\bline \d/.test(diagnostic.message || '') ? ` (line ${diagnostic.line}${diagnostic.column ? `:${diagnostic.column}` : ''})` : '';
         const message = `compile: ${diagnostic.code}: ${diagnostic.message}${where}`;

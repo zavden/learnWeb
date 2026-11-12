@@ -2,13 +2,18 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import { isModuleScript } from '../renderer/scriptKind.ts';
 import { getSyntaxDiagnostics } from './loopGuard.ts';
+import type { SyntaxDiagnostic } from './types.ts';
 
 // Syntax errors of a learner's JavaScript, exactly as Chrome reports them: classic scripts are
 // compiled (never run) by V8 itself, so early errors like `const x;`, a repeated `let` or a
 // sloppy-mode octal literal behave as in the browser. Module scripts would need V8's experimental
 // module API, so they use the TypeScript parser instead (modules are strict, as TS assumes).
+// Used by scriptCompiler.ts for JavaScript blocks; whether a script is a module is decided exactly as
+// the preview decides it (src/utils/renderer/scriptKind.ts).
 
-function parseV8SyntaxError(error, fileName) {
+// V8 puts the location in the first line of the stack ("script.js:2") and marks the column with a
+// caret line ("      ^^^").
+function parseV8SyntaxError(error: Error, fileName: string): SyntaxDiagnostic {
     const stack = String(error?.stack || '');
     const lines = stack.split('\n');
     const location = new RegExp(`^${fileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:(\\d+)`).exec(lines[0] || '');
@@ -25,7 +30,7 @@ function parseV8SyntaxError(error, fileName) {
 // Chrome refuses to run the whole script ("Identifier 'top' has already been declared").
 const BROWSER_RESERVED_GLOBALS = new Set(['top', 'window', 'document', 'location']);
 
-function collectBindingNames(nameNode, found) {
+function collectBindingNames(nameNode: ts.BindingName | undefined, found: ts.Identifier[]): void {
     if (!nameNode) return;
     if (ts.isIdentifier(nameNode)) {
         found.push(nameNode);
@@ -38,10 +43,10 @@ function collectBindingNames(nameNode, found) {
     }
 }
 
-function findReservedGlobalDeclaration(code, fileName) {
+function findReservedGlobalDeclaration(code: string, fileName: string): SyntaxDiagnostic | null {
     const sourceFile = ts.createSourceFile(fileName, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
     for (const statement of sourceFile.statements) {
-        const names = [];
+        const names: ts.Identifier[] = [];
         if (ts.isVariableStatement(statement) && (statement.declarationList.flags & ts.NodeFlags.BlockScoped)) {
             for (const declaration of statement.declarationList.declarations) collectBindingNames(declaration.name, names);
         } else if (ts.isClassDeclaration(statement) && statement.name) {
@@ -60,7 +65,17 @@ function findReservedGlobalDeclaration(code, fileName) {
     return null;
 }
 
-export function checkJavaScriptSyntax(source = '', { fileName = 'script.js' } = {}) {
+/** `checkJavaScriptSyntax()` options. */
+export interface CheckJavaScriptSyntaxOptions {
+    /** Name V8 uses in the stack trace; the location is read back from it. */
+    fileName?: string;
+}
+
+/**
+ * The syntax errors Chrome would report for this script (at most one for classic scripts, as V8 stops at
+ * the first); `[]` for valid or empty code. The code is compiled, never executed.
+ */
+export function checkJavaScriptSyntax(source: string = '', { fileName = 'script.js' }: CheckJavaScriptSyntaxOptions = {}): SyntaxDiagnostic[] {
     const code = String(source ?? '');
     if (!code.trim()) return [];
 
@@ -72,8 +87,9 @@ export function checkJavaScriptSyntax(source = '', { fileName = 'script.js' } = 
         // Compiling only: the code is never executed.
         new vm.Script(code, { filename: fileName });
     } catch (error) {
-        if (!(error instanceof SyntaxError) && error?.name !== 'SyntaxError') return [];
-        return [parseV8SyntaxError(error, fileName)];
+        // `vm` errors are V8 SyntaxErrors; the name check also accepts one from another realm.
+        if (!(error instanceof SyntaxError) && (error as Error)?.name !== 'SyntaxError') return [];
+        return [parseV8SyntaxError(error as Error, fileName)];
     }
     const reservedGlobal = findReservedGlobalDeclaration(code, fileName);
     return reservedGlobal ? [reservedGlobal] : [];

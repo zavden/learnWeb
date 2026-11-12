@@ -3,14 +3,16 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import type { Diagnostic } from '../src/types/diagnostics.ts';
+import type { ExampleDocument } from '../src/types/document.ts';
 import { parseExampleDocument } from '../src/utils/markdown.ts';
 import { compileExampleDocument } from '../src/utils/exampleCompiler.ts';
 
-function getErrorDiagnostics(diagnostics = []) {
+function getErrorDiagnostics(diagnostics: Diagnostic[] = []): Diagnostic[] {
     return diagnostics.filter((diagnostic) => diagnostic.level === 'error');
 }
 
-function loadExampleDocument(relativePath) {
+function loadExampleDocument(relativePath: string): ExampleDocument {
     const absolutePath = path.resolve(process.cwd(), relativePath);
     const content = fs.readFileSync(absolutePath, 'utf-8');
     return parseExampleDocument(content);

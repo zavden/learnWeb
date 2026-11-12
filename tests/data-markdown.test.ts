@@ -15,7 +15,6 @@ import {
 } from '../src/utils/markdown.ts';
 import { parseMetadataValue, serializeMetadataValue } from '../src/utils/markdown/core.ts';
 import { compileExampleDocument } from '../src/utils/exampleCompiler.ts';
-import type { CompileResult } from '../src/types/compile.ts';
 import type { ExampleDocument } from '../src/types/document.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -85,8 +84,7 @@ test('"# HTML-FULL" with an html fence is an html-full block and roundtrips unch
     assert.deepEqual(getCodes(documentModel), []);
     assert.equal(buildExampleDocument(documentModel), source);
 
-    // TODO(ts-migration): drop the assertion once compileExampleDocument returns a CompileResult
-    const compiled = await compileExampleDocument(documentModel) as CompileResult;
+    const compiled = await compileExampleDocument(documentModel);
     assert.match(compiled.compiledDocument.fullDocumentHtml!, /<p>full<\/p>/);
 });
 
@@ -101,8 +99,7 @@ test('html-full fences keep working and repo HTML-FULL examples render as full d
         const repoDocument = parseExampleDocument(repoSource);
         assert.equal(repoDocument.blocks[0].type, 'html-full');
         assert.equal(buildExampleDocument(repoDocument), repoSource.trimEnd());
-        // TODO(ts-migration): drop the assertion once compileExampleDocument returns a CompileResult
-        const compiled = await compileExampleDocument(repoDocument) as CompileResult;
+        const compiled = await compileExampleDocument(repoDocument);
         assert.ok(compiled.compiledDocument.fullDocumentHtml!.length > 0);
     }
 });

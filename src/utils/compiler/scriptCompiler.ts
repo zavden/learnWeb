@@ -1,20 +1,61 @@
+// Script step of plain examples (called by src/utils/exampleCompiler.ts):
+// - JavaScript: syntax check (syntaxCheck.ts, as Chrome would report it), loop guards, `//# sourceURL=`;
+// - TypeScript: `ts.transpileModule` (strict mode, ES2022, inline source map), loop guards, type check
+//   (typeChecker.ts; non-blocking `typescript-type` warnings/errors, skipped with `typecheck: false`) and
+//   `jsView`, the JavaScript as a learner would see it from `tsc` (the read-only `compiled.js` tab).
+// Loop guards are only inserted into code that parses, so they never move a real syntax error.
+
 import ts from 'typescript';
+import type { Diagnostic } from '../../types/diagnostics.ts';
+import { errorMessage } from '../errors.ts';
 import { createCompileDiagnostic, normalizeSourcePath } from './helpers.ts';
 import { addLoopGuards } from './loopGuard.ts';
 import { checkJavaScriptSyntax } from './syntaxCheck.ts';
 import { typeCheckTypeScript } from './typeChecker.ts';
+import type { CompilerBlock } from './types.ts';
 
-function formatTsDiagnostic(diagnostic) {
+/** `compileScript()` output. */
+export interface ScriptCompileResult {
+    /**
+     * The code to run: loop-guarded unless disabled, with `//# sourceURL=<path>` (JavaScript) or an inline
+     * source map (TypeScript). JavaScript with syntax errors is returned as written.
+     */
+    js: string;
+    /**
+     * TypeScript only: the transpiled code without loop guards or source map (`''` when it has syntax
+     * errors). Absent for JavaScript.
+     */
+    jsView?: string;
+    diagnostics: Diagnostic[];
+}
+
+/** `compileScript()` options. */
+export interface CompileScriptOptions {
+    /** Document path of the script (`script.js`, `script.ts`): names it in diagnostics and stack traces. */
+    sourcePath?: string;
+    /** Insert infinite-loop guards (default `true`; `loop_protect: false` turns it off). */
+    loopProtect?: boolean;
+    /** Type-check TypeScript (default `true`; `typecheck: false` turns it off). */
+    typeCheck?: boolean;
+}
+
+interface GuardLoopsOptions {
+    enabled: boolean;
+    fileName: string;
+    scriptKind: ts.ScriptKind;
+}
+
+function formatTsDiagnostic(diagnostic: ts.Diagnostic): string {
     return ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
 }
 
-function appendSourceUrl(js = '', sourcePath = '') {
+function appendSourceUrl(js: string = '', sourcePath: string = ''): string {
     if (!js || !sourcePath) return js || '';
     if (/sourceURL=|sourceMappingURL=/i.test(js)) return js;
     return `${js}\n//# sourceURL=${sourcePath}`;
 }
 
-function guardLoops(source, { enabled, fileName, scriptKind }) {
+function guardLoops(source: string, { enabled, fileName, scriptKind }: GuardLoopsOptions): string {
     if (!enabled) return source;
     try {
         return addLoopGuards(source, { fileName, scriptKind }).code;
@@ -24,7 +65,7 @@ function guardLoops(source, { enabled, fileName, scriptKind }) {
     }
 }
 
-function compileJavaScript(block, { sourcePath, loopProtect }) {
+function compileJavaScript(block: CompilerBlock, { sourcePath, loopProtect }: { sourcePath: string; loopProtect: boolean }): ScriptCompileResult {
     const filePath = normalizeSourcePath(sourcePath, 'script.js');
     const source = block.content || '';
     const syntaxDiagnostics = checkJavaScriptSyntax(source, { fileName: filePath });
@@ -53,10 +94,10 @@ function compileJavaScript(block, { sourcePath, loopProtect }) {
     };
 }
 
-function compileTypeScript(block, { sourcePath, loopProtect, typeCheck }) {
+function compileTypeScript(block: CompilerBlock, { sourcePath, loopProtect, typeCheck }: Required<CompileScriptOptions>): ScriptCompileResult {
     const filePath = normalizeSourcePath(sourcePath, 'script.ts');
     const source = block.content || '';
-    const transpileOptions = {
+    const transpileOptions: ts.TranspileOptions = {
         compilerOptions: {
             // Like `tsc --strict`: scripts without imports/exports get "use strict" (modules already are),
             // so the code runs with the semantics the type checker assumes (writes to frozen objects throw…).
@@ -121,7 +162,7 @@ function compileTypeScript(block, { sourcePath, loopProtect, typeCheck }) {
             diagnostics.push(createCompileDiagnostic(
                 'warning',
                 'typescript-typecheck-failed',
-                `Type checking failed: ${error?.message || error}`,
+                `Type checking failed: ${errorMessage(error)}`,
                 { blocking: false, slot: 'script', type: 'typescript' }
             ));
         }
@@ -136,11 +177,15 @@ function compileTypeScript(block, { sourcePath, loopProtect, typeCheck }) {
     };
 }
 
-function stripSourceMapComment(code = '') {
+function stripSourceMapComment(code: string = ''): string {
     return String(code || '').replace(/\n?\/\/# sourceMappingURL=\S*\s*$/, '\n');
 }
 
-export function compileScript(block, { sourcePath = '', loopProtect = true, typeCheck = true } = {}) {
+/**
+ * Compiles the script block of a plain example (`javascript` or `typescript`); `null` (no script block)
+ * gives empty output, any other block type an `unsupported-script-compiler` error.
+ */
+export function compileScript(block: CompilerBlock | null, { sourcePath = '', loopProtect = true, typeCheck = true }: CompileScriptOptions = {}): ScriptCompileResult {
     if (!block) {
         return {
             js: '',

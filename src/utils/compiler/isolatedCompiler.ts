@@ -1,32 +1,52 @@
-import { Worker } from 'worker_threads';
+import { Worker, type ResourceLimits } from 'worker_threads';
+import type { CompileResult, CompileSourceDocument } from '../../types/compile.ts';
+import type { BlockSlot } from '../../types/document.ts';
+import type { CompileThreadMessage, CompileThreadRequest } from './types.ts';
 
 // Compiles example documents in a single long-lived worker thread with a memory cap and a
 // per-job timeout. Jobs run one at a time (one CPU core at most). When a job hangs or runs out
 // of memory the worker is terminated, the job gets a diagnostic, and a fresh worker is started
 // lazily for the next job.
+//
+// Used by server.ts (`POST /api/compile`, warmed up at start) and scripts/check-material.ts and
+// scripts/snapshot-material.ts (which call `shutdownIsolatedCompiler()` so the process can exit). The
+// worker runs compileWorkerThread.ts; messages follow `CompileThreadRequest`/`CompileThreadMessage`.
+// Invariant: `worker` and `workerReady` are set and cleared together.
 
 const WORKER_URL = new URL('./compileWorkerThread.ts', import.meta.url);
 const JOB_TIMEOUT_MS = 5000;
 const WORKER_BOOT_TIMEOUT_MS = 20000;
-const RESOURCE_LIMITS = {
+const RESOURCE_LIMITS: ResourceLimits = {
     maxOldGenerationSizeMb: 384,
     maxYoungGenerationSizeMb: 48,
 };
 
-let worker = null;
-let workerReady = null;
-let nextJobId = 0;
-let activeJob = null;
-const queue = [];
+/** A queued compilation and the callbacks of the promise `compileExampleDocumentIsolated()` returned. */
+interface CompileJob {
+    document: CompileSourceDocument;
+    id: number;
+    /** Only for failures of the worker itself (it did not start); compile problems resolve with diagnostics. */
+    reject: (reason?: unknown) => void;
+    resolve: (result: CompileResult) => void;
+    /** The job's timeout, set once it is sent to the worker. */
+    timer?: ReturnType<typeof setTimeout>;
+}
 
-function getSlotForFailure(sourceDocument) {
+let worker: Worker | null = null;
+let workerReady: Promise<void> | null = null;
+let nextJobId = 0;
+let activeJob: CompileJob | null = null;
+const queue: CompileJob[] = [];
+
+// The diagnostic of a stopped job points at the block most likely to blame (Sass, then Pug, else the script).
+function getSlotForFailure(sourceDocument: CompileSourceDocument | null | undefined): BlockSlot {
     const blocks = sourceDocument?.blocks || [];
     if (blocks.some((block) => block.type === 'scss' || block.type === 'sass')) return 'style';
     if (blocks.some((block) => block.type === 'pug')) return 'markup';
     return 'script';
 }
 
-function buildFailureResult(code, message, sourceDocument) {
+function buildFailureResult(code: string, message: string, sourceDocument: CompileSourceDocument): CompileResult {
     return {
         compiledDocument: { css: '', html: '', js: '' },
         compileDiagnostics: [
@@ -35,13 +55,13 @@ function buildFailureResult(code, message, sourceDocument) {
     };
 }
 
-function startWorker() {
+function startWorker(): Worker {
     const instance = new Worker(WORKER_URL, { resourceLimits: RESOURCE_LIMITS });
     worker = instance;
 
-    workerReady = new Promise((resolve, reject) => {
+    workerReady = new Promise<void>((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error('Compile worker did not start in time.')), WORKER_BOOT_TIMEOUT_MS);
-        instance.once('message', (message) => {
+        instance.once('message', (message: CompileThreadMessage) => {
             if (message?.type === 'ready') {
                 clearTimeout(timer);
                 resolve();
@@ -55,7 +75,7 @@ function startWorker() {
     // Rejections are handled where the promise is awaited; avoid unhandled-rejection noise.
     workerReady.catch(() => {});
 
-    instance.on('message', (message) => {
+    instance.on('message', (message: CompileThreadMessage) => {
         if (!activeJob || message?.id !== activeJob.id) return;
         const job = activeJob;
         finishActiveJob();
@@ -66,7 +86,7 @@ function startWorker() {
         }
     });
 
-    instance.on('error', (error) => {
+    instance.on('error', (error: NodeJS.ErrnoException) => {
         if (worker !== instance) return;
         const outOfMemory = error?.code === 'ERR_WORKER_OUT_OF_MEMORY';
         failActiveJob(
@@ -87,20 +107,21 @@ function startWorker() {
     return instance;
 }
 
-function finishActiveJob() {
+function finishActiveJob(): void {
     if (activeJob?.timer) clearTimeout(activeJob.timer);
     activeJob = null;
     setImmediate(runNextJob);
 }
 
-function discardWorker() {
+function discardWorker(): void {
     const instance = worker;
     worker = null;
     workerReady = null;
     if (instance) instance.terminate().catch(() => {});
 }
 
-function failActiveJob(code, message) {
+/** Ends the running job with a failure result (the diagnostic `code`/`message`) and throws its worker away. */
+function failActiveJob(code: string, message: string): void {
     if (!activeJob) return;
     const job = activeJob;
     discardWorker();
@@ -108,10 +129,10 @@ function failActiveJob(code, message) {
     job.resolve(buildFailureResult(code, message, job.document));
 }
 
-async function runNextJob() {
+async function runNextJob(): Promise<void> {
     if (activeJob || queue.length === 0) return;
 
-    const job = queue.shift();
+    const job = queue.shift()!; // not empty: checked above
     activeJob = job;
 
     try {
@@ -135,22 +156,33 @@ async function runNextJob() {
         );
     }, JOB_TIMEOUT_MS);
 
-    worker.postMessage({ document: job.document, id: job.id, type: 'compile' });
+    worker.postMessage({ document: job.document, id: job.id, type: 'compile' } satisfies CompileThreadRequest);
 }
 
-export function compileExampleDocumentIsolated(sourceDocument) {
-    return new Promise((resolve, reject) => {
+/**
+ * Compiles a document in the worker thread (queued behind earlier calls). A timeout, an out-of-memory
+ * stop or a crash resolves with an empty compiled document and one error diagnostic
+ * (`compile-timeout`, `compile-out-of-memory`, `compile-worker-crashed`). It rejects only when the
+ * worker cannot start or the compiler threw.
+ */
+export function compileExampleDocumentIsolated(sourceDocument: CompileSourceDocument): Promise<CompileResult> {
+    return new Promise<CompileResult>((resolve, reject) => {
         queue.push({ document: sourceDocument, id: ++nextJobId, reject, resolve });
         runNextJob();
     });
 }
 
-export function warmUpIsolatedCompiler() {
+/** Starts the worker ahead of the first job (it takes a moment to load the compilers); resolves when it is ready. */
+export function warmUpIsolatedCompiler(): Promise<void> {
     if (!worker) startWorker();
-    return workerReady;
+    return workerReady!; // set together with `worker`
 }
 
-export async function shutdownIsolatedCompiler() {
+/**
+ * Terminates the worker so a script's process can exit. Call it once no compilation is pending: a job
+ * still running when the worker goes away is never settled.
+ */
+export async function shutdownIsolatedCompiler(): Promise<void> {
     const instance = worker;
     worker = null;
     workerReady = null;

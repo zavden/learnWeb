@@ -1,4 +1,14 @@
+// esbuild plugins that serve in-memory files to the React and Vue compilers (nothing is read from or
+// written to disk):
+// - `createInlineModulesPlugin`: the few generated modules of a single-file React/Vue build, in the
+//   `learncode-inline` namespace;
+// - `createVirtualFilesPlugin`: the files of a multi-file project, in the `learncode-virtual` namespace,
+//   with Node-like resolution of extensionless and `index` imports.
+// Bare imports (`react`, `vue`) fall through to esbuild's normal resolution from `process.cwd()`, so they
+// come from the app's own node_modules. The namespace prefixes the file names in build errors.
+
 import path from 'path';
+import type { Plugin } from 'esbuild';
 import {
     VIRTUAL_NAMESPACE,
     VIRTUAL_EXTENSIONS,
@@ -6,8 +16,10 @@ import {
     inferLoader,
     normalizeVirtualPath,
 } from './helpers.ts';
+import type { InlineModule, VirtualModule } from './types.ts';
 
-export function createInlineModulesPlugin(files = new Map(), entryPath = 'entry.js') {
+/** Serves `files` (path → module) to a build whose entry point is `entryPath`; relative imports resolve between them. */
+export function createInlineModulesPlugin(files: ReadonlyMap<string, InlineModule> = new Map(), entryPath: string = 'entry.js'): Plugin {
     return {
         name: 'learncode-inline-modules',
         setup(buildContext) {
@@ -53,7 +65,12 @@ export function createInlineModulesPlugin(files = new Map(), entryPath = 'entry.
     };
 }
 
-export function resolveVirtualImport(specifier, importerPath, fileMap) {
+/**
+ * The project path an import resolves to: the path itself, then with each of `VIRTUAL_EXTENSIONS`, then
+ * as a folder with an `index` file. Relative specifiers resolve from the importer's folder. `null` when
+ * no project file matches.
+ */
+export function resolveVirtualImport(specifier: string, importerPath: string, fileMap: ReadonlyMap<string, VirtualModule>): string | null {
     const basePath = importerPath ? path.posix.dirname(importerPath) : '';
     const rawCandidate = specifier.startsWith('.')
         ? path.posix.normalize(path.posix.join(basePath, specifier))
@@ -68,7 +85,11 @@ export function resolveVirtualImport(specifier, importerPath, fileMap) {
     return candidates.find((candidate) => fileMap.has(candidate)) || null;
 }
 
-export function createVirtualFilesPlugin(fileMap, entryPath) {
+/**
+ * Serves the files of a multi-file project (`fileMap`: normalized path → module) to a build whose entry
+ * point is `VIRTUAL_ENTRY`, mapped to `entryPath`.
+ */
+export function createVirtualFilesPlugin(fileMap: ReadonlyMap<string, VirtualModule>, entryPath: string): Plugin {
     return {
         name: 'learncode-virtual-files',
         setup(buildContext) {

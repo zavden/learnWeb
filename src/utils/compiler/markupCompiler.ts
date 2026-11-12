@@ -1,8 +1,37 @@
+// Markup step of plain examples (called by src/utils/exampleCompiler.ts): HTML and SVG pass through,
+// HTML-FULL becomes `fullDocumentHtml`, Pug is rendered with pug. Inline `<script>` loops then get the
+// infinite-loop guards of loopGuard.ts (without changing the line count) unless `loopProtect` is false.
+
 import pug from 'pug';
+import type { Diagnostic } from '../../types/diagnostics.ts';
 import { createCompileDiagnostic } from './helpers.ts';
 import { addLoopGuardsToHtml } from './loopGuard.ts';
+import type { CompilerBlock } from './types.ts';
 
-export function compileMarkup(block, { loopProtect = true } = {}) {
+/** `compileMarkup()` output. */
+export interface MarkupCompileResult {
+    /** Body markup: HTML/SVG as written or the rendered Pug; `''` for HTML-FULL and on errors. */
+    html: string;
+    /** The HTML-FULL document; `''` for every other markup type. */
+    fullDocumentHtml: string;
+    diagnostics: Diagnostic[];
+}
+
+/** `compileMarkup()` options. */
+export interface CompileMarkupOptions {
+    /** Add infinite-loop guards to inline scripts (default `true`; `loop_protect: false` turns it off). */
+    loopProtect?: boolean;
+}
+
+/** What pug attaches to the errors it throws: 1-based `line`/`column` and the bare message in `msg`. */
+interface PugCompileError extends Error {
+    msg?: string;
+    line?: number;
+    column?: number;
+}
+
+/** Compiles the markup block of a plain example; `null` (no markup block) gives empty output. */
+export function compileMarkup(block: CompilerBlock | null, { loopProtect = true }: CompileMarkupOptions = {}): MarkupCompileResult {
     const result = compileMarkupSource(block);
     if (!loopProtect) return result;
     return {
@@ -12,7 +41,7 @@ export function compileMarkup(block, { loopProtect = true } = {}) {
     };
 }
 
-function compileMarkupSource(block) {
+function compileMarkupSource(block: CompilerBlock | null): MarkupCompileResult {
     if (!block) {
         return {
             html: '',
@@ -46,9 +75,10 @@ function compileMarkupSource(block) {
                 fullDocumentHtml: '',
                 diagnostics: [],
             };
-        } catch (error) {
-            const line = Number.isFinite(error?.line) ? error.line : null;
-            const column = Number.isFinite(error?.column) ? error.column : null;
+        } catch (caught) {
+            const error = caught as PugCompileError | null;
+            const line = Number.isFinite(error?.line) ? error!.line : null;
+            const column = Number.isFinite(error?.column) ? error!.column : null;
             const message = String(error?.msg || error?.message || 'Failed to compile Pug.').trim();
             return {
                 html: '',

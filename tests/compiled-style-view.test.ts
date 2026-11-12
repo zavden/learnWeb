@@ -1,8 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import type { CompileResult } from '../src/types/compile.ts';
+import type { Diagnostic } from '../src/types/diagnostics.ts';
+import type { ExampleDocument } from '../src/types/document.ts';
 import { compileExampleDocument } from '../src/utils/exampleCompiler.ts';
 import {
+    type GeneratedCodeFile,
     buildCompiledScriptFiles,
     buildCompiledStyleFiles,
     formatSassMessages,
@@ -11,7 +15,7 @@ import {
 import { parseExampleDocument } from '../src/utils/markdown.ts';
 import { renderTheoryCodeEmbedMarkup } from '../src/utils/theoryExerciseEmbeds.ts';
 
-function scssExample(scss) {
+function scssExample(scss: string): ExampleDocument {
     return parseExampleDocument(`---
 example_stage: minimal
 ---
@@ -30,7 +34,7 @@ ${scss}
 `);
 }
 
-async function generatedFilesFor(scss) {
+async function generatedFilesFor(scss: string): Promise<GeneratedCodeFile[]> {
     const documentModel = scssExample(scss);
     return buildCompiledStyleFiles(documentModel, await compileExampleDocument(documentModel));
 }
@@ -54,7 +58,8 @@ test('a Sass compile error shows only the compiler message, without line suffix'
 
 test('@warn lines are labeled and plain CSS examples get no generated files', async () => {
     assert.deepEqual(
-        formatSassMessages([{ code: 'sass-warning', line: 4, message: 'Usa $size en px' }]),
+        // The diagnostic has no `level`: only `code`, `line` and `message` matter here.
+        formatSassMessages([{ code: 'sass-warning', line: 4, message: 'Usa $size en px' }] as Diagnostic[]),
         ['styles.scss:4 @warn: Usa $size en px']
     );
 
@@ -80,7 +85,7 @@ test('generated tabs follow the Sass tab and are marked in the code embed', asyn
 test('messages from inside a mixin carry the call stack, and compiler timeouts count as errors', async () => {
     const files = await generatedFilesFor('@mixin size($name) {\n  @if $name != small { @warn "Tamaño desconocido: #{$name}"; }\n}\n.note {\n  @include size(huge);\n}');
     assert.equal(
-        files.find((file) => file.path === 'sass-output.txt').content,
+        files.find((file) => file.path === 'sass-output.txt')!.content,
         'styles.scss:5 @warn: Tamaño desconocido: huge\n    styles.scss 2:24  size()\n    styles.scss 5:3   root stylesheet'
     );
 
@@ -88,7 +93,7 @@ test('messages from inside a mixin carry the call stack, and compiler timeouts c
     const timedOut = buildCompiledStyleFiles(scssDocument, {
         compileDiagnostics: [{ code: 'compile-timeout', level: 'error', message: 'Compilation took longer than 5s and was stopped.' }],
         compiledDocument: { css: '' },
-    });
+    } as CompileResult); // a partial compiled document: only `css` is read
     assert.deepEqual(timedOut.map((file) => file.path), ['sass-output.txt']);
     assert.equal(timedOut[0].content, 'styles.scss Error: Compilation took longer than 5s and was stopped.');
 });

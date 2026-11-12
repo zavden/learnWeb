@@ -1,6 +1,17 @@
+// React compilers (called by src/utils/exampleCompiler.ts for `framework: react`). Both bundle with
+// esbuild into one development IIFE (automatic JSX runtime, inline source map) that mounts on
+// `<div id="root">`; React itself comes from the app's node_modules.
+// - Single file (legacy blocks): a JSX/TSX `app` block that defines `App` (no imports or exports) plus
+//   an optional style block; a generated entry renders `<App />`.
+// - Multi-file (virtual files): the project's files, starting at the `entry` metadata; SCSS/Sass files
+//   are compiled to CSS before bundling, CSS imports end up in the bundle's CSS.
+
 import path from 'path';
-import { build } from 'esbuild';
+import { build, type BuildFailure } from 'esbuild';
 import * as sass from 'sass';
+import type { CompileResult, CompileSourceDocument } from '../../types/compile.ts';
+import type { Diagnostic } from '../../types/diagnostics.ts';
+import type { VirtualFile } from '../../types/document.ts';
 import {
     VIRTUAL_ENTRY,
     createCompileDiagnostic,
@@ -10,9 +21,10 @@ import {
     getFileBySlot,
 } from './helpers.ts';
 import { compileStyle } from './styleCompiler.ts';
+import type { CompilerBlock, InlineModule, ProjectModule } from './types.ts';
 import { createVirtualFilesPlugin, createInlineModulesPlugin } from './virtualFilesPlugin.ts';
 
-function buildReactSingleFileEntry(appImportPath) {
+function buildReactSingleFileEntry(appImportPath: string): string {
     return `
 import React from 'react';
 import { createRoot } from 'react-dom/client';
@@ -31,8 +43,8 @@ root.render(React.createElement(App));
 `;
 }
 
-function validateReactSingleFileAppBlock(appBlock) {
-    const diagnostics = [];
+function validateReactSingleFileAppBlock(appBlock: CompilerBlock | null): Diagnostic[] {
+    const diagnostics: Diagnostic[] = [];
     const source = appBlock?.content || '';
 
     if (!appBlock) {
@@ -83,7 +95,14 @@ function validateReactSingleFileAppBlock(appBlock) {
     return diagnostics;
 }
 
-async function buildReactSingleFileBundle({ appSource, appPath, loader }) {
+interface ReactSingleFileBundleInput {
+    appSource: string;
+    /** Document path of the app block (`App.jsx`); `react-example.<loader>` when empty. */
+    appPath: string;
+    loader: 'jsx' | 'tsx';
+}
+
+async function buildReactSingleFileBundle({ appSource, appPath, loader }: ReactSingleFileBundleInput): Promise<{ js: string; css: string }> {
     const entryPath = '__learncode_react_single__/entry.js';
     const normalizedAppPath = normalizeSourcePath(appPath, `react-example.${loader}`);
     const appImportPath = `./${path.posix.relative(
@@ -91,7 +110,7 @@ async function buildReactSingleFileBundle({ appSource, appPath, loader }) {
         normalizedAppPath,
     )}`;
 
-    const files = new Map([
+    const files = new Map<string, InlineModule>([
         [
             entryPath,
             {
@@ -137,7 +156,11 @@ async function buildReactSingleFileBundle({ appSource, appPath, loader }) {
     };
 }
 
-export async function compileReactSingleFileDocument(sourceDocument) {
+/**
+ * Compiles a single-file React example (an `app` block and an optional style block). Validation and
+ * build errors leave `js` empty; the style block's CSS is kept so the page still gets its styles.
+ */
+export async function compileReactSingleFileDocument(sourceDocument: CompileSourceDocument): Promise<CompileResult> {
     const appBlock = getBlockBySlot(sourceDocument, 'app');
     const styleBlock = getBlockBySlot(sourceDocument, 'style');
     const styleResult = compileStyle(styleBlock);
@@ -161,9 +184,10 @@ export async function compileReactSingleFileDocument(sourceDocument) {
     try {
         const appFile = getFileBySlot(sourceDocument, 'app');
         const bundle = await buildReactSingleFileBundle({
-            appSource: appBlock.content || '',
+            // The app block exists: without one, validation reported an error and we returned above.
+            appSource: appBlock!.content || '',
             appPath: appFile?.path || '',
-            loader: appBlock.type === 'tsx' ? 'tsx' : 'jsx',
+            loader: appBlock!.type === 'tsx' ? 'tsx' : 'jsx',
         });
 
         return {
@@ -178,7 +202,9 @@ export async function compileReactSingleFileDocument(sourceDocument) {
                 ...appDiagnostics,
             ],
         };
-    } catch (error) {
+    } catch (caught) {
+        // esbuild throws a BuildFailure (one entry in `errors` per problem); anything else only has a message.
+        const error = caught as Partial<BuildFailure>;
         const diagnostics = (error.errors || []).map((entry) => createCompileDiagnostic(
             'error',
             'react-build-error',
@@ -218,9 +244,10 @@ export async function compileReactSingleFileDocument(sourceDocument) {
     }
 }
 
-function createVirtualReactFileMap(files = []) {
-    const diagnostics = [];
-    const map = new Map();
+/** The project files keyed by normalized path, with SCSS/Sass compiled to CSS (a failed file becomes empty). */
+function createVirtualReactFileMap(files: readonly VirtualFile[] = []): { diagnostics: Diagnostic[]; map: Map<string, ProjectModule> } {
+    const diagnostics: Diagnostic[] = [];
+    const map = new Map<string, ProjectModule>();
 
     files.forEach((file) => {
         const virtualPath = normalizeVirtualPath(file.path);
@@ -240,7 +267,7 @@ function createVirtualReactFileMap(files = []) {
                     createCompileDiagnostic(
                         'error',
                         'sass-compile-error',
-                        error.message || `Failed to compile "${virtualPath}".`,
+                        (error as Error).message || `Failed to compile "${virtualPath}".`,
                         { file: virtualPath, type: language }
                     )
                 );
@@ -259,7 +286,11 @@ function createVirtualReactFileMap(files = []) {
     return { diagnostics, map };
 }
 
-export async function compileReactMultiFileDocument(sourceDocument) {
+/**
+ * Compiles a multi-file React project from its `entry` file. A missing entry or a build error leaves
+ * `css` and `js` empty; Sass errors are reported but the build still runs without that file's CSS.
+ */
+export async function compileReactMultiFileDocument(sourceDocument: CompileSourceDocument): Promise<CompileResult> {
     const files = sourceDocument.files || [];
     const entryPath = normalizeVirtualPath(sourceDocument?.metadata?.entry || '');
     const { diagnostics: fileDiagnostics, map: fileMap } = createVirtualReactFileMap(files);
@@ -317,7 +348,9 @@ export async function compileReactMultiFileDocument(sourceDocument) {
             },
             compileDiagnostics: fileDiagnostics,
         };
-    } catch (error) {
+    } catch (caught) {
+        // esbuild throws a BuildFailure (one entry in `errors` per problem); anything else only has a message.
+        const error = caught as Partial<BuildFailure>;
         const buildDiagnostics = (error.errors || []).map((entry) => createCompileDiagnostic(
             'error',
             'react-build-error',

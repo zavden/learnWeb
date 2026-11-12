@@ -46,7 +46,7 @@ import { compileExampleDocumentIsolated, shutdownIsolatedCompiler } from '../src
 import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../src/utils/exampleRenderer.ts';
 import { buildMaterialTree } from '../src/utils/materialTree.ts';
 import { errorMessage } from '../src/utils/errors.ts';
-import type { CompileRequest, CompileResponse, CompileResult } from '../src/types/compile.ts';
+import type { CompileRequest, CompileResponse } from '../src/types/compile.ts';
 import type { ExampleDocument } from '../src/types/document.ts';
 import type { TheoryExerciseEmbeds } from '../src/types/theory.ts';
 import { buildRuntimeBridgeScriptBody } from '../src/utils/renderer/runtimeBridge.ts';
@@ -119,8 +119,7 @@ const compileCache = new Map<string, Promise<CompileResponse>>();
 function compileDocument(documentModel: ExampleDocument): Promise<CompileResponse> {
     const cacheKey = createCompileCacheKey({ document: documentModel });
     if (!compileCache.has(cacheKey)) {
-        // TODO(ts-migration): drop the assertion once compileExampleDocumentIsolated returns a CompileResult
-        const compiled = compileExampleDocumentIsolated(documentModel) as Promise<CompileResult>;
+        const compiled = compileExampleDocumentIsolated(documentModel);
         compileCache.set(cacheKey, compiled.then((result) => ({
             document: documentModel,
             compiledDocument: result.compiledDocument,

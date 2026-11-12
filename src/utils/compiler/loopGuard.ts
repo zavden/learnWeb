@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import type { SyntaxDiagnostic } from './types.ts';
 
 // Inserts a time-based guard into every loop of a learner's script so an accidental infinite
 // loop (very easy to create while typing, since the preview re-renders on every pause) stops
@@ -7,8 +8,15 @@ import ts from 'typescript';
 // Every insertion stays on the line of the loop it belongs to, and the guard helper is appended
 // as one extra line after the learner's code, so error line numbers and source maps keep pointing
 // at the learner's own lines.
+//
+// Used by scriptCompiler.ts (script blocks) and markupCompiler.ts (inline <script> tags, through
+// `addLoopGuardsToHtml`); syntaxCheck.ts reuses `getSyntaxDiagnostics` for module scripts. The preview
+// runtime installs its own copy of the helper for inline scripts (src/utils/renderer/runtimeBridgeRuntime.ts):
+// keep both in sync.
 
+/** Name of the guard helper the inserted checks call (and of the global the preview runtime installs). */
 export const LOOP_GUARD_NAME = '__lwLoop';
+/** How long a loop may keep the page busy before the guard throws. */
 export const LOOP_GUARD_LIMIT_MS = 1200;
 
 // A single hoisted function declaration (no top-level statements), so it is already usable
@@ -22,7 +30,40 @@ const GUARD_HELPER = `function ${LOOP_GUARD_NAME}(l){var g=${LOOP_GUARD_NAME};`
     + `it kept running for more than ${LOOP_GUARD_LIMIT_MS / 1000}s without letting the page update, so LearnWeb stopped it. `
     + `(Add "loop_protect: false" to the example frontmatter to disable this guard.)';return true;}`;
 
-function isLoop(node) {
+/** `addLoopGuards()` options. */
+export interface AddLoopGuardsOptions {
+    /** Only used by the TypeScript parser (and its messages). */
+    fileName?: string;
+    /** How to parse the code (`JS` by default, `TS` for TypeScript blocks). */
+    scriptKind?: ts.ScriptKind;
+    /** Append the guard helper after the code (default). Inline `<script>` tags use the runtime's global helper. */
+    appendHelper?: boolean;
+    /** Added to the line numbers in the guard messages (lines before an inline script in its HTML document). */
+    lineOffset?: number;
+}
+
+/** `addLoopGuards()` output. */
+export interface LoopGuardResult {
+    code: string;
+    /** Number of loops that got a guard (`0` means `code` is the input unchanged). */
+    guarded: number;
+}
+
+/** `getSyntaxDiagnostics()` options. */
+export interface SyntaxDiagnosticsOptions {
+    fileName?: string;
+    scriptKind?: ts.ScriptKind;
+}
+
+/**
+ * The parser's own syntax errors of a source file. `parseDiagnostics` is internal to TypeScript (absent
+ * from its public types) but has been stable for years; `getSyntaxDiagnostics()` still checks it is an array.
+ */
+type SourceFileWithParseDiagnostics = ts.SourceFile & { parseDiagnostics?: readonly ts.DiagnosticWithLocation[] };
+
+type LoopStatement = ts.WhileStatement | ts.DoStatement | ts.ForStatement | ts.ForInStatement | ts.ForOfStatement;
+
+function isLoop(node: ts.Node): node is LoopStatement {
     return ts.isWhileStatement(node)
         || ts.isDoStatement(node)
         || ts.isForStatement(node)
@@ -30,21 +71,26 @@ function isLoop(node) {
         || ts.isForOfStatement(node);
 }
 
-function buildGuardStatement(line) {
+function buildGuardStatement(line: number): string {
     return `if(${LOOP_GUARD_NAME}(${line}))throw new RangeError(${LOOP_GUARD_NAME}.msg);`;
 }
 
-export function addLoopGuards(source = '', { fileName = 'script.js', scriptKind = ts.ScriptKind.JS, appendHelper = true, lineOffset = 0 } = {}) {
+/**
+ * Inserts `if(__lwLoop(line))throw new RangeError(…)` at the start of every loop body (wrapping
+ * single-statement bodies in braces), without adding or removing lines. The code must parse: callers
+ * check for syntax errors first, since guards inserted into broken code could move the real error.
+ */
+export function addLoopGuards(source: string = '', { fileName = 'script.js', scriptKind = ts.ScriptKind.JS, appendHelper = true, lineOffset = 0 }: AddLoopGuardsOptions = {}): LoopGuardResult {
     const text = String(source ?? '');
     if (!/\b(for|while|do)\b/.test(text)) {
         return { code: text, guarded: 0 };
     }
 
     const sourceFile = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, scriptKind);
-    const insertions = [];
+    const insertions: { position: number; text: string }[] = [];
     let guarded = 0;
 
-    const visit = (node) => {
+    const visit = (node: ts.Node): void => {
         if (isLoop(node) && node.statement) {
             guarded += 1;
             const body = node.statement;
@@ -80,8 +126,9 @@ export function addLoopGuards(source = '', { fileName = 'script.js', scriptKind 
     };
 }
 
-export function getSyntaxDiagnostics(source = '', { fileName = 'script.js', scriptKind = ts.ScriptKind.JS } = {}) {
-    const sourceFile = ts.createSourceFile(fileName, String(source ?? ''), ts.ScriptTarget.Latest, true, scriptKind);
+/** Syntax errors of a script according to the TypeScript parser (never type errors), in source order. */
+export function getSyntaxDiagnostics(source: string = '', { fileName = 'script.js', scriptKind = ts.ScriptKind.JS }: SyntaxDiagnosticsOptions = {}): SyntaxDiagnostic[] {
+    const sourceFile = ts.createSourceFile(fileName, String(source ?? ''), ts.ScriptTarget.Latest, true, scriptKind) as SourceFileWithParseDiagnostics;
     const diagnostics = Array.isArray(sourceFile.parseDiagnostics) ? sourceFile.parseDiagnostics : [];
 
     return diagnostics.map((diagnostic) => {
@@ -99,13 +146,16 @@ export function getSyntaxDiagnostics(source = '', { fileName = 'script.js', scri
 const INLINE_SCRIPT_PATTERN = /(<script\b([^>]*)>)([\s\S]*?)(<\/script\s*>)/gi;
 const JS_SCRIPT_TYPES = new Set(['', 'text/javascript', 'application/javascript', 'module', 'text/ecmascript']);
 
-// Adds loop guards to the inline scripts of an HTML string (HTML block, HTML-FULL, Pug output).
-// Scripts with `src`, non-JS types or syntax errors are left untouched; no line is added or removed.
-export function addLoopGuardsToHtml(html = '') {
+/**
+ * Adds loop guards to the inline scripts of an HTML string (HTML block, HTML-FULL, Pug output).
+ * Scripts with `src`, non-JS types or syntax errors are left untouched; no line is added or removed, and
+ * the messages name the line in the HTML document. The guards call the preview runtime's global helper.
+ */
+export function addLoopGuardsToHtml(html: string = ''): string {
     const source = String(html ?? '');
     if (!/<script\b/i.test(source) || !/\b(for|while|do)\b/.test(source)) return source;
 
-    return source.replace(INLINE_SCRIPT_PATTERN, (match, open, attributes, content, close, offset) => {
+    return source.replace(INLINE_SCRIPT_PATTERN, (match: string, open: string, attributes: string, content: string, close: string, offset: number) => {
         if (/\bsrc\s*=/i.test(attributes)) return match;
         const typeMatch = /\btype\s*=\s*["']?([^"'\s>]*)/i.exec(attributes);
         if (typeMatch && !JS_SCRIPT_TYPES.has(typeMatch[1].trim().toLowerCase())) return match;

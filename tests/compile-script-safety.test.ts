@@ -10,17 +10,20 @@ import { addLoopGuards, LOOP_GUARD_NAME } from '../src/utils/compiler/loopGuard.
 // MessageChannel keeps Node alive while a port has a listener, so the vm gets an inert stand-in.
 // Without the reset message, the guard measures the whole synchronous run, which is what we test.
 class InertMessageChannel {
+    port1: { onmessage: null };
+    port2: { postMessage(): void };
+
     constructor() {
         this.port1 = { onmessage: null };
         this.port2 = { postMessage() {} };
     }
 }
 
-function runGuarded(code) {
-    const logs = [];
+function runGuarded(code: string): string[] {
+    const logs: string[] = [];
     const context = vm.createContext({
         MessageChannel: InertMessageChannel,
-        console: { log: (...args) => logs.push(args.join(' ')) },
+        console: { log: (...args: unknown[]) => logs.push(args.join(' ')) },
         performance,
     });
     vm.runInContext(code, context, { filename: 'script.js' });
@@ -68,7 +71,7 @@ test('typescript emits modern class fields', () => {
 test('typescript scripts run in strict mode like tsc --strict, modules stay untouched', () => {
     const script = compileScript({ type: 'typescript', content: 'const sizes = Object.freeze([1, 2]);\nconsole.log(sizes);\n' }, { typeCheck: false });
     assert.match(script.js, /^"use strict";/);
-    assert.match(script.jsView, /^"use strict";/);
+    assert.match(script.jsView!, /^"use strict";/);
     assert.throws(() => runGuarded(script.js.replace('sizes);', 'sizes); sizes[0] = 9;')), /Cannot assign to read only property/);
 
     const module = compileScript({ type: 'typescript', content: "import { x } from './util.js';\nconsole.log(x);\n" }, { typeCheck: false });
@@ -100,7 +103,7 @@ test('loop guards keep every user line in place', () => {
     const lines = code.split('\n');
     // One extra line: the hoisted guard helper.
     assert.equal(lines.length, source.split('\n').length + 1);
-    assert.match(lines.at(-1), new RegExp(`^function ${LOOP_GUARD_NAME}\\(`));
+    assert.match(lines.at(-1)!, new RegExp(`^function ${LOOP_GUARD_NAME}\\(`));
     assert.match(lines[1], new RegExp(`^while \\(i < 3\\) \\{if\\(${LOOP_GUARD_NAME}\\(2\\)\\)`));
     assert.deepEqual(runGuarded(code), ['1', '2']);
 });
@@ -108,7 +111,7 @@ test('loop guards keep every user line in place', () => {
 test('loop guards stop an infinite loop with an error pointing at the loop line', () => {
     const result = compileScript({ type: 'javascript', content: "let i = 0;\nwhile (i < 5) {\n}\nconsole.log('never');" }, { sourcePath: 'script.js' });
     const started = performance.now();
-    assert.throws(() => runGuarded(result.js), (error) => {
+    assert.throws(() => runGuarded(result.js), (error: Error) => {
         assert.equal(error.name, 'RangeError');
         assert.match(error.message, /Possible infinite loop at line 2/);
         assert.match(String(error.stack), /script\.js:2:/);

@@ -1,14 +1,34 @@
+// Vue compilers (called by src/utils/exampleCompiler.ts for `framework: vue`). Both bundle with esbuild
+// into one IIFE (inline source map) that mounts on `<div id="app">`; Vue itself comes from the app's
+// node_modules. Templates are compiled ahead of time, so the bundle uses Vue's runtime-only build.
+// - Single file (legacy blocks): an HTML block is the template (compiled to a `render` module with
+//   @vue/compiler-dom), an optional JavaScript/TypeScript block exports the component definition
+//   (`export default {…}` / `defineComponent(…)`), an optional style block is compiled by styleCompiler.ts.
+// - Multi-file (virtual files): `.vue` single-file components are compiled with @vue/compiler-sfc
+//   (`<script>`/`<script setup>` in JS or TS, plain HTML `<template>`, CSS/SCSS/Sass `<style>` with
+//   `scoped` support), `.html` files become template modules, SCSS/Sass files become CSS; then the
+//   project is bundled from its `entry` file. The SFCs' CSS is appended after the bundle's CSS.
+// Unsupported SFC features (`src=` blocks, CSS modules, custom blocks, other languages) are reported as
+// errors instead of being ignored.
+
 import path from 'path';
 import { createHash } from 'crypto';
-import { build } from 'esbuild';
+import { build, type BuildFailure, type Loader } from 'esbuild';
 import * as sass from 'sass';
-import { compile as compileVueTemplate } from '@vue/compiler-dom';
+import { compile as compileVueTemplate, type CompilerError, type SourceLocation } from '@vue/compiler-dom';
 import {
     compileScript as compileVueSfcScript,
     compileStyle as compileVueSfcStyle,
     compileTemplate as compileVueSfcTemplate,
     parse as parseVueSfc,
+    type SFCBlock,
+    type SFCDescriptor,
+    type SFCScriptBlock,
+    type SFCTemplateCompileOptions,
 } from '@vue/compiler-sfc';
+import type { CompileResult, CompileSourceDocument } from '../../types/compile.ts';
+import type { Diagnostic, DiagnosticDetails, DiagnosticLevel } from '../../types/diagnostics.ts';
+import type { VirtualFile } from '../../types/document.ts';
 import {
     VIRTUAL_ENTRY,
     createCompileDiagnostic,
@@ -20,35 +40,58 @@ import {
     getFileBySlot,
 } from './helpers.ts';
 import { compileStyle } from './styleCompiler.ts';
+import type { CompilerBlock, InlineModule, ProjectModule } from './types.ts';
 import { createInlineModulesPlugin, createVirtualFilesPlugin } from './virtualFilesPlugin.ts';
 
-function createVueSfcScopeToken(sourcePath = '') {
+/**
+ * An error from the Vue compilers: `CompilerError` (template and SFC parse errors) carries a 1-based
+ * `loc` relative to the code it compiled; style errors are plain `Error`s without one.
+ */
+type VueCompileError = Error & { loc?: SourceLocation };
+
+/** `compileVueTemplateModule()` output: an ES module exporting `render` (named and default), or `''`. */
+interface VueTemplateModule {
+    code: string;
+    diagnostics: Diagnostic[];
+}
+
+/** `compileVueSfcFile()` output: the component module (`''` on errors), its extracted CSS and the loader for the module. */
+interface VueSfcModule {
+    code: string;
+    css: string;
+    diagnostics: Diagnostic[];
+    loader: 'js' | 'ts';
+}
+
+/** Scope id of an SFC (`data-v-<token>` for scoped styles): stable per file path. */
+function createVueSfcScopeToken(sourcePath: string = ''): string {
     return createHash('sha1')
         .update(String(sourcePath || 'component.vue'))
         .digest('hex')
         .slice(0, 8);
 }
 
-function normalizeVueSfcScriptLanguage(language = '') {
+function normalizeVueSfcScriptLanguage(language: string | undefined = ''): string {
     const normalized = String(language || '').trim().toLowerCase();
     if (!normalized || normalized === 'js' || normalized === 'javascript') return 'javascript';
     if (normalized === 'ts' || normalized === 'typescript') return 'typescript';
     return normalized;
 }
 
-function normalizeVueSfcStyleLanguage(language = '') {
+function normalizeVueSfcStyleLanguage(language: string | undefined = ''): string {
     const normalized = String(language || '').trim().toLowerCase();
     if (!normalized || normalized === 'css') return 'css';
     if (normalized === 'scss' || normalized === 'sass') return normalized;
     return normalized;
 }
 
-function normalizeVueSfcTemplateLanguage(language = '') {
+function normalizeVueSfcTemplateLanguage(language: string | undefined = ''): string {
     const normalized = String(language || '').trim().toLowerCase();
     return normalized || 'html';
 }
 
-function toVueSfcDiagnosticPosition(error, block = null) {
+/** Position of a Vue error in the `.vue` file: lines inside `block` are shifted by the block's start line. */
+function toVueSfcDiagnosticPosition(error: VueCompileError | null, block: Pick<SFCBlock, 'loc'> | null = null): { line: number | null; column: number | null } {
     const line = error?.loc?.start?.line ?? null;
     const column = error?.loc?.start?.column ?? null;
 
@@ -65,7 +108,15 @@ function toVueSfcDiagnosticPosition(error, block = null) {
     };
 }
 
-function createVueSfcDiagnostic(level, code, message, sourcePath, error = null, block = null, extra = {}) {
+function createVueSfcDiagnostic(
+    level: DiagnosticLevel,
+    code: string,
+    message: string,
+    sourcePath: string,
+    error: VueCompileError | null = null,
+    block: Pick<SFCBlock, 'loc'> | null = null,
+    extra: DiagnosticDetails = {},
+): Diagnostic {
     const position = toVueSfcDiagnosticPosition(error, block);
 
     return createCompileDiagnostic(
@@ -81,8 +132,8 @@ function createVueSfcDiagnostic(level, code, message, sourcePath, error = null, 
     );
 }
 
-function validateVueSingleFile(markupBlock, scriptBlock) {
-    const diagnostics = [];
+function validateVueSingleFile(markupBlock: CompilerBlock | null, scriptBlock: CompilerBlock | null): Diagnostic[] {
+    const diagnostics: Diagnostic[] = [];
     const scriptSource = scriptBlock?.content || '';
 
     if (!markupBlock) {
@@ -164,8 +215,9 @@ function validateVueSingleFile(markupBlock, scriptBlock) {
     return diagnostics;
 }
 
-function compileVueTemplateModule(templateSource = '', sourcePath = 'template.html') {
-    const errors = [];
+/** Compiles an HTML template into a module exporting `render`; errors leave `code` empty. */
+function compileVueTemplateModule(templateSource: string = '', sourcePath: string = 'template.html'): VueTemplateModule {
+    const errors: CompilerError[] = [];
     const result = compileVueTemplate(templateSource || '', {
         filename: sourcePath || 'template.html',
         mode: 'module',
@@ -195,11 +247,16 @@ function compileVueTemplateModule(templateSource = '', sourcePath = 'template.ht
     };
 }
 
-function compileVueSfcFile(source = '', sourcePath = 'Component.vue') {
-    const diagnostics = [];
-    const extractedCss = [];
+/**
+ * Compiles a `.vue` file into an ES module whose default export is the component (`__sfc__`, with
+ * `render` and the scope id attached) plus the CSS of its `<style>` blocks. Parse, validation and script
+ * errors leave `code` and `css` empty; a `<style>` block that fails is left out of `css`.
+ */
+function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.vue'): VueSfcModule {
+    const diagnostics: Diagnostic[] = [];
+    const extractedCss: string[] = [];
     const scopeToken = createVueSfcScopeToken(sourcePath);
-    let descriptor = null;
+    let descriptor: SFCDescriptor | null = null;
     let scriptLanguage = 'javascript';
 
     try {
@@ -232,7 +289,7 @@ function compileVueSfcFile(source = '', sourcePath = 'Component.vue') {
             createCompileDiagnostic(
                 'error',
                 'vue-sfc-parse-error',
-                error.message || 'Failed to parse Vue SFC.',
+                (error as Error).message || 'Failed to parse Vue SFC.',
                 { file: sourcePath || null }
             )
         );
@@ -428,7 +485,7 @@ function compileVueSfcFile(source = '', sourcePath = 'Component.vue') {
         };
     }
 
-    let scriptResult = null;
+    let scriptResult: SFCScriptBlock | null = null;
 
     try {
         if (descriptor.script || descriptor.scriptSetup) {
@@ -445,7 +502,7 @@ function compileVueSfcFile(source = '', sourcePath = 'Component.vue') {
             createCompileDiagnostic(
                 'error',
                 'vue-sfc-script-compile-error',
-                error.message || `Failed to compile the script block in "${sourcePath}".`,
+                (error as Error).message || `Failed to compile the script block in "${sourcePath}".`,
                 { file: sourcePath || null }
             )
         );
@@ -461,7 +518,10 @@ function compileVueSfcFile(source = '', sourcePath = 'Component.vue') {
     }
 
     const hasScopedStyles = descriptor.styles.some((styleBlock) => styleBlock.scoped);
-    const templateErrors = [];
+    const templateErrors: CompilerError[] = [];
+    // NOTE: `compileTemplate()` has no top-level `onError` option (hence the assertion): it ignores this
+    // callback and returns the errors in `templateResult.errors`, so `templateErrors` stays empty and
+    // template errors of SFCs are not reported. Kept as is (behaviour must not change in the TS migration).
     const templateResult = compileVueSfcTemplate({
         source: descriptor.template?.content || '',
         filename: sourcePath || 'Component.vue',
@@ -470,10 +530,10 @@ function compileVueSfcFile(source = '', sourcePath = 'Component.vue') {
         compilerOptions: {
             bindingMetadata: scriptResult?.bindings || {},
         },
-        onError: (error) => {
+        onError: (error: CompilerError) => {
             templateErrors.push(error);
         },
-    });
+    } as SFCTemplateCompileOptions);
 
     templateErrors.forEach((error) => {
         diagnostics.push(
@@ -505,7 +565,7 @@ function compileVueSfcFile(source = '', sourcePath = 'Component.vue') {
                     createCompileDiagnostic(
                         'error',
                         'sass-compile-error',
-                        error.message || `Failed to compile style block in "${sourcePath}".`,
+                        (error as Error).message || `Failed to compile style block in "${sourcePath}".`,
                         { file: sourcePath || null, type: styleLanguage }
                     )
                 );
@@ -550,7 +610,7 @@ function compileVueSfcFile(source = '', sourcePath = 'Component.vue') {
         }
     });
 
-    const moduleParts = [];
+    const moduleParts: string[] = [];
 
     if (scriptResult?.content) {
         moduleParts.push(scriptResult.content.trim());
@@ -577,7 +637,7 @@ function compileVueSfcFile(source = '', sourcePath = 'Component.vue') {
     };
 }
 
-function buildVueSingleFileEntry({ componentImportPath, templateImportPath }) {
+function buildVueSingleFileEntry({ componentImportPath, templateImportPath }: { componentImportPath: string; templateImportPath: string }): string {
     return `
 import { createApp } from 'vue';
 import componentDefinition from ${JSON.stringify(componentImportPath)};
@@ -598,7 +658,18 @@ createApp(normalizedComponent).mount(rootElement);
 `;
 }
 
-async function buildVueSingleFileBundle({ scriptPath, scriptSource, scriptLoader, templateCode, templatePath }) {
+interface VueSingleFileBundleInput {
+    /** Document path of the script block; `component.js`/`component.ts` when empty. */
+    scriptPath: string;
+    scriptSource: string;
+    scriptLoader: 'js' | 'ts';
+    /** The compiled template module (`compileVueTemplateModule()`). */
+    templateCode: string;
+    /** Document path of the HTML block; `index.html` when empty. */
+    templatePath: string;
+}
+
+async function buildVueSingleFileBundle({ scriptPath, scriptSource, scriptLoader, templateCode, templatePath }: VueSingleFileBundleInput): Promise<{ js: string }> {
     const entryPath = '__learncode_vue_single__/entry.js';
     const normalizedScriptPath = normalizeSourcePath(
         scriptPath,
@@ -607,7 +678,7 @@ async function buildVueSingleFileBundle({ scriptPath, scriptSource, scriptLoader
     const normalizedTemplatePath = normalizeSourcePath(templatePath, 'index.html');
     const componentImportPath = `./${path.posix.relative(path.posix.dirname(entryPath), normalizedScriptPath)}`;
     const templateImportPath = `./${path.posix.relative(path.posix.dirname(entryPath), normalizedTemplatePath)}`;
-    const files = new Map([
+    const files = new Map<string, InlineModule>([
         [
             entryPath,
             {
@@ -661,7 +732,11 @@ async function buildVueSingleFileBundle({ scriptPath, scriptSource, scriptLoader
     };
 }
 
-export async function compileVueSingleFileDocument(sourceDocument) {
+/**
+ * Compiles a single-file Vue example (HTML template, optional script and style blocks). Validation,
+ * template and build errors leave `js` empty; the style block's CSS is kept.
+ */
+export async function compileVueSingleFileDocument(sourceDocument: CompileSourceDocument): Promise<CompileResult> {
     const markupBlock = getBlockBySlot(sourceDocument, 'markup');
     const scriptBlock = getBlockBySlot(sourceDocument, 'script');
     const styleBlock = getBlockBySlot(sourceDocument, 'style');
@@ -711,7 +786,9 @@ export async function compileVueSingleFileDocument(sourceDocument) {
                 ...templateResult.diagnostics,
             ],
         };
-    } catch (error) {
+    } catch (caught) {
+        // esbuild throws a BuildFailure (one entry in `errors` per problem); anything else only has a message.
+        const error = caught as Partial<BuildFailure>;
         const diagnostics = (error.errors || []).map((entry) => createCompileDiagnostic(
             'error',
             'vue-build-error',
@@ -748,16 +825,21 @@ export async function compileVueSingleFileDocument(sourceDocument) {
     }
 }
 
-function createVirtualVueFileMap(files = []) {
-    const diagnostics = [];
-    const map = new Map();
-    const extractedStyles = [];
+/**
+ * The project files keyed by normalized path, turned into modules esbuild can load: SCSS/Sass → CSS,
+ * `.html` → template module, `.vue` → component module (its CSS goes to `extractedStyles`). A template or
+ * component that produced no code gets a placeholder module (an empty `render` / component).
+ */
+function createVirtualVueFileMap(files: readonly VirtualFile[] = []): { diagnostics: Diagnostic[]; extractedStyles: string[]; map: Map<string, ProjectModule> } {
+    const diagnostics: Diagnostic[] = [];
+    const map = new Map<string, ProjectModule>();
+    const extractedStyles: string[] = [];
 
     files.forEach((file) => {
         const virtualPath = normalizeVirtualPath(file.path);
         let contents = file.content || '';
         let language = file.language || '';
-        let loader = null;
+        let loader: Loader | null = null;
 
         if (language === 'scss' || language === 'sass') {
             try {
@@ -773,7 +855,7 @@ function createVirtualVueFileMap(files = []) {
                     createCompileDiagnostic(
                         'error',
                         'sass-compile-error',
-                        error.message || `Failed to compile "${virtualPath}".`,
+                        (error as Error).message || `Failed to compile "${virtualPath}".`,
                         { file: virtualPath, type: language }
                     )
                 );
@@ -814,7 +896,11 @@ function createVirtualVueFileMap(files = []) {
     return { diagnostics, extractedStyles, map };
 }
 
-export async function compileVueMultiFileDocument(sourceDocument) {
+/**
+ * Compiles a multi-file Vue project from its `entry` file. A missing entry, any error while preparing the
+ * files (Sass, templates, SFCs) or a build error leaves `css` and `js` empty.
+ */
+export async function compileVueMultiFileDocument(sourceDocument: CompileSourceDocument): Promise<CompileResult> {
     const files = sourceDocument.files || [];
     const entryPath = normalizeVirtualPath(sourceDocument?.metadata?.entry || '');
     const { diagnostics: fileDiagnostics, extractedStyles, map: fileMap } = createVirtualVueFileMap(files);
@@ -885,7 +971,9 @@ export async function compileVueMultiFileDocument(sourceDocument) {
             },
             compileDiagnostics: fileDiagnostics,
         };
-    } catch (error) {
+    } catch (caught) {
+        // esbuild throws a BuildFailure (one entry in `errors` per problem); anything else only has a message.
+        const error = caught as Partial<BuildFailure>;
         const buildDiagnostics = (error.errors || []).map((entry) => createCompileDiagnostic(
             'error',
             'vue-build-error',
