@@ -1,32 +1,103 @@
-import { getBlockDefinition, normalizeBlockType } from '../../config/exampleBlocks.ts';
-import { getVimShortcutSections, getDefaultVimShortcutConfig } from '../../editor/vimSupport.ts';
-import { evaluateDocumentFileTypeChange, getDocumentFileTypeChangeOptions, getDocumentFileVisibilityEntries, getDocumentLanguageOptions, getExampleEditorialMetadata, hasBlockingDiagnostics, isShaderDocument, updateDocumentFileType, updateExampleEditorialMetadata, updateDocumentHiddenFiles } from '../../utils/markdown.ts';
-import { findDirectionalPanelTargetIndex } from '../../utils/panelNavigation.ts';
-import type { Editor } from '../Editor.ts';
+// The editor's dialogs about the open document and its files, and the small file pickers:
+// - example metadata dialog: description, tags, star rating and importance (the editorial frontmatter);
+//   applying it also writes an example that already has a file to disk (`_handleModify`) unless the
+//   document has blocking errors;
+// - file-type ("badge") dialog: change a file's language or a block's type, opened from a clickable badge
+//   (`_createBadge` in src/components/Editor.ts);
+// - file visibility dialog (`editor_hidden_files`) and the file context menu with "Hide <file>" (right
+//   click on a tab or panel header);
+// - quick open (fuzzy file picker) and `_selectAdjacentTab` (previous/next tab in the Tabs layout);
+// - context hints dialog (tips about the metadata the example uses: console, exercise, shader keys) and
+//   the Vim shortcut help dialog.
+//
+// `metadataDialogsMixin` is an Editor mixin: src/components/Editor.ts copies its methods onto
+// `Editor.prototype`, so `this` is the Editor; the dialog elements and states (`…DialogState`,
+// `quickOpenState`, `fileContextMenuState`) are declared there. The Editor constructor calls the
+// `_init…Dialog()` methods once; its Vim shortcuts call `_openQuickOpenDialog`, `_selectAdjacentTab` and
+// `openShortcutHelpDialog`; `_applyDocument` (./fileOperations.ts) calls `_renderContextHints`;
+// ./diagnostics.ts reveals hidden files through `_setFileHiddenState`; src/main.ts calls
+// `setVimShortcutConfig`.
+//
+// Before editing:
+// - Most dialog elements are typed `| null` and checked before use (the context-hints content and note
+//   are the exceptions: they are used unchecked).
+// - Each dialog remembers the focused editor when it opens (`_rememberEditorFocusTarget`) and gives the
+//   focus back from its `close` listener (`_scheduleEditorFocusRestore`).
+// - Edits never mutate `currentDocument`: they build a new document with the document API, then
+//   `_applyDocument` + `_emitSessionStateChange`.
+// - Example-only dialogs check `_isTheoryDocumentTarget()`: while theory is edited the document is the
+//   theory pseudo-document.
 
+import { getVimShortcutSections, getDefaultVimShortcutConfig } from '../../editor/vimSupport.ts';
+import { evaluateDocumentFileTypeChange, getDocumentFileTypeChangeOptions, getDocumentFileVisibilityEntries, getExampleEditorialMetadata, hasBlockingDiagnostics, isShaderDocument, updateDocumentFileType, updateExampleEditorialMetadata, updateDocumentHiddenFiles } from '../../utils/markdown.ts';
+import type { VimShortcutConfig, VimShortcutHelpSection } from '../../editor/vimSupport.ts';
+import type { ExampleImportance, FileTypeChangeEvaluation, FileVisibilityKey } from '../../types/document.ts';
+import type { Editor, EditorFile, FileTypeDialogOption } from '../Editor.ts';
+
+/** One choice of the importance `<select>` of the example metadata dialog. */
+export interface ExampleImportanceOption {
+    /** The `example_importance` value; `''` for "Not set". */
+    value: ExampleImportance | '';
+    label: string;
+    /** CSS modifier of the preview pill (`is-<accent>`). */
+    accent: string;
+}
+
+/**
+ * The importance choices of the example metadata dialog, in menu order, first the "Not set" fallback.
+ * The levels also exist in EXAMPLE_IMPORTANCE_VALUES (src/utils/markdown/constants.ts, the source of
+ * `ExampleImportance`), in EXAMPLE_IMPORTANCE_META (src/utils/exampleEditorial.ts) and as the `<option>`s
+ * of `#editor-example-importance` in index.html. A value here that is not a level, or a level missing
+ * here, fails to type-check (`satisfies` and the guard below); index.html is not checked.
+ */
 export const EXAMPLE_IMPORTANCE_OPTIONS = [
     { value: '', label: 'Not set', accent: 'neutral' },
     { value: 'trivial', label: 'Trivial', accent: 'trivial' },
     { value: 'useful', label: 'Useful', accent: 'useful' },
     { value: 'important', label: 'Important', accent: 'important' },
     { value: 'critical', label: 'Critical', accent: 'critical' },
-];
+] as const satisfies readonly ExampleImportanceOption[];
 
+// Compile-time guard: every `ExampleImportance` level must have an option above (a level missing there
+// makes this line fail to type-check).
+type AssertNever<T extends never> = T;
+type _EveryImportanceLevelHasAnOption = AssertNever<Exclude<ExampleImportance, (typeof EXAMPLE_IMPORTANCE_OPTIONS)[number]['value']>>;
+
+/** Style of a dialog's hint line: `error` turns it red. */
+type DialogHintType = 'info' | 'error';
+
+/** One card of the context hints dialog. */
+interface ContextHint {
+    /** CSS modifier of the card (`editor-context-hint-<accent>`). */
+    accent: 'console' | 'exercise' | 'shader' | 'uniforms' | 'textures';
+    body: string;
+    /** The metadata key(s) the hint is about. */
+    label: string;
+    title: string;
+}
+
+/** Options of `_setFileHiddenState`. */
+interface SetFileHiddenStateOptions {
+    /** Skip the confirmation toast. */
+    silent?: boolean;
+}
+
+/** Editor mixin: metadata, file-type, visibility, quick-open, context-hint and shortcut dialogs (see the header). */
 export const metadataDialogsMixin = {
-    _initContextHintsDialog() {
+    _initContextHintsDialog(): void {
         this.btnContextHints?.addEventListener('click', () => this._openContextHintsDialog());
         this.btnContextHintsDialogClose?.addEventListener('click', () => this.contextHintsDialog?.close());
         this.btnContextHintsDialogCloseIcon?.addEventListener('click', () => this.contextHintsDialog?.close());
         this.contextHintsDialog?.addEventListener('close', () => this._scheduleEditorFocusRestore());
     },
 
-    _initShortcutsDialog() {
+    _initShortcutsDialog(): void {
         this.btnShortcutsDialogClose?.addEventListener('click', () => this.shortcutsDialog?.close());
         this.btnShortcutsDialogCloseIcon?.addEventListener('click', () => this.shortcutsDialog?.close());
         this.shortcutsDialog?.addEventListener('close', () => this._scheduleEditorFocusRestore());
     },
 
-    _initExampleMetadataDialog() {
+    _initExampleMetadataDialog(): void {
         this.btnEditExampleMetadata?.addEventListener('click', () => this._openExampleMetadataDialog());
         this.btnExampleRatingClear?.addEventListener('click', () => this._setExampleMetadataDialogRating(0));
         this.exampleImportanceSelect?.addEventListener('change', () => this._syncExampleMetadataImportancePreview());
@@ -42,7 +113,8 @@ export const metadataDialogsMixin = {
         this._renderExampleMetadataRatingStars();
     },
 
-    _initFileTypeDialog() {
+    /** Wires the file-type dialog; closing it clears its state. */
+    _initFileTypeDialog(): void {
         this.btnFileTypeCancel?.addEventListener('click', () => this.fileTypeDialog?.close());
         this.btnFileTypeApply?.addEventListener('click', () => this._applyFileTypeDialog());
         this.fileTypeDialog?.addEventListener('close', () => {
@@ -55,7 +127,8 @@ export const metadataDialogsMixin = {
         });
     },
 
-    _initQuickOpenDialog() {
+    /** Wires the quick-open dialog: live filtering, arrow keys and Enter; closing it clears the query. */
+    _initQuickOpenDialog(): void {
         this.quickOpenInput?.addEventListener('input', () => this._renderQuickOpenMatches());
         this.quickOpenInput?.addEventListener('keydown', (event) => this._handleQuickOpenKeydown(event));
         this.btnQuickOpenCancel?.addEventListener('click', () => this.quickOpenDialog?.close());
@@ -75,7 +148,11 @@ export const metadataDialogsMixin = {
         });
     },
 
-    _initFileVisibilityDialog() {
+    /**
+     * Wires the visibility dialog and the file context menu. The menu closes on a click outside it,
+     * on Escape and on window resize (page-wide listeners, installed once).
+     */
+    _initFileVisibilityDialog(): void {
         this.btnEditFileVisibility?.addEventListener('click', () => this._openFileVisibilityDialog());
         this.btnFileVisibilityCancel?.addEventListener('click', () => this.fileVisibilityDialog?.close());
         this.btnFileVisibilityApply?.addEventListener('click', () => this._applyFileVisibilityDialog());
@@ -88,7 +165,7 @@ export const metadataDialogsMixin = {
 
         document.addEventListener('click', (event) => {
             if (!this.fileContextMenu || this.fileContextMenu.classList.contains('hidden')) return;
-            if (this.fileContextMenu.contains(event.target)) return;
+            if (this.fileContextMenu.contains(event.target as Node | null)) return;
             this._closeFileContextMenu();
         });
 
@@ -101,25 +178,33 @@ export const metadataDialogsMixin = {
         window.addEventListener('resize', () => this._closeFileContextMenu());
     },
 
-    _getExampleImportanceOption(value = '') {
+    /** The option for an `example_importance` value; the "Not set" option for `''` or an unknown value. */
+    _getExampleImportanceOption(value: string = ''): ExampleImportanceOption {
         return EXAMPLE_IMPORTANCE_OPTIONS.find((option) => option.value === value) || EXAMPLE_IMPORTANCE_OPTIONS[0];
     },
 
-    _setExampleMetadataHint(message, type = 'info') {
+    _setExampleMetadataHint(message: string, type: DialogHintType = 'info'): void {
         if (!this.exampleMetadataHint) return;
         this.exampleMetadataHint.textContent = message;
         this.exampleMetadataHint.classList.toggle('is-error', type === 'error');
     },
 
-    _setExampleMetadataDialogRating(value = 0) {
-        const numericValue = Number.isInteger(value) ? value : Number.parseInt(value, 10);
+    /**
+     * Sets the dialog's star rating (0 = none) and redraws the stars. Numeric text is parsed and the value
+     * is clamped to 0–5; anything unparsable becomes 0.
+     */
+    _setExampleMetadataDialogRating(value: number | string = 0): void {
+        // Number.isInteger is true only for numbers; parseInt stringifies anything else (and so truncates
+        // a non-integer number: 2.5 → 2).
+        const numericValue = Number.isInteger(value) ? value as number : Number.parseInt(value as string, 10);
         this.exampleMetadataDialogState.rating = Number.isInteger(numericValue)
             ? Math.max(0, Math.min(5, numericValue))
             : 0;
         this._renderExampleMetadataRatingStars();
     },
 
-    _renderExampleMetadataRatingStars() {
+    /** Rebuilds the five star buttons; clicking the current rating's star clears the rating. */
+    _renderExampleMetadataRatingStars(): void {
         if (!this.exampleRatingStars) return;
 
         const currentRating = this.exampleMetadataDialogState.rating || 0;
@@ -131,7 +216,7 @@ export const metadataDialogsMixin = {
             button.className = `editor-example-rating-star ${value <= currentRating ? 'is-active' : ''}`;
             button.setAttribute('aria-label', `Set rating to ${value} star${value === 1 ? '' : 's'}`);
             button.setAttribute('aria-pressed', String(value === currentRating));
-            button.textContent = '\u2605';
+            button.textContent = '★';
             button.addEventListener('click', () => {
                 this._setExampleMetadataDialogRating(value === currentRating ? 0 : value);
             });
@@ -139,7 +224,8 @@ export const metadataDialogsMixin = {
         }
     },
 
-    _syncExampleMetadataImportancePreview() {
+    /** Shows the selected importance as a colored pill next to the select. */
+    _syncExampleMetadataImportancePreview(): void {
         if (!this.exampleImportancePreview || !this.exampleImportanceSelect) return;
 
         const option = this._getExampleImportanceOption(this.exampleImportanceSelect.value);
@@ -147,7 +233,8 @@ export const metadataDialogsMixin = {
         this.exampleImportancePreview.className = `editor-example-importance-preview is-${option.accent}`;
     },
 
-    _openExampleMetadataDialog() {
+    /** Opens the metadata dialog filled from the document's editorial metadata (examples only). */
+    _openExampleMetadataDialog(): void {
         if (!this.exampleMetadataDialog || this._isTheoryDocumentTarget()) return;
 
         const editorialMetadata = getExampleEditorialMetadata(this.currentDocument);
@@ -172,7 +259,12 @@ export const metadataDialogsMixin = {
         window.requestAnimationFrame(() => this.exampleDescriptionInput?.focus());
     },
 
-    _canEditFileType(file) {
+    /**
+     * Whether the file's type (badge) can be changed: there is a file, the document is an example and the
+     * exercise does not lock the file. A `false` result does not mean the file is missing, although
+     * TypeScript narrows it that way: don't read `file` on the `false` branch.
+     */
+    _canEditFileType(file: EditorFile | null | undefined): file is EditorFile {
         return Boolean(
             file
             && !this._isTheoryDocumentTarget()
@@ -180,7 +272,8 @@ export const metadataDialogsMixin = {
         );
     },
 
-    _buildFileTypeDialogOption(evaluation) {
+    /** A dialog option built from an evaluation; the fallback when the document API lists no options. */
+    _buildFileTypeDialogOption(evaluation: FileTypeChangeEvaluation | null | undefined): FileTypeDialogOption {
         return {
             allowed: Boolean(evaluation?.allowed),
             code: evaluation?.code || '',
@@ -192,24 +285,27 @@ export const metadataDialogsMixin = {
         };
     },
 
-    _getFileTypeDialogFile() {
+    /** The file the file-type dialog is editing, or `null` (dialog closed, or the file is gone). */
+    _getFileTypeDialogFile(): EditorFile | null {
         if (!this.fileTypeDialogState.fileId) return null;
         return (this.currentDocument.files || []).find((file) => file.id === this.fileTypeDialogState.fileId) || null;
     },
 
-    _getFileTypeDialogEvaluation() {
+    /** The evaluation of the selected type for the dialog's file, or `null` when there is nothing to evaluate. */
+    _getFileTypeDialogEvaluation(): FileTypeChangeEvaluation | null {
         const file = this._getFileTypeDialogFile();
         if (!file || !this.fileTypeDialogState.selectedType) return null;
         return evaluateDocumentFileTypeChange(this.currentDocument, file.id, this.fileTypeDialogState.selectedType);
     },
 
-    _setFileTypeDialogHint(message, type = 'info') {
+    _setFileTypeDialogHint(message: string, type: DialogHintType = 'info'): void {
         if (!this.fileTypeDialogHint) return;
         this.fileTypeDialogHint.textContent = message;
         this.fileTypeDialogHint.classList.toggle('is-error', type === 'error');
     },
 
-    _syncFileTypeDialogPreview() {
+    /** Updates the current → next badge preview, the path preview, the Apply button and the hint. */
+    _syncFileTypeDialogPreview(): void {
         const file = this._getFileTypeDialogFile();
         const evaluation = this._getFileTypeDialogEvaluation();
         if (!file || !evaluation) return;
@@ -269,7 +365,8 @@ export const metadataDialogsMixin = {
         this._setFileTypeDialogHint('This badge change is valid and can be applied.');
     },
 
-    _renderFileTypeDialogOptions() {
+    /** Rebuilds the option buttons (blocked options stay listed, with the reason). */
+    _renderFileTypeDialogOptions(): void {
         if (!this.fileTypeOptions || !this.fileTypeEmpty) return;
 
         const options = Array.isArray(this.fileTypeDialogState.options) ? this.fileTypeDialogState.options : [];
@@ -312,11 +409,15 @@ export const metadataDialogsMixin = {
 
             button.appendChild(meta);
             button.appendChild(detail);
-            this.fileTypeOptions.appendChild(button);
+            this.fileTypeOptions!.appendChild(button); // checked at the top of the method
         });
     },
 
-    _openFileTypeDialog(file) {
+    /**
+     * Opens the file-type dialog for a file (when `_canEditFileType` allows it). The first allowed type
+     * other than the current one is preselected.
+     */
+    _openFileTypeDialog(file: EditorFile | null | undefined): void {
         if (!this.fileTypeDialog || !this._canEditFileType(file)) return;
 
         this._rememberEditorFocusTarget();
@@ -353,11 +454,12 @@ export const metadataDialogsMixin = {
         this._syncFileTypeDialogPreview();
         this.fileTypeDialog.showModal();
         window.requestAnimationFrame(() => {
-            this.fileTypeOptions?.querySelector('.editor-file-type-option.is-active')?.focus();
+            this.fileTypeOptions?.querySelector<HTMLButtonElement>('.editor-file-type-option.is-active')?.focus();
         });
     },
 
-    _applyFileTypeDialog() {
+    /** Applies the selected type, keeps the cursor on the (possibly renamed) file and closes the dialog. */
+    _applyFileTypeDialog(): void {
         const file = this._getFileTypeDialogFile();
         const evaluation = this._getFileTypeDialogEvaluation();
         if (!file || !evaluation) return;
@@ -384,7 +486,12 @@ export const metadataDialogsMixin = {
         this._showToast(`Changed badge to ${this._getFileDefinition({ language: evaluation.nextType }).heading || evaluation.nextType}.`, 'success');
     },
 
-    async _applyExampleMetadataDialog() {
+    /**
+     * Writes the dialog's values into the editorial metadata and closes it. An example that already has a
+     * file and no blocking errors is then written to disk (`_handleModify`, which shows its own toast);
+     * otherwise only a toast confirms the edit.
+     */
+    async _applyExampleMetadataDialog(): Promise<void> {
         if (!this.exampleMetadataDialog || this._isTheoryDocumentTarget()) return;
 
         const nextDocument = updateExampleEditorialMetadata(this.currentDocument, {
@@ -406,19 +513,19 @@ export const metadataDialogsMixin = {
         this._showToast('Example metadata updated.', 'success');
     },
 
-    _getFileVisibilityDialogHiddenKeys() {
+    _getFileVisibilityDialogHiddenKeys(): FileVisibilityKey[] {
         return Array.isArray(this.fileVisibilityDialogState.hiddenKeys)
             ? this.fileVisibilityDialogState.hiddenKeys
             : [];
     },
 
-    _setFileVisibilityHint(message, type = 'info') {
+    _setFileVisibilityHint(message: string, type: DialogHintType = 'info'): void {
         if (!this.fileVisibilityHint) return;
         this.fileVisibilityHint.textContent = message;
         this.fileVisibilityHint.classList.toggle('is-error', type === 'error');
     },
 
-    _syncFileVisibilityDialogHint() {
+    _syncFileVisibilityDialogHint(): void {
         const hiddenCount = this._getFileVisibilityDialogHiddenKeys().length;
         if (hiddenCount === 0) {
             this._setFileVisibilityHint('All files are currently visible.');
@@ -428,7 +535,8 @@ export const metadataDialogsMixin = {
         this._setFileVisibilityHint(`${hiddenCount} file${hiddenCount === 1 ? '' : 's'} hidden. Hidden files stay in the Markdown document and keep compiling normally.`);
     },
 
-    _renderFileVisibilityDialogList() {
+    /** Rebuilds the visibility rows (one Visible/Hidden toggle per file); toggling edits only the dialog state. */
+    _renderFileVisibilityDialogList(): void {
         if (!this.fileVisibilityList || !this.fileVisibilityEmpty) return;
 
         const visibilityEntries = this._getFileVisibilityEntries();
@@ -498,7 +606,7 @@ export const metadataDialogsMixin = {
             hiddenButton.className = 'file-visibility-toggle-btn';
             hiddenButton.textContent = 'Hidden';
 
-            const applyHiddenState = (nextHidden) => {
+            const applyHiddenState = (nextHidden: boolean): void => {
                 const nextHiddenKeys = new Set(this._getFileVisibilityDialogHiddenKeys());
                 if (nextHidden) {
                     nextHiddenKeys.add(entry.key);
@@ -526,13 +634,14 @@ export const metadataDialogsMixin = {
 
             row.appendChild(meta);
             row.appendChild(state);
-            this.fileVisibilityList.appendChild(row);
+            this.fileVisibilityList!.appendChild(row); // checked at the top of the method
         });
 
         this._syncFileVisibilityDialogHint();
     },
 
-    _openFileVisibilityDialog() {
+    /** Opens the visibility dialog with the document's current `editor_hidden_files`. */
+    _openFileVisibilityDialog(): void {
         if (!this.fileVisibilityDialog) return;
 
         this._rememberEditorFocusTarget();
@@ -543,7 +652,8 @@ export const metadataDialogsMixin = {
         this.fileVisibilityDialog.showModal();
     },
 
-    _applyFileVisibilityDialog() {
+    /** Writes the dialog's hidden keys to `editor_hidden_files` and closes it. */
+    _applyFileVisibilityDialog(): void {
         const nextDocument = updateDocumentHiddenFiles(
             this.currentDocument,
             this._getFileVisibilityDialogHiddenKeys(),
@@ -563,7 +673,11 @@ export const metadataDialogsMixin = {
         );
     },
 
-    _setFileHiddenState(fileId, hidden, { silent = false } = {}) {
+    /**
+     * Hides or shows one file through `editor_hidden_files` (a shown file also becomes the active one).
+     * Returns `false` when the file is unknown or has no visibility key.
+     */
+    _setFileHiddenState(fileId: string, hidden: boolean, { silent = false }: SetFileHiddenStateOptions = {}): boolean {
         const visibilityEntries = this._getFileVisibilityEntries();
         const targetEntry = visibilityEntries.find((entry) => entry.file.id === fileId);
         if (!targetEntry?.key) return false;
@@ -596,7 +710,8 @@ export const metadataDialogsMixin = {
         return true;
     },
 
-    _openFileContextMenu(file, clientX, clientY) {
+    /** Opens the "Hide file" context menu at the pointer, kept inside the window (not in exercise mode). */
+    _openFileContextMenu(file: EditorFile | null | undefined, clientX: number, clientY: number): void {
         if (!this.fileContextMenu || !this.btnContextHideFile || !file || this._isExerciseMode()) return;
 
         this.fileContextMenuState.fileId = file.id;
@@ -613,7 +728,7 @@ export const metadataDialogsMixin = {
         this.fileContextMenu.style.top = `${top}px`;
     },
 
-    _closeFileContextMenu() {
+    _closeFileContextMenu(): void {
         if (!this.fileContextMenu) return;
 
         this.fileContextMenu.classList.add('hidden');
@@ -621,15 +736,16 @@ export const metadataDialogsMixin = {
         this.fileContextMenuState.fileId = null;
     },
 
-    _handleContextHideFile() {
+    _handleContextHideFile(): void {
         const fileId = this.fileContextMenuState.fileId;
         if (!fileId) return;
         this._setFileHiddenState(fileId, true);
     },
 
-    _getContextHints() {
+    /** The tips that apply to the open document's metadata (console, exercise, shader runtime/uniforms/textures). */
+    _getContextHints(): ContextHint[] {
         const metadata = this.currentDocument?.metadata || {};
-        const hints = [];
+        const hints: ContextHint[] = [];
 
         if (metadata.console === true && !this._isShaderDocument()) {
             hints.push({
@@ -679,7 +795,11 @@ export const metadataDialogsMixin = {
         return hints;
     },
 
-    _renderContextHints() {
+    /**
+     * Refreshes the context-hints button (hidden when there is no hint) and the dialog content; closes the
+     * dialog when the document no longer has hints. Called after every document change.
+     */
+    _renderContextHints(): void {
         const hints = this._getContextHints();
         const hasHints = hints.length > 0;
 
@@ -710,7 +830,8 @@ export const metadataDialogsMixin = {
         this.contextHintsDialogContent.appendChild(this._buildContextHintsContent(hints));
     },
 
-    _buildContextHintsContent(hints) {
+    /** The hint cards as collapsible `<details>` (a single hint starts open). */
+    _buildContextHintsContent(hints: ContextHint[]): HTMLDivElement {
         const grid = document.createElement('div');
         grid.className = `editor-context-hints-grid ${hints.length > 1 ? 'is-cascade' : 'is-single'}`;
 
@@ -754,7 +875,7 @@ export const metadataDialogsMixin = {
         return grid;
     },
 
-    _openContextHintsDialog() {
+    _openContextHintsDialog(): void {
         const hints = this._getContextHints();
         if (!this.contextHintsDialog || hints.length === 0) return;
 
@@ -765,7 +886,8 @@ export const metadataDialogsMixin = {
         this.contextHintsDialog.showModal();
     },
 
-    _getShortcutSections() {
+    /** The shortcut help for the current layout and document type, from the loaded Vim shortcut config. */
+    _getShortcutSections(): VimShortcutHelpSection[] {
         return getVimShortcutSections({
             layoutMode: this.layoutMode,
             shaderDocument: isShaderDocument(this.currentDocument),
@@ -773,7 +895,7 @@ export const metadataDialogsMixin = {
         });
     },
 
-    _buildShortcutSections() {
+    _buildShortcutSections(): DocumentFragment {
         const fragment = document.createDocumentFragment();
 
         this._getShortcutSections().forEach((section) => {
@@ -818,7 +940,8 @@ export const metadataDialogsMixin = {
         return fragment;
     },
 
-    openShortcutHelpDialog() {
+    /** Opens the shortcut help; returns whether it opened (`false` when its elements are missing). */
+    openShortcutHelpDialog(): boolean {
         if (!this.shortcutsDialog || !this.shortcutsDialogContent) return false;
 
         this._rememberEditorFocusTarget();
@@ -830,7 +953,8 @@ export const metadataDialogsMixin = {
         return true;
     },
 
-    setVimShortcutConfig(config) {
+    /** Sets the Vim shortcut config (the defaults for a missing one) and refreshes an open help dialog. */
+    setVimShortcutConfig(config: VimShortcutConfig | null | undefined): void {
         this.vimShortcutConfig = config || getDefaultVimShortcutConfig();
 
         if (this.shortcutsDialog?.open && this.shortcutsDialogContent) {
@@ -838,7 +962,8 @@ export const metadataDialogsMixin = {
         }
     },
 
-    _openQuickOpenDialog() {
+    /** Opens quick open with an empty query (only when some file is visible). */
+    _openQuickOpenDialog(): void {
         if (!this.quickOpenDialog || !this.quickOpenInput) return;
         if (this._getVisibleFiles().length === 0) return;
 
@@ -850,7 +975,8 @@ export const metadataDialogsMixin = {
         this.quickOpenInput.select();
     },
 
-    _selectAdjacentTab(direction = 1) {
+    /** Tabs layout only: activates the previous (`direction < 0`) or next visible file, wrapping around. */
+    _selectAdjacentTab(direction: number = 1): void {
         if (this.layoutMode !== 'tabs') return;
 
         const files = this._getVisibleFiles();
@@ -868,7 +994,11 @@ export const metadataDialogsMixin = {
         this._emitSessionStateChange();
     },
 
-    _renderQuickOpenMatches() {
+    /**
+     * Re-runs the quick-open query and rebuilds the list, keeping the highlighted file when it still
+     * matches (else the first match). Hovering a row highlights it; clicking opens it.
+     */
+    _renderQuickOpenMatches(): void {
         if (!this.quickOpenList || !this.quickOpenEmpty || !this.btnQuickOpenConfirm) return;
 
         const matches = this._getQuickOpenMatches(this.quickOpenInput?.value || '');
@@ -922,16 +1052,17 @@ export const metadataDialogsMixin = {
             const detail = document.createElement('div');
             detail.className = 'editor-quick-open-item-detail';
             detail.textContent = file.name && file.name !== file.path
-                ? `${file.name} \u2022 ${file.language}`
+                ? `${file.name} • ${file.language}`
                 : file.language;
 
             item.appendChild(meta);
             item.appendChild(detail);
-            this.quickOpenList.appendChild(item);
+            this.quickOpenList!.appendChild(item); // checked at the top of the method
         });
     },
 
-    _handleQuickOpenKeydown(event) {
+    /** ArrowUp/ArrowDown move the highlight, Enter opens the highlighted file; other keys type into the query. */
+    _handleQuickOpenKeydown(event: KeyboardEvent): void {
         if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) {
             return;
         }
@@ -964,13 +1095,17 @@ export const metadataDialogsMixin = {
         this._openSelectedQuickOpenMatch();
     },
 
-    _openSelectedQuickOpenMatch() {
+    _openSelectedQuickOpenMatch(): void {
         const file = this.quickOpenState.matches[this.quickOpenState.selectedIndex] || null;
         if (!file) return;
         this._openFileFromQuickPicker(file);
     },
 
-    _openFileFromQuickPicker(file) {
+    /**
+     * Closes quick open and moves to the file: in Tabs a different file becomes the open tab (re-render);
+     * otherwise the cursor goes to the file's editor right away.
+     */
+    _openFileFromQuickPicker(file: EditorFile | null | undefined): void {
         if (!file?.id) return;
 
         this.quickOpenDialog?.close();

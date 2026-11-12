@@ -73,8 +73,11 @@ export interface EnabledExercisePresentation {
     hints: string[];
     instructions: string[];
     lockedFileCount: number;
-    /** The notes body is folded away (only the header stays). */
-    notesCollapsed: boolean;
+    /**
+     * The notes body is folded away (only the header stays). Absent right after the exercise metadata
+     * changes (the editor resets its exercise state without this field), which reads as not folded.
+     */
+    notesCollapsed?: boolean;
     /** Hints not revealed yet. */
     remainingHintCount: number;
     referencesRevealed: boolean;
