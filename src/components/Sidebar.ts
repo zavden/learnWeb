@@ -1,9 +1,84 @@
 // ─── Sidebar Navigation Component ───────────────────────
+// The left sidebar: the material tree (chapters > sections > topics) with its expand/collapse and
+// "show hidden chapters" controls, plus the toolbar buttons (create, favorites, pending, preview info,
+// Vim default, system-clipboard default). Created once by the app shell (src/main.ts), which supplies the
+// callbacks; the tree comes from `fetchTree` (src/utils/api.ts, shape in src/types/material.ts).
+//
+// Worth knowing before editing:
+// - `fullTree` always holds every chapter, hidden ones included (topic lookups for session restore,
+//   favorites, pending and the create dialog need them); `tree` is the part currently displayed.
+// - Expansion state lives in two Sets keyed `chapter:<id>` and `section:<chapterId>/<sectionId>`, so it
+//   survives `render()` (which rebuilds the whole tree DOM) and `load()` (which drops keys that vanished).
+// - The three toggle buttons (preview info, Vim, clipboard) never flip their own state: they ask the app
+//   (`onXToggle(!current)`) and the app answers by calling the matching `setX…` method.
+// - "Show hidden" is the only state the sidebar persists itself (localStorage).
 
 import { fetchTree, setChapterHidden } from '../utils/api.ts';
+import { byId } from '../utils/dom.ts';
+import { errorMessage } from '../utils/errors.ts';
+import type { MaterialChapter, MaterialLabelSource, MaterialTopic, MaterialTree } from '../types/material.ts';
 
+/** What the app shell passes to `new Sidebar(...)`. */
+export interface SidebarOptions {
+    /** A topic row was clicked (the row is already highlighted); `label` is the text of that row. */
+    onTopicSelect: (topicPath: string, label: string) => void;
+    /** The header "+" button (no argument) or a topic's own "+" button (that topic's path) was clicked. */
+    onCreateClick: (topicPath?: string) => void;
+    /** The clipboard-default button was clicked; `enabled` is the state the user asks for. */
+    onClipboardDefaultToggle?: (enabled: boolean) => void;
+    onFavoritesClick?: () => void;
+    onPendingClick?: () => void;
+    /** The preview-info button was clicked; `visible` is the state the user asks for. */
+    onPreviewInfoToggle?: (visible: boolean) => void;
+    /** The Vim-default button was clicked; `enabled` is the state the user asks for. */
+    onVimDefaultToggle?: (enabled: boolean) => void;
+}
+
+/** Options of {@link Sidebar.getTree}. */
+export interface SidebarTreeOptions {
+    /** Keep hidden chapters in the result (default `false`). */
+    includeHidden?: boolean;
+}
+
+/**
+ * The sidebar: wires the elements of `index.html` (`#nav-tree` and the toolbar buttons) in its constructor.
+ * Call `load()` after construction to fill the tree.
+ */
 export class Sidebar {
-    constructor({ onTopicSelect, onCreateClick, onClipboardDefaultToggle, onFavoritesClick, onPendingClick, onPreviewInfoToggle, onVimDefaultToggle }) {
+    private readonly onTopicSelect: SidebarOptions['onTopicSelect'];
+    private readonly onCreateClick: SidebarOptions['onCreateClick'];
+    private readonly onClipboardDefaultToggle: SidebarOptions['onClipboardDefaultToggle'];
+    private readonly onFavoritesClick: SidebarOptions['onFavoritesClick'];
+    private readonly onPendingClick: SidebarOptions['onPendingClick'];
+    private readonly onPreviewInfoToggle: SidebarOptions['onPreviewInfoToggle'];
+    private readonly onVimDefaultToggle: SidebarOptions['onVimDefaultToggle'];
+    private readonly container: HTMLElement;
+    private readonly btnCreate: HTMLElement;
+    private readonly btnFavorites: HTMLElement | null;
+    private readonly btnSidebarPreviewInfo: HTMLElement | null;
+    private readonly btnSidebarClipboardDefault: HTMLElement | null;
+    private readonly btnSidebarVimDefault: HTMLElement | null;
+    private readonly btnToggleHiddenChapters: HTMLElement | null;
+    private readonly btnCollapseTree: HTMLElement | null;
+    private readonly btnExpandTree: HTMLElement | null;
+    private readonly treeControls: HTMLElement | null;
+    /** The chapters currently displayed: `fullTree`, minus the hidden chapters unless `showHiddenChapters`. */
+    private tree: MaterialTree;
+    /** Every chapter the server knows, hidden ones included. */
+    private fullTree: MaterialTree;
+    /** Path of the highlighted topic (`chapterId/sectionId/topicId`), or `null` when none is. */
+    private activeTopicPath: string | null;
+    private readonly showHiddenStorageKey: string;
+    private clipboardDefaultEnabled: boolean;
+    private previewInfoVisible: boolean;
+    private vimDefaultEnabled: boolean;
+    /** Whether hidden chapters are listed in the tree (the "Show Hidden" toggle; persisted in localStorage). */
+    showHiddenChapters: boolean;
+    private expandedChapterIds: Set<string>;
+    private expandedSectionIds: Set<string>;
+    private readonly btnPending: HTMLElement | null;
+
+    constructor({ onTopicSelect, onCreateClick, onClipboardDefaultToggle, onFavoritesClick, onPendingClick, onPreviewInfoToggle, onVimDefaultToggle }: SidebarOptions) {
         this.onTopicSelect = onTopicSelect;
         this.onCreateClick = onCreateClick;
         this.onClipboardDefaultToggle = onClipboardDefaultToggle;
@@ -11,8 +86,8 @@ export class Sidebar {
         this.onPendingClick = onPendingClick;
         this.onPreviewInfoToggle = onPreviewInfoToggle;
         this.onVimDefaultToggle = onVimDefaultToggle;
-        this.container = document.getElementById('nav-tree');
-        this.btnCreate = document.getElementById('btn-create');
+        this.container = byId('nav-tree');
+        this.btnCreate = byId('btn-create');
         this.btnFavorites = document.getElementById('btn-favorites');
         this.btnSidebarPreviewInfo = document.getElementById('btn-sidebar-preview-info');
         this.btnSidebarClipboardDefault = document.getElementById('btn-sidebar-clipboard-default');
@@ -45,7 +120,8 @@ export class Sidebar {
         this._syncControlState();
     }
 
-    async load() {
+    /** (Re)fetches the tree from the server, re-applies the hidden-chapters filter and re-renders. */
+    async load(): Promise<void> {
         // Always fetch hidden chapters too: "hidden" only affects what the tree shows,
         // topic lookups (session restore, favorites, pending, create) need all of them.
         this.fullTree = await fetchTree({ includeHidden: true });
@@ -59,7 +135,8 @@ export class Sidebar {
         }
     }
 
-    render() {
+    /** Rebuilds the whole tree DOM from `tree` and the expansion Sets. Does not restore the active highlight. */
+    render(): void {
         this.container.innerHTML = '';
         this.container.classList.toggle('showing-hidden', this.showHiddenChapters);
         this._syncControlState();
@@ -163,7 +240,7 @@ export class Sidebar {
         });
     }
 
-    _createItem(label, className, hasArrow, isExpanded = false, labelSource = 'slug') {
+    private _createItem(label: string, className: string, hasArrow: boolean, isExpanded: boolean = false, labelSource: MaterialLabelSource = 'slug'): HTMLDivElement {
         const div = document.createElement('div');
         div.className = `tree-item ${className}`;
 
@@ -184,17 +261,17 @@ export class Sidebar {
         return div;
     }
 
-    _toggleChapter(chapterKey, item, childrenDiv) {
+    private _toggleChapter(chapterKey: string, item: HTMLElement, childrenDiv: HTMLElement): void {
         const nextExpanded = !this.expandedChapterIds.has(chapterKey);
         this._setChapterExpanded(chapterKey, nextExpanded, item, childrenDiv);
     }
 
-    _toggleSection(sectionKey, item, childrenDiv) {
+    private _toggleSection(sectionKey: string, item: HTMLElement, childrenDiv: HTMLElement): void {
         const nextExpanded = !this.expandedSectionIds.has(sectionKey);
         this._setSectionExpanded(sectionKey, nextExpanded, item, childrenDiv);
     }
 
-    _setChapterExpanded(chapterKey, expanded, item, childrenDiv) {
+    private _setChapterExpanded(chapterKey: string, expanded: boolean, item: HTMLElement, childrenDiv: HTMLElement): void {
         if (expanded) {
             this.expandedChapterIds.add(chapterKey);
         } else {
@@ -204,7 +281,7 @@ export class Sidebar {
         this._applyExpandedState(item, childrenDiv, expanded);
     }
 
-    _setSectionExpanded(sectionKey, expanded, item, childrenDiv) {
+    private _setSectionExpanded(sectionKey: string, expanded: boolean, item: HTMLElement, childrenDiv: HTMLElement): void {
         if (expanded) {
             this.expandedSectionIds.add(sectionKey);
         } else {
@@ -214,7 +291,7 @@ export class Sidebar {
         this._applyExpandedState(item, childrenDiv, expanded);
     }
 
-    _applyExpandedState(item, childrenDiv, expanded) {
+    private _applyExpandedState(item: HTMLElement, childrenDiv: HTMLElement, expanded: boolean): void {
         const arrow = item.querySelector('.arrow');
         if (arrow) {
             arrow.classList.toggle('expanded', expanded);
@@ -222,13 +299,14 @@ export class Sidebar {
         childrenDiv.classList.toggle('collapsed', !expanded);
     }
 
-    _syncExpansionState() {
+    /** Drops expansion keys of chapters and sections that are no longer displayed. */
+    private _syncExpansionState(): void {
         const availableChapterIds = new Set(this.tree.map((chapter) => this._getChapterKey(chapter.id)));
         this.expandedChapterIds = new Set(
             Array.from(this.expandedChapterIds).filter((chapterKey) => availableChapterIds.has(chapterKey)),
         );
 
-        const availableSectionIds = new Set();
+        const availableSectionIds = new Set<string>();
         this.tree.forEach((chapter) => {
             chapter.sections.forEach((section) => {
                 availableSectionIds.add(this._getSectionKey(chapter.id, section.id));
@@ -241,15 +319,15 @@ export class Sidebar {
 
     }
 
-    _getChapterKey(chapterId) {
+    private _getChapterKey(chapterId: string): string {
         return `chapter:${chapterId}`;
     }
 
-    _getSectionKey(chapterId, sectionId) {
+    private _getSectionKey(chapterId: string, sectionId: string): string {
         return `section:${chapterId}/${sectionId}`;
     }
 
-    _ensureTopicAncestorsExpanded(topicPath) {
+    private _ensureTopicAncestorsExpanded(topicPath: string | null | undefined): void {
         const [chapterId, sectionId] = String(topicPath || '').split('/');
         if (!chapterId || !sectionId) return;
 
@@ -257,14 +335,18 @@ export class Sidebar {
         this.expandedSectionIds.add(this._getSectionKey(chapterId, sectionId));
     }
 
-    setActive(topicPath) {
+    /**
+     * Highlights the topic at `topicPath` (`chapterId/sectionId/topicId`) and expands its chapter and
+     * section. `null` clears the highlight. Does not fire `onTopicSelect`.
+     */
+    setActive(topicPath: string | null): void {
         this.activeTopicPath = topicPath;
         this._ensureTopicAncestorsExpanded(topicPath);
         this.render();
         this._applyActiveClass();
     }
 
-    _applyActiveClass() {
+    private _applyActiveClass(): void {
         this.container.querySelectorAll('.tree-item').forEach((el) => {
             el.classList.remove('active');
         });
@@ -272,14 +354,16 @@ export class Sidebar {
         if (activeEl) activeEl.classList.add('active');
     }
 
-    collapseAll() {
+    /** Collapses every chapter and section (the "collapse" control button). */
+    collapseAll(): void {
         this.expandedChapterIds.clear();
         this.expandedSectionIds.clear();
         this.render();
         this._applyActiveClass();
     }
 
-    expandAllVisible() {
+    /** Expands every chapter and section of the displayed tree, except hidden chapters. */
+    expandAllVisible(): void {
         this.tree.forEach((chapter) => {
             if (chapter.hidden) return;
             this.expandedChapterIds.add(this._getChapterKey(chapter.id));
@@ -291,7 +375,8 @@ export class Sidebar {
         this._applyActiveClass();
     }
 
-    async toggleHiddenChapters() {
+    /** Flips "Show Hidden", remembers the choice in localStorage and reloads the tree. */
+    async toggleHiddenChapters(): Promise<void> {
         this.showHiddenChapters = !this.showHiddenChapters;
         try {
             window.localStorage.setItem(this.showHiddenStorageKey, this.showHiddenChapters ? '1' : '0');
@@ -301,7 +386,7 @@ export class Sidebar {
         await this.load();
     }
 
-    _readShowHiddenChapters() {
+    private _readShowHiddenChapters(): boolean {
         try {
             return window.localStorage.getItem(this.showHiddenStorageKey) === '1';
         } catch {
@@ -309,7 +394,8 @@ export class Sidebar {
         }
     }
 
-    _syncControlState() {
+    /** Brings the toolbar buttons (labels, titles, pressed state) in line with the state fields. */
+    private _syncControlState(): void {
         if (this.btnSidebarPreviewInfo) {
             this.btnSidebarPreviewInfo.classList.toggle('is-active', this.previewInfoVisible);
             this.btnSidebarPreviewInfo.setAttribute('aria-pressed', String(this.previewInfoVisible));
@@ -346,29 +432,35 @@ export class Sidebar {
         }
     }
 
-    setClipboardDefaultEnabled(enabled) {
+    /** Shows the clipboard-default button as on or off. Does not fire `onClipboardDefaultToggle`. */
+    setClipboardDefaultEnabled(enabled: boolean): void {
         this.clipboardDefaultEnabled = Boolean(enabled);
         this._syncControlState();
     }
 
-    setPreviewInfoVisible(visible) {
+    /** Shows the preview-info button as on or off. Does not fire `onPreviewInfoToggle`. */
+    setPreviewInfoVisible(visible: boolean): void {
         this.previewInfoVisible = visible !== false;
         this._syncControlState();
     }
 
-    setVimDefaultEnabled(enabled) {
+    /** Shows the Vim-default button as on or off. Does not fire `onVimDefaultToggle`. */
+    setVimDefaultEnabled(enabled: boolean): void {
         this.vimDefaultEnabled = Boolean(enabled);
         this._syncControlState();
     }
 
-    /** Returns tree data for create dialog parent selection */
-    getTree({ includeHidden = false } = {}) {
+    /**
+     * The tree for the create dialog's parent selector: every chapter the server knows once `load()` has
+     * run (the displayed tree before that), minus hidden chapters unless `includeHidden`.
+     */
+    getTree({ includeHidden = false }: SidebarTreeOptions = {}): MaterialTree {
         const source = this.fullTree.length > 0 ? this.fullTree : this.tree;
         return includeHidden ? source : source.filter((chapter) => !chapter.hidden);
     }
 
     /** Human-readable "Chapter / Section / Topic" label for a topic path ('' if unknown). */
-    describeTopic(topicPath) {
+    describeTopic(topicPath: string | null | undefined): string {
         const normalizedPath = String(topicPath || '').trim();
         if (!normalizedPath) return '';
 
@@ -385,7 +477,7 @@ export class Sidebar {
     }
 
     /** Finds a topic anywhere in the material tree, including hidden chapters. */
-    findTopic(topicPath) {
+    findTopic(topicPath: string | null | undefined): MaterialTopic | null {
         const normalizedPath = String(topicPath || '').trim();
         if (!normalizedPath) return null;
 
@@ -399,7 +491,8 @@ export class Sidebar {
         return null;
     }
 
-    async _toggleChapterHidden(chapter) {
+    /** Asks for confirmation, then hides (or restores) a chapter through the API and reloads the tree. */
+    private async _toggleChapterHidden(chapter: MaterialChapter): Promise<void> {
         if (!chapter?.id) return;
 
         const nextHidden = !chapter.hidden;
@@ -412,7 +505,7 @@ export class Sidebar {
             await this.load();
         } catch (error) {
             console.error(`Failed to ${nextHidden ? 'hide' : 'restore'} chapter.`, error);
-            window.alert(`Could not update chapter visibility: ${error.message}`);
+            window.alert(`Could not update chapter visibility: ${errorMessage(error)}`);
         }
     }
 }

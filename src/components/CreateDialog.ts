@@ -1,27 +1,83 @@
+// ─── Create Dialog ──────────────────────────────────────
+// The "Create New" dialog (#create-dialog): makes a chapter, section, topic or example through
+// `createItem` (src/utils/api.ts, POST /api/create). Created once by the app shell (src/main.ts), which
+// opens it from the sidebar's "+" buttons with the current tree (`open`) and reloads the sidebar when
+// `onCreated` fires.
+//
+// Worth knowing before editing:
+// - The options of `#create-type` in index.html are exactly the four `CreateItemType` values, which is
+//   why the selector's value is asserted to that type wherever it is read.
+// - The parent selector is rebuilt from `tree` each time the type changes. A chapter has no parent;
+//   a section's parent is a chapter, a topic's a section and an example's a topic. Hidden chapters are
+//   listed (marked "(hidden)") only if the caller put them in the tree it passed to `open`.
+// - Submit stays disabled while a request is in flight or while the chosen type has no parent to pick.
+
 import { SESSION_PRESETS } from '../config/exampleBlocks.ts';
 import { createItem } from '../utils/api.ts';
-import { showToast } from './editor/toast.ts';
+import { byId } from '../utils/dom.ts';
+import { errorMessage } from '../utils/errors.ts';
+import { showToast, type ToastType } from './editor/toast.ts';
+import type { CreateItemResponse, CreateItemType } from '../types/api.ts';
+import type { MaterialTree } from '../types/material.ts';
 
-const PARENT_LABELS = {
+/** What the dialog asks for as the parent of each type; a chapter has none. */
+const PARENT_LABELS: Partial<Record<CreateItemType, string>> = {
     section: 'chapter',
     topic: 'section',
     example: 'topic',
 };
 
+/** What `onCreated` receives after the server created the item. */
+export interface CreatedItem {
+    type: CreateItemType;
+    /** The name as typed (trimmed), not the generated folder or file name: that is in `result`. */
+    name: string;
+    /** Path of the parent the item was created in; `''` for a chapter. */
+    parentPath: string;
+    result: CreateItemResponse;
+}
+
+/** What the app shell passes to `new CreateDialog(...)`. */
+export interface CreateDialogOptions {
+    /** Called after a successful create, once the dialog is closed and the success toast is shown. */
+    onCreated?: (created: CreatedItem) => void;
+}
+
+/** Kind of message `_setHint` shows: `error` is styled as a validation error. */
+type HintType = 'info' | 'error';
+
+/** The create dialog. Call `open` with the tree to pick a parent from; the form handles the rest. */
 export class CreateDialog {
-    constructor({ onCreated }) {
+    private readonly onCreated: CreateDialogOptions['onCreated'];
+    private readonly dialog: HTMLDialogElement;
+    private readonly form: HTMLFormElement;
+    private readonly typeSelect: HTMLSelectElement;
+    private readonly parentSelect: HTMLSelectElement;
+    private readonly parentGroup: HTMLElement;
+    private readonly presetSelect: HTMLSelectElement;
+    private readonly presetGroup: HTMLElement;
+    private readonly nameInput: HTMLInputElement;
+    private readonly btnCancel: HTMLButtonElement;
+    private readonly btnSubmit: HTMLButtonElement | null;
+    private readonly hint: HTMLElement | null;
+    /** The tree the parent selector is built from; set by each `open`. */
+    private tree: MaterialTree;
+    /** `true` while a create request is in flight. */
+    private isSubmitting: boolean;
+
+    constructor({ onCreated }: CreateDialogOptions) {
         this.onCreated = onCreated;
-        this.dialog = document.getElementById('create-dialog');
-        this.form = document.getElementById('create-form');
-        this.typeSelect = document.getElementById('create-type');
-        this.parentSelect = document.getElementById('create-parent');
-        this.parentGroup = document.getElementById('parent-group');
-        this.presetSelect = document.getElementById('create-preset');
-        this.presetGroup = document.getElementById('preset-group');
-        this.nameInput = document.getElementById('create-name');
-        this.btnCancel = document.getElementById('btn-cancel-create');
-        this.btnSubmit = document.getElementById('btn-submit-create')
-            || this.form?.querySelector('button[type="submit"]');
+        this.dialog = byId('create-dialog');
+        this.form = byId('create-form');
+        this.typeSelect = byId('create-type');
+        this.parentSelect = byId('create-parent');
+        this.parentGroup = byId('parent-group');
+        this.presetSelect = byId('create-preset');
+        this.presetGroup = byId('preset-group');
+        this.nameInput = byId('create-name');
+        this.btnCancel = byId('btn-cancel-create');
+        this.btnSubmit = (document.getElementById('btn-submit-create') as HTMLButtonElement | null)
+            || this.form?.querySelector<HTMLButtonElement>('button[type="submit"]');
         this.hint = document.getElementById('create-dialog-hint');
 
         this.tree = [];
@@ -31,7 +87,8 @@ export class CreateDialog {
         this._initEvents();
     }
 
-    _populatePresets() {
+    /** Fills the example-preset selector from `SESSION_PRESETS` and selects the default preset. */
+    private _populatePresets(): void {
         this.presetSelect.innerHTML = '';
 
         SESSION_PRESETS.forEach((preset) => {
@@ -44,7 +101,7 @@ export class CreateDialog {
         this.presetSelect.value = 'html-css-javascript';
     }
 
-    _initEvents() {
+    private _initEvents(): void {
         this.typeSelect.addEventListener('change', () => this._updateFormState());
         this.parentSelect.addEventListener('change', () => this._syncSubmitState());
 
@@ -57,7 +114,7 @@ export class CreateDialog {
             // Ignore double submits (Enter pressed twice) while a request is in flight.
             if (this.isSubmitting) return;
 
-            const type = this.typeSelect.value;
+            const type = this.typeSelect.value as CreateItemType;
             const name = this.nameInput.value.trim();
             if (!name) {
                 this._setHint('Enter a name.', 'error');
@@ -90,27 +147,28 @@ export class CreateDialog {
                     });
                 }
             } catch (err) {
-                this._setHint(`Error: ${err.message}`, 'error');
-                this._showToast(`Error: ${err.message}`, 'error');
+                this._setHint(`Error: ${errorMessage(err)}`, 'error');
+                this._showToast(`Error: ${errorMessage(err)}`, 'error');
             } finally {
                 this._setSubmitting(false);
             }
         });
     }
 
-    _setSubmitting(submitting) {
+    private _setSubmitting(submitting: boolean): void {
         this.isSubmitting = Boolean(submitting);
         this._syncSubmitState();
     }
 
-    _setHint(message = '', type = 'info') {
+    private _setHint(message: string = '', type: HintType = 'info'): void {
         if (!this.hint) return;
         this.hint.textContent = message;
         this.hint.classList.toggle('is-error', type === 'error');
     }
 
-    _syncSubmitState() {
-        const type = this.typeSelect.value;
+    /** Enables the submit button only when no request is running and the selected type has its parent. */
+    private _syncSubmitState(): void {
+        const type = this.typeSelect.value as CreateItemType;
         const needsParent = type !== 'chapter';
         const hasParent = !needsParent || Boolean(String(this.parentSelect.value || '').trim());
 
@@ -125,7 +183,11 @@ export class CreateDialog {
         }
     }
 
-    open(tree, preselectedTopicPath = null) {
+    /**
+     * Shows the dialog over `tree` (the parents it offers). With a topic path the type starts as
+     * `example` with that topic as parent (left empty if the topic is not in `tree`); otherwise as `chapter`.
+     */
+    open(tree: MaterialTree, preselectedTopicPath: string | null = null): void {
         this.tree = Array.isArray(tree) ? tree : [];
         this.nameInput.value = '';
         this.presetSelect.value = 'html-css-javascript';
@@ -149,8 +211,9 @@ export class CreateDialog {
         this.nameInput.focus();
     }
 
-    _updateFormState() {
-        const type = this.typeSelect.value;
+    /** Rebuilds the parent selector and shows or hides the parent and preset rows for the selected type. */
+    private _updateFormState(): void {
+        const type = this.typeSelect.value as CreateItemType;
         this.parentSelect.innerHTML = '';
 
         if (type === 'chapter') {
@@ -200,7 +263,7 @@ export class CreateDialog {
         this._syncSubmitState();
     }
 
-    _showToast(message, type = 'success') {
+    private _showToast(message: string, type: ToastType = 'success'): void {
         showToast(message, type);
     }
 }

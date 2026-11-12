@@ -1,11 +1,25 @@
-import { fetchTopicAssets } from '../utils/api.ts';
-import { highlightCode } from '../utils/theoryRenderer.ts';
-
+// ─── Assets Dialog ──────────────────────────────────────
 // Read-only browser for the files in a topic's assets/ folder (data files, helper scripts,
-// stylesheets, images) that examples load with relative URLs.
+// stylesheets, images) that examples load with relative URLs. Created once by the app shell
+// (src/main.ts), which opens it from the gallery's "Assets" button; the file list comes from
+// `fetchTopicAssets` (src/utils/api.ts) and code is highlighted with `highlightCode`
+// (src/utils/theoryRenderer.ts).
+//
+// Worth knowing before editing:
+// - `request` is a generation counter, bumped by `open`, by `_show` and when the dialog closes. An async
+//   step that finds a newer value drops its result, so a slow file never overwrites the one picked after it.
+// - Images are shown as `<img>`; SVG additionally falls through to the text viewer, so its source is
+//   listed under the picture. Extensions missing from `TEXT_LANGUAGES` count as binary.
+
+import { fetchTopicAssets } from '../utils/api.ts';
+import { byId } from '../utils/dom.ts';
+import { errorMessage } from '../utils/errors.ts';
+import { highlightCode } from '../utils/theoryRenderer.ts';
+import type { TopicAsset, TopicAssetsResponse } from '../types/api.ts';
 
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'svg', 'ico', 'bmp']);
-const TEXT_LANGUAGES = {
+/** File extension (lower case) to the highlight.js language used to show the file; `plaintext` is escaped, not highlighted. */
+const TEXT_LANGUAGES: Readonly<Record<string, string | undefined>> = {
     css: 'css',
     csv: 'plaintext',
     htm: 'html',
@@ -22,26 +36,45 @@ const TEXT_LANGUAGES = {
     glsl: 'glsl',
     xml: 'xml',
 };
+/** Text files whose `content-length` is above this are not loaded into the viewer. */
 const MAX_TEXT_BYTES = 400_000;
 
-function getExtension(filename = '') {
+/** Lower-case extension of the last path segment, or `''` when it has none. */
+function getExtension(filename: string = ''): string {
     const name = String(filename).split('/').pop() || '';
     return name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : '';
 }
 
-function formatBytes(bytes) {
+function formatBytes(bytes: number): string {
     if (!Number.isFinite(bytes)) return '';
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+/** Options of {@link AssetsDialog.open}. */
+export interface AssetsDialogOpenOptions {
+    /** Shown in the dialog title (`Assets · <label>`); the plain title `Assets` when empty. */
+    topicLabel?: string;
+}
+
+/** The assets dialog: a file list on the left, a viewer on the right. Call `open` to show it for a topic. */
 export class AssetsDialog {
+    private readonly dialog: HTMLDialogElement | null;
+    private readonly title: HTMLElement;
+    private readonly list: HTMLElement;
+    private readonly viewer: HTMLElement;
+    private readonly btnClose: HTMLElement | null;
+    private readonly btnCloseIcon: HTMLElement | null;
+    private topicPath: string;
+    /** Generation counter, see the header comment. */
+    private request: number;
+
     constructor() {
-        this.dialog = document.getElementById('assets-dialog');
-        this.title = document.getElementById('assets-dialog-title');
-        this.list = document.getElementById('assets-dialog-list');
-        this.viewer = document.getElementById('assets-dialog-viewer');
+        this.dialog = document.getElementById('assets-dialog') as HTMLDialogElement | null;
+        this.title = byId('assets-dialog-title');
+        this.list = byId('assets-dialog-list');
+        this.viewer = byId('assets-dialog-viewer');
         this.btnClose = document.getElementById('assets-dialog-close');
         this.btnCloseIcon = document.getElementById('assets-dialog-close-icon');
         this.topicPath = '';
@@ -55,7 +88,11 @@ export class AssetsDialog {
         });
     }
 
-    async open(topicPath, { topicLabel = '' } = {}) {
+    /**
+     * Opens the dialog for the assets of `topicPath` (`chapterId/sectionId/topicId`) and shows the first file.
+     * Does nothing without a dialog element or a topic path.
+     */
+    async open(topicPath: string, { topicLabel = '' }: AssetsDialogOpenOptions = {}): Promise<void> {
         if (!this.dialog || !topicPath) return;
         this.topicPath = topicPath;
         const request = ++this.request;
@@ -64,12 +101,12 @@ export class AssetsDialog {
         this.viewer.replaceChildren(this._message('Pick a file to see it.'));
         if (!this.dialog.open) this.dialog.showModal();
 
-        let assets = [];
+        let assets: TopicAssetsResponse = [];
         try {
             assets = await fetchTopicAssets(topicPath);
         } catch (error) {
             if (request !== this.request) return;
-            this.list.replaceChildren(this._message(`Could not list assets: ${error.message}`));
+            this.list.replaceChildren(this._message(`Could not list assets: ${errorMessage(error)}`));
             return;
         }
         if (request !== this.request) return;
@@ -93,10 +130,11 @@ export class AssetsDialog {
             });
             return button;
         }));
-        this.list.querySelector('.assets-dialog-item')?.click();
+        this.list.querySelector<HTMLElement>('.assets-dialog-item')?.click();
     }
 
-    async _show(asset) {
+    /** Shows one asset in the viewer pane: an image, highlighted text, or a hint to open it raw. */
+    private async _show(asset: TopicAsset): Promise<void> {
         const request = ++this.request;
         const path = asset.path || asset.filename;
         const extension = getExtension(path);
@@ -146,11 +184,11 @@ export class AssetsDialog {
             if (IMAGE_EXTENSIONS.has(extension)) this.viewer.append(pre);
             else this.viewer.replaceChildren(header, pre);
         } catch (error) {
-            if (request === this.request) this.viewer.replaceChildren(header, this._message(`Could not load the file: ${error.message}`));
+            if (request === this.request) this.viewer.replaceChildren(header, this._message(`Could not load the file: ${errorMessage(error)}`));
         }
     }
 
-    _message(text) {
+    private _message(text: string): HTMLParagraphElement {
         const paragraph = document.createElement('p');
         paragraph.className = 'dialog-hint assets-dialog-message';
         paragraph.textContent = text;
