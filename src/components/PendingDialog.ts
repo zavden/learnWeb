@@ -57,6 +57,12 @@ export class PendingDialog {
     /** Counts renders (and dialog closes): a render whose token is stale drops its result. */
     private _renderToken: number;
 
+    /**
+     * Starts the preview of a card built by `_createCard()`. A sandboxed copy only loads once its frame is
+     * in the page (`loadSrcdocWhenLaidOut`), and `render()` attaches the cards after all of them are built.
+     */
+    private readonly _previewLoads = new WeakMap<HTMLDivElement, () => void>();
+
     constructor({ getTopicLabel, onExampleSelect, onRemovePending }: PendingDialogOptions) {
         this.onExampleSelect = onExampleSelect;
         this.getTopicLabel = getTopicLabel;
@@ -112,7 +118,10 @@ export class PendingDialog {
         // A newer render (or closing the dialog) superseded this one.
         if (renderToken !== this._renderToken) return;
         this.grid.innerHTML = '';
-        cards.forEach((card) => this.grid!.appendChild(card)); // checked at the top; narrowing does not reach the callback
+        cards.forEach((card) => {
+            this.grid!.appendChild(card); // checked at the top; narrowing does not reach the callback
+            this._previewLoads.get(card)?.();
+        });
     }
 
     private async _createCard(entry: PendingEntry): Promise<HTMLDivElement> {
@@ -159,7 +168,8 @@ export class PendingDialog {
                     }
 
                     preview.appendChild(iframe);
-                    loadSrcdocWhenLaidOut(iframe, srcdoc);
+                    // The card is not in the page yet: render() starts the preview once it is attached.
+                    this._previewLoads.set(div, () => loadSrcdocWhenLaidOut(iframe, srcdoc));
                 }
             } catch (error) {
                 console.error(`Failed to load pending preview for ${entry.path}`, error);
