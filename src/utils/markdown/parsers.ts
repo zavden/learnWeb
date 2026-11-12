@@ -7,11 +7,7 @@
 // Unclosed fences are recovered when the next opening fence of the same kind appears at column 0: the
 // block is closed there with a `recovered-unclosed-fence` warning instead of swallowing the next block.
 
-import {
-    deriveSessionId,
-    getBlockDefinition,
-    sortBlocks,
-} from '../../config/exampleBlocks.ts';
+import { deriveSessionId, getBlockDefinition, sortBlocks } from '../../config/exampleBlocks.ts';
 import type { Diagnostic } from '../../types/diagnostics.ts';
 import type {
     DocumentFileInput,
@@ -22,10 +18,7 @@ import type {
     UnsupportedBlock,
     VirtualFile,
 } from '../../types/document.ts';
-import {
-    REACT_MULTI_FILE_LANGUAGES,
-    VUE_MULTI_FILE_LANGUAGES,
-} from './constants.ts';
+import { REACT_MULTI_FILE_LANGUAGES, VUE_MULTI_FILE_LANGUAGES } from './constants.ts';
 import {
     buildBlock,
     buildFrontmatter,
@@ -208,8 +201,8 @@ export function parseLegacyBlocks(
                     'error',
                     'unexpected-text',
                     `Unexpected content at line ${index + 1}. Examples must be composed of fenced code blocks.`,
-                    { line: index + 1 }
-                )
+                    { line: index + 1 },
+                ),
             );
             index += 1;
             continue;
@@ -217,9 +210,7 @@ export function parseLegacyBlocks(
 
         const fenceLanguage = fence.language;
         // "# HTML-FULL" + ```html is the documented HTML-FULL format.
-        const language = fenceLanguage === 'html' && isHtmlFullHeading(heading)
-            ? 'html-full'
-            : fenceLanguage;
+        const language = fenceLanguage === 'html' && isHtmlFullHeading(heading) ? 'html-full' : fenceLanguage;
         const fenceLineNumber = index + 1;
         const fenced = readFencedContent(lines, index + 1, fence, isHeadingLine);
         const { closed, content } = fenced;
@@ -231,8 +222,8 @@ export function parseLegacyBlocks(
                     'warning',
                     'recovered-unclosed-fence',
                     `The "${language || 'unknown'}" block opened at line ${fenceLineNumber} has no proper closing fence. It was closed before the next block.`,
-                    { language, line: fenceLineNumber }
-                )
+                    { language, line: fenceLineNumber },
+                ),
             );
         }
 
@@ -240,24 +231,18 @@ export function parseLegacyBlocks(
 
         if (!closed) {
             diagnostics.push(
-                createDiagnostic(
-                    'error',
-                    'unclosed-fence',
-                    `Unclosed code fence for "${language || 'unknown'}".`,
-                    { language }
-                )
+                createDiagnostic('error', 'unclosed-fence', `Unclosed code fence for "${language || 'unknown'}".`, {
+                    language,
+                }),
             );
             break;
         }
 
         if (!definition) {
             diagnostics.push(
-                createDiagnostic(
-                    'error',
-                    'unsupported-language',
-                    `Unsupported block language "${language}".`,
-                    { language }
-                )
+                createDiagnostic('error', 'unsupported-language', `Unsupported block language "${language}".`, {
+                    language,
+                }),
             );
             unsupportedBlocks.push({ language, heading, content });
             continue;
@@ -269,8 +254,8 @@ export function parseLegacyBlocks(
                     'error',
                     'disabled-language',
                     `Block language "${language}" is recognized but not enabled yet.`,
-                    { language }
-                )
+                    { language },
+                ),
             );
             unsupportedBlocks.push({ language, heading, content });
             continue;
@@ -282,8 +267,8 @@ export function parseLegacyBlocks(
                     'warning',
                     'heading-mismatch',
                     `Heading "${heading}" does not match the canonical label "${definition.heading}".`,
-                    { heading, language }
-                )
+                    { heading, language },
+                ),
             );
         }
 
@@ -325,12 +310,9 @@ export function parseVirtualFiles(
         const fileMatch = lines[index].match(/^##\s+@file\s+(.+)$/);
         if (!fileMatch) {
             diagnostics.push(
-                createDiagnostic(
-                    'error',
-                    'invalid-file-section',
-                    `Expected "## @file ..." at line ${index + 1}.`,
-                    { line: index + 1 }
-                )
+                createDiagnostic('error', 'invalid-file-section', `Expected "## @file ..." at line ${index + 1}.`, {
+                    line: index + 1,
+                }),
             );
             index += 1;
             continue;
@@ -360,8 +342,8 @@ export function parseVirtualFiles(
                             'warning',
                             'duplicate-file-lang-directive',
                             `File "${filePath || '(unknown)'}" declares @lang more than once. The last value wins.`,
-                            { line: index + 1, path: filePath || null }
-                        )
+                            { line: index + 1, path: filePath || null },
+                        ),
                     );
                 }
                 explicitLanguage = normalizeBlockType(langMatch[1]);
@@ -378,8 +360,8 @@ export function parseVirtualFiles(
                             'warning',
                             'duplicate-file-role-directive',
                             `File "${filePath || '(unknown)'}" declares @role more than once. The last value wins.`,
-                            { line: index + 1, path: filePath || null }
-                        )
+                            { line: index + 1, path: filePath || null },
+                        ),
                     );
                 }
                 role = roleMatch[1].trim().toLowerCase();
@@ -396,8 +378,8 @@ export function parseVirtualFiles(
                     'warning',
                     'unknown-file-directive',
                     `Ignoring unsupported file directive at line ${index + 1}.`,
-                    { line: index + 1 }
-                )
+                    { line: index + 1 },
+                ),
             );
             index += 1;
         }
@@ -408,8 +390,8 @@ export function parseVirtualFiles(
                     'error',
                     'missing-file-fence',
                     `File "${filePath}" is missing its fenced code block.`,
-                    { path: filePath }
-                )
+                    { path: filePath },
+                ),
             );
             break;
         }
@@ -429,19 +411,16 @@ export function parseVirtualFiles(
                     'warning',
                     'recovered-unclosed-fence',
                     `File "${filePath}" opened its code block at line ${fenceLineNumber} without a proper closing fence. It was closed before the next file.`,
-                    { line: fenceLineNumber, path: filePath }
-                )
+                    { line: fenceLineNumber, path: filePath },
+                ),
             );
         }
 
         if (!closed) {
             diagnostics.push(
-                createDiagnostic(
-                    'error',
-                    'unclosed-fence',
-                    `Unclosed code fence for file "${filePath}".`,
-                    { path: filePath }
-                )
+                createDiagnostic('error', 'unclosed-fence', `Unclosed code fence for file "${filePath}".`, {
+                    path: filePath,
+                }),
             );
             break;
         }
@@ -452,8 +431,8 @@ export function parseVirtualFiles(
                     'error',
                     'missing-file-language',
                     `File "${filePath}" must declare a language using @lang or the fenced block language.`,
-                    { path: filePath }
-                )
+                    { path: filePath },
+                ),
             );
             continue;
         }
@@ -462,9 +441,9 @@ export function parseVirtualFiles(
         const definition = getBlockDefinition(normalizedLanguage);
 
         if (
-            !definition
-            && !REACT_MULTI_FILE_LANGUAGES.has(normalizedLanguage)
-            && !VUE_MULTI_FILE_LANGUAGES.has(normalizedLanguage)
+            !definition &&
+            !REACT_MULTI_FILE_LANGUAGES.has(normalizedLanguage) &&
+            !VUE_MULTI_FILE_LANGUAGES.has(normalizedLanguage)
         ) {
             const looksLikeVirtualAsset = role === 'asset' || isLikelyVirtualAssetPath(filePath);
 
@@ -475,8 +454,8 @@ export function parseVirtualFiles(
                     looksLikeVirtualAsset
                         ? `Virtual asset files like "${filePath}" are not supported inside Markdown projects yet. Use the topic-level assets/ folder and reference the file by relative URL instead.`
                         : `Unsupported language "${normalizedLanguage}" for file "${filePath}".`,
-                    { language: normalizedLanguage, path: filePath }
-                )
+                    { language: normalizedLanguage, path: filePath },
+                ),
             );
             continue;
         }
@@ -487,19 +466,21 @@ export function parseVirtualFiles(
                     'warning',
                     'file-language-mismatch',
                     `File "${filePath}" declares @lang "${explicitLanguage}" but the fenced block uses "${fenceLanguage}".`,
-                    { language: explicitLanguage, path: filePath }
-                )
+                    { language: explicitLanguage, path: filePath },
+                ),
             );
         }
 
-        files.push(buildVirtualFile({
-            path: filePath || `invalid-file-${files.length}`,
-            language: normalizedLanguage,
-            content,
-            role,
-            sourceKind: 'virtual',
-            index: files.length,
-        }));
+        files.push(
+            buildVirtualFile({
+                path: filePath || `invalid-file-${files.length}`,
+                language: normalizedLanguage,
+                content,
+                role,
+                sourceKind: 'virtual',
+                index: files.length,
+            }),
+        );
     }
 
     if (!metadata.mode) {
@@ -546,10 +527,7 @@ export function buildVirtualMarkdown(files: readonly VirtualFile[] = [], metadat
     const frontmatter = buildFrontmatter(metadata);
     const body = files
         .map((file) => {
-            const directives = [
-                `## @file ${file.path}`,
-                `## @lang ${file.language}`,
-            ];
+            const directives = [`## @file ${file.path}`, `## @lang ${file.language}`];
 
             if (file.role) {
                 directives.push(`## @role ${file.role}`);

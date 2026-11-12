@@ -38,7 +38,10 @@ export function serializeHighlights(highlights: DocumentHighlights, files: reado
  * highlights keyed by file id. Tolerant: segments for unknown paths and pairs with a bad line number
  * (not a number, or below 1) or an empty color are skipped; empty input gives an empty map.
  */
-export function parseHighlights(str: string | null | undefined, files: readonly HighlightFileRef[] | null | undefined): DocumentHighlights {
+export function parseHighlights(
+    str: string | null | undefined,
+    files: readonly HighlightFileRef[] | null | undefined,
+): DocumentHighlights {
     const result: DocumentHighlights = new Map();
     if (!str || !files) return result;
 

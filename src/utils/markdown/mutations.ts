@@ -62,7 +62,11 @@ function reparseDocument(documentModel: ExampleDocument): ExampleDocument {
  * Replaces the content of one file (legacy files write through to their block). The cheap path used on
  * every keystroke: it resynchronizes but does not reparse, so `diagnostics` are the previous ones.
  */
-export function updateDocumentFileContent(documentModel: ExampleDocumentInput | null | undefined, fileId: string, content: string): ExampleDocument {
+export function updateDocumentFileContent(
+    documentModel: ExampleDocumentInput | null | undefined,
+    fileId: string,
+    content: string,
+): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
     const file = nextDocument.files.find((entry) => entry.id === fileId);
     if (!file) return nextDocument;
@@ -77,7 +81,11 @@ export function updateDocumentFileContent(documentModel: ExampleDocumentInput | 
  * follow it); a legacy block is rebuilt with the new type and its canonical heading, keeping its content.
  * A blocked change returns the document resynchronized but otherwise unchanged.
  */
-export function updateDocumentFileType(documentModel: ExampleDocumentInput | null | undefined, fileId: string, nextType: string): ExampleDocument {
+export function updateDocumentFileType(
+    documentModel: ExampleDocumentInput | null | undefined,
+    fileId: string,
+    nextType: string,
+): ExampleDocument {
     const evaluation = evaluateDocumentFileTypeChange(documentModel, fileId, nextType);
     if (!evaluation.allowed) {
         return synchronizeDocument(documentModel);
@@ -130,7 +138,10 @@ export function updateDocumentFileType(documentModel: ExampleDocumentInput | nul
  * missing), a JSX/TSX block sets `framework: react` when no framework is declared. Paths are not checked
  * for duplicates here: callers check first, and the reparse reports what slips through.
  */
-export function createDocumentFile(documentModel: ExampleDocumentInput | null | undefined, options: NewDocumentFile = {}): ExampleDocument {
+export function createDocumentFile(
+    documentModel: ExampleDocumentInput | null | undefined,
+    options: NewDocumentFile = {},
+): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
     const language = normalizeBlockType(options.language || '');
 
@@ -140,12 +151,12 @@ export function createDocumentFile(documentModel: ExampleDocumentInput | null | 
         const path = normalizeVirtualPath(options.path || '');
         if (!path) return nextDocument;
 
-        const role = String(options.role || '').trim().toLowerCase();
-        const nextFiles = (nextDocument.files || []).map((entry) => (
-            role === 'entry' && entry.role === 'entry'
-                ? { ...entry, role: '' }
-                : entry
-        ));
+        const role = String(options.role || '')
+            .trim()
+            .toLowerCase();
+        const nextFiles = (nextDocument.files || []).map((entry) =>
+            role === 'entry' && entry.role === 'entry' ? { ...entry, role: '' } : entry,
+        );
         nextDocument.files = [
             ...nextFiles,
             {
@@ -181,7 +192,7 @@ export function createDocumentFile(documentModel: ExampleDocumentInput | null | 
             language,
             options.content || '',
             definition?.heading || null,
-            `${language}-${nextDocument.blocks?.length || 0}`
+            `${language}-${nextDocument.blocks?.length || 0}`,
         ),
     ];
 
@@ -209,7 +220,11 @@ export function createDocumentFile(documentModel: ExampleDocumentInput | null | 
  * `editor_hidden_files` key is renamed with it. The language is not checked against the path: use
  * `updateDocumentFileType()` for a validated badge change.
  */
-export function updateDocumentFileDetails(documentModel: ExampleDocumentInput | null | undefined, fileId: string, updates: DocumentFileDetailsUpdate = {}): ExampleDocument {
+export function updateDocumentFileDetails(
+    documentModel: ExampleDocumentInput | null | undefined,
+    fileId: string,
+    updates: DocumentFileDetailsUpdate = {},
+): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
     if (nextDocument.sourceFormat !== 'virtual-files') return nextDocument;
 
@@ -219,7 +234,9 @@ export function updateDocumentFileDetails(documentModel: ExampleDocumentInput | 
     const oldPath = file.path;
     const nextPath = normalizeVirtualPath(updates.path || file.path);
     const nextLanguage = normalizeBlockType(updates.language || file.language);
-    const nextRole = String(updates.role ?? file.role ?? '').trim().toLowerCase();
+    const nextRole = String(updates.role ?? file.role ?? '')
+        .trim()
+        .toLowerCase();
 
     file.path = nextPath || file.path;
     file.name = getFileName(file.path);
@@ -254,7 +271,7 @@ export function updateDocumentFileDetails(documentModel: ExampleDocumentInput | 
         const nextHiddenKey = normalizeEditorHiddenFileKey(`file:${file.path}`);
 
         if (oldHiddenKey && nextHiddenKey && previousHiddenKeys.includes(oldHiddenKey)) {
-            const remappedHiddenKeys = previousHiddenKeys.map((key) => key === oldHiddenKey ? nextHiddenKey : key);
+            const remappedHiddenKeys = previousHiddenKeys.map((key) => (key === oldHiddenKey ? nextHiddenKey : key));
             return updateDocumentHiddenFiles(nextDocument, remappedHiddenKeys);
         }
     }
@@ -266,7 +283,10 @@ export function updateDocumentFileDetails(documentModel: ExampleDocumentInput | 
  * Inserts a copy right after the file: a virtual file gets a free `-copy` path (and loses role `entry`),
  * a legacy block is copied with its heading. Duplicate blocks of one slot are then reported by validation.
  */
-export function duplicateDocumentFile(documentModel: ExampleDocumentInput | null | undefined, fileId: string): ExampleDocument {
+export function duplicateDocumentFile(
+    documentModel: ExampleDocumentInput | null | undefined,
+    fileId: string,
+): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
 
     if (nextDocument.sourceFormat === 'virtual-files') {
@@ -301,8 +321,8 @@ export function duplicateDocumentFile(documentModel: ExampleDocumentInput | null
             sourceBlock.type,
             sourceBlock.content,
             sourceBlock.heading,
-            `${sourceBlock.type}-${nextDocument.blocks.length}`
-        )
+            `${sourceBlock.type}-${nextDocument.blocks.length}`,
+        ),
     );
 
     return reparseDocument(nextDocument);
@@ -312,7 +332,10 @@ export function duplicateDocumentFile(documentModel: ExampleDocumentInput | null
  * Removes a file (a legacy file removes its block). Removing the entry file of a virtual project moves
  * `metadata.entry` to the first remaining entry candidate, or deletes it when there is none.
  */
-export function removeDocumentFile(documentModel: ExampleDocumentInput | null | undefined, fileId: string): ExampleDocument {
+export function removeDocumentFile(
+    documentModel: ExampleDocumentInput | null | undefined,
+    fileId: string,
+): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
 
     if (nextDocument.sourceFormat === 'virtual-files') {
@@ -347,7 +370,10 @@ export function removeDocumentFile(documentModel: ExampleDocumentInput | null | 
 }
 
 /** Sets `metadata.entry` of a virtual-files document (an empty path deletes it); no-op for legacy documents. The path need not exist. */
-export function setDocumentEntryPath(documentModel: ExampleDocumentInput | null | undefined, entryPath: string = ''): ExampleDocument {
+export function setDocumentEntryPath(
+    documentModel: ExampleDocumentInput | null | undefined,
+    entryPath: string = '',
+): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
     if (nextDocument.sourceFormat !== 'virtual-files') return nextDocument;
 
@@ -369,7 +395,10 @@ export function setDocumentEntryPath(documentModel: ExampleDocumentInput | null 
  * Replaces `shader_uniforms` with the dialog's list (drafts without a name or a known type are skipped;
  * an empty list deletes the key). Does not check that the document is a shader document.
  */
-export function updateShaderUniformDefinitions(documentModel: ExampleDocumentInput | null | undefined, uniforms: ShaderUniformDraft[] = []): ExampleDocument {
+export function updateShaderUniformDefinitions(
+    documentModel: ExampleDocumentInput | null | undefined,
+    uniforms: ShaderUniformDraft[] = [],
+): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
     const declarations = Array.isArray(uniforms)
         ? uniforms.map((uniform) => serializeShaderUniformDeclaration(uniform)).filter(Boolean)
@@ -392,7 +421,10 @@ export function updateShaderUniformDefinitions(documentModel: ExampleDocumentInp
  * Replaces `shader_textures` with the dialog's list (invalid drafts are skipped; an empty list deletes the
  * key). Does not check that the document is a shader document.
  */
-export function updateShaderTextureDefinitions(documentModel: ExampleDocumentInput | null | undefined, textures: ShaderTextureDraft[] = []): ExampleDocument {
+export function updateShaderTextureDefinitions(
+    documentModel: ExampleDocumentInput | null | undefined,
+    textures: ShaderTextureDraft[] = [],
+): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
     const declarations = Array.isArray(textures)
         ? textures.map((texture) => serializeShaderTextureDeclaration(texture)).filter(Boolean)
@@ -415,17 +447,20 @@ export function updateShaderTextureDefinitions(documentModel: ExampleDocumentInp
  * Sets the `resolution` of a shader document from the preview's size controls (values rounded). Returns
  * the clone unchanged for a non-shader document or a missing, non-numeric or non-positive size.
  */
-export function updateShaderResolution(documentModel: ExampleDocumentInput | null | undefined, resolution: ShaderResolutionInput | null = null): ExampleDocument {
+export function updateShaderResolution(
+    documentModel: ExampleDocumentInput | null | undefined,
+    resolution: ShaderResolutionInput | null = null,
+): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
     if (!isShaderDocument(nextDocument)) return nextDocument;
 
     // `Number.isFinite()` is only true for a number, so `resolution` is set in the first branch; in the
     // second, `parseInt` stringifies whatever it gets (`undefined` and other non-text give NaN).
     const width = Number.isFinite(resolution?.width)
-        ? resolution!.width as number
+        ? (resolution!.width as number)
         : Number.parseInt(resolution?.width as string, 10);
     const height = Number.isFinite(resolution?.height)
-        ? resolution!.height as number
+        ? (resolution!.height as number)
         : Number.parseInt(resolution?.height as string, 10);
 
     if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
@@ -444,7 +479,10 @@ export function updateShaderResolution(documentModel: ExampleDocumentInput | nul
  * Applies the example metadata dialog: only the keys present in `updates` change; each value is
  * normalized like the parser does, and an empty or invalid value deletes its key.
  */
-export function updateExampleEditorialMetadata(documentModel: ExampleDocumentInput | null | undefined, updates: ExampleEditorialUpdate = {}): ExampleDocument {
+export function updateExampleEditorialMetadata(
+    documentModel: ExampleDocumentInput | null | undefined,
+    updates: ExampleEditorialUpdate = {},
+): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
     const metadata = {
         ...(nextDocument.metadata || {}),
@@ -482,16 +520,21 @@ export function updateExampleEditorialMetadata(documentModel: ExampleDocumentInp
  * Replaces `editor_hidden_files` with the given visibility keys, normalized and de-duplicated; keys that
  * match no file of the document are dropped, and an empty result deletes the key.
  */
-export function updateDocumentHiddenFiles(documentModel: ExampleDocumentInput | null | undefined, hiddenKeys: string[] = []): ExampleDocument {
+export function updateDocumentHiddenFiles(
+    documentModel: ExampleDocumentInput | null | undefined,
+    hiddenKeys: string[] = [],
+): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
     const visibilityEntries = getDocumentFileVisibilityEntries(nextDocument);
     const validKeys = new Set(visibilityEntries.map((entry) => entry.key).filter(Boolean));
     const requestedKeys = Array.isArray(hiddenKeys) ? hiddenKeys : [];
-    const normalizedKeys = Array.from(new Set(
-        requestedKeys
-            .map((entry) => normalizeEditorHiddenFileKey(entry))
-            .filter((entry) => entry && validKeys.has(entry))
-    ));
+    const normalizedKeys = Array.from(
+        new Set(
+            requestedKeys
+                .map((entry) => normalizeEditorHiddenFileKey(entry))
+                .filter((entry) => entry && validKeys.has(entry)),
+        ),
+    );
     const metadata = {
         ...(nextDocument.metadata || {}),
     };

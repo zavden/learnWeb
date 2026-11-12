@@ -47,7 +47,9 @@ function detectIndentUnit(text: string = ''): string {
 }
 
 function stripTrailingLineComment(text: string = ''): string {
-    return String(text || '').replace(/\/\/.*$/, '').trimEnd();
+    return String(text || '')
+        .replace(/\/\/.*$/, '')
+        .trimEnd();
 }
 
 /**

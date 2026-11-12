@@ -64,7 +64,8 @@ function getService(): ts.LanguageService {
 
     const host: ts.LanguageServiceHost = {
         directoryExists: (dirName) => dirName === ROOT || ts.sys.directoryExists(dirName),
-        fileExists: (fileName) => fileName === currentFileName || fileName === AMBIENT_FILE || ts.sys.fileExists(fileName),
+        fileExists: (fileName) =>
+            fileName === currentFileName || fileName === AMBIENT_FILE || ts.sys.fileExists(fileName),
         getCompilationSettings: () => COMPILER_OPTIONS,
         getCurrentDirectory: () => ROOT,
         getDefaultLibFileName: (options) => ts.getDefaultLibFilePath(options),
@@ -88,7 +89,10 @@ function getService(): ts.LanguageService {
 }
 
 function toVirtualFileName(sourcePath: string = 'script.ts'): string {
-    const baseName = String(sourcePath || 'script.ts').split('/').pop() || 'script.ts';
+    const baseName =
+        String(sourcePath || 'script.ts')
+            .split('/')
+            .pop() || 'script.ts';
     return `${ROOT}/${/\.tsx?$/i.test(baseName) ? baseName : `${baseName}.ts`}`;
 }
 
@@ -96,27 +100,33 @@ function toVirtualFileName(sourcePath: string = 'script.ts'): string {
  * The semantic (type) errors of one script, in TypeScript's order. Syntax errors are not included: the
  * transpiler already reports them, and callers only type-check code that parsed.
  */
-export function typeCheckTypeScript(source: string = '', { sourcePath = 'script.ts' }: TypeCheckOptions = {}): TypeCheckDiagnostic[] {
+export function typeCheckTypeScript(
+    source: string = '',
+    { sourcePath = 'script.ts' }: TypeCheckOptions = {},
+): TypeCheckDiagnostic[] {
     currentFileName = toVirtualFileName(sourcePath);
     currentSource = String(source ?? '');
     currentVersion += 1;
 
     const languageService = getService();
     // Syntax errors are already reported by the transpiler, so only semantic ones are collected.
-    return languageService.getSemanticDiagnostics(currentFileName)
+    return languageService
+        .getSemanticDiagnostics(currentFileName)
         .filter((diagnostic) => diagnostic.file?.fileName === currentFileName)
         .map((diagnostic) => {
-            const position = typeof diagnostic.start === 'number'
-                // `file` is set: the filter above kept only diagnostics of the script file.
-                ? diagnostic.file!.getLineAndCharacterOfPosition(diagnostic.start)
-                : null;
+            const position =
+                typeof diagnostic.start === 'number'
+                    ? // `file` is set: the filter above kept only diagnostics of the script file.
+                      diagnostic.file!.getLineAndCharacterOfPosition(diagnostic.start)
+                    : null;
             return {
                 code: diagnostic.code,
                 column: position ? position.character + 1 : null,
                 line: position ? position.line + 1 : null,
                 message: ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'),
-                warning: diagnostic.category === ts.DiagnosticCategory.Warning
-                    || diagnostic.category === ts.DiagnosticCategory.Suggestion,
+                warning:
+                    diagnostic.category === ts.DiagnosticCategory.Warning ||
+                    diagnostic.category === ts.DiagnosticCategory.Suggestion,
             };
         });
 }

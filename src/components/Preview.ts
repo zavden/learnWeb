@@ -40,7 +40,11 @@ import type { TheoryDocument } from '../types/theory.ts';
 import { compileExample } from '../utils/compileClient.ts';
 import { type ConsoleHistorySession, createConsoleHistorySession } from '../utils/consoleHistory.ts';
 import { errorMessage } from '../utils/errors.ts';
-import { type RenderCompiledExampleOptions, renderCompiledExampleDocument, renderShaderExampleDocument } from '../utils/exampleRenderer.ts';
+import {
+    type RenderCompiledExampleOptions,
+    renderCompiledExampleDocument,
+    renderShaderExampleDocument,
+} from '../utils/exampleRenderer.ts';
 import {
     HOSTED_PREVIEW_SANDBOX,
     SRCDOC_PREVIEW_SANDBOX,
@@ -55,7 +59,12 @@ import { validateShaderPreviewDocument } from '../utils/shaderPreviewDiagnostics
 import { getTheoryDocumentContent, isTheoryDocument } from '../utils/theoryDocument.ts';
 import { loadTheoryExerciseEmbeds } from '../utils/theoryExerciseEmbeds.ts';
 import { highlightCode, renderTheoryPreviewDocument } from '../utils/theoryRenderer.ts';
-import { buildCompiledStyleFiles, COMPILED_CSS_PATH, type GeneratedCodeFile, SASS_OUTPUT_PATH } from '../utils/compiledStyleView.ts';
+import {
+    buildCompiledStyleFiles,
+    COMPILED_CSS_PATH,
+    type GeneratedCodeFile,
+    SASS_OUTPUT_PATH,
+} from '../utils/compiledStyleView.ts';
 import { byId } from '../utils/dom.ts';
 import {
     type ConsoleEntry,
@@ -343,7 +352,9 @@ export class Preview {
         this.consoleFilterButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.preview-console-filter'));
         this.shaderEditorControls = document.getElementById('shader-editor-controls') as HTMLElement | null;
         this.shaderEditorControlsBody = document.getElementById('shader-editor-controls-body') as HTMLDivElement | null;
-        this.btnToggleShaderControls = document.getElementById('btn-toggle-shader-controls') as HTMLButtonElement | null;
+        this.btnToggleShaderControls = document.getElementById(
+            'btn-toggle-shader-controls',
+        ) as HTMLButtonElement | null;
         this.shaderPanel = document.getElementById('preview-shader-panel') as HTMLDivElement | null;
         this.shaderFps = document.getElementById('preview-shader-fps') as HTMLElement | null;
         this.shaderFrame = document.getElementById('preview-shader-frame') as HTMLElement | null;
@@ -351,18 +362,24 @@ export class Preview {
         this.shaderUniformList = document.getElementById('preview-shader-uniform-list') as HTMLDivElement | null;
         this.shaderTexturePanel = document.getElementById('preview-shader-texture-panel') as HTMLElement | null;
         this.shaderTextureSummary = document.getElementById('preview-shader-texture-summary') as HTMLSpanElement | null;
-        this.btnToggleShaderTextures = document.getElementById('btn-toggle-shader-textures') as HTMLButtonElement | null;
+        this.btnToggleShaderTextures = document.getElementById(
+            'btn-toggle-shader-textures',
+        ) as HTMLButtonElement | null;
         this.shaderTextureViewer = document.getElementById('preview-shader-texture-viewer') as HTMLDivElement | null;
         this.shaderTextureTabs = document.getElementById('preview-shader-texture-tabs') as HTMLDivElement | null;
         this.shaderTextureStage = document.getElementById('preview-shader-texture-stage') as HTMLElement | null;
-        this.shaderTextureStageEmpty = document.getElementById('preview-shader-texture-stage-empty') as HTMLDivElement | null;
+        this.shaderTextureStageEmpty = document.getElementById(
+            'preview-shader-texture-stage-empty',
+        ) as HTMLDivElement | null;
         this.shaderTextureImage = document.getElementById('preview-shader-texture-image') as HTMLImageElement | null;
         this.shaderTextureCaption = document.getElementById('preview-shader-texture-caption') as HTMLElement | null;
         this.shaderCustomList = document.getElementById('preview-shader-custom-list') as HTMLDivElement | null;
         this.shaderCustomEmpty = document.getElementById('preview-shader-custom-empty') as HTMLDivElement | null;
         this.shaderTextureList = document.getElementById('preview-shader-texture-list') as HTMLDivElement | null;
         this.shaderTextureEmpty = document.getElementById('preview-shader-texture-empty') as HTMLDivElement | null;
-        this.shaderResolutionSelect = document.getElementById('preview-shader-resolution-select') as HTMLSelectElement | null;
+        this.shaderResolutionSelect = document.getElementById(
+            'preview-shader-resolution-select',
+        ) as HTMLSelectElement | null;
         this.shaderWidthRange = document.getElementById('preview-shader-width-range') as HTMLInputElement | null;
         this.shaderWidthInput = document.getElementById('preview-shader-width-input') as HTMLInputElement | null;
         this.shaderHeightRange = document.getElementById('preview-shader-height-range') as HTMLInputElement | null;
@@ -505,7 +522,10 @@ export class Preview {
      * Prepares the console/shader session for the document, then renders it: now when forced, after a
      * 300 ms pause in typing otherwise, never while auto-render is off.
      */
-    private _scheduleRender(documentModel: PreviewDocument, { forceRender = false }: { forceRender?: boolean } = {}): void {
+    private _scheduleRender(
+        documentModel: PreviewDocument,
+        { forceRender = false }: { forceRender?: boolean } = {},
+    ): void {
         if (!documentModel) return;
 
         const shaderEnabled = isShaderDocument(documentModel);
@@ -513,7 +533,9 @@ export class Preview {
         const shaderResolution = shaderConfig?.resolution || null;
 
         this._prepareConsoleSession({
-            consoleEnabled: (Boolean(documentModel?.metadata?.console) || this._isScriptOnlyDocument(documentModel)) && !shaderEnabled,
+            consoleEnabled:
+                (Boolean(documentModel?.metadata?.console) || this._isScriptOnlyDocument(documentModel)) &&
+                !shaderEnabled,
             sessionKey: this._lastSessionKey,
             shaderConfig,
             shaderEnabled,
@@ -542,7 +564,8 @@ export class Preview {
 
     /** A single-file example with a script and no markup: it shows the console without asking. */
     private _isScriptOnlyDocument(documentModel: PreviewDocument): boolean {
-        if (!documentModel || documentModel.sourceFormat === 'virtual-files' || documentModel.metadata?.framework) return false;
+        if (!documentModel || documentModel.sourceFormat === 'virtual-files' || documentModel.metadata?.framework)
+            return false;
         const blocks = Array.isArray(documentModel.blocks) ? documentModel.blocks : [];
         return blocks.some((block) => block.slot === 'script') && !blocks.some((block) => block.slot === 'markup');
     }
@@ -579,7 +602,10 @@ export class Preview {
     }
 
     // Hosted documents live on the preview origin (cross-origin to the app).
-    private _showHosted(url: string, { renderToken = this._renderToken, fallbackHtml = null }: HostedShowOptions = {}): void {
+    private _showHosted(
+        url: string,
+        { renderToken = this._renderToken, fallbackHtml = null }: HostedShowOptions = {},
+    ): void {
         if (!this.iframe) return;
         this._applyFrameSandbox('hosted');
         this._setOpenInTabUrl(url);
@@ -620,10 +646,11 @@ export class Preview {
     getShaderPersistedState(): ShaderPersistedState | null {
         if (!isShaderDocument(this._lastDocument)) return null;
 
-        const currentResolution = this._shaderControls?.currentResolution
-            || this._shaderControls?.baseResolution
-            || getShaderConfig(this._lastDocument)?.resolution
-            || null;
+        const currentResolution =
+            this._shaderControls?.currentResolution ||
+            this._shaderControls?.baseResolution ||
+            getShaderConfig(this._lastDocument)?.resolution ||
+            null;
 
         if (!currentResolution) {
             return null;
@@ -713,7 +740,8 @@ export class Preview {
     getPreferredShaderPanelHeight(): number | null {
         if (this._runtimeMode !== 'shader' || !this.consolePanel || !this.shaderPanel) return null;
 
-        const headerHeight = this.consolePanel.querySelector('.preview-console-header')?.getBoundingClientRect().height || 48;
+        const headerHeight =
+            this.consolePanel.querySelector('.preview-console-header')?.getBoundingClientRect().height || 48;
         const bodyHeight = this.shaderPanel.scrollHeight || 0;
         if (!bodyHeight) return null;
 
@@ -743,10 +771,12 @@ export class Preview {
         this._resetConsoleSession();
         this._updateCompiledStyleView([]);
         this._setFrameDisplayMode('default');
-        this._showSrcdoc(renderCompiledExampleDocument({}, this._currentTopicPath, [], {
-            consoleEnabled: false,
-            renderId: this._renderToken,
-        }));
+        this._showSrcdoc(
+            renderCompiledExampleDocument({}, this._currentTopicPath, [], {
+                consoleEnabled: false,
+                renderId: this._renderToken,
+            }),
+        );
         this._emitCompileState([]);
     }
 
@@ -800,11 +830,13 @@ export class Preview {
             const content = getTheoryDocumentContent(documentModel);
             const exerciseEmbeds = await loadTheoryExerciseEmbeds(this._currentTopicPath, content);
             if (renderToken !== this._renderToken) return;
-            this._showSrcdoc(renderTheoryPreviewDocument(content, {
-                exerciseEmbeds,
-                renderId: renderToken,
-                topicPath: this._currentTopicPath,
-            }));
+            this._showSrcdoc(
+                renderTheoryPreviewDocument(content, {
+                    exerciseEmbeds,
+                    renderId: renderToken,
+                    topicPath: this._currentTopicPath,
+                }),
+            );
             this._emitCompileState([]);
             return;
         }
@@ -819,13 +851,15 @@ export class Preview {
             const compileDiagnostics = structuralDiagnostics.some((diagnostic) => diagnostic.level === 'error')
                 ? []
                 : validateShaderPreviewDocument(documentModel);
-            this._showSrcdoc(renderShaderExampleDocument(documentModel, {
-                consoleEnabled: false,
-                diagnostics: [...structuralDiagnostics, ...compileDiagnostics],
-                renderId: renderToken,
-                shaderControls: this._shaderControls,
-                topicPath: this._currentTopicPath,
-            }));
+            this._showSrcdoc(
+                renderShaderExampleDocument(documentModel, {
+                    consoleEnabled: false,
+                    diagnostics: [...structuralDiagnostics, ...compileDiagnostics],
+                    renderId: renderToken,
+                    shaderControls: this._shaderControls,
+                    topicPath: this._currentTopicPath,
+                }),
+            );
             this._emitCompileState(compileDiagnostics);
             return;
         }
@@ -843,13 +877,22 @@ export class Preview {
                 renderId: renderToken,
                 suppressDialogs: !explicit,
             };
-            this._setFrameDisplayMode(result.compiledDocument?.markupType === 'svg' && !result.compiledDocument?.framework ? 'svg' : 'default');
+            this._setFrameDisplayMode(
+                result.compiledDocument?.markupType === 'svg' && !result.compiledDocument?.framework
+                    ? 'svg'
+                    : 'default',
+            );
             this._emitCompileState(diagnostics);
 
-            const hostedHtml = renderCompiledExampleDocument(result.compiledDocument, this._currentTopicPath, diagnostics, {
-                ...renderOptions,
-                hosted: true,
-            });
+            const hostedHtml = renderCompiledExampleDocument(
+                result.compiledDocument,
+                this._currentTopicPath,
+                diagnostics,
+                {
+                    ...renderOptions,
+                    hosted: true,
+                },
+            );
             const hostedUrl = await publishPreviewDocument({
                 html: hostedHtml,
                 renderId: renderToken,
@@ -857,7 +900,13 @@ export class Preview {
             });
             if (renderToken !== this._renderToken) return;
 
-            const renderSrcdoc = () => renderCompiledExampleDocument(result.compiledDocument, this._currentTopicPath, diagnostics, renderOptions);
+            const renderSrcdoc = () =>
+                renderCompiledExampleDocument(
+                    result.compiledDocument,
+                    this._currentTopicPath,
+                    diagnostics,
+                    renderOptions,
+                );
             if (hostedUrl) {
                 this._showHosted(hostedUrl, { fallbackHtml: renderSrcdoc, renderToken });
             } else {
@@ -876,10 +925,12 @@ export class Preview {
 
             this._setFrameDisplayMode('default');
             this._updateCompiledStyleView([]);
-            this._showSrcdoc(renderCompiledExampleDocument({}, this._currentTopicPath, diagnostics, {
-                consoleEnabled: this._consoleEnabled,
-                renderId: renderToken,
-            }));
+            this._showSrcdoc(
+                renderCompiledExampleDocument({}, this._currentTopicPath, diagnostics, {
+                    consoleEnabled: this._consoleEnabled,
+                    renderId: renderToken,
+                }),
+            );
             this._emitCompileState(diagnostics);
         }
     }
@@ -889,7 +940,9 @@ export class Preview {
      * a protocol message (src/types/runtime.ts) only behind the `source`, sending-window and `renderId`
      * checks, and the fields are still checked one by one before use.
      */
-    private _handleRuntimeMessage(event: MessageEvent<PreviewFrameMessage | TheoryPreviewMessage | null | undefined>): void {
+    private _handleRuntimeMessage(
+        event: MessageEvent<PreviewFrameMessage | TheoryPreviewMessage | null | undefined>,
+    ): void {
         if (event?.data?.source === 'learncode-theory-preview') {
             if (event.source !== this.iframe?.contentWindow) return;
             if (event.data.renderId !== this._renderToken) return;
@@ -987,13 +1040,18 @@ export class Preview {
     }
 
     /** Where a runtime error points: a mapped frame, else a learner-file frame, else the runtime's `location`. */
-    private _getPrimaryRuntimeFrame(data: Pick<RuntimeMessagePosition, 'location'> = {}, stackFrames: NormalizedStackFrame[] = []): PrimaryRuntimeFrame | null {
+    private _getPrimaryRuntimeFrame(
+        data: Pick<RuntimeMessagePosition, 'location'> = {},
+        stackFrames: NormalizedStackFrame[] = [],
+    ): PrimaryRuntimeFrame | null {
         // Frames the runtime mapped back to a learner file win (e.g. user code calling a CDN library).
         const mappedFrame = stackFrames.find((frame) => frame?.mapped && frame.path && frame.line);
         if (mappedFrame) return mappedFrame;
         const fromStack = stackFrames.find((frame) => {
             const path = frame?.path || '';
-            return path && frame.line && !path.includes('node_modules') && !path.startsWith('/') && !/^https?:/i.test(path);
+            return (
+                path && frame.line && !path.includes('node_modules') && !path.startsWith('/') && !/^https?:/i.test(path)
+            );
         });
         if (fromStack) return fromStack;
         const location = data.location;
@@ -1006,10 +1064,11 @@ export class Preview {
     // The compiler already reports JS/TS syntax errors with exact positions; skip the runtime copy.
     private _isDuplicateOfCompileDiagnostic(data: { errorName?: string } = {}): boolean {
         if (data.errorName !== 'SyntaxError') return false;
-        return (this._lastCompileDiagnostics || []).some((diagnostic) => (
-            diagnostic?.level === 'error'
-            && ['javascript-syntax', 'typescript-transpile'].includes(diagnostic?.code)
-        ));
+        return (this._lastCompileDiagnostics || []).some(
+            (diagnostic) =>
+                diagnostic?.level === 'error' &&
+                ['javascript-syntax', 'typescript-transpile'].includes(diagnostic?.code),
+        );
     }
 
     /** Expands the console/shader panel and toolbar again (the app's layout reset). */

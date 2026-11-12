@@ -27,7 +27,12 @@ interface ShaderStageResult {
     shader: WebGLShader | null;
 }
 
-function createShaderDiagnostic(level: DiagnosticLevel, code: string, message: string, details: DiagnosticDetails = {}): Diagnostic {
+function createShaderDiagnostic(
+    level: DiagnosticLevel,
+    code: string,
+    message: string,
+    details: DiagnosticDetails = {},
+): Diagnostic {
     return {
         level,
         code,
@@ -39,11 +44,7 @@ function createShaderDiagnostic(level: DiagnosticLevel, code: string, message: s
 /** Path of the document file of a stage (`shader.vert` / `shader.frag` when none matches). */
 function getShaderFilePath(documentModel: ExampleDocumentInput, type: ShaderBlockType): string {
     const files = Array.isArray(documentModel?.files) ? documentModel.files : [];
-    const match = files.find((file) => (
-        file?.language === type
-        || file?.blockType === type
-        || file?.slot === type
-    ));
+    const match = files.find((file) => file?.language === type || file?.blockType === type || file?.slot === type);
 
     if (match?.path) {
         return match.path;
@@ -58,18 +59,22 @@ function getShaderFilePath(documentModel: ExampleDocumentInput, type: ShaderBloc
  * an error without one.
  * An empty log gives one generic "<Stage> shader compilation failed." error.
  */
-export function parseShaderCompilerLog(log: string | null = '', { file = '', stage = 'fragment' }: ShaderCompilerLogOptions = {}): Diagnostic[] {
+export function parseShaderCompilerLog(
+    log: string | null = '',
+    { file = '', stage = 'fragment' }: ShaderCompilerLogOptions = {},
+): Diagnostic[] {
     const source = String(log || '').replace(/\r\n/g, '\n');
     const lines = source
         .split('\n')
         .map((entry) => entry.trim())
         .filter(Boolean);
 
-    const code = stage === 'vertex'
-        ? 'shader-vertex-compile-error'
-        : stage === 'fragment'
-            ? 'shader-fragment-compile-error'
-            : 'shader-compile-error';
+    const code =
+        stage === 'vertex'
+            ? 'shader-vertex-compile-error'
+            : stage === 'fragment'
+              ? 'shader-fragment-compile-error'
+              : 'shader-compile-error';
 
     const diagnostics = lines.map((line) => {
         const webglMatch = line.match(/^(ERROR|WARNING):\s*\d+\s*:\s*(\d+)\s*:\s*(.+)$/i);
@@ -83,55 +88,50 @@ export function parseShaderCompilerLog(log: string | null = '', { file = '', sta
                     line: Number.parseInt(webglMatch[2], 10) || null,
                     slot: stage,
                     type: stage,
-                }
+                },
             );
         }
 
         const angleMatch = line.match(/^\d+\s*:\s*(\d+)\s*:\s*(.+)$/);
         if (angleMatch) {
-            return createShaderDiagnostic(
-                'error',
-                code,
-                angleMatch[2].trim(),
-                {
-                    file: file || null,
-                    line: Number.parseInt(angleMatch[1], 10) || null,
-                    slot: stage,
-                    type: stage,
-                }
-            );
-        }
-
-        return createShaderDiagnostic(
-            'error',
-            code,
-            line,
-            {
+            return createShaderDiagnostic('error', code, angleMatch[2].trim(), {
                 file: file || null,
+                line: Number.parseInt(angleMatch[1], 10) || null,
                 slot: stage,
                 type: stage,
-            }
-        );
+            });
+        }
+
+        return createShaderDiagnostic('error', code, line, {
+            file: file || null,
+            slot: stage,
+            type: stage,
+        });
     });
 
     return diagnostics.length > 0
         ? diagnostics
         : [
-            createShaderDiagnostic(
-                'error',
-                code,
-                `${stage === 'vertex' ? 'Vertex' : 'Fragment'} shader compilation failed.`,
-                {
-                    file: file || null,
-                    slot: stage,
-                    type: stage,
-                }
-            ),
-        ];
+              createShaderDiagnostic(
+                  'error',
+                  code,
+                  `${stage === 'vertex' ? 'Vertex' : 'Fragment'} shader compilation failed.`,
+                  {
+                      file: file || null,
+                      slot: stage,
+                      type: stage,
+                  },
+              ),
+          ];
 }
 
 /** Compile one stage; on failure the shader is deleted and its log parsed. `type` is `gl.VERTEX_SHADER` or `gl.FRAGMENT_SHADER`. */
-function compileShaderStage(gl: WebGLRenderingContext, type: number, source: string, { file = '', stage = 'fragment' }: ShaderCompilerLogOptions = {}): ShaderStageResult {
+function compileShaderStage(
+    gl: WebGLRenderingContext,
+    type: number,
+    source: string,
+    { file = '', stage = 'fragment' }: ShaderCompilerLogOptions = {},
+): ShaderStageResult {
     // `!`: createShader() only returns null when the context is lost.
     const shader = gl.createShader(type)!;
     gl.shaderSource(shader, source);
@@ -178,13 +178,14 @@ function getValidationContext(): WebGLRenderingContext | null {
         validationContext = null;
         validationCanvas = null;
     });
-    validationContext = validationCanvas.getContext('webgl', {
-        alpha: false,
-        antialias: false,
-        depth: false,
-        preserveDrawingBuffer: false,
-        stencil: false,
-    }) || validationCanvas.getContext('experimental-webgl') as WebGLRenderingContext | null;
+    validationContext =
+        validationCanvas.getContext('webgl', {
+            alpha: false,
+            antialias: false,
+            depth: false,
+            preserveDrawingBuffer: false,
+            stencil: false,
+        }) || (validationCanvas.getContext('experimental-webgl') as WebGLRenderingContext | null);
 
     return validationContext;
 }
@@ -219,7 +220,7 @@ export function validateShaderPreviewDocument(documentModel: ExampleDocumentInpu
             createShaderDiagnostic(
                 'error',
                 'shader-webgl-context-unavailable',
-                'This browser could not create a WebGL context for shader preview.'
+                'This browser could not create a WebGL context for shader preview.',
             ),
         ];
     }
@@ -265,8 +266,8 @@ export function validateShaderPreviewDocument(documentModel: ExampleDocumentInpu
                     {
                         slot: 'program',
                         type: 'shader-program',
-                    }
-                )
+                    },
+                ),
             );
             return diagnostics;
         }
@@ -282,8 +283,8 @@ export function validateShaderPreviewDocument(documentModel: ExampleDocumentInpu
                         file: vertexFile,
                         slot: 'vertex',
                         type: 'vertex',
-                    }
-                )
+                    },
+                ),
             );
         }
 

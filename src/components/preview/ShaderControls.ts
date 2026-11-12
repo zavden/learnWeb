@@ -159,15 +159,15 @@ export function cloneShaderUniformValue(value: ShaderUniformValue): ShaderUnifor
 
 /** N for a `vecN` type (2 to 4), `0` for any other type. */
 export function getShaderVectorSize(type: string | null | undefined = ''): number {
-    const match = String(type || '').trim().match(/^vec([234])$/);
+    const match = String(type || '')
+        .trim()
+        .match(/^vec([234])$/);
     return match ? Number.parseInt(match[1], 10) : 0;
 }
 
 /** A copy of a uniform's slider hint (`null` stays `null`). */
 export function cloneShaderUniformControl(control: ShaderUniformControl | null = null): ShaderUniformControl | null {
-    return control && typeof control === 'object'
-        ? { ...control }
-        : null;
+    return control && typeof control === 'object' ? { ...control } : null;
 }
 
 export const shaderControlsMixin = {
@@ -192,12 +192,15 @@ export const shaderControlsMixin = {
     },
 
     /** A whole-pixel, positive resolution: the given one (numbers may come as text) or the fallback. */
-    _normalizeShaderResolution(resolution: ShaderResolutionInput | null = null, fallback: ShaderResolution = { width: 800, height: 600 }): ShaderResolution {
+    _normalizeShaderResolution(
+        resolution: ShaderResolutionInput | null = null,
+        fallback: ShaderResolution = { width: 800, height: 600 },
+    ): ShaderResolution {
         const width = Number.isFinite(resolution?.width)
-            ? resolution!.width as number
+            ? (resolution!.width as number)
             : Number.parseInt(resolution?.width as string, 10);
         const height = Number.isFinite(resolution?.height)
-            ? resolution!.height as number
+            ? (resolution!.height as number)
             : Number.parseInt(resolution?.height as string, 10);
 
         if (Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0) {
@@ -226,7 +229,10 @@ export const shaderControlsMixin = {
         };
     },
 
-    _shaderResolutionEquals(first: ShaderResolution | null | undefined, second: ShaderResolution | null | undefined): boolean {
+    _shaderResolutionEquals(
+        first: ShaderResolution | null | undefined,
+        second: ShaderResolution | null | undefined,
+    ): boolean {
         if (!first || !second) return false;
         return first.width === second.width && first.height === second.height;
     },
@@ -239,7 +245,9 @@ export const shaderControlsMixin = {
 
     /** The resolution of a `<width>x<height>` value, or `null`. */
     _parseShaderResolution(value: string = ''): ShaderResolution | null {
-        const match = String(value || '').trim().match(/^(\d+)\s*x\s*(\d+)$/i);
+        const match = String(value || '')
+            .trim()
+            .match(/^(\d+)\s*x\s*(\d+)$/i);
         if (!match) return null;
 
         return this._normalizeShaderResolution({
@@ -253,7 +261,11 @@ export const shaderControlsMixin = {
     },
 
     /** `rawValue` as a whole number within the axis limits, or `fallbackValue` when it is not a number. */
-    _clampShaderResolutionAxis(axis: ShaderResolutionAxis = 'width', rawValue: number | string, fallbackValue: number = 800): number {
+    _clampShaderResolutionAxis(
+        axis: ShaderResolutionAxis = 'width',
+        rawValue: number | string,
+        fallbackValue: number = 800,
+    ): number {
         // `parseInt` stringifies a number argument.
         const parsedValue = Number.parseInt(rawValue as string, 10);
         if (!Number.isFinite(parsedValue)) {
@@ -265,7 +277,11 @@ export const shaderControlsMixin = {
     },
 
     /** Shows `nextValue` in an axis's slider and number input, except in the one being edited. */
-    _syncShaderResolutionAxisControl(rangeInput: HTMLInputElement | null, valueInput: HTMLInputElement | null, nextValue: number): void {
+    _syncShaderResolutionAxisControl(
+        rangeInput: HTMLInputElement | null,
+        valueInput: HTMLInputElement | null,
+        nextValue: number,
+    ): void {
         const normalizedValue = String(nextValue);
 
         if (rangeInput && document.activeElement !== rangeInput && rangeInput.value !== normalizedValue) {
@@ -278,7 +294,11 @@ export const shaderControlsMixin = {
     },
 
     /** Wires an axis's slider and number input (the input applies while typing, and clamps on change/blur). */
-    _bindShaderResolutionAxisControls(axis: ShaderResolutionAxis, rangeInput: HTMLInputElement | null, valueInput: HTMLInputElement | null): void {
+    _bindShaderResolutionAxisControls(
+        axis: ShaderResolutionAxis,
+        rangeInput: HTMLInputElement | null,
+        valueInput: HTMLInputElement | null,
+    ): void {
         if (rangeInput) {
             rangeInput.addEventListener('input', () => {
                 this._handleShaderResolutionAxisChange(axis, rangeInput.value);
@@ -309,7 +329,13 @@ export const shaderControlsMixin = {
      * declarations; otherwise it keeps what the learner set: the current resolution (unless it was the
      * document default), uniform values (when name and type are unchanged) and texture statuses.
      */
-    _syncShaderControls({ sessionKey = '', resolution = null, customUniforms = [], textures = [], reset = false }: ShaderControlsSync = {}): void {
+    _syncShaderControls({
+        sessionKey = '',
+        resolution = null,
+        customUniforms = [],
+        textures = [],
+        reset = false,
+    }: ShaderControlsSync = {}): void {
         const normalizedResolution = this._normalizeShaderResolution(resolution);
 
         if (reset || !this._shaderControls) {
@@ -346,7 +372,7 @@ export const shaderControlsMixin = {
             this._shaderControls.currentResolution = normalizedResolution;
         }
         const previousUniforms = new Map(
-            (this._shaderControls.customUniforms || []).map((uniform) => [uniform.name, uniform])
+            (this._shaderControls.customUniforms || []).map((uniform) => [uniform.name, uniform]),
         );
         this._shaderControls.customUniforms = customUniforms.map((uniform) => {
             const previousUniform = previousUniforms.get(uniform.name);
@@ -362,7 +388,7 @@ export const shaderControlsMixin = {
             };
         });
         const previousTextures = new Map(
-            (this._shaderControls.textures || []).map((texture) => [texture.name, texture])
+            (this._shaderControls.textures || []).map((texture) => [texture.name, texture]),
         );
         this._shaderControls.textures = textures.map((texture) => {
             const previousTexture = previousTextures.get(texture.name);
@@ -379,10 +405,12 @@ export const shaderControlsMixin = {
     _buildShaderResolutionOptions(): ShaderResolutionOption[] {
         const baseResolution = this._shaderControls?.baseResolution || this._normalizeShaderResolution();
         const currentResolution = this._shaderControls?.currentResolution || baseResolution;
-        const options = [{
-            label: `Document Default (${baseResolution.width} x ${baseResolution.height})`,
-            value: 'document',
-        }];
+        const options = [
+            {
+                label: `Document Default (${baseResolution.width} x ${baseResolution.height})`,
+                value: 'document',
+            },
+        ];
 
         SHADER_RESOLUTION_PRESETS.forEach((preset) => {
             options.push({
@@ -429,16 +457,25 @@ export const shaderControlsMixin = {
         }
 
         if (
-            this.shaderResolutionSelect
-            && (this._shaderResolutionSelectionValue !== selectedValue || this.shaderResolutionSelect.value !== selectedValue)
+            this.shaderResolutionSelect &&
+            (this._shaderResolutionSelectionValue !== selectedValue ||
+                this.shaderResolutionSelect.value !== selectedValue)
         ) {
             this.shaderResolutionSelect.value = selectedValue;
             this._shaderResolutionSelectionValue = selectedValue;
         }
 
         if (currentResolution) {
-            this._syncShaderResolutionAxisControl(this.shaderWidthRange, this.shaderWidthInput, currentResolution.width);
-            this._syncShaderResolutionAxisControl(this.shaderHeightRange, this.shaderHeightInput, currentResolution.height);
+            this._syncShaderResolutionAxisControl(
+                this.shaderWidthRange,
+                this.shaderWidthInput,
+                currentResolution.width,
+            );
+            this._syncShaderResolutionAxisControl(
+                this.shaderHeightRange,
+                this.shaderHeightInput,
+                currentResolution.height,
+            );
         }
     },
 
@@ -446,15 +483,21 @@ export const shaderControlsMixin = {
     _sendShaderControlMessage(payload: ShaderControlPayload = {} as ShaderControlPayload): void {
         if (this._runtimeMode !== 'shader' || !this.iframe?.contentWindow) return;
 
-        this.iframe.contentWindow.postMessage({
-            source: SHADER_CONTROL_SOURCE,
-            renderId: this._renderToken,
-            ...payload,
-        } satisfies ShaderControlMessage, '*');
+        this.iframe.contentWindow.postMessage(
+            {
+                source: SHADER_CONTROL_SOURCE,
+                renderId: this._renderToken,
+                ...payload,
+            } satisfies ShaderControlMessage,
+            '*',
+        );
     },
 
     /** Sets the canvas size: in the panel state, in the stats, and in the running page. */
-    _applyShaderResolution(nextResolution: ShaderResolutionInput | null | undefined, { syncPanel = true }: { syncPanel?: boolean } = {}): void {
+    _applyShaderResolution(
+        nextResolution: ShaderResolutionInput | null | undefined,
+        { syncPanel = true }: { syncPanel?: boolean } = {},
+    ): void {
         if (this._runtimeMode !== 'shader' || !this._shaderControls || !nextResolution) return;
 
         const normalizedResolution = this._normalizeShaderResolution(nextResolution);
@@ -476,9 +519,8 @@ export const shaderControlsMixin = {
     _handleShaderResolutionChange(value: string): void {
         if (this._runtimeMode !== 'shader' || !this._shaderControls) return;
 
-        const nextResolution = value === 'document'
-            ? this._shaderControls.baseResolution
-            : this._parseShaderResolution(value);
+        const nextResolution =
+            value === 'document' ? this._shaderControls.baseResolution : this._parseShaderResolution(value);
         if (!nextResolution) return;
 
         this._applyShaderResolution(nextResolution);
@@ -534,7 +576,8 @@ export const shaderControlsMixin = {
     _resetShaderRuntime(): void {
         if (this._runtimeMode !== 'shader') return;
 
-        const currentResolution = this._shaderControls?.currentResolution || this._shaderControls?.baseResolution || null;
+        const currentResolution =
+            this._shaderControls?.currentResolution || this._shaderControls?.baseResolution || null;
         this._resetShaderStats(currentResolution);
         this._shaderStats.paused = Boolean(this._shaderControls?.paused);
         this._renderShaderPanel();
@@ -545,23 +588,27 @@ export const shaderControlsMixin = {
 
     /** Signature of the custom uniform list (see `_shaderCustomUniformsSignature`). */
     _serializeShaderCustomUniforms(uniforms: ShaderUniform[] | null = []): string {
-        return JSON.stringify((uniforms || []).map((uniform) => ({
-            control: uniform.control || null,
-            name: uniform.name,
-            type: uniform.type,
-            value: uniform.value,
-        })));
+        return JSON.stringify(
+            (uniforms || []).map((uniform) => ({
+                control: uniform.control || null,
+                name: uniform.name,
+                type: uniform.type,
+                value: uniform.value,
+            })),
+        );
     },
 
     /** Signature of a texture list (see `_shaderTexturesSignature`). */
     _serializeShaderTextures(textures: ShaderPanelTexture[] | null = []): string {
-        return JSON.stringify((textures || []).map((texture) => ({
-            assetPath: texture.assetPath,
-            height: texture.height || 0,
-            name: texture.name,
-            status: texture.status || 'idle',
-            width: texture.width || 0,
-        })));
+        return JSON.stringify(
+            (textures || []).map((texture) => ({
+                assetPath: texture.assetPath,
+                height: texture.height || 0,
+                name: texture.name,
+                status: texture.status || 'idle',
+                width: texture.width || 0,
+            })),
+        );
     },
 
     /** URL of a texture image in the current topic's assets (`''` without a topic or a path). */
@@ -573,7 +620,7 @@ export const shaderControlsMixin = {
     _toggleShaderTextureViewer(): void {
         const textures = this._shaderStats.textures?.length
             ? this._shaderStats.textures
-            : (this._shaderControls?.textures || []);
+            : this._shaderControls?.textures || [];
         if (!textures.length) return;
 
         this._shaderTextureViewerExpanded = !this._shaderTextureViewerExpanded;
@@ -676,9 +723,8 @@ export const shaderControlsMixin = {
 
                 // `uniform.control` is set in this branch; the callback below loses that narrowing, hence its `!`.
                 const syncRangeValue = (rawValue: string, { force = false }: { force?: boolean } = {}) => {
-                    const parsedValue = uniform.type === 'int'
-                        ? Number.parseInt(rawValue, 10)
-                        : Number.parseFloat(rawValue);
+                    const parsedValue =
+                        uniform.type === 'int' ? Number.parseInt(rawValue, 10) : Number.parseFloat(rawValue);
 
                     if (!Number.isFinite(parsedValue)) {
                         if (force) {
@@ -690,7 +736,10 @@ export const shaderControlsMixin = {
                     }
 
                     // A `float`/`int` uniform normalizes to a number.
-                    const normalizedValue = this._normalizeShaderCustomUniformValue(uniform.type, parsedValue) as number;
+                    const normalizedValue = this._normalizeShaderCustomUniformValue(
+                        uniform.type,
+                        parsedValue,
+                    ) as number;
                     const clampedValue = Math.max(
                         uniform.control!.min,
                         Math.min(uniform.control!.max, normalizedValue),
@@ -729,7 +778,10 @@ export const shaderControlsMixin = {
             } else if (getShaderVectorSize(uniform.type) > 0) {
                 const vectorSize = getShaderVectorSize(uniform.type);
                 // A `vecN` uniform normalizes to an array of N numbers.
-                const normalizedVector = this._normalizeShaderCustomUniformValue(uniform.type, uniform.value) as number[];
+                const normalizedVector = this._normalizeShaderCustomUniformValue(
+                    uniform.type,
+                    uniform.value,
+                ) as number[];
 
                 if (vectorSize >= 3) {
                     const colorRow = document.createElement('div');
@@ -791,7 +843,7 @@ export const shaderControlsMixin = {
                     input.type = 'number';
                     input.step = '0.01';
                     input.className = 'preview-shader-custom-input';
-                    input.value = String(Array.isArray(normalizedVector) ? normalizedVector[index] ?? 0 : 0);
+                    input.value = String(Array.isArray(normalizedVector) ? (normalizedVector[index] ?? 0) : 0);
                     input.placeholder = axis;
                     input.addEventListener('change', () => {
                         const currentValue = Array.isArray(uniform.value)
@@ -810,9 +862,8 @@ export const shaderControlsMixin = {
                 input.className = 'preview-shader-custom-input';
                 input.value = String(uniform.value);
                 input.addEventListener('change', () => {
-                    const nextValue = uniform.type === 'int'
-                        ? Number.parseInt(input.value, 10)
-                        : Number.parseFloat(input.value);
+                    const nextValue =
+                        uniform.type === 'int' ? Number.parseInt(input.value, 10) : Number.parseFloat(input.value);
                     this._handleShaderCustomUniformChange(uniform.name, nextValue);
                 });
                 controls.appendChild(input);
@@ -828,7 +879,7 @@ export const shaderControlsMixin = {
 
         const textures = this._shaderStats.textures?.length
             ? this._shaderStats.textures
-            : (this._shaderControls?.textures || []);
+            : this._shaderControls?.textures || [];
         const signature = this._serializeShaderTextures(textures);
         if (signature === this._shaderTexturesSignature) {
             return;
@@ -865,9 +916,7 @@ export const shaderControlsMixin = {
 
             const status = document.createElement('div');
             status.className = 'preview-shader-texture-status';
-            const dimensions = texture.width > 0 && texture.height > 0
-                ? ` • ${texture.width} x ${texture.height}`
-                : '';
+            const dimensions = texture.width > 0 && texture.height > 0 ? ` • ${texture.width} x ${texture.height}` : '';
             status.textContent = `${texture.status || 'idle'}${dimensions}`;
             item.appendChild(status);
 
@@ -878,29 +927,31 @@ export const shaderControlsMixin = {
     /** The texture summary and, when expanded, the viewer with one tab per texture. */
     _renderShaderTexturePreview(): void {
         if (
-            !this.shaderTexturePanel
-            || !this.shaderTextureSummary
-            || !this.btnToggleShaderTextures
-            || !this.shaderTextureViewer
-            || !this.shaderTextureTabs
-            || !this.shaderTextureStage
-            || !this.shaderTextureStageEmpty
-            || !this.shaderTextureImage
-            || !this.shaderTextureCaption
+            !this.shaderTexturePanel ||
+            !this.shaderTextureSummary ||
+            !this.btnToggleShaderTextures ||
+            !this.shaderTextureViewer ||
+            !this.shaderTextureTabs ||
+            !this.shaderTextureStage ||
+            !this.shaderTextureStageEmpty ||
+            !this.shaderTextureImage ||
+            !this.shaderTextureCaption
         ) {
             return;
         }
 
         const textures = this._shaderStats.textures?.length
             ? this._shaderStats.textures
-            : (this._shaderControls?.textures || []);
+            : this._shaderControls?.textures || [];
         const hasTextures = textures.length > 0;
 
         this.shaderTexturePanel.classList.toggle('hidden', !hasTextures);
         this.shaderTextureSummary.textContent = hasTextures
             ? `${textures.length} texture${textures.length === 1 ? '' : 's'}`
             : 'No textures';
-        this.btnToggleShaderTextures.textContent = this._shaderTextureViewerExpanded ? 'Hide Textures' : 'Show Textures';
+        this.btnToggleShaderTextures.textContent = this._shaderTextureViewerExpanded
+            ? 'Hide Textures'
+            : 'Show Textures';
         this.btnToggleShaderTextures.disabled = !hasTextures;
         this.shaderTextureViewer.classList.toggle('hidden', !hasTextures || !this._shaderTextureViewerExpanded);
 
@@ -967,14 +1018,12 @@ export const shaderControlsMixin = {
             const vectorSize = getShaderVectorSize(type);
             const vector = Array.isArray(value) ? value : Array.from({ length: vectorSize }, () => 0);
             return vector
-                .map((entry: unknown) => Number.isFinite(Number(entry)) ? Number(entry) : 0)
+                .map((entry: unknown) => (Number.isFinite(Number(entry)) ? Number(entry) : 0))
                 .slice(0, vectorSize);
         }
 
         // `parseInt`/`parseFloat` stringify whatever they get.
-        const numeric = type === 'int'
-            ? Number.parseInt(value as string, 10)
-            : Number.parseFloat(value as string);
+        const numeric = type === 'int' ? Number.parseInt(value as string, 10) : Number.parseFloat(value as string);
 
         if (!Number.isFinite(numeric)) {
             return type === 'int' ? 0 : 0;
@@ -987,7 +1036,11 @@ export const shaderControlsMixin = {
      * Sets a custom uniform (normalized, and clamped to its range) and sends it to the page. `rerender: false`
      * keeps the controls as they are (the one being dragged or typed in already shows the value).
      */
-    _setShaderCustomUniformValue(name: string, rawValue: unknown, { rerender = true }: { rerender?: boolean } = {}): void {
+    _setShaderCustomUniformValue(
+        name: string,
+        rawValue: unknown,
+        { rerender = true }: { rerender?: boolean } = {},
+    ): void {
         if (this._runtimeMode !== 'shader' || !this._shaderControls) return;
 
         const targetUniform = (this._shaderControls.customUniforms || []).find((uniform) => uniform.name === name);
@@ -1003,7 +1056,9 @@ export const shaderControlsMixin = {
             this._shaderCustomUniformsSignature = '';
             this._renderShaderCustomUniformControls();
         } else {
-            this._shaderCustomUniformsSignature = this._serializeShaderCustomUniforms(this._shaderControls.customUniforms);
+            this._shaderCustomUniformsSignature = this._serializeShaderCustomUniforms(
+                this._shaderControls.customUniforms,
+            );
         }
         this._sendShaderControlMessage({
             action: 'set-custom-uniform',
@@ -1059,13 +1114,13 @@ export const shaderControlsMixin = {
         const height = Number.isFinite(data?.resolution?.height)
             ? data.resolution!.height
             : Number.parseInt(data?.resolution?.height as unknown as string, 10) || 0;
-        const uniforms = data?.uniforms && typeof data.uniforms === 'object'
-            ? data.uniforms
-            : {};
+        const uniforms = data?.uniforms && typeof data.uniforms === 'object' ? data.uniforms : {};
 
         this._shaderStats = {
             fps: Number.isFinite(data?.fps) ? data.fps! : Number.parseFloat(data?.fps as unknown as string) || 0,
-            frame: Number.isFinite(data?.frame) ? data.frame! : Number.parseInt(data?.frame as unknown as string, 10) || 0,
+            frame: Number.isFinite(data?.frame)
+                ? data.frame!
+                : Number.parseInt(data?.frame as unknown as string, 10) || 0,
             lastUpdated: Number.isFinite(data?.timestamp)
                 ? data.timestamp!
                 : Number.parseInt(data?.timestamp as unknown as string, 10) || Date.now(),
@@ -1073,12 +1128,16 @@ export const shaderControlsMixin = {
             resolution: width > 0 && height > 0 ? { width, height } : this._shaderStats.resolution,
             textures: Array.isArray(data?.textures)
                 ? data.textures.map((texture) => ({
-                    assetPath: texture.assetPath || '',
-                    height: Number.isFinite(texture.height) ? texture.height : Number.parseInt(texture.height as unknown as string, 10) || 0,
-                    name: texture.name || '',
-                    status: texture.status || 'idle',
-                    width: Number.isFinite(texture.width) ? texture.width : Number.parseInt(texture.width as unknown as string, 10) || 0,
-                }))
+                      assetPath: texture.assetPath || '',
+                      height: Number.isFinite(texture.height)
+                          ? texture.height
+                          : Number.parseInt(texture.height as unknown as string, 10) || 0,
+                      name: texture.name || '',
+                      status: texture.status || 'idle',
+                      width: Number.isFinite(texture.width)
+                          ? texture.width
+                          : Number.parseInt(texture.width as unknown as string, 10) || 0,
+                  }))
                 : this._shaderStats.textures,
             uniforms: {
                 ...this._shaderStats.uniforms,
@@ -1105,7 +1164,9 @@ export const shaderControlsMixin = {
 
         if (name === 'u_resolution' && value && typeof value === 'object') {
             const width = Number.isFinite(value.width) ? value.width : Number.parseInt(value.width as string, 10) || 0;
-            const height = Number.isFinite(value.height) ? value.height : Number.parseInt(value.height as string, 10) || 0;
+            const height = Number.isFinite(value.height)
+                ? value.height
+                : Number.parseInt(value.height as string, 10) || 0;
             return `${width} x ${height}`;
         }
 
@@ -1128,7 +1189,13 @@ export const shaderControlsMixin = {
 
     /** Re-renders the whole panel (stats, uniform values, controls); cheap enough to run on every stats message. */
     _renderShaderPanel(): void {
-        if (!this.shaderPanel || !this.shaderFps || !this.shaderFrame || !this.shaderUpdated || !this.shaderUniformList) {
+        if (
+            !this.shaderPanel ||
+            !this.shaderFps ||
+            !this.shaderFrame ||
+            !this.shaderUpdated ||
+            !this.shaderUniformList
+        ) {
             return;
         }
 
@@ -1138,9 +1205,7 @@ export const shaderControlsMixin = {
         this._renderShaderTextureStatus();
         this._renderShaderTexturePreview();
         // `!`: Number.isFinite() is true only for a number, but it does not narrow.
-        this.shaderFps.textContent = Number.isFinite(stats.fps) && stats.fps! > 0
-            ? `${Math.round(stats.fps!)}`
-            : '--';
+        this.shaderFps.textContent = Number.isFinite(stats.fps) && stats.fps! > 0 ? `${Math.round(stats.fps!)}` : '--';
         this.shaderFrame.textContent = Number.isFinite(stats.frame) ? String(stats.frame) : '--';
         this.shaderUpdated.textContent = stats.lastUpdated
             ? `${stats.paused ? 'Paused' : 'Updated'} ${new Date(stats.lastUpdated).toLocaleTimeString()}`

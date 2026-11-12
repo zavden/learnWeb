@@ -27,7 +27,10 @@ main { color: red; }
     const htmlFullResult = evaluateDocumentFileTypeChange(documentModel, htmlFile.id, 'html-full');
     const pugResult = evaluateDocumentFileTypeChange(documentModel, htmlFile.id, 'pug');
 
-    assert.deepEqual(options.map((option) => option.value), ['html', 'html-full', 'svg', 'pug']);
+    assert.deepEqual(
+        options.map((option) => option.value),
+        ['html', 'html-full', 'svg', 'pug'],
+    );
     assert.equal(htmlFullResult.allowed, false);
     assert.equal(htmlFullResult.code, 'html-full-must-stand-alone');
     assert.match(htmlFullResult.reason, /only block/i);
@@ -57,7 +60,10 @@ main { color: red; }
     const tsxResult = evaluateDocumentFileTypeChange(documentModel, appFile.id, 'tsx');
     const cssResult = evaluateDocumentFileTypeChange(documentModel, appFile.id, 'css');
 
-    assert.deepEqual(options.map((option) => option.value), ['jsx', 'tsx']);
+    assert.deepEqual(
+        options.map((option) => option.value),
+        ['jsx', 'tsx'],
+    );
     assert.equal(tsxResult.allowed, true);
     assert.equal(cssResult.allowed, false);
     assert.equal(cssResult.code, 'incompatible-target-type');
@@ -93,7 +99,10 @@ export function App() {
     const tsxResult = evaluateDocumentFileTypeChange(documentModel, entryFile.id, 'tsx');
     const cssResult = evaluateDocumentFileTypeChange(documentModel, entryFile.id, 'css');
 
-    assert.deepEqual(options.map((option) => option.value), ['jsx', 'tsx', 'javascript', 'typescript']);
+    assert.deepEqual(
+        options.map((option) => option.value),
+        ['jsx', 'tsx', 'javascript', 'typescript'],
+    );
     assert.equal(tsxResult.allowed, true);
     assert.equal(tsxResult.expectedPath, 'src/main.tsx');
     assert.equal(tsxResult.wouldChangePath, true);
@@ -127,7 +136,10 @@ body { margin: 0; }
     const styleOptions = getDocumentFileTypeChangeOptions(documentModel, styleFile.id);
     const scssResult = evaluateDocumentFileTypeChange(documentModel, styleFile.id, 'scss');
 
-    assert.deepEqual(styleOptions.map((option) => option.value), ['css', 'scss', 'sass']);
+    assert.deepEqual(
+        styleOptions.map((option) => option.value),
+        ['css', 'scss', 'sass'],
+    );
     assert.equal(scssResult.allowed, true);
     assert.equal(scssResult.expectedPath, 'src/styles.scss');
     assert.equal(getExpectedPathForLanguage('src/main.mjs', 'typescript'), 'src/main.mts');
@@ -160,7 +172,10 @@ export {};
 
     assert.equal(nextDocument.metadata.entry, 'src/main.ts');
     assert.ok(nextDocument.files.some((file) => file.path === 'src/main.ts' && file.language === 'typescript'));
-    assert.equal(nextDocument.files.some((file) => file.path === 'src/main.js'), false);
+    assert.equal(
+        nextDocument.files.some((file) => file.path === 'src/main.js'),
+        false,
+    );
 });
 
 test('virtual badge changes rewrite language, path extension and entry metadata consistently', () => {
@@ -189,12 +204,19 @@ body { margin: 0; }
     const styleFile = documentModel.files.find((file) => file.role === 'style');
 
     const withTsxEntry = updateDocumentFileType(documentModel, entryFile.id, 'tsx');
-    const withScssStyle = updateDocumentFileType(withTsxEntry, withTsxEntry.files.find((file) => file.role === 'style')!.id, 'scss');
+    const withScssStyle = updateDocumentFileType(
+        withTsxEntry,
+        withTsxEntry.files.find((file) => file.role === 'style')!.id,
+        'scss',
+    );
 
     assert.equal(withTsxEntry.metadata.entry, 'src/main.tsx');
     assert.ok(withTsxEntry.files.some((file) => file.path === 'src/main.tsx' && file.language === 'tsx'));
     assert.ok(withScssStyle.files.some((file) => file.path === 'src/styles.scss' && file.language === 'scss'));
-    assert.equal(withScssStyle.files.some((file) => file.path === 'src/styles.css'), false);
+    assert.equal(
+        withScssStyle.files.some((file) => file.path === 'src/styles.css'),
+        false,
+    );
     assert.ok(styleFile);
 });
 
@@ -414,7 +436,10 @@ void main() {
     const options = getDocumentFileTypeChangeOptions(documentModel, vertexFile.id);
     const result = evaluateDocumentFileTypeChange(documentModel, vertexFile.id, 'fragment');
 
-    assert.deepEqual(options.map((option) => option.value), ['vertex', 'fragment']);
+    assert.deepEqual(
+        options.map((option) => option.value),
+        ['vertex', 'fragment'],
+    );
     assert.equal(result.allowed, false);
     assert.equal(result.code, 'shader-block-change-not-supported');
 });
@@ -453,7 +478,10 @@ export function App() {
     assert.equal(evaluation.code, 'exercise-file-type-change-locked');
     assert.match(evaluation.reason, /locked by the current exercise/i);
     assert.ok(nextDocument.files.some((file) => file.path === 'src/App.jsx' && file.language === 'jsx'));
-    assert.equal(nextDocument.files.some((file) => file.path === 'src/App.tsx'), false);
+    assert.equal(
+        nextDocument.files.some((file) => file.path === 'src/App.tsx'),
+        false,
+    );
 });
 
 test('locked exercise files still expose badge options but keep them blocked with explicit reasons', () => {
@@ -485,7 +513,10 @@ export function App() {
     const appFile = documentModel.files.find((file) => file.path === 'src/App.jsx')!;
     const options = getDocumentFileTypeChangeOptions(documentModel, appFile.id);
 
-    assert.deepEqual(options.map((option) => option.value), ['jsx', 'tsx', 'javascript', 'typescript']);
+    assert.deepEqual(
+        options.map((option) => option.value),
+        ['jsx', 'tsx', 'javascript', 'typescript'],
+    );
     assert.ok(options.every((option) => option.allowed === false));
     assert.ok(options.every((option) => /locked by the current exercise/i.test(option.reason)));
 });

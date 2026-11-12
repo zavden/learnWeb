@@ -20,11 +20,7 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import {
-    buildExampleDocument,
-    createExampleDocumentFromPreset,
-    parseExampleDocument,
-} from './src/utils/markdown.ts';
+import { buildExampleDocument, createExampleDocumentFromPreset, parseExampleDocument } from './src/utils/markdown.ts';
 import { cloneSerializable, createCompileCacheKey } from './src/utils/compileCache.ts';
 import { compileExampleDocumentIsolated, warmUpIsolatedCompiler } from './src/utils/compiler/isolatedCompiler.ts';
 import {
@@ -33,18 +29,8 @@ import {
     writeClipboardDefaultState,
     writeVimDefaultState,
 } from './src/utils/editorDefaults.ts';
-import {
-    addFavorite,
-    readFavoritesState,
-    removeFavorite,
-    resolveFavorites,
-} from './src/utils/favoritesStore.ts';
-import {
-    addPending,
-    readPendingState,
-    removePending,
-    resolvePending,
-} from './src/utils/pendingStore.ts';
+import { addFavorite, readFavoritesState, removeFavorite, resolveFavorites } from './src/utils/favoritesStore.ts';
+import { addPending, readPendingState, removePending, resolvePending } from './src/utils/pendingStore.ts';
 import { loadVimShortcutConfig } from './src/editor/vimShortcutConfig.ts';
 import { buildMaterialTree, readHiddenState, setChapterHidden } from './src/utils/materialTree.ts';
 import { createDemoApiRouter } from './src/utils/demoApi.ts';
@@ -118,7 +104,10 @@ app.use('/api/demo', createDemoApiRouter());
 // that carries a non-local Origin header is refused with 403; the rest gets CORS headers for the
 // local app origins only.
 app.use((req: Request, res: Response, next: NextFunction) => {
-    if ((req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') && ASSET_ROUTE_PATTERN.test(req.path)) {
+    if (
+        (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') &&
+        ASSET_ROUTE_PATTERN.test(req.path)
+    ) {
         // Lets the preview runtime read the status of a failed asset request (a 404 module import) in
         // its resource timings, also from sandboxed srcdoc copies.
         res.set('Timing-Allow-Origin', '*');
@@ -339,37 +328,40 @@ app.get('/api/tree/hidden-state', (req, res) => {
     }
 });
 
-app.patch('/api/tree/chapters/:chapterId/hidden', (req: Request<{ chapterId: string }, unknown, Partial<SetChapterHiddenRequest>>, res: Response) => {
-    try {
-        const chapterId = String(req.params.chapterId || '').trim();
-        const hidden = req.body?.hidden !== false;
+app.patch(
+    '/api/tree/chapters/:chapterId/hidden',
+    (req: Request<{ chapterId: string }, unknown, Partial<SetChapterHiddenRequest>>, res: Response) => {
+        try {
+            const chapterId = String(req.params.chapterId || '').trim();
+            const hidden = req.body?.hidden !== false;
 
-        if (!chapterId || !/^ch\d+-[^/\\]+$/.test(chapterId) || chapterId.includes('..')) {
-            return res.status(400).json({ error: 'Invalid chapter id' });
+            if (!chapterId || !/^ch\d+-[^/\\]+$/.test(chapterId) || chapterId.includes('..')) {
+                return res.status(400).json({ error: 'Invalid chapter id' });
+            }
+
+            const chapterPath = resolveInside(MATERIAL_DIR, chapterId);
+
+            if (!fs.existsSync(chapterPath) || !fs.statSync(chapterPath).isDirectory()) {
+                return res.status(404).json({ error: 'Chapter not found' });
+            }
+
+            const hiddenState = setChapterHidden(HIDDEN_STATE_FILE, chapterId, hidden);
+            const tree = buildMaterialTree(MATERIAL_DIR, {
+                hiddenStateFile: HIDDEN_STATE_FILE,
+                includeHidden: false,
+            });
+
+            res.json({
+                chapterId,
+                hidden,
+                hiddenState,
+                tree,
+            } satisfies SetChapterHiddenResponse);
+        } catch (err) {
+            res.status(500).json({ error: errorMessage(err) });
         }
-
-        const chapterPath = resolveInside(MATERIAL_DIR, chapterId);
-
-        if (!fs.existsSync(chapterPath) || !fs.statSync(chapterPath).isDirectory()) {
-            return res.status(404).json({ error: 'Chapter not found' });
-        }
-
-        const hiddenState = setChapterHidden(HIDDEN_STATE_FILE, chapterId, hidden);
-        const tree = buildMaterialTree(MATERIAL_DIR, {
-            hiddenStateFile: HIDDEN_STATE_FILE,
-            includeHidden: false,
-        });
-
-        res.json({
-            chapterId,
-            hidden,
-            hiddenState,
-            tree,
-        } satisfies SetChapterHiddenResponse);
-    } catch (err) {
-        res.status(500).json({ error: errorMessage(err) });
-    }
-});
+    },
+);
 
 // ─── Editor defaults: Vim keys, system clipboard, Vim shortcuts ──
 
@@ -398,20 +390,21 @@ app.get('/api/editor/clipboard-default', (req, res) => {
     }
 });
 
-app.patch('/api/editor/clipboard-default', (req: Request<NoParams, unknown, Partial<EditorFlagRequest>>, res: Response) => {
-    try {
-        const enabled = req.body?.enabled !== false;
-        res.json(writeClipboardDefaultState(CLIPBOARD_DEFAULT_FILE, enabled) satisfies ClipboardDefaultState);
-    } catch (err) {
-        res.status(500).json({ error: errorMessage(err) });
-    }
-});
+app.patch(
+    '/api/editor/clipboard-default',
+    (req: Request<NoParams, unknown, Partial<EditorFlagRequest>>, res: Response) => {
+        try {
+            const enabled = req.body?.enabled !== false;
+            res.json(writeClipboardDefaultState(CLIPBOARD_DEFAULT_FILE, enabled) satisfies ClipboardDefaultState);
+        } catch (err) {
+            res.status(500).json({ error: errorMessage(err) });
+        }
+    },
+);
 
 app.get('/api/editor/vim-shortcuts', (req, res) => {
     try {
-        const source = fs.existsSync(VIM_SHORTCUTS_FILE)
-            ? fs.readFileSync(VIM_SHORTCUTS_FILE, 'utf-8')
-            : '';
+        const source = fs.existsSync(VIM_SHORTCUTS_FILE) ? fs.readFileSync(VIM_SHORTCUTS_FILE, 'utf-8') : '';
         const result = loadVimShortcutConfig(source);
         res.json({
             config: result.config,
@@ -524,19 +517,22 @@ app.get('/api/topic/:ch/:sec/:top/main', (req: Request<TopicParams>, res: Respon
     }
 });
 
-app.patch('/api/topic/:ch/:sec/:top/main', (req: Request<TopicParams, unknown, Partial<TopicMainWriteRequest>>, res: Response) => {
-    try {
-        const { content } = req.body || {};
-        const dirPath = resolveTopicDir(req.params);
-        const filePath = resolveInside(dirPath, 'main.md');
+app.patch(
+    '/api/topic/:ch/:sec/:top/main',
+    (req: Request<TopicParams, unknown, Partial<TopicMainWriteRequest>>, res: Response) => {
+        try {
+            const { content } = req.body || {};
+            const dirPath = resolveTopicDir(req.params);
+            const filePath = resolveInside(dirPath, 'main.md');
 
-        ensureDir(dirPath);
-        fs.writeFileSync(filePath, typeof content === 'string' ? content : String(content ?? ''), 'utf-8');
-        res.json({ filename: 'main.md' } satisfies TopicMainWriteResponse);
-    } catch (err) {
-        sendRouteError(res, err);
-    }
-});
+            ensureDir(dirPath);
+            fs.writeFileSync(filePath, typeof content === 'string' ? content : String(content ?? ''), 'utf-8');
+            res.json({ filename: 'main.md' } satisfies TopicMainWriteResponse);
+        } catch (err) {
+            sendRouteError(res, err);
+        }
+    },
+);
 
 // ─── GET /api/topic/:ch/:sec/:top/examples ──────────────
 
@@ -545,7 +541,8 @@ const exampleFilenameCollator = new Intl.Collator('en', { numeric: true, sensiti
 app.get('/api/topic/:ch/:sec/:top/examples', (req: Request<TopicParams>, res: Response) => {
     try {
         const dirPath = resolveInside(resolveTopicDir(req.params), 'examples');
-        if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) return res.json([] satisfies ExamplesListResponse);
+        if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory())
+            return res.json([] satisfies ExamplesListResponse);
         const files = fs
             .readdirSync(dirPath)
             .filter((f) => f.toLowerCase().endsWith('.md') && f.toLowerCase() !== 'readme.md')
@@ -570,44 +567,50 @@ app.get('/api/topic/:ch/:sec/:top/examples/:file', (req: Request<TopicParams & {
 
 // ─── POST /api/topic/:ch/:sec/:top/examples ─────────────
 
-app.post('/api/topic/:ch/:sec/:top/examples', (req: Request<TopicParams, unknown, Partial<ExampleSaveRequest>>, res: Response) => {
-    try {
-        const { content } = req.body || {};
-        const dirPath = resolveInside(resolveTopicDir(req.params), 'examples');
-        ensureDir(dirPath);
+app.post(
+    '/api/topic/:ch/:sec/:top/examples',
+    (req: Request<TopicParams, unknown, Partial<ExampleSaveRequest>>, res: Response) => {
+        try {
+            const { content } = req.body || {};
+            const dirPath = resolveInside(resolveTopicDir(req.params), 'examples');
+            ensureDir(dirPath);
 
-        const now = new Date();
-        const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-        const month = months[now.getMonth()];
-        const day = String(now.getDate()).padStart(2, '0');
-        const year = now.getFullYear();
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        const seconds = String(now.getSeconds()).padStart(2, '0');
-        const filename = `${month}-${day}-${year}-${hours}:${minutes}:${seconds}.md`;
+            const now = new Date();
+            const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+            const month = months[now.getMonth()];
+            const day = String(now.getDate()).padStart(2, '0');
+            const year = now.getFullYear();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            const filename = `${month}-${day}-${year}-${hours}:${minutes}:${seconds}.md`;
 
-        fs.writeFileSync(resolveInside(dirPath, filename), typeof content === 'string' ? content : '', 'utf-8');
-        res.json({ filename } satisfies ExampleSaveResponse);
-    } catch (err) {
-        sendRouteError(res, err);
-    }
-});
+            fs.writeFileSync(resolveInside(dirPath, filename), typeof content === 'string' ? content : '', 'utf-8');
+            res.json({ filename } satisfies ExampleSaveResponse);
+        } catch (err) {
+            sendRouteError(res, err);
+        }
+    },
+);
 
 // ─── PATCH /api/topic/:ch/:sec/:top/examples/* ──────
 
-app.patch('/api/topic/:ch/:sec/:top/examples/*', (req: Request<TopicWildcardParams, unknown, Partial<ExampleModifyRequest>>, res: Response) => {
-    try {
-        const file = req.params[0]; // Capture everything after /examples/
-        const { content } = req.body || {};
-        const filePath = resolveExampleFile(req.params, file);
-        if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
-        if (typeof content !== 'string') return res.status(400).json({ error: 'Missing content' });
-        fs.writeFileSync(filePath, content, 'utf-8');
-        res.json({ filename: file } satisfies ExampleModifyResponse);
-    } catch (err) {
-        sendRouteError(res, err);
-    }
-});
+app.patch(
+    '/api/topic/:ch/:sec/:top/examples/*',
+    (req: Request<TopicWildcardParams, unknown, Partial<ExampleModifyRequest>>, res: Response) => {
+        try {
+            const file = req.params[0]; // Capture everything after /examples/
+            const { content } = req.body || {};
+            const filePath = resolveExampleFile(req.params, file);
+            if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+            if (typeof content !== 'string') return res.status(400).json({ error: 'Missing content' });
+            fs.writeFileSync(filePath, content, 'utf-8');
+            res.json({ filename: file } satisfies ExampleModifyResponse);
+        } catch (err) {
+            sendRouteError(res, err);
+        }
+    },
+);
 
 // ─── DELETE /api/topic/:ch/:sec/:top/examples/* ─────
 
@@ -626,30 +629,32 @@ app.delete('/api/topic/:ch/:sec/:top/examples/*', (req: Request<TopicWildcardPar
 
 // ─── PUT /api/topic/:ch/:sec/:top/examples/* ────────
 
-app.put('/api/topic/:ch/:sec/:top/examples/*', (req: Request<TopicWildcardParams, unknown, Partial<ExampleRenameRequest>>, res: Response) => {
-    try {
-        const file = req.params[0]; // Capture everything after /examples/
-        const { newFilename } = req.body || {};
-        const oldPath = resolveExampleFile(req.params, file);
-        const newPath = resolveExampleFile(req.params, newFilename);
+app.put(
+    '/api/topic/:ch/:sec/:top/examples/*',
+    (req: Request<TopicWildcardParams, unknown, Partial<ExampleRenameRequest>>, res: Response) => {
+        try {
+            const file = req.params[0]; // Capture everything after /examples/
+            const { newFilename } = req.body || {};
+            const oldPath = resolveExampleFile(req.params, file);
+            const newPath = resolveExampleFile(req.params, newFilename);
 
-        if (!fs.existsSync(oldPath)) return res.status(404).json({ error: 'File not found' });
-        if (fs.existsSync(newPath)) return res.status(409).json({ error: 'Target filename already exists' });
+            if (!fs.existsSync(oldPath)) return res.status(404).json({ error: 'File not found' });
+            if (fs.existsSync(newPath)) return res.status(409).json({ error: 'Target filename already exists' });
 
-        fs.renameSync(oldPath, newPath);
-        forgetExampleReferences(oldPath, newPath);
-        res.json({ oldFilename: file, newFilename: newFilename! } satisfies ExampleRenameResponse); // resolveExampleFile rejected a missing name
-    } catch (err) {
-        sendRouteError(res, err);
-    }
-});
+            fs.renameSync(oldPath, newPath);
+            forgetExampleReferences(oldPath, newPath);
+            res.json({ oldFilename: file, newFilename: newFilename! } satisfies ExampleRenameResponse); // resolveExampleFile rejected a missing name
+        } catch (err) {
+            sendRouteError(res, err);
+        }
+    },
+);
 
 // ─── POST /api/compile ───────────────────────────────────
 
 app.post('/api/compile', async (req: Request<NoParams, unknown, Partial<CompileRequest>>, res: Response) => {
     try {
-        const sourceDocument = req.body?.document
-            || parseExampleDocument(req.body?.content || '');
+        const sourceDocument = req.body?.document || parseExampleDocument(req.body?.content || '');
         const cacheKey = createCompileCacheKey({ document: sourceDocument });
         const cached = getCachedCompileResponse(cacheKey);
 
@@ -703,13 +708,14 @@ app.post('/api/create', (req: Request<NoParams, unknown, Partial<CreateItemReque
         let targetDir: string;
         let prefix: string;
         // `String(name)` is what String.prototype.replace did implicitly with the replacement text.
-        const replaceTemplateTokens = (content = ''): string => String(content)
-            .replaceAll('__EXAMPLE_NAME__', String(name))
-            .replace(/Hello World/g, String(name))
-            .replace(/Hello from Pug/g, String(name))
-            .replace(/SCSS preset/g, String(name))
-            .replace(/Hello React/g, String(name))
-            .replace(/React TSX Todo/g, String(name));
+        const replaceTemplateTokens = (content = ''): string =>
+            String(content)
+                .replaceAll('__EXAMPLE_NAME__', String(name))
+                .replace(/Hello World/g, String(name))
+                .replace(/Hello from Pug/g, String(name))
+                .replace(/SCSS preset/g, String(name))
+                .replace(/Hello React/g, String(name))
+                .replace(/React TSX Todo/g, String(name));
 
         if (type === 'chapter') {
             targetDir = MATERIAL_DIR;
@@ -720,7 +726,11 @@ app.post('/api/create', (req: Request<NoParams, unknown, Partial<CreateItemReque
         } else if (type === 'topic') {
             const [chapter, section, ...rest] = String(parentPath || '').split('/');
             if (rest.length) throw new PathError('Invalid section path');
-            targetDir = resolveInside(MATERIAL_DIR, assertPlainSegment(chapter, 'chapter'), assertPlainSegment(section, 'section'));
+            targetDir = resolveInside(
+                MATERIAL_DIR,
+                assertPlainSegment(chapter, 'chapter'),
+                assertPlainSegment(section, 'section'),
+            );
             prefix = 'top';
         } else if (type === 'example') {
             // parentPath should be "ch/sec/top"
@@ -737,7 +747,9 @@ app.post('/api/create', (req: Request<NoParams, unknown, Partial<CreateItemReque
 
             if (fs.existsSync(filePath)) return res.status(409).json({ error: 'Example already exists' });
 
-            const sourceDocument: ExampleDocument = createExampleDocumentFromPreset(sessionPreset || 'html-css-javascript');
+            const sourceDocument: ExampleDocument = createExampleDocumentFromPreset(
+                sessionPreset || 'html-css-javascript',
+            );
             sourceDocument.blocks = sourceDocument.blocks.map((block) => ({
                 ...block,
                 content: replaceTemplateTokens(block.content),
@@ -748,7 +760,11 @@ app.post('/api/create', (req: Request<NoParams, unknown, Partial<CreateItemReque
             }));
             const template = buildExampleDocument(sourceDocument);
             fs.writeFileSync(filePath, template, 'utf-8');
-            return res.json({ filename, path: filePath, sessionPreset: sessionPreset || 'html-css-javascript' } satisfies CreateExampleResponse);
+            return res.json({
+                filename,
+                path: filePath,
+                sessionPreset: sessionPreset || 'html-css-javascript',
+            } satisfies CreateExampleResponse);
         } else {
             return res.status(400).json({ error: 'Invalid type' });
         }
@@ -771,7 +787,7 @@ app.post('/api/create', (req: Request<NoParams, unknown, Partial<CreateItemReque
             fs.writeFileSync(
                 path.join(newPath, 'main.md'),
                 `# ${label.charAt(0).toUpperCase()}${label.slice(1)}\n\nWrite your theory here.\n`,
-                'utf-8'
+                'utf-8',
             );
         }
 
@@ -785,7 +801,8 @@ app.post('/api/create', (req: Request<NoParams, unknown, Partial<CreateItemReque
 
 /** Paths (with `/` separators, relative to `assetsDir`) of every file below it, skipping dotfiles and dot folders. */
 function listAssetFiles(assetsDir: string, prefix = ''): string[] {
-    return fs.readdirSync(assetsDir, { withFileTypes: true })
+    return fs
+        .readdirSync(assetsDir, { withFileTypes: true })
         .filter((entry) => !entry.name.startsWith('.'))
         .flatMap((entry) => {
             const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
@@ -821,12 +838,16 @@ app.get('/api/topic/:ch/:sec/:top/assets/*', (req: Request<TopicWildcardParams>,
     try {
         const assetsDir = resolveInside(resolveTopicDir(req.params), 'assets');
         const relativePath = String(req.params[0] || '');
-        const segments = relativePath.split('/').filter(Boolean).map((segment) => assertPlainSegment(segment, 'asset path'));
+        const segments = relativePath
+            .split('/')
+            .filter(Boolean)
+            .map((segment) => assertPlainSegment(segment, 'asset path'));
         if (segments.length === 0) {
             return res.redirect(307, req.originalUrl.replace(/\/+$/, '').replace(/\?.*$/, ''));
         }
         const filePath = resolveInside(assetsDir, ...segments);
-        if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return res.status(404).json({ error: 'Asset not found' });
+        if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile())
+            return res.status(404).json({ error: 'Asset not found' });
         res.sendFile(filePath);
     } catch (err) {
         sendRouteError(res, err);
@@ -860,7 +881,9 @@ function getPreviewOrigin(): string {
 
 /** The topic named by `chapter/section/topic`, or the placeholder segments for any other value. Throws a `PathError` for a path that escapes `material/`. */
 function parsePreviewTopic(topicPath = ''): TopicParams {
-    const segments = String(topicPath || '').split('/').filter(Boolean);
+    const segments = String(topicPath || '')
+        .split('/')
+        .filter(Boolean);
     if (segments.length !== 3) {
         return { ch: PREVIEW_PLACEHOLDER_SEGMENT, sec: PREVIEW_PLACEHOLDER_SEGMENT, top: PREVIEW_PLACEHOLDER_SEGMENT };
     }
@@ -869,30 +892,33 @@ function parsePreviewTopic(topicPath = ''): TopicParams {
     return { ch, sec, top };
 }
 
-app.post('/api/preview-documents', (req: Request<NoParams, unknown, Partial<PreviewDocumentRequest>>, res: Response) => {
-    try {
-        const html = req.body?.html;
-        if (typeof html !== 'string') throw new PathError('Missing preview html');
+app.post(
+    '/api/preview-documents',
+    (req: Request<NoParams, unknown, Partial<PreviewDocumentRequest>>, res: Response) => {
+        try {
+            const html = req.body?.html;
+            if (typeof html !== 'string') throw new PathError('Missing preview html');
 
-        const topic = parsePreviewTopic(req.body?.topicPath);
-        previewDocumentCounter += 1;
-        const id = `${Date.now().toString(36)}-${previewDocumentCounter.toString(36)}`;
-        previewDocuments.set(id, { html, ...topic });
-        while (previewDocuments.size > PREVIEW_DOCUMENT_LIMIT) {
-            previewDocuments.delete(previewDocuments.keys().next().value!); // the loop condition guarantees an entry
+            const topic = parsePreviewTopic(req.body?.topicPath);
+            previewDocumentCounter += 1;
+            const id = `${Date.now().toString(36)}-${previewDocumentCounter.toString(36)}`;
+            previewDocuments.set(id, { html, ...topic });
+            while (previewDocuments.size > PREVIEW_DOCUMENT_LIMIT) {
+                previewDocuments.delete(previewDocuments.keys().next().value!); // the loop condition guarantees an entry
+            }
+
+            const encodedTopic = [topic.ch, topic.sec, topic.top].map(encodeURIComponent).join('/');
+            res.json({
+                id,
+                origin: getPreviewOrigin(),
+                port: PORT,
+                url: `/preview/${encodedTopic}/${id}/index.html`,
+            } satisfies PreviewDocumentResponse);
+        } catch (err) {
+            sendRouteError(res, err);
         }
-
-        const encodedTopic = [topic.ch, topic.sec, topic.top].map(encodeURIComponent).join('/');
-        res.json({
-            id,
-            origin: getPreviewOrigin(),
-            port: PORT,
-            url: `/preview/${encodedTopic}/${id}/index.html`,
-        } satisfies PreviewDocumentResponse);
-    } catch (err) {
-        sendRouteError(res, err);
-    }
-});
+    },
+);
 
 app.get('/preview/:ch/:sec/:top/:id/*', (req: Request<PreviewParams>, res: Response) => {
     try {
@@ -901,7 +927,12 @@ app.get('/preview/:ch/:sec/:top/:id/*', (req: Request<PreviewParams>, res: Respo
             const previewDocument = previewDocuments.get(req.params.id);
             res.set('Cache-Control', 'no-store');
             if (!previewDocument) {
-                return res.status(410).type('html').send('<!DOCTYPE html><meta charset="utf-8"><p style="font:13px system-ui;color:#666">This preview has expired. Press Refresh in the preview toolbar.</p>');
+                return res
+                    .status(410)
+                    .type('html')
+                    .send(
+                        '<!DOCTYPE html><meta charset="utf-8"><p style="font:13px system-ui;color:#666">This preview has expired. Press Refresh in the preview toolbar.</p>',
+                    );
             }
             return res.type('html').send(previewDocument.html);
         }
@@ -911,7 +942,10 @@ app.get('/preview/:ch/:sec/:top/:id/*', (req: Request<PreviewParams>, res: Respo
         }
 
         const assetsDir = resolveInside(resolveTopicDir(req.params), 'assets');
-        const segments = relativePath.split('/').filter(Boolean).map((segment) => assertPlainSegment(segment, 'asset path'));
+        const segments = relativePath
+            .split('/')
+            .filter(Boolean)
+            .map((segment) => assertPlainSegment(segment, 'asset path'));
         const filePath = resolveInside(assetsDir, ...segments);
         if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
             return res.status(404).json({ error: 'Asset not found' });

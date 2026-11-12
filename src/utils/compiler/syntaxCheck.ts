@@ -47,8 +47,9 @@ function findReservedGlobalDeclaration(code: string, fileName: string): SyntaxDi
     const sourceFile = ts.createSourceFile(fileName, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
     for (const statement of sourceFile.statements) {
         const names: ts.Identifier[] = [];
-        if (ts.isVariableStatement(statement) && (statement.declarationList.flags & ts.NodeFlags.BlockScoped)) {
-            for (const declaration of statement.declarationList.declarations) collectBindingNames(declaration.name, names);
+        if (ts.isVariableStatement(statement) && statement.declarationList.flags & ts.NodeFlags.BlockScoped) {
+            for (const declaration of statement.declarationList.declarations)
+                collectBindingNames(declaration.name, names);
         } else if (ts.isClassDeclaration(statement) && statement.name) {
             names.push(statement.name);
         }
@@ -75,7 +76,10 @@ export interface CheckJavaScriptSyntaxOptions {
  * The syntax errors Chrome would report for this script (at most one for classic scripts, as V8 stops at
  * the first); `[]` for valid or empty code. The code is compiled, never executed.
  */
-export function checkJavaScriptSyntax(source: string = '', { fileName = 'script.js' }: CheckJavaScriptSyntaxOptions = {}): SyntaxDiagnostic[] {
+export function checkJavaScriptSyntax(
+    source: string = '',
+    { fileName = 'script.js' }: CheckJavaScriptSyntaxOptions = {},
+): SyntaxDiagnostic[] {
     const code = String(source ?? '');
     if (!code.trim()) return [];
 

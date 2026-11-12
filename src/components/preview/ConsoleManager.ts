@@ -88,8 +88,23 @@ export interface ConsoleEntry {
 }
 
 /** What `_appendConsoleEntry` accepts: the descriptive fields of an entry, all optional. */
-export type ConsoleEntryInput = Partial<Pick<ConsoleEntry,
-    'collapsed' | 'groupId' | 'groups' | 'kind' | 'level' | 'location' | 'message' | 'method' | 'parts' | 'stackFrames' | 'stackText' | 'table'>>;
+export type ConsoleEntryInput = Partial<
+    Pick<
+        ConsoleEntry,
+        | 'collapsed'
+        | 'groupId'
+        | 'groups'
+        | 'kind'
+        | 'level'
+        | 'location'
+        | 'message'
+        | 'method'
+        | 'parts'
+        | 'stackFrames'
+        | 'stackText'
+        | 'table'
+    >
+>;
 
 /** Input of `_prepareConsoleSession`: the document about to be shown. */
 export interface ConsoleSessionOptions {
@@ -116,7 +131,10 @@ export interface ConsoleValueOptions {
 }
 
 /** An inspector command before `_requestConsoleInspect` adds `source`, `renderId` and `requestId`. */
-export type ConsoleInspectRequest = DistributiveOmit<ConsoleInspectCommand | ConsoleGetPropertyCommand, 'source' | 'renderId' | 'requestId'>;
+export type ConsoleInspectRequest = DistributiveOmit<
+    ConsoleInspectCommand | ConsoleGetPropertyCommand,
+    'source' | 'renderId' | 'requestId'
+>;
 
 /** An inspector request waiting for the iframe's 'inspect-result' (or for its 4 s timeout). */
 export interface PendingConsoleInspect {
@@ -159,7 +177,13 @@ export const consoleManagerMixin = {
      * swaps in that example's REPL history; then picks the runtime mode (shader panel, console or none)
      * and, for shaders, merges the document's uniforms and textures into the panel state.
      */
-    _prepareConsoleSession({ consoleEnabled, sessionKey, shaderEnabled = false, shaderResolution = null, shaderConfig = null }: ConsoleSessionOptions): void {
+    _prepareConsoleSession({
+        consoleEnabled,
+        sessionKey,
+        shaderEnabled = false,
+        shaderResolution = null,
+        shaderConfig = null,
+    }: ConsoleSessionOptions): void {
         const normalizedSessionKey = String(sessionKey || '').trim() || '__draft__';
         const previousMode = this._runtimeMode;
         const shaderSessionChanged = normalizedSessionKey !== this._shaderControlSessionKey;
@@ -441,18 +465,23 @@ export const consoleManagerMixin = {
     },
 
     /** Consecutive entries merge when they look the same and nothing in them can differ (tables, groups, objects, REPL). */
-    _canMergeConsoleEntries(previousEntry: ConsoleEntry | null | undefined, nextEntry: ConsoleEntry | null | undefined): boolean {
+    _canMergeConsoleEntries(
+        previousEntry: ConsoleEntry | null | undefined,
+        nextEntry: ConsoleEntry | null | undefined,
+    ): boolean {
         if (!previousEntry || !nextEntry) return false;
         if (previousEntry.table || nextEntry.table || previousEntry.groupId || nextEntry.groupId) return false;
         if (nextEntry.kind === 'command' || nextEntry.kind === 'command-result') return false;
         // Expandable objects may differ even when their previews match.
         if (this._consoleEntryHasHandles(previousEntry) || this._consoleEntryHasHandles(nextEntry)) return false;
 
-        return previousEntry.kind === nextEntry.kind
-            && previousEntry.level === nextEntry.level
-            && previousEntry.location === nextEntry.location
-            && this._consoleEntryText(previousEntry) === this._consoleEntryText(nextEntry)
-            && previousEntry.groups.join(',') === nextEntry.groups.join(',');
+        return (
+            previousEntry.kind === nextEntry.kind &&
+            previousEntry.level === nextEntry.level &&
+            previousEntry.location === nextEntry.location &&
+            this._consoleEntryText(previousEntry) === this._consoleEntryText(nextEntry) &&
+            previousEntry.groups.join(',') === nextEntry.groups.join(',')
+        );
     },
 
     _consoleEntryHasHandles(entry: ConsoleEntry | null | undefined): boolean {
@@ -468,7 +497,11 @@ export const consoleManagerMixin = {
         if (this._consoleFlushScheduled) return;
         this._consoleFlushScheduled = true;
         const flush = () => this._flushConsoleQueue();
-        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function' && document.visibilityState !== 'hidden') {
+        if (
+            typeof window !== 'undefined' &&
+            typeof window.requestAnimationFrame === 'function' &&
+            document.visibilityState !== 'hidden'
+        ) {
             window.requestAnimationFrame(flush);
         } else {
             setTimeout(flush, 32);
@@ -528,9 +561,7 @@ export const consoleManagerMixin = {
 
         if (level === 'all') {
             const shouldEnableAll = this._consoleFilters.size !== 4;
-            this._consoleFilters = shouldEnableAll
-                ? new Set(['log', 'info', 'warn', 'error'])
-                : new Set();
+            this._consoleFilters = shouldEnableAll ? new Set(['log', 'info', 'warn', 'error']) : new Set();
             this._renderConsoleEntries();
             return;
         }
@@ -603,13 +634,16 @@ export const consoleManagerMixin = {
             return;
         }
 
-        this.iframe.contentWindow.postMessage({
-            action: 'eval',
-            source: 'learncode-console-command',
-            renderId: this._renderToken,
-            command,
-            commandId,
-        } satisfies ConsoleEvalCommand, '*');
+        this.iframe.contentWindow.postMessage(
+            {
+                action: 'eval',
+                source: 'learncode-console-command',
+                renderId: this._renderToken,
+                command,
+                commandId,
+            } satisfies ConsoleEvalCommand,
+            '*',
+        );
 
         this._setConsoleInputValue('');
     },
@@ -620,7 +654,10 @@ export const consoleManagerMixin = {
      * Sends an inspector command to the iframe. Resolves with its answer, or with an `ok: false` answer
      * after 4 s, when the frame is missing, or when the preview re-renders first.
      */
-    _requestConsoleInspect(this: ConsoleHost, payload: ConsoleInspectRequest = {} as ConsoleInspectRequest): Promise<InspectResponse> {
+    _requestConsoleInspect(
+        this: ConsoleHost,
+        payload: ConsoleInspectRequest = {} as ConsoleInspectRequest,
+    ): Promise<InspectResponse> {
         const requestId = ++this._consoleInspectSequence;
         return new Promise((resolve) => {
             const timer = setTimeout(() => {
@@ -631,16 +668,22 @@ export const consoleManagerMixin = {
 
             try {
                 // `!`: a missing frame or window throws here, and the catch answers the request.
-                this.iframe!.contentWindow!.postMessage({
-                    ...payload,
-                    requestId,
-                    renderId: this._renderToken,
-                    source: 'learncode-console-command',
-                } satisfies ConsoleInspectCommand | ConsoleGetPropertyCommand, '*');
+                this.iframe!.contentWindow!.postMessage(
+                    {
+                        ...payload,
+                        requestId,
+                        renderId: this._renderToken,
+                        source: 'learncode-console-command',
+                    } satisfies ConsoleInspectCommand | ConsoleGetPropertyCommand,
+                    '*',
+                );
             } catch (error) {
                 clearTimeout(timer);
                 this._consoleInspectRequests.delete(requestId);
-                resolve({ ok: false, error: (error as Error | null | undefined)?.message || 'Preview frame is not available.' });
+                resolve({
+                    ok: false,
+                    error: (error as Error | null | undefined)?.message || 'Preview frame is not available.',
+                });
             }
         });
     },
@@ -674,9 +717,10 @@ export const consoleManagerMixin = {
         this.consoleOutput.innerHTML = '';
         this.consoleFilterButtons.forEach((button) => {
             const level = button.dataset.level || '';
-            const active = level === 'all'
-                ? this._consoleFilters.size === 4
-                : this._consoleFilters.has(level as ConsoleFilterLevel);
+            const active =
+                level === 'all'
+                    ? this._consoleFilters.size === 4
+                    : this._consoleFilters.has(level as ConsoleFilterLevel);
             button.classList.toggle('active', active);
         });
 
@@ -706,20 +750,20 @@ export const consoleManagerMixin = {
 
         const total = this._consoleEntries.length;
         const visible = this._consoleEntries.filter((entry) => this._isConsoleEntryVisible(entry)).length;
-        const dropped = this._consoleDroppedCount
-            ? ` (+${this._consoleDroppedCount} older dropped)`
-            : '';
+        const dropped = this._consoleDroppedCount ? ` (+${this._consoleDroppedCount} older dropped)` : '';
 
         if (total === 0 || visible === 0) {
-            this.consoleEmpty.textContent = total === 0 ? 'No runtime messages yet.' : 'No messages for the current filters.';
+            this.consoleEmpty.textContent =
+                total === 0 ? 'No runtime messages yet.' : 'No messages for the current filters.';
             if (this.consoleEmpty.parentNode !== this.consoleOutput) this.consoleOutput.prepend(this.consoleEmpty);
         } else if (this.consoleEmpty.parentNode === this.consoleOutput) {
             this.consoleEmpty.remove();
         }
 
-        this.consoleCount.textContent = visible === total
-            ? `${total} entr${total === 1 ? 'y' : 'ies'}${dropped}`
-            : `${visible}/${total} visible${dropped}`;
+        this.consoleCount.textContent =
+            visible === total
+                ? `${total} entr${total === 1 ? 'y' : 'ies'}${dropped}`
+                : `${visible}/${total} visible${dropped}`;
         this.btnClearConsole.disabled = total === 0;
     },
 
@@ -839,7 +883,8 @@ export const consoleManagerMixin = {
      * inline display only; nothing that loads URLs or runs code.
      */
     _sanitizeConsoleStyle(this: ConsoleHost, style: string = ''): string {
-        const allowed = /^(color|background|background-color|font-weight|font-style|font-size|font-family|text-decoration|text-transform|letter-spacing|line-height|text-shadow|opacity|border-radius|border(-(top|right|bottom|left))?(-(color|width|style))?|padding(-(top|right|bottom|left))?|margin(-(top|right|bottom|left))?|display)$/i;
+        const allowed =
+            /^(color|background|background-color|font-weight|font-style|font-size|font-family|text-decoration|text-transform|letter-spacing|line-height|text-shadow|opacity|border-radius|border(-(top|right|bottom|left))?(-(color|width|style))?|padding(-(top|right|bottom|left))?|margin(-(top|right|bottom|left))?|display)$/i;
         return String(style)
             .split(';')
             .map((declaration) => declaration.trim())
@@ -935,7 +980,9 @@ export const consoleManagerMixin = {
                 children.appendChild(error);
                 return;
             }
-            (response.properties || []).forEach((property) => children.appendChild(this._renderConsoleProperty(property)));
+            (response.properties || []).forEach((property) =>
+                children.appendChild(this._renderConsoleProperty(property)),
+            );
             if (!response.properties?.length) {
                 const empty = document.createElement('div');
                 empty.className = 'console-tree-row console-tree-empty';
@@ -1005,21 +1052,25 @@ export const consoleManagerMixin = {
                     invoke.title = response?.error || 'Unable to read this property.';
                     return;
                 }
-                row.replaceChildren(this._renderConsoleValue(response.value || {}, {
-                    dimmed: property.enumerable === false,
-                    keyName: property.name,
-                }));
+                row.replaceChildren(
+                    this._renderConsoleValue(response.value || {}, {
+                        dimmed: property.enumerable === false,
+                        keyName: property.name,
+                    }),
+                );
             });
             row.appendChild(invoke);
             return row;
         }
 
-        row.appendChild(this._renderConsoleValue(property.value || {}, {
-            dimmed: property.enumerable === false && !property.internal,
-            internal: Boolean(property.internal),
-            keyName: property.name,
-            receiver: property.name === '[[Prototype]]' ? property.receiver : null,
-        }));
+        row.appendChild(
+            this._renderConsoleValue(property.value || {}, {
+                dimmed: property.enumerable === false && !property.internal,
+                internal: Boolean(property.internal),
+                keyName: property.name,
+                receiver: property.name === '[[Prototype]]' ? property.receiver : null,
+            }),
+        );
         return row;
     },
 

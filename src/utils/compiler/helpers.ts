@@ -17,7 +17,12 @@ export const VIRTUAL_EXTENSIONS = ['.tsx', '.ts', '.jsx', '.js', '.html', '.css'
 export const INLINE_NAMESPACE = 'learncode-inline';
 
 /** A compile diagnostic: `level`, `code` and `message` first, then the details in the order given. */
-export function createCompileDiagnostic(level: DiagnosticLevel, code: string, message: string, details: DiagnosticDetails = {}): Diagnostic {
+export function createCompileDiagnostic(
+    level: DiagnosticLevel,
+    code: string,
+    message: string,
+    details: DiagnosticDetails = {},
+): Diagnostic {
     return { level, code, message, ...details };
 }
 
@@ -67,11 +72,17 @@ export function inferLoader(language: string = ''): Loader {
 }
 
 /** The first legacy block in `slot`, or `null` (virtual-files documents have no blocks). */
-export function getBlockBySlot(sourceDocument: CompileSourceDocument | null | undefined, slot: BlockSlot): ExampleBlock | null {
+export function getBlockBySlot(
+    sourceDocument: CompileSourceDocument | null | undefined,
+    slot: BlockSlot,
+): ExampleBlock | null {
     return (sourceDocument?.blocks || []).find((block) => block.slot === slot) || null;
 }
 
 /** The first file of a legacy block in `slot` (its `path` names the block in diagnostics and stack traces), or `null`. */
-export function getFileBySlot(sourceDocument: CompileSourceDocument | null | undefined, slot: BlockSlot): VirtualFile | null {
+export function getFileBySlot(
+    sourceDocument: CompileSourceDocument | null | undefined,
+    slot: BlockSlot,
+): VirtualFile | null {
     return (sourceDocument?.files || []).find((file) => file.slot === slot) || null;
 }

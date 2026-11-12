@@ -30,9 +30,7 @@
   display: grid;
   gap: 14px;
   padding: 16px 18px;
-  background:
-    linear-gradient(135deg, rgba(56, 189, 248, 0.14), rgba(37, 99, 235, 0.08)),
-    var(--bg-tertiary);
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.14), rgba(37, 99, 235, 0.08)), var(--bg-tertiary);
   border-bottom: 1px solid var(--border-default);
 }
 

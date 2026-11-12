@@ -101,22 +101,28 @@ export const sessionManagerMixin = {
      */
     _sanitizePanelState(panelState: PanelStateInput = {}): PanelState {
         const collapsedFileIds = Array.isArray(panelState.collapsedFileIds)
-            ? Array.from(new Set<string>(panelState.collapsedFileIds.filter((value: unknown) => typeof value === 'string' && value.trim())))
+            ? Array.from(
+                  new Set<string>(
+                      panelState.collapsedFileIds.filter((value: unknown) => typeof value === 'string' && value.trim()),
+                  ),
+              )
             : [];
 
         return {
             collapsedFileIds,
-            maximizedFileId: typeof panelState.maximizedFileId === 'string' && panelState.maximizedFileId.trim()
-                ? panelState.maximizedFileId
-                : null,
+            maximizedFileId:
+                typeof panelState.maximizedFileId === 'string' && panelState.maximizedFileId.trim()
+                    ? panelState.maximizedFileId
+                    : null,
         };
     },
 
     /** The editor part of the UI session (see `EditorSessionState`); while theory is edited, the layout to return to. */
     getSessionState(): EditorSessionState {
-        const layoutMode = this._isTheoryDocumentTarget() && this._layoutModeBeforeTheory
-            ? this._layoutModeBeforeTheory
-            : this.layoutMode;
+        const layoutMode =
+            this._isTheoryDocumentTarget() && this._layoutModeBeforeTheory
+                ? this._layoutModeBeforeTheory
+                : this.layoutMode;
 
         return {
             activeFileId: this.activeFileId,
@@ -137,7 +143,12 @@ export const sessionManagerMixin = {
      */
     restoreSessionState(sessionState: EditorSessionStateInput = {}): void {
         if (typeof sessionState.vimEnabled === 'boolean') {
-            this._setVimEnabled(sessionState.vimEnabled, { persist: false, rerender: false, emit: false, showToast: false });
+            this._setVimEnabled(sessionState.vimEnabled, {
+                persist: false,
+                rerender: false,
+                emit: false,
+                showToast: false,
+            });
         }
 
         if (sessionState.layoutMode) {
@@ -149,9 +160,10 @@ export const sessionManagerMixin = {
             }
         }
 
-        this.activeFileId = typeof sessionState.activeFileId === 'string' && sessionState.activeFileId.trim()
-            ? sessionState.activeFileId
-            : null;
+        this.activeFileId =
+            typeof sessionState.activeFileId === 'string' && sessionState.activeFileId.trim()
+                ? sessionState.activeFileId
+                : null;
         this.exerciseState = this._sanitizeExerciseState(sessionState.exercise || {});
         this.panelState = this._sanitizePanelState(sessionState);
         this._renderWorkspace();
@@ -305,7 +317,10 @@ export const sessionManagerMixin = {
      * The dirty-tracking signature of a document: `theory:` + the text for theory, the Markdown it would be
      * saved as (live highlights included) for an example, `''` for an empty document or when serializing fails.
      */
-    _computeDirtySignature(this: Editor, documentModel: EditorDocument = (this as unknown as CurrentDocumentHolder).currentDocument): string {
+    _computeDirtySignature(
+        this: Editor,
+        documentModel: EditorDocument = (this as unknown as CurrentDocumentHolder).currentDocument,
+    ): string {
         if (!documentModel) return '';
 
         if (isTheoryDocument(documentModel)) {

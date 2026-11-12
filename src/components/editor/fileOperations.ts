@@ -21,7 +21,23 @@ import { buildFrameworkFileTemplate, getFrameworkFileTemplateOptions } from '../
 import { normalizeBlockType } from '../../config/exampleBlocks.ts';
 import { fetchExample, modifyExample, removeExample, renameExample, saveExample } from '../../utils/api.ts';
 import { errorMessage } from '../../utils/errors.ts';
-import { buildExampleDocument, cloneExampleDocument, createDocumentFile, createEmptyExampleDocument, duplicateDocumentFile, getDocumentEntryCandidates, getDocumentLanguageOptions, hasBlockingDiagnostics, isShaderDocument, parseExampleDocument, removeDocumentFile, setDocumentEntryPath, synchronizeDocument, updateDocumentFileDetails, VIRTUAL_FILE_ROLE_OPTIONS } from '../../utils/markdown.ts';
+import {
+    buildExampleDocument,
+    cloneExampleDocument,
+    createDocumentFile,
+    createEmptyExampleDocument,
+    duplicateDocumentFile,
+    getDocumentEntryCandidates,
+    getDocumentLanguageOptions,
+    hasBlockingDiagnostics,
+    isShaderDocument,
+    parseExampleDocument,
+    removeDocumentFile,
+    setDocumentEntryPath,
+    synchronizeDocument,
+    updateDocumentFileDetails,
+    VIRTUAL_FILE_ROLE_OPTIONS,
+} from '../../utils/markdown.ts';
 import { createTheoryDocument } from '../../utils/theoryDocument.ts';
 import { parseHighlights, serializeHighlights } from '../../utils/highlights.ts';
 import type { FileLanguage, NewDocumentFile, VirtualFileRole } from '../../types/document.ts';
@@ -47,7 +63,9 @@ export type DefaultFileContentRequest = Pick<NewDocumentFile, 'language' | 'path
 export const fileOperationsMixin = {
     /** `metadata.framework` lower-cased (`react`, `vue`), `''` for plain web and shader examples. */
     _getDocumentFramework(): string {
-        return String(this.currentDocument?.metadata?.framework || '').trim().toLowerCase();
+        return String(this.currentDocument?.metadata?.framework || '')
+            .trim()
+            .toLowerCase();
     },
 
     /** Whether the document is written as `@file` sections (true for theory as well). */
@@ -114,14 +132,18 @@ export const fileOperationsMixin = {
                 this.fileDialogPath.value = nextSuggestion;
             }
 
-            if (this.fileDialogRole && (!this.fileDialogRole.value || this.fileDialogRole.value === this.fileDialogState.suggestedRole)) {
+            if (
+                this.fileDialogRole &&
+                (!this.fileDialogRole.value || this.fileDialogRole.value === this.fileDialogState.suggestedRole)
+            ) {
                 this.fileDialogRole.value = this._getDefaultVirtualRole(nextLanguage);
             }
 
             this.fileDialogState.suggestedPath = nextSuggestion;
             this.fileDialogState.suggestedRole = this.fileDialogRole?.value || '';
             if (this.fileDialogHint) {
-                this.fileDialogHint.textContent = 'New files are stored inside the same Markdown document using @file sections.';
+                this.fileDialogHint.textContent =
+                    'New files are stored inside the same Markdown document using @file sections.';
             }
             return;
         }
@@ -138,13 +160,12 @@ export const fileOperationsMixin = {
         if (templateId === 'custom') return;
 
         const currentPath = this.fileDialogPath?.value.trim() || '';
-        const requestedPath = !currentPath || currentPath === this.fileDialogState.suggestedPath
-            ? ''
-            : currentPath;
+        const requestedPath = !currentPath || currentPath === this.fileDialogState.suggestedPath ? '' : currentPath;
         const requestedLanguage = this.fileDialogLanguage?.value || '';
-        const requestedRole = (this.fileDialogRole?.value || '') === this.fileDialogState.suggestedRole
-            ? ''
-            : (this.fileDialogRole?.value || '');
+        const requestedRole =
+            (this.fileDialogRole?.value || '') === this.fileDialogState.suggestedRole
+                ? ''
+                : this.fileDialogRole?.value || '';
 
         const scaffold = buildFrameworkFileTemplate(this.currentDocument, templateId, {
             language: requestedLanguage,
@@ -272,10 +293,11 @@ export const fileOperationsMixin = {
         const framework = this._getDocumentFramework();
         const hasEntry = getDocumentEntryCandidates(this.currentDocument).length > 0;
 
-        if (!hasEntry && (
-            (framework === 'react' && ['jsx', 'tsx', 'javascript', 'typescript'].includes(normalizedLanguage))
-            || (framework === 'vue' && ['javascript', 'typescript'].includes(normalizedLanguage))
-        )) {
+        if (
+            !hasEntry &&
+            ((framework === 'react' && ['jsx', 'tsx', 'javascript', 'typescript'].includes(normalizedLanguage)) ||
+                (framework === 'vue' && ['javascript', 'typescript'].includes(normalizedLanguage)))
+        ) {
             return 'entry';
         }
 
@@ -289,12 +311,14 @@ export const fileOperationsMixin = {
 
     /** `my-panel.jsx` → `MyPanel` (extension dropped); `NewFile` when nothing is left. */
     _toPascalCase(value: string = ''): string {
-        return String(value)
-            .replace(/\.[^.]+$/, '')
-            .split(/[^A-Za-z0-9]+/)
-            .filter(Boolean)
-            .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-            .join('') || 'NewFile';
+        return (
+            String(value)
+                .replace(/\.[^.]+$/, '')
+                .split(/[^A-Za-z0-9]+/)
+                .filter(Boolean)
+                .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+                .join('') || 'NewFile'
+        );
     },
 
     /**
@@ -305,10 +329,11 @@ export const fileOperationsMixin = {
         const normalizedLanguage = normalizeBlockType(language);
         const framework = this._getDocumentFramework();
         const componentName = this._toPascalCase(path.split('/').pop() || 'NewFile');
-        const usesTypedVue = framework === 'vue'
-            && (this.currentDocument.files || []).some((file) => ['typescript'].includes(file.language));
-        const usesVueSfc = framework === 'vue'
-            && (this.currentDocument.files || []).some((file) => file.language === 'vue');
+        const usesTypedVue =
+            framework === 'vue' &&
+            (this.currentDocument.files || []).some((file) => ['typescript'].includes(file.language));
+        const usesVueSfc =
+            framework === 'vue' && (this.currentDocument.files || []).some((file) => file.language === 'vue');
 
         switch (normalizedLanguage) {
             case 'vertex':
@@ -548,7 +573,9 @@ const title = ref('${componentName}');
                 return;
             }
 
-            const hasConflict = (this.currentDocument.files || []).some((file) => file.id !== activeFile.id && file.path === nextPath);
+            const hasConflict = (this.currentDocument.files || []).some(
+                (file) => file.id !== activeFile.id && file.path === nextPath,
+            );
             if (hasConflict) {
                 this._showToast(`Another file already uses "${nextPath}".`, 'error');
                 return;
@@ -649,7 +676,10 @@ const title = ref('${componentName}');
             content: this._getDefaultFileContent({ language }),
             language,
         });
-        const nextFile = [...(nextDocument.files || [])].reverse().find((file) => file.language === language) || nextDocument.files.at(-1) || null;
+        const nextFile =
+            [...(nextDocument.files || [])].reverse().find((file) => file.language === language) ||
+            nextDocument.files.at(-1) ||
+            null;
 
         this.fileDialog.close();
         this.activeFileId = nextFile?.id || null;
@@ -993,7 +1023,10 @@ const title = ref('${componentName}');
      * in-place mutation of the current document and live (unsaved) highlights / editor states are carried
      * over, and a dirty check is scheduled.
      */
-    _applyDocument(documentModel: EditorDocument, { notify = true, reset = false, editorStates = null }: ApplyDocumentOptions = {}): void {
+    _applyDocument(
+        documentModel: EditorDocument,
+        { notify = true, reset = false, editorStates = null }: ApplyDocumentOptions = {},
+    ): void {
         let carriedHighlights = '';
 
         if (!reset) {

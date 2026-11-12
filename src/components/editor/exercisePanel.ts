@@ -25,7 +25,12 @@
 
 import { resolveExerciseComparison } from '../../utils/exerciseComparison.ts';
 import { buildQuickOpenMatches } from '../../utils/fileQuickOpen.ts';
-import { createEmptyExampleDocument, getDocumentFileVisibilityEntries, getExerciseConfig, parseExampleDocument } from '../../utils/markdown.ts';
+import {
+    createEmptyExampleDocument,
+    getDocumentFileVisibilityEntries,
+    getExerciseConfig,
+    parseExampleDocument,
+} from '../../utils/markdown.ts';
 import { fetchExample } from '../../utils/api.ts';
 import type { ExerciseConfig, FileVisibilityEntry } from '../../types/document.ts';
 import type { ExercisePresentation } from '../ExercisePanel.ts';
@@ -63,7 +68,7 @@ export const exercisePanelMixin = {
     _sanitizeExerciseState(exerciseState: ExerciseStateInput = {}): ExerciseState {
         // Number.isFinite is true only for numbers; parseInt stringifies anything else (`'2'` → 2).
         const revealedHints = Number.isFinite(exerciseState.revealedHints)
-            ? exerciseState.revealedHints as number
+            ? (exerciseState.revealedHints as number)
             : Number.parseInt(exerciseState.revealedHints as string, 10);
 
         return {
@@ -71,9 +76,8 @@ export const exercisePanelMixin = {
             notesCollapsed: Boolean(exerciseState.notesCollapsed),
             referencesRevealed: Boolean(exerciseState.referencesRevealed),
             revealedHints: Number.isFinite(revealedHints) && revealedHints > 0 ? revealedHints : 0,
-            selectedComparePairId: typeof exerciseState.selectedComparePairId === 'string'
-                ? exerciseState.selectedComparePairId
-                : '',
+            selectedComparePairId:
+                typeof exerciseState.selectedComparePairId === 'string' ? exerciseState.selectedComparePairId : '',
             solutionsRevealed: Boolean(exerciseState.solutionsRevealed),
         };
     },
@@ -130,17 +134,21 @@ export const exercisePanelMixin = {
             solutionsRevealed: sanitizedState.solutionsRevealed && this.exerciseConfig.solutionFiles.length > 0,
         };
 
-        this.exerciseState = previousSignature === nextSignature
-            ? nextState
-            : {
-                comparisonVisible: false,
-                referencesRevealed: false,
-                revealedHints: 0,
-                selectedComparePairId: '',
-                solutionsRevealed: false,
-            };
+        this.exerciseState =
+            previousSignature === nextSignature
+                ? nextState
+                : {
+                      comparisonVisible: false,
+                      referencesRevealed: false,
+                      revealedHints: 0,
+                      selectedComparePairId: '',
+                      solutionsRevealed: false,
+                  };
 
-        if (previousConfig.solutionExample !== this.exerciseConfig.solutionExample || !this.exerciseConfig.solutionExample) {
+        if (
+            previousConfig.solutionExample !== this.exerciseConfig.solutionExample ||
+            !this.exerciseConfig.solutionExample
+        ) {
             this._resetExerciseComparisonSource();
         }
     },
@@ -171,9 +179,7 @@ export const exercisePanelMixin = {
 
     /** Whether the file is read-only because the exercise locks it (`exercise_locked_files`). */
     _isExerciseFileLocked(file: EditorFile | null | undefined): boolean {
-        return this._isExerciseMode()
-            && Boolean(file?.path)
-            && this.exerciseConfig.lockedFiles.includes(file!.path); // `Boolean(file?.path)` just checked it
+        return this._isExerciseMode() && Boolean(file?.path) && this.exerciseConfig.lockedFiles.includes(file!.path); // `Boolean(file?.path)` just checked it
     },
 
     /** One entry per document file with its `editor_hidden_files` key and whether it is hidden there. */
@@ -191,7 +197,7 @@ export const exercisePanelMixin = {
         return new Set(
             this._getFileVisibilityEntries()
                 .filter((entry) => entry.hidden)
-                .map((entry) => entry.file.id)
+                .map((entry) => entry.file.id),
         );
     },
 
@@ -204,10 +210,9 @@ export const exercisePanelMixin = {
     /** The files the workspace shows, in document order: not concealed by the exercise and not hidden by the author. */
     _getVisibleFiles(): EditorFile[] {
         const hiddenFileIds = this._getManuallyHiddenFileIdSet();
-        return (this.currentDocument.files || []).filter((file) => (
-            this._isExerciseFileVisible(file)
-            && !hiddenFileIds.has(file.id)
-        ));
+        return (this.currentDocument.files || []).filter(
+            (file) => this._isExerciseFileVisible(file) && !hiddenFileIds.has(file.id),
+        );
     },
 
     /** The visible files matching a quick-open query, best first (all of them, in order, for an empty query). */
@@ -227,8 +232,8 @@ export const exercisePanelMixin = {
         }
 
         const revealedHints = this.exerciseConfig.hints.slice(0, this.exerciseState.revealedHints);
-        const comparisonIntent = this.exerciseConfig.comparePairs.length > 0
-            || Boolean(this.exerciseConfig.solutionExample);
+        const comparisonIntent =
+            this.exerciseConfig.comparePairs.length > 0 || Boolean(this.exerciseConfig.solutionExample);
         const comparison = resolveExerciseComparison({
             attemptDocument: this.currentDocument,
             exerciseConfig: this.exerciseConfig,
@@ -403,7 +408,8 @@ export const exercisePanelMixin = {
             if (requestId !== this.exerciseComparisonRequestId) return;
 
             this.exerciseComparisonSource = null;
-            this.exerciseComparisonSourceError = (error as Error | null | undefined)?.message || `Failed to load "${solutionFilename}".`;
+            this.exerciseComparisonSourceError =
+                (error as Error | null | undefined)?.message || `Failed to load "${solutionFilename}".`;
             this.exerciseComparisonSourceStatus = 'error';
         }
 

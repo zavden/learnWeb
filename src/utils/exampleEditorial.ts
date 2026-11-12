@@ -24,22 +24,30 @@ export type ExampleImportanceMeta = (typeof EXAMPLE_IMPORTANCE_META)[ExampleImpo
  * The editorial fields {@link hasExampleEditorialMetadata} looks at. Any of them may be missing or
  * empty, so a partly filled metadata object is accepted.
  */
-export type ExampleEditorialFields = Partial<Pick<ExampleEditorialMetadata, 'description' | 'tags' | 'rating' | 'importance'>>;
+export type ExampleEditorialFields = Partial<
+    Pick<ExampleEditorialMetadata, 'description' | 'tags' | 'rating' | 'importance'>
+>;
 
 /** The pill data for an importance name (case and surrounding spaces ignored), or `null` when it is not a known level. */
 export function getExampleImportanceMeta(value = ''): ExampleImportanceMeta | null {
     const levels: Readonly<Record<string, ExampleImportanceMeta | undefined>> = EXAMPLE_IMPORTANCE_META;
-    return levels[String(value || '').trim().toLowerCase()] || null;
+    return (
+        levels[
+            String(value || '')
+                .trim()
+                .toLowerCase()
+        ] || null
+    );
 }
 
 /** Whether the metadata carries anything worth showing: a description, a tag, an integer rating or an importance. */
 export function hasExampleEditorialMetadata(metadata: ExampleEditorialFields | null = null): boolean {
     if (!metadata || typeof metadata !== 'object') return false;
     return Boolean(
-        String(metadata.description || '').trim()
-        || (Array.isArray(metadata.tags) && metadata.tags.length > 0)
-        || Number.isInteger(metadata.rating)
-        || String(metadata.importance || '').trim()
+        String(metadata.description || '').trim() ||
+        (Array.isArray(metadata.tags) && metadata.tags.length > 0) ||
+        Number.isInteger(metadata.rating) ||
+        String(metadata.importance || '').trim(),
     );
 }
 

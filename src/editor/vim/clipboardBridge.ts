@@ -108,7 +108,12 @@ async function readSystemClipboardSnapshot(): Promise<{ ok: boolean; text: strin
 }
 
 // Puts `text` into the `+` and unnamed registers (through their possibly patched setText).
-function syncPlusRegister(controller: VimRegisterController, text: string, linewise: boolean = false, blockwise: boolean = false): void {
+function syncPlusRegister(
+    controller: VimRegisterController,
+    text: string,
+    linewise: boolean = false,
+    blockwise: boolean = false,
+): void {
     if (!controller || typeof controller.getRegister !== 'function') {
         return;
     }
@@ -145,7 +150,12 @@ export function installRegisterControllerBridge(): void {
     const originalUnnamedSetText = controller.unnamedRegister?.setText?.bind(controller.unnamedRegister);
 
     if (typeof originalUnnamedSetText === 'function') {
-        controller.unnamedRegister.setText = function patchedUnnamedSetText(this: VimRegister, text?: string, linewise?: boolean, blockwise?: boolean): void {
+        controller.unnamedRegister.setText = function patchedUnnamedSetText(
+            this: VimRegister,
+            text?: string,
+            linewise?: boolean,
+            blockwise?: boolean,
+        ): void {
             originalUnnamedSetText(text, linewise, blockwise);
 
             const normalizedText = normalizeClipboardText(text);
@@ -164,7 +174,13 @@ export function installRegisterControllerBridge(): void {
         };
     }
 
-    controller.pushText = function patchedPushText(registerName: string | null | undefined, operator: string, text: string, linewise?: boolean, blockwise?: boolean): void {
+    controller.pushText = function patchedPushText(
+        registerName: string | null | undefined,
+        operator: string,
+        text: string,
+        linewise?: boolean,
+        blockwise?: boolean,
+    ): void {
         const result = originalPushText(registerName, operator, text, linewise, blockwise);
         const normalizedRegister = typeof registerName === 'string' ? registerName.toLowerCase() : '';
 

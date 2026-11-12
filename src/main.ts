@@ -274,7 +274,8 @@ class App {
         this.previewZoomPercent = 100;
         this.previewZoomSliderVisible = false;
         this.previewHeaderHidden = false;
-        this.previewEditorialSummaryVisible = window.localStorage.getItem(this.previewEditorialSummaryVisibleStorageKey) !== '0';
+        this.previewEditorialSummaryVisible =
+            window.localStorage.getItem(this.previewEditorialSummaryVisibleStorageKey) !== '0';
         this.clipboardDefaultEnabled = true;
         this.vimDefaultEnabled = true;
         this.theoryReturnState = null;
@@ -304,11 +305,15 @@ class App {
         this.previewColumn = document.getElementById('preview-column');
         this.previewHeader = document.querySelector<HTMLElement>('.preview-header');
         this.previewEditorialSummary = document.getElementById('preview-editorial-summary');
-        this.previewEditorialDescription = document.getElementById('preview-editorial-description') as HTMLParagraphElement | null;
+        this.previewEditorialDescription = document.getElementById(
+            'preview-editorial-description',
+        ) as HTMLParagraphElement | null;
         this.previewEditorialMeta = document.getElementById('preview-editorial-meta');
         this.previewFrame = document.getElementById('preview-frame') as HTMLIFrameElement | null;
         this.previewFrameContainer = byId('preview-frame-container');
-        this.btnViewportSliderToggle = document.getElementById('btn-viewport-slider-toggle') as HTMLButtonElement | null;
+        this.btnViewportSliderToggle = document.getElementById(
+            'btn-viewport-slider-toggle',
+        ) as HTMLButtonElement | null;
         this.btnViewportWidthInc = document.getElementById('btn-viewport-width-inc') as HTMLButtonElement | null;
         this.btnViewportWidthDec = document.getElementById('btn-viewport-width-dec') as HTMLButtonElement | null;
         this.previewViewportRail = document.getElementById('preview-viewport-rail');
@@ -416,12 +421,13 @@ class App {
         this.gallery = new Gallery({
             getTopicLabel: (topicPath: string) => this.sidebar?.describeTopic?.(topicPath) || '',
             onExampleSelect: (filename: string) => this._openExampleFromGallery(filename),
-            onExampleDeleted: (topicPath: string, filename: string) => this._handleExampleListChanged({
-                reason: 'deleted',
-                filename,
-                topicPath,
-                source: 'gallery',
-            }),
+            onExampleDeleted: (topicPath: string, filename: string) =>
+                this._handleExampleListChanged({
+                    reason: 'deleted',
+                    filename,
+                    topicPath,
+                    source: 'gallery',
+                }),
         });
 
         this.favoritesDialog = new FavoritesDialog({
@@ -451,8 +457,10 @@ class App {
 
         this.theoryViewer = new TheoryViewer({
             onEditRequest: () => this.openTheoryEditor(),
-            onExerciseOpenRequest: (topicPath: string, filename: string) => this._openTheoryExercise(topicPath, filename),
-            onExercisePreviewRequest: (topicPath: string, filename: string) => this._openTheoryExercisePreview(topicPath, filename),
+            onExerciseOpenRequest: (topicPath: string, filename: string) =>
+                this._openTheoryExercise(topicPath, filename),
+            onExercisePreviewRequest: (topicPath: string, filename: string) =>
+                this._openTheoryExercisePreview(topicPath, filename),
         });
 
         this.sidebar = new Sidebar({
@@ -586,15 +594,20 @@ class App {
      * Reacts to a created, renamed or deleted example: reloads favorites and pending (their entries may now
      * point at a missing file), and refreshes the Gallery when the open topic is the one that changed.
      */
-    async _handleExampleListChanged({ reason = '', filename = '', topicPath = '', source = 'editor' }: ExampleListChange = {}): Promise<void> {
+    async _handleExampleListChanged({
+        reason = '',
+        filename = '',
+        topicPath = '',
+        source = 'editor',
+    }: ExampleListChange = {}): Promise<void> {
         const affectsCurrentTopic = Boolean(topicPath) && topicPath === this.currentTopicPath;
 
         if (
-            reason === 'deleted'
-            && source === 'gallery'
-            && affectsCurrentTopic
-            && this.editor?.currentFilename === filename
-            && !this.editor?.isEditingTheoryDocument?.()
+            reason === 'deleted' &&
+            source === 'gallery' &&
+            affectsCurrentTopic &&
+            this.editor?.currentFilename === filename &&
+            !this.editor?.isEditingTheoryDocument?.()
         ) {
             // The example open in the editor no longer exists on disk.
             this.editor.clearCurrentExample();
@@ -695,11 +708,13 @@ class App {
             const saved = await this.editor.saveTheoryDocument();
             if (!saved) return;
             if (
-                this.theoryReturnState?.snapshot?.dirty
-                && !window.confirm(buildDiscardChangesMessage(
-                    'The example you were editing before opening the theory',
-                    `open "${normalizedFilename}"`,
-                ))
+                this.theoryReturnState?.snapshot?.dirty &&
+                !window.confirm(
+                    buildDiscardChangesMessage(
+                        'The example you were editing before opening the theory',
+                        `open "${normalizedFilename}"`,
+                    ),
+                )
             ) {
                 return;
             }
@@ -777,7 +792,11 @@ class App {
      * Opens a topic: points every component at it and shows its Gallery. Returns false when the user
      * declined to discard unsaved work, or when another topic was selected while the Gallery was loading.
      */
-    async selectTopic(topicPath: string, label: string, { persist = true, skipGuard = false }: NavigationOptions = {}): Promise<boolean> {
+    async selectTopic(
+        topicPath: string,
+        label: string,
+        { persist = true, skipGuard = false }: NavigationOptions = {},
+    ): Promise<boolean> {
         if (!skipGuard && !this._confirmDiscardUnsavedChanges('switch topic')) {
             // Keep the sidebar highlight on the topic that is still open.
             this.sidebar.setActive(this.currentTopicPath);
@@ -816,7 +835,10 @@ class App {
     }
 
     /** Opens `filename` of the current topic in the Editor. Returns whether an example was actually loaded. */
-    async loadExample(filename: string, { persist = true, skipGuard = false }: NavigationOptions = {}): Promise<boolean> {
+    async loadExample(
+        filename: string,
+        { persist = true, skipGuard = false }: NavigationOptions = {},
+    ): Promise<boolean> {
         if (!skipGuard && !this._confirmDiscardUnsavedChanges(`open "${filename}"`)) return false;
 
         this.showEditor();
@@ -857,9 +879,9 @@ class App {
             if (!this.editor.isEditingTheoryDocument()) {
                 this.theoryReturnState = this.galleryView.classList.contains('hidden')
                     ? {
-                        mode: 'editor',
-                        snapshot: this.editor.captureWorkspaceSnapshot(),
-                    }
+                          mode: 'editor',
+                          snapshot: this.editor.captureWorkspaceSnapshot(),
+                      }
                     : { mode: 'gallery' };
             }
 
@@ -972,9 +994,7 @@ class App {
             }
 
             this.editor?._showToast?.(
-                this.favoritePaths.has(favoritePath)
-                    ? 'Added to favorites.'
-                    : 'Removed from favorites.',
+                this.favoritePaths.has(favoritePath) ? 'Added to favorites.' : 'Removed from favorites.',
                 'success',
             );
         } catch (error) {
@@ -1060,9 +1080,7 @@ class App {
             }
 
             this.editor?._showToast?.(
-                this.pendingPaths.has(pendingPath)
-                    ? 'Added to pending.'
-                    : 'Removed from pending.',
+                this.pendingPaths.has(pendingPath) ? 'Added to pending.' : 'Removed from pending.',
                 'success',
             );
         } catch (error) {
@@ -1119,8 +1137,8 @@ class App {
         this.previewHeaderHidden = Boolean(hidden);
         this.previewHeader?.classList.toggle('hidden', this.previewHeaderHidden);
         this._setConsoleHeight(
-            Number.parseInt(this.previewColumn?.style.getPropertyValue('--preview-console-height') || '', 10)
-                || this.previewConsoleDefaultHeight,
+            Number.parseInt(this.previewColumn?.style.getPropertyValue('--preview-console-height') || '', 10) ||
+                this.previewConsoleDefaultHeight,
             { persist: false },
         );
 
@@ -1356,10 +1374,9 @@ class App {
                 this.previewColumn!.style.getPropertyValue('--preview-console-height') || '',
                 10,
             );
-            this._setConsoleHeight(
-                Number.isFinite(currentHeight) ? currentHeight : this.previewConsoleDefaultHeight,
-                { persist: false },
-            );
+            this._setConsoleHeight(Number.isFinite(currentHeight) ? currentHeight : this.previewConsoleDefaultHeight, {
+                persist: false,
+            });
         });
     }
 
@@ -1483,7 +1500,10 @@ class App {
         if (!this.previewFrame) return;
 
         // parseInt turns a number into its string first, so the cast is only for the type checker.
-        const nextWidth = Math.max(this.previewMinWidth, Math.round(Number.parseInt(width as string, 10) || this.previewMinWidth));
+        const nextWidth = Math.max(
+            this.previewMinWidth,
+            Math.round(Number.parseInt(width as string, 10) || this.previewMinWidth),
+        );
         this.previewWidthMode = 'custom';
         this.customPreviewWidth = nextWidth;
         this._syncPreviewControls(nextWidth, 'custom');
@@ -1498,9 +1518,10 @@ class App {
     _adjustPreviewViewportWidth(delta: number = 0): void {
         if (!this.previewFrame) return;
 
-        const currentWidth = this.previewWidthMode === 'full'
-            ? Math.round(this.previewColumn?.getBoundingClientRect().width || this.previewMinWidth)
-            : this.customPreviewWidth;
+        const currentWidth =
+            this.previewWidthMode === 'full'
+                ? Math.round(this.previewColumn?.getBoundingClientRect().width || this.previewMinWidth)
+                : this.customPreviewWidth;
         const sliderMin = Number.parseInt(this.viewportSlider?.min || '', 10);
         const sliderMax = Number.parseInt(this.viewportSlider?.max || '', 10);
         const minWidth = Number.isFinite(sliderMin) ? sliderMin : this.previewMinWidth;
@@ -1547,16 +1568,14 @@ class App {
         this.previewZoomPercent = nextZoom;
         const scale = nextZoom / 100;
         const isDefaultZoom = nextZoom === 100;
-        const widthValue = this.previewWidthMode === 'full'
-            ? '100%'
-            : `${this.customPreviewWidth}px`;
+        const widthValue = this.previewWidthMode === 'full' ? '100%' : `${this.customPreviewWidth}px`;
 
         this.previewFrame.style.setProperty('--preview-zoom-scale', String(scale));
         this.previewFrame.style.width = isDefaultZoom
             ? widthValue
             : this.previewWidthMode === 'full'
-                ? `${100 / scale}%`
-                : `${this.customPreviewWidth / scale}px`;
+              ? `${100 / scale}%`
+              : `${this.customPreviewWidth / scale}px`;
         this.previewFrame.style.height = isDefaultZoom ? '100%' : `${100 / scale}%`;
         this.previewFrame.style.transform = isDefaultZoom ? '' : `scale(${scale})`;
         this.previewZoomSlider.value = String(nextZoom);
@@ -1565,9 +1584,8 @@ class App {
         this.btnPreviewZoomInc?.toggleAttribute('disabled', nextZoom >= 300);
         if (this.btnPreviewZoomReset) {
             this.btnPreviewZoomReset.textContent = `${nextZoom}%`;
-            this.btnPreviewZoomReset.title = nextZoom === 100
-                ? 'Preview zoom is already at 100%'
-                : 'Reset preview zoom to 100%';
+            this.btnPreviewZoomReset.title =
+                nextZoom === 100 ? 'Preview zoom is already at 100%' : 'Reset preview zoom to 100%';
             this.btnPreviewZoomReset.classList.toggle('is-active', nextZoom !== 100);
             this.btnPreviewZoomReset.toggleAttribute('disabled', nextZoom === 100);
         }
@@ -1632,7 +1650,11 @@ class App {
 
     /** Drag of the preview / console divider; the console grows as the pointer moves up. */
     _startConsoleResize(event: MouseEvent): void {
-        if (!this.previewConsoleResizer || !this.previewConsole || this.previewConsoleResizer.classList.contains('hidden')) {
+        if (
+            !this.previewConsoleResizer ||
+            !this.previewConsole ||
+            this.previewConsoleResizer.classList.contains('hidden')
+        ) {
             return;
         }
 
@@ -1676,7 +1698,7 @@ class App {
 
             const parsed: unknown = JSON.parse(raw);
             // The stored object is untrusted: the restore methods re-check every field they use.
-            return parsed && typeof parsed === 'object' ? parsed as StoredSessionState : null;
+            return parsed && typeof parsed === 'object' ? (parsed as StoredSessionState) : null;
         } catch {
             return null;
         }
@@ -1701,10 +1723,9 @@ class App {
             },
             preview: {
                 columnWidth: previewColumnWidth || this.previewMinWidth,
-                consoleHeight: Number.parseInt(
-                    this.previewColumn?.style.getPropertyValue('--preview-console-height') || '',
-                    10,
-                ) || this.previewConsoleDefaultHeight,
+                consoleHeight:
+                    Number.parseInt(this.previewColumn?.style.getPropertyValue('--preview-console-height') || '', 10) ||
+                    this.previewConsoleDefaultHeight,
                 customWidth: this.previewWidthMode === 'custom' ? this.customPreviewWidth : null,
                 headerHidden: this.previewHeaderHidden,
                 zoom: this.previewZoomPercent,
@@ -1748,24 +1769,22 @@ class App {
         this._setPreviewHeaderHidden(previewState.headerHidden === true, { persist: false });
 
         const columnWidth = Number.isFinite(previewState.columnWidth)
-            ? previewState.columnWidth as number
+            ? (previewState.columnWidth as number)
             : Number.parseInt(previewState.columnWidth as string, 10);
         if (Number.isFinite(columnWidth) && columnWidth > 0) {
             this._setPreviewColumnWidth(columnWidth, { persist: false });
         }
 
         const consoleHeight = Number.isFinite(previewState.consoleHeight)
-            ? previewState.consoleHeight as number
+            ? (previewState.consoleHeight as number)
             : Number.parseInt(previewState.consoleHeight as string, 10);
         this._setConsoleHeight(
-            Number.isFinite(consoleHeight) && consoleHeight > 0
-                ? consoleHeight
-                : this.previewConsoleDefaultHeight,
+            Number.isFinite(consoleHeight) && consoleHeight > 0 ? consoleHeight : this.previewConsoleDefaultHeight,
             { persist: false },
         );
 
         const customWidth = Number.isFinite(previewState.customWidth)
-            ? previewState.customWidth as number
+            ? (previewState.customWidth as number)
             : Number.parseInt(previewState.customWidth as string, 10);
 
         if (previewState.widthMode === 'custom' && Number.isFinite(customWidth) && customWidth > 0) {
@@ -1775,7 +1794,7 @@ class App {
         }
 
         const zoom = Number.isFinite(previewState.zoom)
-            ? previewState.zoom as number
+            ? (previewState.zoom as number)
             : Number.parseInt(previewState.zoom as string, 10);
         this._applyPreviewZoom(Number.isFinite(zoom) && zoom > 0 ? zoom : 100, { persist: false });
     }
@@ -1809,12 +1828,10 @@ class App {
         this.editor.restoreSessionState(sessionState.editor || {});
 
         const documentTarget = sessionState.documentTarget === 'theory' ? 'theory' : 'example';
-        const documentFilename = typeof sessionState.documentFilename === 'string'
-            ? sessionState.documentFilename.trim()
-            : '';
-        const exampleFilename = typeof sessionState.exampleFilename === 'string'
-            ? sessionState.exampleFilename.trim()
-            : '';
+        const documentFilename =
+            typeof sessionState.documentFilename === 'string' ? sessionState.documentFilename.trim() : '';
+        const exampleFilename =
+            typeof sessionState.exampleFilename === 'string' ? sessionState.exampleFilename.trim() : '';
         if (documentTarget === 'theory') {
             try {
                 await this.openTheoryEditor({ persist: false });
@@ -1868,7 +1885,7 @@ class App {
         this.previewEditorialSummaryVisible = visible !== false;
         window.localStorage.setItem(
             this.previewEditorialSummaryVisibleStorageKey,
-            this.previewEditorialSummaryVisible ? '1' : '0'
+            this.previewEditorialSummaryVisible ? '1' : '0',
         );
         this.sidebar?.setPreviewInfoVisible?.(this.previewEditorialSummaryVisible);
         this._syncPreviewEditorialSummary();
@@ -1883,9 +1900,9 @@ class App {
         if (!this.previewEditorialSummary || !this.previewEditorialDescription || !this.previewEditorialMeta) return;
 
         if (
-            !this.previewEditorialSummaryVisible
-            || !this.galleryView.classList.contains('hidden')
-            || this.editor?.isEditingTheoryDocument?.()
+            !this.previewEditorialSummaryVisible ||
+            !this.galleryView.classList.contains('hidden') ||
+            this.editor?.isEditingTheoryDocument?.()
         ) {
             this._clearPreviewEditorialSummary();
             return;

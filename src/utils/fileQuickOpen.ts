@@ -20,7 +20,9 @@ interface SearchFields {
 }
 
 function normalizeToken(value = ''): string {
-    return String(value || '').trim().toLowerCase();
+    return String(value || '')
+        .trim()
+        .toLowerCase();
 }
 
 function buildSearchFields(file: Partial<QuickOpenFile> = {}): SearchFields {

@@ -31,14 +31,21 @@ function runGuarded(code: string): string[] {
 }
 
 test('typescript blocks report type errors as non-blocking diagnostics', () => {
-    const result = compileScript({
-        type: 'typescript',
-        content: "const n: number = 'hola';\nconst status = document.getElementById('status');\nstatus.textContent = 'x';\n",
-    }, { sourcePath: 'script.ts' });
+    const result = compileScript(
+        {
+            type: 'typescript',
+            content:
+                "const n: number = 'hola';\nconst status = document.getElementById('status');\nstatus.textContent = 'x';\n",
+        },
+        { sourcePath: 'script.ts' },
+    );
 
     const typeErrors = result.diagnostics.filter((diagnostic) => diagnostic.code === 'typescript-type');
     assert.equal(typeErrors.length, 2);
-    assert.deepEqual(typeErrors.map((diagnostic) => diagnostic.line), [1, 3]);
+    assert.deepEqual(
+        typeErrors.map((diagnostic) => diagnostic.line),
+        [1, 3],
+    );
     assert.ok(typeErrors.every((diagnostic) => diagnostic.blocking === false && diagnostic.slot === 'script'));
     assert.match(typeErrors[0].message, /^TS2322: Type 'string' is not assignable to type 'number'/);
     // `status` must not clash with the DOM global of the same name: files are checked as modules.
@@ -61,7 +68,8 @@ test('typescript type checking can be disabled and accepts URL imports', () => {
 test('typescript emits modern class fields', () => {
     const result = compileScript({
         type: 'typescript',
-        content: 'class Counter { #count = 0; label?: string; inc() { return ++this.#count; } }\nconsole.log(new Counter().inc());\n',
+        content:
+            'class Counter { #count = 0; label?: string; inc() { return ++this.#count; } }\nconsole.log(new Counter().inc());\n',
     });
     assert.equal(result.diagnostics.length, 0);
     assert.match(result.js, /#count = 0/);
@@ -69,17 +77,29 @@ test('typescript emits modern class fields', () => {
 });
 
 test('typescript scripts run in strict mode like tsc --strict, modules stay untouched', () => {
-    const script = compileScript({ type: 'typescript', content: 'const sizes = Object.freeze([1, 2]);\nconsole.log(sizes);\n' }, { typeCheck: false });
+    const script = compileScript(
+        { type: 'typescript', content: 'const sizes = Object.freeze([1, 2]);\nconsole.log(sizes);\n' },
+        { typeCheck: false },
+    );
     assert.match(script.js, /^"use strict";/);
     assert.match(script.jsView!, /^"use strict";/);
-    assert.throws(() => runGuarded(script.js.replace('sizes);', 'sizes); sizes[0] = 9;')), /Cannot assign to read only property/);
+    assert.throws(
+        () => runGuarded(script.js.replace('sizes);', 'sizes); sizes[0] = 9;')),
+        /Cannot assign to read only property/,
+    );
 
-    const module = compileScript({ type: 'typescript', content: "import { x } from './util.js';\nconsole.log(x);\n" }, { typeCheck: false });
+    const module = compileScript(
+        { type: 'typescript', content: "import { x } from './util.js';\nconsole.log(x);\n" },
+        { typeCheck: false },
+    );
     assert.doesNotMatch(module.js, /use strict/);
 });
 
 test('javascript syntax errors are reported with their line and column', () => {
-    const result = compileScript({ type: 'javascript', content: "console.log('ok');\nlet x = ;\n" }, { sourcePath: 'script.js' });
+    const result = compileScript(
+        { type: 'javascript', content: "console.log('ok');\nlet x = ;\n" },
+        { sourcePath: 'script.js' },
+    );
     assert.equal(result.diagnostics.length, 1);
     assert.equal(result.diagnostics[0].code, 'javascript-syntax');
     assert.equal(result.diagnostics[0].line, 2);
@@ -109,14 +129,20 @@ test('loop guards keep every user line in place', () => {
 });
 
 test('loop guards stop an infinite loop with an error pointing at the loop line', () => {
-    const result = compileScript({ type: 'javascript', content: "let i = 0;\nwhile (i < 5) {\n}\nconsole.log('never');" }, { sourcePath: 'script.js' });
+    const result = compileScript(
+        { type: 'javascript', content: "let i = 0;\nwhile (i < 5) {\n}\nconsole.log('never');" },
+        { sourcePath: 'script.js' },
+    );
     const started = performance.now();
-    assert.throws(() => runGuarded(result.js), (error: Error) => {
-        assert.equal(error.name, 'RangeError');
-        assert.match(error.message, /Possible infinite loop at line 2/);
-        assert.match(String(error.stack), /script\.js:2:/);
-        return true;
-    });
+    assert.throws(
+        () => runGuarded(result.js),
+        (error: Error) => {
+            assert.equal(error.name, 'RangeError');
+            assert.match(error.message, /Possible infinite loop at line 2/);
+            assert.match(String(error.stack), /script\.js:2:/);
+            return true;
+        },
+    );
     assert.ok(performance.now() - started < 4000);
 });
 
@@ -172,7 +198,10 @@ test('inline <script> loops in HTML get guards without changing the line count',
 
 test('javascript syntax errors come from V8 and match the browser', () => {
     const constNoInit = compileScript({ type: 'javascript', content: 'console.log(1);\nconst x;\n' });
-    assert.deepEqual(constNoInit.diagnostics.map((d) => [d.line, d.column, d.message]), [[2, 7, 'SyntaxError: Missing initializer in const declaration']]);
+    assert.deepEqual(
+        constNoInit.diagnostics.map((d) => [d.line, d.column, d.message]),
+        [[2, 7, 'SyntaxError: Missing initializer in const declaration']],
+    );
     const duplicateLet = compileScript({ type: 'javascript', content: 'let a = 1;\nlet a = 2;\n' });
     assert.equal(duplicateLet.diagnostics[0].line, 2);
     // Legacy octal literals are legal in classic (sloppy) scripts.
@@ -182,13 +211,20 @@ test('javascript syntax errors come from V8 and match the browser', () => {
 });
 
 test('classic scripts cannot redeclare non-configurable window globals, as in Chrome', () => {
-    const topConst = compileScript({ type: 'javascript', content: "console.log(1);\nconst { top, left } = box;\n" });
-    assert.deepEqual(topConst.diagnostics.map((d) => [d.code, d.line, d.column, d.message]), [
-        ['javascript-syntax', 2, 9, "SyntaxError: Identifier 'top' has already been declared"],
-    ]);
+    const topConst = compileScript({ type: 'javascript', content: 'console.log(1);\nconst { top, left } = box;\n' });
+    assert.deepEqual(
+        topConst.diagnostics.map((d) => [d.code, d.line, d.column, d.message]),
+        [['javascript-syntax', 2, 9, "SyntaxError: Identifier 'top' has already been declared"]],
+    );
     assert.equal(compileScript({ type: 'javascript', content: 'class location {}' }).diagnostics.length, 1);
     // Ordinary window properties, `var`, nested scopes and modules are fine.
-    for (const content of ['let name = 1; const status = 2;', 'var top = 1;', '{ const top = 1; }', 'function f() { let window = 1; }', "export const top = 1;"]) {
+    for (const content of [
+        'let name = 1; const status = 2;',
+        'var top = 1;',
+        '{ const top = 1; }',
+        'function f() { let window = 1; }',
+        'export const top = 1;',
+    ]) {
         assert.equal(compileScript({ type: 'javascript', content }).diagnostics.length, 0, content);
     }
 });

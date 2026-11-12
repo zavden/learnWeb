@@ -62,11 +62,7 @@ import type { ExercisePresentation } from './ExercisePanel.ts';
 import { getBlockDefinition } from '../config/exampleBlocks.ts';
 import { HIGHLIGHT_COLORS } from '../config/highlightColors.ts';
 import { glslLanguage } from '../editor/glslLanguage.ts';
-import {
-    cssLearningSupport,
-    htmlLearningSupport,
-    javascriptLearningSupport,
-} from '../editor/learningCompletions.ts';
+import { cssLearningSupport, htmlLearningSupport, javascriptLearningSupport } from '../editor/learningCompletions.ts';
 import {
     type VimModeLabel,
     type VimShortcutConfig,
@@ -82,7 +78,11 @@ import {
 } from '../editor/vimSupport.ts';
 import { vueScriptEnterCommand } from '../editor/vueSmartEnter.ts';
 import { byId, queryRequired } from '../utils/dom.ts';
-import { type PanelDirection, getWrappedPanelIndex, findDirectionalPanelTargetIndex } from '../utils/panelNavigation.ts';
+import {
+    type PanelDirection,
+    getWrappedPanelIndex,
+    findDirectionalPanelTargetIndex,
+} from '../utils/panelNavigation.ts';
 import {
     cloneExampleDocument,
     createEmptyExampleDocument,
@@ -789,8 +789,12 @@ export class Editor {
         this.btnModify = byId<HTMLButtonElement>('btn-modify');
         this.btnRemove = byId<HTMLButtonElement>('btn-remove');
         this.btnAddFile = document.getElementById('btn-add-file') as HTMLButtonElement | null;
-        this.btnToggleFavoriteExample = document.getElementById('btn-toggle-favorite-example') as HTMLButtonElement | null;
-        this.btnTogglePendingExample = document.getElementById('btn-toggle-pending-example') as HTMLButtonElement | null;
+        this.btnToggleFavoriteExample = document.getElementById(
+            'btn-toggle-favorite-example',
+        ) as HTMLButtonElement | null;
+        this.btnTogglePendingExample = document.getElementById(
+            'btn-toggle-pending-example',
+        ) as HTMLButtonElement | null;
         this.btnEditExampleMetadata = document.getElementById('btn-edit-example-metadata') as HTMLButtonElement | null;
         this.btnEditShaderUniforms = document.getElementById('btn-edit-shader-uniforms') as HTMLButtonElement | null;
         this.btnEditShaderTextures = document.getElementById('btn-edit-shader-textures') as HTMLButtonElement | null;
@@ -803,7 +807,9 @@ export class Editor {
         this.btnLayout = document.getElementById('btn-editor-layout') as HTMLButtonElement | null;
         this.btnContextHints = document.getElementById('btn-editor-context-hints') as HTMLButtonElement | null;
         this.btnAutoFit = document.getElementById('btn-auto-fit') as HTMLButtonElement | null;
-        this.btnSystemClipboardToggle = document.getElementById('btn-system-clipboard-toggle') as HTMLButtonElement | null;
+        this.btnSystemClipboardToggle = document.getElementById(
+            'btn-system-clipboard-toggle',
+        ) as HTMLButtonElement | null;
         this.btnVimToggle = document.getElementById('btn-vim-toggle') as HTMLButtonElement | null;
         this.vimModeIndicator = document.getElementById('vim-mode-indicator') as HTMLSpanElement | null;
         this.entrySelectGroup = document.getElementById('entry-select-group') as HTMLLabelElement | null;
@@ -824,19 +830,37 @@ export class Editor {
         this.fileDialogCancel = document.getElementById('editor-file-dialog-cancel') as HTMLButtonElement | null;
         this.fileDialogConfirm = byId<HTMLButtonElement>('editor-file-dialog-confirm');
         this.fileDialogForm = document.getElementById('editor-file-form') as HTMLFormElement | null;
-        this.exampleMetadataDialog = document.getElementById('editor-example-metadata-dialog') as HTMLDialogElement | null;
-        this.exampleDescriptionInput = document.getElementById('editor-example-description') as HTMLTextAreaElement | null;
+        this.exampleMetadataDialog = document.getElementById(
+            'editor-example-metadata-dialog',
+        ) as HTMLDialogElement | null;
+        this.exampleDescriptionInput = document.getElementById(
+            'editor-example-description',
+        ) as HTMLTextAreaElement | null;
         this.exampleTagsInput = document.getElementById('editor-example-tags') as HTMLInputElement | null;
         this.exampleRatingStars = document.getElementById('editor-example-rating-stars') as HTMLDivElement | null;
-        this.btnExampleRatingClear = document.getElementById('btn-editor-example-rating-clear') as HTMLButtonElement | null;
+        this.btnExampleRatingClear = document.getElementById(
+            'btn-editor-example-rating-clear',
+        ) as HTMLButtonElement | null;
         this.exampleImportanceSelect = document.getElementById('editor-example-importance') as HTMLSelectElement | null;
-        this.exampleImportancePreview = document.getElementById('editor-example-importance-preview') as HTMLSpanElement | null;
-        this.exampleMetadataHint = document.getElementById('editor-example-metadata-hint') as HTMLParagraphElement | null;
-        this.btnExampleMetadataCancel = document.getElementById('editor-example-metadata-cancel') as HTMLButtonElement | null;
-        this.btnExampleMetadataApply = document.getElementById('editor-example-metadata-apply') as HTMLButtonElement | null;
+        this.exampleImportancePreview = document.getElementById(
+            'editor-example-importance-preview',
+        ) as HTMLSpanElement | null;
+        this.exampleMetadataHint = document.getElementById(
+            'editor-example-metadata-hint',
+        ) as HTMLParagraphElement | null;
+        this.btnExampleMetadataCancel = document.getElementById(
+            'editor-example-metadata-cancel',
+        ) as HTMLButtonElement | null;
+        this.btnExampleMetadataApply = document.getElementById(
+            'editor-example-metadata-apply',
+        ) as HTMLButtonElement | null;
         this.fileTypeDialog = document.getElementById('editor-file-type-dialog') as HTMLDialogElement | null;
-        this.fileTypeDialogTitle = document.getElementById('editor-file-type-dialog-title') as HTMLHeadingElement | null;
-        this.fileTypeDialogNote = document.getElementById('editor-file-type-dialog-note') as HTMLParagraphElement | null;
+        this.fileTypeDialogTitle = document.getElementById(
+            'editor-file-type-dialog-title',
+        ) as HTMLHeadingElement | null;
+        this.fileTypeDialogNote = document.getElementById(
+            'editor-file-type-dialog-note',
+        ) as HTMLParagraphElement | null;
         this.fileTypeCurrentBadge = document.getElementById('editor-file-type-current-badge') as HTMLSpanElement | null;
         this.fileTypeCurrentLabel = document.getElementById('editor-file-type-current-label') as HTMLElement | null;
         this.fileTypeNextBadge = document.getElementById('editor-file-type-next-badge') as HTMLSpanElement | null;
@@ -844,7 +868,9 @@ export class Editor {
         this.fileTypePathPreview = document.getElementById('editor-file-type-path-preview') as HTMLElement | null;
         this.fileTypeOptions = document.getElementById('editor-file-type-options') as HTMLDivElement | null;
         this.fileTypeEmpty = document.getElementById('editor-file-type-empty') as HTMLParagraphElement | null;
-        this.fileTypeDialogHint = document.getElementById('editor-file-type-dialog-hint') as HTMLParagraphElement | null;
+        this.fileTypeDialogHint = document.getElementById(
+            'editor-file-type-dialog-hint',
+        ) as HTMLParagraphElement | null;
         this.btnFileTypeCancel = document.getElementById('editor-file-type-cancel') as HTMLButtonElement | null;
         this.btnFileTypeApply = document.getElementById('editor-file-type-apply') as HTMLButtonElement | null;
         this.shaderUniformDialog = document.getElementById('shader-uniform-dialog') as HTMLDialogElement | null;
@@ -853,9 +879,13 @@ export class Editor {
         this.shaderUniformName = document.getElementById('shader-uniform-name') as HTMLInputElement | null;
         this.shaderUniformType = document.getElementById('shader-uniform-type') as HTMLSelectElement | null;
         this.shaderUniformScalarGroup = document.getElementById('shader-uniform-scalar-group') as HTMLDivElement | null;
-        this.shaderUniformDefaultScalar = document.getElementById('shader-uniform-default-scalar') as HTMLInputElement | null;
+        this.shaderUniformDefaultScalar = document.getElementById(
+            'shader-uniform-default-scalar',
+        ) as HTMLInputElement | null;
         this.shaderUniformBoolGroup = document.getElementById('shader-uniform-bool-group') as HTMLDivElement | null;
-        this.shaderUniformDefaultBool = document.getElementById('shader-uniform-default-bool') as HTMLSelectElement | null;
+        this.shaderUniformDefaultBool = document.getElementById(
+            'shader-uniform-default-bool',
+        ) as HTMLSelectElement | null;
         this.shaderUniformVectorGroup = document.getElementById('shader-uniform-vector-group') as HTMLDivElement | null;
         this.shaderUniformVectorInputs = [
             document.getElementById('shader-uniform-vector-0') as HTMLInputElement | null,
@@ -867,9 +897,15 @@ export class Editor {
         this.shaderUniformRangeMin = document.getElementById('shader-uniform-range-min') as HTMLInputElement | null;
         this.shaderUniformRangeMax = document.getElementById('shader-uniform-range-max') as HTMLInputElement | null;
         this.shaderUniformRangeStep = document.getElementById('shader-uniform-range-step') as HTMLInputElement | null;
-        this.shaderUniformDialogHint = document.getElementById('shader-uniform-dialog-hint') as HTMLParagraphElement | null;
-        this.shaderUniformDialogTypeHint = document.getElementById('shader-uniform-dialog-type-hint') as HTMLSpanElement | null;
-        this.shaderUniformDialogMode = document.getElementById('shader-uniform-dialog-mode') as HTMLParagraphElement | null;
+        this.shaderUniformDialogHint = document.getElementById(
+            'shader-uniform-dialog-hint',
+        ) as HTMLParagraphElement | null;
+        this.shaderUniformDialogTypeHint = document.getElementById(
+            'shader-uniform-dialog-type-hint',
+        ) as HTMLSpanElement | null;
+        this.shaderUniformDialogMode = document.getElementById(
+            'shader-uniform-dialog-mode',
+        ) as HTMLParagraphElement | null;
         this.btnShaderUniformAdd = document.getElementById('btn-shader-uniform-add') as HTMLButtonElement | null;
         this.btnShaderUniformReset = document.getElementById('btn-shader-uniform-reset') as HTMLButtonElement | null;
         this.btnShaderUniformCancel = document.getElementById('btn-shader-uniform-cancel') as HTMLButtonElement | null;
@@ -880,19 +916,33 @@ export class Editor {
         this.shaderTextureName = document.getElementById('shader-texture-name') as HTMLInputElement | null;
         this.shaderTextureAsset = document.getElementById('shader-texture-asset') as HTMLInputElement | null;
         this.shaderTextureAssets = document.getElementById('shader-texture-assets') as HTMLDivElement | null;
-        this.shaderTextureAssetsEmpty = document.getElementById('shader-texture-assets-empty') as HTMLParagraphElement | null;
-        this.shaderTextureDialogMode = document.getElementById('shader-texture-dialog-mode') as HTMLParagraphElement | null;
-        this.shaderTextureDialogHint = document.getElementById('shader-texture-dialog-hint') as HTMLParagraphElement | null;
+        this.shaderTextureAssetsEmpty = document.getElementById(
+            'shader-texture-assets-empty',
+        ) as HTMLParagraphElement | null;
+        this.shaderTextureDialogMode = document.getElementById(
+            'shader-texture-dialog-mode',
+        ) as HTMLParagraphElement | null;
+        this.shaderTextureDialogHint = document.getElementById(
+            'shader-texture-dialog-hint',
+        ) as HTMLParagraphElement | null;
         this.btnShaderTextureAdd = document.getElementById('btn-shader-texture-add') as HTMLButtonElement | null;
         this.btnShaderTextureReset = document.getElementById('btn-shader-texture-reset') as HTMLButtonElement | null;
         this.btnShaderTextureCancel = document.getElementById('btn-shader-texture-cancel') as HTMLButtonElement | null;
         this.btnShaderTextureApply = document.getElementById('btn-shader-texture-apply') as HTMLButtonElement | null;
-        this.fileVisibilityDialog = document.getElementById('editor-file-visibility-dialog') as HTMLDialogElement | null;
+        this.fileVisibilityDialog = document.getElementById(
+            'editor-file-visibility-dialog',
+        ) as HTMLDialogElement | null;
         this.fileVisibilityList = document.getElementById('editor-file-visibility-list') as HTMLDivElement | null;
-        this.fileVisibilityEmpty = document.getElementById('editor-file-visibility-empty') as HTMLParagraphElement | null;
+        this.fileVisibilityEmpty = document.getElementById(
+            'editor-file-visibility-empty',
+        ) as HTMLParagraphElement | null;
         this.fileVisibilityHint = document.getElementById('editor-file-visibility-hint') as HTMLParagraphElement | null;
-        this.btnFileVisibilityCancel = document.getElementById('editor-file-visibility-cancel') as HTMLButtonElement | null;
-        this.btnFileVisibilityApply = document.getElementById('editor-file-visibility-apply') as HTMLButtonElement | null;
+        this.btnFileVisibilityCancel = document.getElementById(
+            'editor-file-visibility-cancel',
+        ) as HTMLButtonElement | null;
+        this.btnFileVisibilityApply = document.getElementById(
+            'editor-file-visibility-apply',
+        ) as HTMLButtonElement | null;
         this.quickOpenDialog = document.getElementById('editor-quick-open-dialog') as HTMLDialogElement | null;
         this.quickOpenInput = document.getElementById('editor-quick-open-input') as HTMLInputElement | null;
         this.quickOpenList = document.getElementById('editor-quick-open-list') as HTMLDivElement | null;
@@ -900,23 +950,39 @@ export class Editor {
         this.quickOpenHint = document.getElementById('editor-quick-open-hint') as HTMLParagraphElement | null;
         this.btnQuickOpenCancel = document.getElementById('editor-quick-open-cancel') as HTMLButtonElement | null;
         this.btnQuickOpenConfirm = document.getElementById('editor-quick-open-open') as HTMLButtonElement | null;
-        this.btnQuickOpenCloseIcon = document.getElementById('editor-quick-open-close-icon') as HTMLButtonElement | null;
+        this.btnQuickOpenCloseIcon = document.getElementById(
+            'editor-quick-open-close-icon',
+        ) as HTMLButtonElement | null;
         this.contextHintsDialog = document.getElementById('editor-context-hints-dialog') as HTMLDialogElement | null;
         this.contextHintsDialogContent = byId<HTMLDivElement>('editor-context-hints-dialog-content');
         this.contextHintsDialogNote = byId<HTMLParagraphElement>('editor-context-hints-dialog-note');
-        this.btnContextHintsDialogClose = document.getElementById('editor-context-hints-dialog-close') as HTMLButtonElement | null;
-        this.btnContextHintsDialogCloseIcon = document.getElementById('editor-context-hints-dialog-close-icon') as HTMLButtonElement | null;
+        this.btnContextHintsDialogClose = document.getElementById(
+            'editor-context-hints-dialog-close',
+        ) as HTMLButtonElement | null;
+        this.btnContextHintsDialogCloseIcon = document.getElementById(
+            'editor-context-hints-dialog-close-icon',
+        ) as HTMLButtonElement | null;
         this.shortcutsDialog = document.getElementById('editor-shortcuts-dialog') as HTMLDialogElement | null;
-        this.shortcutsDialogContent = document.getElementById('editor-shortcuts-dialog-content') as HTMLDivElement | null;
-        this.shortcutsDialogNote = document.getElementById('editor-shortcuts-dialog-note') as HTMLParagraphElement | null;
-        this.btnShortcutsDialogClose = document.getElementById('editor-shortcuts-dialog-close') as HTMLButtonElement | null;
-        this.btnShortcutsDialogCloseIcon = document.getElementById('editor-shortcuts-dialog-close-icon') as HTMLButtonElement | null;
+        this.shortcutsDialogContent = document.getElementById(
+            'editor-shortcuts-dialog-content',
+        ) as HTMLDivElement | null;
+        this.shortcutsDialogNote = document.getElementById(
+            'editor-shortcuts-dialog-note',
+        ) as HTMLParagraphElement | null;
+        this.btnShortcutsDialogClose = document.getElementById(
+            'editor-shortcuts-dialog-close',
+        ) as HTMLButtonElement | null;
+        this.btnShortcutsDialogCloseIcon = document.getElementById(
+            'editor-shortcuts-dialog-close-icon',
+        ) as HTMLButtonElement | null;
         this.fileContextMenu = document.getElementById('editor-file-context-menu') as HTMLDivElement | null;
         this.btnContextHideFile = document.getElementById('btn-context-hide-file') as HTMLButtonElement | null;
         this.btnInsertExerciseEmbed = document.getElementById('btn-insert-exercise-embed') as HTMLButtonElement | null;
         this.exerciseEmbedDialog = document.getElementById('exercise-embed-dialog') as HTMLDialogElement | null;
         this.exerciseEmbedList = byId<HTMLDivElement>('exercise-embed-list');
-        this.btnExerciseEmbedDialogClose = document.getElementById('exercise-embed-dialog-close') as HTMLButtonElement | null;
+        this.btnExerciseEmbedDialogClose = document.getElementById(
+            'exercise-embed-dialog-close',
+        ) as HTMLButtonElement | null;
         this.fileDialogState = {
             mode: 'create',
             fileId: null,
@@ -1030,7 +1096,9 @@ export class Editor {
         this.btnDuplicateFile?.addEventListener('click', () => this._handleDuplicateFile());
         this.btnEditFile?.addEventListener('click', () => this._openFileDialog('edit'));
         this.btnDeleteFile?.addEventListener('click', () => this._handleDeleteFile());
-        this.entrySelect?.addEventListener('change', (event) => this._handleEntryChange((event.target as HTMLSelectElement).value));
+        this.entrySelect?.addEventListener('change', (event) =>
+            this._handleEntryChange((event.target as HTMLSelectElement).value),
+        );
         this.fileDialogTemplate?.addEventListener('change', () => this._handleFileTemplateChange());
         this.fileDialogPath?.addEventListener('change', () => {
             if (this.fileDialogState.mode !== 'create' || this._getActiveTemplateId() === 'custom') return;
@@ -1069,7 +1137,10 @@ export class Editor {
      * Switches between Panels and Tabs. Anything other than `tabs` means Panels (session data is not
      * trusted). The options default to persisting, re-rendering and notifying the session.
      */
-    _setLayoutMode(mode: EditorLayoutMode, { persist = true, rerender = true, emit = true }: SetLayoutModeOptions = {}): void {
+    _setLayoutMode(
+        mode: EditorLayoutMode,
+        { persist = true, rerender = true, emit = true }: SetLayoutModeOptions = {},
+    ): void {
         this.layoutMode = mode === 'tabs' ? 'tabs' : 'panels';
 
         if (persist) {
@@ -1093,9 +1164,7 @@ export class Editor {
         if (!this.btnLayout) return;
 
         const label = this.layoutMode === 'panels' ? 'Tabs' : 'Panels';
-        const description = this.layoutMode === 'panels'
-            ? 'Switch to tabs view'
-            : 'Switch to vertical panels';
+        const description = this.layoutMode === 'panels' ? 'Switch to tabs view' : 'Switch to vertical panels';
         const labelNode = this.btnLayout.querySelector('.editor-layout-label');
 
         if (labelNode) {
@@ -1118,16 +1187,26 @@ export class Editor {
     /** Syncs the system clipboard and Vim toggles and the Vim mode indicator with the current state. */
     _updateVimUi(): void {
         if (this.btnSystemClipboardToggle) {
-            this.btnSystemClipboardToggle.classList.toggle('is-active', this.systemClipboardEnabled && this.systemClipboardAvailable);
+            this.btnSystemClipboardToggle.classList.toggle(
+                'is-active',
+                this.systemClipboardEnabled && this.systemClipboardAvailable,
+            );
             this.btnSystemClipboardToggle.toggleAttribute('disabled', !this.systemClipboardAvailable);
-            this.btnSystemClipboardToggle.setAttribute('aria-pressed', String(this.systemClipboardEnabled && this.systemClipboardAvailable));
+            this.btnSystemClipboardToggle.setAttribute(
+                'aria-pressed',
+                String(this.systemClipboardEnabled && this.systemClipboardAvailable),
+            );
             this.btnSystemClipboardToggle.title = this.systemClipboardAvailable
-                ? (this.systemClipboardEnabled ? 'Disable system clipboard' : 'Enable system clipboard')
+                ? this.systemClipboardEnabled
+                    ? 'Disable system clipboard'
+                    : 'Enable system clipboard'
                 : 'System clipboard unavailable in this browser context';
             this.btnSystemClipboardToggle.setAttribute(
                 'aria-label',
                 this.systemClipboardAvailable
-                    ? (this.systemClipboardEnabled ? 'Disable system clipboard' : 'Enable system clipboard')
+                    ? this.systemClipboardEnabled
+                        ? 'Disable system clipboard'
+                        : 'Enable system clipboard'
                     : 'System clipboard unavailable in this browser context',
             );
         }
@@ -1141,7 +1220,7 @@ export class Editor {
 
         if (this.vimModeIndicator) {
             this.vimModeIndicator.classList.toggle('hidden', !this.vimEnabled);
-            this.vimModeIndicator.textContent = this.vimEnabled ? (this.vimModeLabel || 'NORMAL') : '';
+            this.vimModeIndicator.textContent = this.vimEnabled ? this.vimModeLabel || 'NORMAL' : '';
         }
     }
 
@@ -1150,19 +1229,18 @@ export class Editor {
 
         this.btnColumnGuideToggle.classList.toggle('is-active', this.columnGuideEnabled);
         this.btnColumnGuideToggle.setAttribute('aria-pressed', String(this.columnGuideEnabled));
-        this.btnColumnGuideToggle.title = this.columnGuideEnabled
-            ? 'Hide 80-column guide'
-            : 'Show 80-column guide';
+        this.btnColumnGuideToggle.title = this.columnGuideEnabled ? 'Hide 80-column guide' : 'Show 80-column guide';
         this.btnColumnGuideToggle.setAttribute(
             'aria-label',
-            this.columnGuideEnabled
-                ? 'Hide 80-column guide'
-                : 'Show 80-column guide',
+            this.columnGuideEnabled ? 'Hide 80-column guide' : 'Show 80-column guide',
         );
     }
 
     /** Shows or hides the 80-column guide; re-rendering keeps the focus on the active file. */
-    _setColumnGuideEnabled(enabled: boolean, { persist = true, rerender = true, showToast = true }: SetColumnGuideEnabledOptions = {}): void {
+    _setColumnGuideEnabled(
+        enabled: boolean,
+        { persist = true, rerender = true, showToast = true }: SetColumnGuideEnabledOptions = {},
+    ): void {
         const nextEnabled = Boolean(enabled);
         const changed = this.columnGuideEnabled !== nextEnabled;
         const activeFile = this._getActiveFile();
@@ -1184,21 +1262,22 @@ export class Editor {
 
         if (changed && showToast) {
             this._showToast(
-                this.columnGuideEnabled
-                    ? '80-column guide enabled.'
-                    : '80-column guide disabled.',
+                this.columnGuideEnabled ? '80-column guide enabled.' : '80-column guide disabled.',
                 'success',
             );
         }
     }
 
     /** Turns Vim mode on or off (the editors are rebuilt with or without the Vim keymap when re-rendered). */
-    _setVimEnabled(enabled: boolean, { persist = true, rerender = true, emit = true, showToast = true }: SetVimEnabledOptions = {}): void {
+    _setVimEnabled(
+        enabled: boolean,
+        { persist = true, rerender = true, emit = true, showToast = true }: SetVimEnabledOptions = {},
+    ): void {
         const nextEnabled = Boolean(enabled);
         const changed = this.vimEnabled !== nextEnabled;
 
         this.vimEnabled = nextEnabled;
-        this.vimModeLabel = this.vimEnabled ? (this.vimModeLabel || 'NORMAL') : '';
+        this.vimModeLabel = this.vimEnabled ? this.vimModeLabel || 'NORMAL' : '';
 
         if (persist) {
             window.localStorage.setItem(this.vimEnabledStorageKey, this.vimEnabled ? '1' : '0');
@@ -1217,12 +1296,7 @@ export class Editor {
         }
 
         if (changed && showToast) {
-            this._showToast(
-                this.vimEnabled
-                    ? 'Vim mode enabled.'
-                    : 'Vim mode disabled.',
-                'success',
-            );
+            this._showToast(this.vimEnabled ? 'Vim mode enabled.' : 'Vim mode disabled.', 'success');
         }
     }
 
@@ -1242,7 +1316,10 @@ export class Editor {
     }
 
     /** Lets Vim's registers use the system clipboard (and pulls its current text when enabling). */
-    _setSystemClipboardEnabled(enabled: boolean, { persist = true, showToast = true }: SetSystemClipboardEnabledOptions = {}): void {
+    _setSystemClipboardEnabled(
+        enabled: boolean,
+        { persist = true, showToast = true }: SetSystemClipboardEnabledOptions = {},
+    ): void {
         const nextEnabled = Boolean(enabled);
         const changed = this.systemClipboardEnabled !== nextEnabled;
 
@@ -1314,17 +1391,24 @@ export class Editor {
             this.btnAddFile.title = isTheory
                 ? 'Theory editing keeps a fixed single file'
                 : isExerciseMode
-                ? 'Exercise mode keeps the file structure fixed'
-                : languageOptions.length === 0
-                    ? (isShader ? 'Shader documents already contain all supported blocks' : 'No additional blocks are available for this document')
-                    : (isVirtual ? 'Create a new virtual file' : 'Add a new code block');
+                  ? 'Exercise mode keeps the file structure fixed'
+                  : languageOptions.length === 0
+                    ? isShader
+                        ? 'Shader documents already contain all supported blocks'
+                        : 'No additional blocks are available for this document'
+                    : isVirtual
+                      ? 'Create a new virtual file'
+                      : 'Add a new code block';
         }
 
         if (this.btnQuickOpenFile) {
             this.btnQuickOpenFile.disabled = files.length === 0 || isTheory;
-            this.btnQuickOpenFile.title = files.length > 0
-                ? (isTheory ? 'Theory editing keeps a single active file' : 'Quick search visible files')
-                : 'No visible files to open';
+            this.btnQuickOpenFile.title =
+                files.length > 0
+                    ? isTheory
+                        ? 'Theory editing keeps a single active file'
+                        : 'Quick search visible files'
+                    : 'No visible files to open';
         }
 
         if (this.btnEditExampleMetadata) {
@@ -1361,8 +1445,8 @@ export class Editor {
             this.btnEditFileVisibility.title = isTheory
                 ? 'Theory editing keeps a single visible file'
                 : isExerciseMode
-                ? 'Exercise mode keeps file visibility fixed'
-                : 'Show, hide and inspect tabs or vertical panels';
+                  ? 'Exercise mode keeps file visibility fixed'
+                  : 'Show, hide and inspect tabs or vertical panels';
         }
 
         if (this.btnDuplicateFile) {
@@ -1437,10 +1521,10 @@ export class Editor {
             empty.textContent = this._isExerciseMode()
                 ? 'All exercise files are hidden. Reveal reference or solution files from the exercise panel.'
                 : (this.currentDocument.files || []).length > 0
-                    ? 'All files are hidden. Use Visibility to reveal one again.'
-                    : this.currentTopicPath
-                        ? 'Select an example from the gallery to begin.'
-                        : 'Select a topic in the sidebar, then pick an example from its gallery.';
+                  ? 'All files are hidden. Use Visibility to reveal one again.'
+                  : this.currentTopicPath
+                    ? 'Select an example from the gallery to begin.'
+                    : 'Select a topic in the sidebar, then pick an example from its gallery.';
             this.workspace.appendChild(empty);
             this._updatePanelControlStates();
             this._updateFileControls();
@@ -1643,7 +1727,9 @@ export class Editor {
         const activeFile = this._getActiveFile()!;
         const meta = document.createElement('div');
         meta.className = 'editor-tab-meta';
-        meta.appendChild(this._createBadge(this._getFileDefinition(activeFile), { file: activeFile, interactive: true }));
+        meta.appendChild(
+            this._createBadge(this._getFileDefinition(activeFile), { file: activeFile, interactive: true }),
+        );
 
         const pathLabel = document.createElement('span');
         pathLabel.className = 'file-path-label';
@@ -1747,7 +1833,10 @@ export class Editor {
     }
 
     /** A language badge; `interactive` badges open the file-type dialog when the file's type can change. */
-    _createBadge(definition: FileBadgeDefinition, { file = null, interactive = false }: CreateBadgeOptions = {}): HTMLSpanElement {
+    _createBadge(
+        definition: FileBadgeDefinition,
+        { file = null, interactive = false }: CreateBadgeOptions = {},
+    ): HTMLSpanElement {
         const badge = document.createElement('span');
         badge.className = `lang-badge ${definition.badgeClass}`;
         badge.textContent = definition.badgeLabel;
@@ -1814,16 +1903,17 @@ export class Editor {
     _createEditor(container: HTMLElement, file: EditorFile): CreatedEditor {
         const isLocked = this._isExerciseFileLocked(file);
         const langExtensions = this._getLanguageExtensions(file.language);
-        const languageKeymap: KeyBinding[] = file.language === 'vue'
-            ? [{ key: 'Enter', run: vueScriptEnterCommand }]
-            : [];
+        const languageKeymap: KeyBinding[] =
+            file.language === 'vue' ? [{ key: 'Enter', run: vueScriptEnterCommand }] : [];
         // `vim()` is typed as a single Extension but returns an array, which is spread below.
-        const vimExtensions = this.vimEnabled ? createVimExtension() as Extension[] : [];
+        const vimExtensions = this.vimEnabled ? (createVimExtension() as Extension[]) : [];
         const updateListener = EditorView.updateListener.of((update) => {
             if (!update.docChanged) {
-                const touchedHighlights = update.transactions.some((transaction) => transaction.effects.some((effect) => (
-                    effect.is(addLineHighlightEffect) || effect.is(removeLineHighlightEffect)
-                )));
+                const touchedHighlights = update.transactions.some((transaction) =>
+                    transaction.effects.some(
+                        (effect) => effect.is(addLineHighlightEffect) || effect.is(removeLineHighlightEffect),
+                    ),
+                );
                 if (touchedHighlights) {
                     this._scheduleDirtyCheck();
                 }
@@ -1903,94 +1993,94 @@ export class Editor {
 
         const vimCleanup = this.vimEnabled
             ? bindVimView(view, {
-                isPanelsLayout: () => this.layoutMode === 'panels',
-                isShaderDocument: () => this._isShaderDocument(),
-                getShortcutConfig: () => this.vimShortcutConfig,
-                onModeChange: (modeLabel) => {
-                    view.dom.dataset.vimMode = modeLabel;
-                    if (this.layoutMode === 'panels' && file.id !== this.activeFileId) {
-                        return;
-                    }
-                    this.vimModeLabel = modeLabel;
-                    this._updateVimUi();
-                },
-                onPreviousTab: () => {
-                    this._selectAdjacentTab(-1);
-                },
-                onNextTab: () => {
-                    this._selectAdjacentTab(1);
-                },
-                onOpenFilePicker: () => {
-                    this._openQuickOpenDialog();
-                },
-                onMovePanelFocus: (direction) => {
-                    return this._handleShiftPanelNavigation(direction);
-                },
-                onToggleSidebar: () => {
-                    this.onToggleSidebar?.();
-                },
-                onCenterWorkspace: () => {
-                    this.onCenterWorkspace?.();
-                },
-                onToggleActivePanelCollapse: () => {
-                    return this._toggleActivePanelCollapsed();
-                },
-                onToggleActivePanelMaximize: () => {
-                    return this._toggleActivePanelMaximize();
-                },
-                onAutoFitPanels: () => {
-                    return this._autoFitPanelsFromVim();
-                },
-                onNormalizePanels: () => {
-                    return this._normalizePanelsFromVim();
-                },
-                onToggleAutoRender: () => {
-                    this.onTogglePreviewAutoRender?.();
-                },
-                onToggleConsole: () => {
-                    return this.onToggleConsole?.();
-                },
-                onToggleShaderPause: () => {
-                    if (!this._isShaderDocument()) return;
-                    this.onToggleShaderPause?.();
-                },
-                onOpenShaderControls: () => {
-                    if (!this._isShaderDocument()) return;
-                    this.onOpenShaderControls?.();
-                },
-                onOpenShaderUniforms: () => {
-                    if (!this._isShaderDocument()) return;
-                    (this.onOpenShaderUniforms || this.openShaderUniformDialog).call(this, null);
-                },
-                onOpenShaderTextures: () => {
-                    if (!this._isShaderDocument()) return;
-                    (this.onOpenShaderTextures || this.openShaderTextureDialog).call(this);
-                },
-                onToggleEditorLayout: () => {
-                    this._toggleLayoutMode({ preserveFocus: true });
-                },
-                onOpenShaderPanel: () => {
-                    if (!this._isShaderDocument()) return;
-                    this.onOpenShaderPanel?.();
-                },
-                onOpenShortcutHelp: () => {
-                    this.openShortcutHelpDialog();
-                },
-                onResetShaderRuntime: () => {
-                    if (!this._isShaderDocument()) return;
-                    this.onResetShaderRuntime?.();
-                },
-                onTogglePreviewHeader: () => {
-                    this.onTogglePreviewHeader?.();
-                },
-                onQuickSave: () => {
-                    this._handleVimWrite();
-                    return true;
-                },
-                onWrite: () => {
-                    this._handleVimWrite();
-                },
-            })
+                  isPanelsLayout: () => this.layoutMode === 'panels',
+                  isShaderDocument: () => this._isShaderDocument(),
+                  getShortcutConfig: () => this.vimShortcutConfig,
+                  onModeChange: (modeLabel) => {
+                      view.dom.dataset.vimMode = modeLabel;
+                      if (this.layoutMode === 'panels' && file.id !== this.activeFileId) {
+                          return;
+                      }
+                      this.vimModeLabel = modeLabel;
+                      this._updateVimUi();
+                  },
+                  onPreviousTab: () => {
+                      this._selectAdjacentTab(-1);
+                  },
+                  onNextTab: () => {
+                      this._selectAdjacentTab(1);
+                  },
+                  onOpenFilePicker: () => {
+                      this._openQuickOpenDialog();
+                  },
+                  onMovePanelFocus: (direction) => {
+                      return this._handleShiftPanelNavigation(direction);
+                  },
+                  onToggleSidebar: () => {
+                      this.onToggleSidebar?.();
+                  },
+                  onCenterWorkspace: () => {
+                      this.onCenterWorkspace?.();
+                  },
+                  onToggleActivePanelCollapse: () => {
+                      return this._toggleActivePanelCollapsed();
+                  },
+                  onToggleActivePanelMaximize: () => {
+                      return this._toggleActivePanelMaximize();
+                  },
+                  onAutoFitPanels: () => {
+                      return this._autoFitPanelsFromVim();
+                  },
+                  onNormalizePanels: () => {
+                      return this._normalizePanelsFromVim();
+                  },
+                  onToggleAutoRender: () => {
+                      this.onTogglePreviewAutoRender?.();
+                  },
+                  onToggleConsole: () => {
+                      return this.onToggleConsole?.();
+                  },
+                  onToggleShaderPause: () => {
+                      if (!this._isShaderDocument()) return;
+                      this.onToggleShaderPause?.();
+                  },
+                  onOpenShaderControls: () => {
+                      if (!this._isShaderDocument()) return;
+                      this.onOpenShaderControls?.();
+                  },
+                  onOpenShaderUniforms: () => {
+                      if (!this._isShaderDocument()) return;
+                      (this.onOpenShaderUniforms || this.openShaderUniformDialog).call(this, null);
+                  },
+                  onOpenShaderTextures: () => {
+                      if (!this._isShaderDocument()) return;
+                      (this.onOpenShaderTextures || this.openShaderTextureDialog).call(this);
+                  },
+                  onToggleEditorLayout: () => {
+                      this._toggleLayoutMode({ preserveFocus: true });
+                  },
+                  onOpenShaderPanel: () => {
+                      if (!this._isShaderDocument()) return;
+                      this.onOpenShaderPanel?.();
+                  },
+                  onOpenShortcutHelp: () => {
+                      this.openShortcutHelpDialog();
+                  },
+                  onResetShaderRuntime: () => {
+                      if (!this._isShaderDocument()) return;
+                      this.onResetShaderRuntime?.();
+                  },
+                  onTogglePreviewHeader: () => {
+                      this.onTogglePreviewHeader?.();
+                  },
+                  onQuickSave: () => {
+                      this._handleVimWrite();
+                      return true;
+                  },
+                  onWrite: () => {
+                      this._handleVimWrite();
+                  },
+              })
             : null;
 
         view.dom.dataset.vim = this.vimEnabled ? 'on' : 'off';
@@ -2020,13 +2110,18 @@ export class Editor {
             case 'svg':
                 return [html(), htmlLearningSupport()];
             case 'vue':
-                return [html({
-                    nestedLanguages: [{
-                        tag: 'style',
-                        attrs: (attrs) => /^(scss|sass|less)$/.test(attrs.lang),
-                        parser: cssLanguage.parser,
-                    }],
-                }), htmlLearningSupport()];
+                return [
+                    html({
+                        nestedLanguages: [
+                            {
+                                tag: 'style',
+                                attrs: (attrs) => /^(scss|sass|less)$/.test(attrs.lang),
+                                parser: cssLanguage.parser,
+                            },
+                        ],
+                    }),
+                    htmlLearningSupport(),
+                ];
             case 'css':
             case 'scss':
             case 'sass':
@@ -2060,11 +2155,12 @@ export class Editor {
 
     /** Remembers which file to focus when the dialog being opened closes. */
     _rememberEditorFocusTarget(): void {
-        this._dialogFocusTargetFileId = this.pendingNavigationTarget?.file?.id
-            || this.activeFileId
-            || (this.layoutMode === 'panels' ? this._getPreferredActivePanelId() : null)
-            || this._getVisibleFiles()[0]?.id
-            || null;
+        this._dialogFocusTargetFileId =
+            this.pendingNavigationTarget?.file?.id ||
+            this.activeFileId ||
+            (this.layoutMode === 'panels' ? this._getPreferredActivePanelId() : null) ||
+            this._getVisibleFiles()[0]?.id ||
+            null;
     }
 
     /** Puts the focus back into the editor on the next frame (after a dialog closed). */
@@ -2154,7 +2250,10 @@ export class Editor {
     }
 
     /** Panels only: makes a file's panel the active one (notifying the session when it changed). */
-    _setActivePanel(fileId: string | null | undefined, { focusEditor = false, syncModeLabel = false }: SetActivePanelOptions = {}): void {
+    _setActivePanel(
+        fileId: string | null | undefined,
+        { focusEditor = false, syncModeLabel = false }: SetActivePanelOptions = {},
+    ): void {
         if (this.layoutMode !== 'panels' || !fileId) return;
 
         const changed = this.activeFileId !== fileId;
@@ -2224,7 +2323,10 @@ export class Editor {
         const panels = this._getPanels();
         if (panels.length <= 1) return false;
 
-        const currentIndex = Math.max(0, panels.findIndex((panel) => panel.dataset.fileId === this.activeFileId));
+        const currentIndex = Math.max(
+            0,
+            panels.findIndex((panel) => panel.dataset.fileId === this.activeFileId),
+        );
         const isPreviousDirection = direction === 'up' || direction === 'left';
         const isNextDirection = direction === 'down' || direction === 'right';
 
@@ -2334,7 +2436,8 @@ export class Editor {
     _syncVimModeFromView(view: EditorView | null | undefined): void {
         if (!this.vimEnabled || !view) return;
         // `data-vim-mode` is only ever set from a VimModeLabel (or '').
-        this.vimModeLabel = (view.dom?.dataset?.vimMode as VimModeLabel | '' | undefined) || this.vimModeLabel || 'NORMAL';
+        this.vimModeLabel =
+            (view.dom?.dataset?.vimMode as VimModeLabel | '' | undefined) || this.vimModeLabel || 'NORMAL';
         this._updateVimUi();
     }
 
@@ -2381,9 +2484,10 @@ export class Editor {
             .map((panel) => panel.dataset.fileId)
             .filter(Boolean);
         const visiblePanels = panels.filter((panel) => !panel.classList.contains('collapsed'));
-        const maximizedFileId = panels.length > 1 && visiblePanels.length === 1 && collapsedFileIds.length === panels.length - 1
-            ? visiblePanels[0].dataset.fileId
-            : null;
+        const maximizedFileId =
+            panels.length > 1 && visiblePanels.length === 1 && collapsedFileIds.length === panels.length - 1
+                ? visiblePanels[0].dataset.fileId
+                : null;
 
         this.panelState = this._sanitizePanelState({ collapsedFileIds, maximizedFileId });
         this._syncActivePanelState();
@@ -2527,7 +2631,7 @@ export class Editor {
 
         const neededHeights = this.editors.map((entry) => {
             const lines = entry.view.state.doc.lines;
-            return (lines * lineHeight) + headerHeight + scrollbarPadding;
+            return lines * lineHeight + headerHeight + scrollbarPadding;
         });
 
         const totalNeeded = neededHeights.reduce((sum, value) => sum + value, 0);
@@ -2541,7 +2645,7 @@ export class Editor {
             return;
         }
 
-        let remainingSpace = availableHeight - (minPanelHeight * panels.length);
+        let remainingSpace = availableHeight - minPanelHeight * panels.length;
         const allocations = panels.map(() => minPanelHeight);
 
         neededHeights.forEach((height, index) => {
@@ -2577,9 +2681,7 @@ export class Editor {
         const canRenameCurrentFile = hasFile && !isTheory;
 
         this.btnSave.disabled = !hasTopic || !hasContent || !isSafeToWrite;
-        this.btnModify.disabled = isTheory
-            ? (!hasTopic || !hasContent || !isSafeToWrite)
-            : (!hasFile || !isSafeToWrite);
+        this.btnModify.disabled = isTheory ? !hasTopic || !hasContent || !isSafeToWrite : !hasFile || !isSafeToWrite;
         this.btnRemove.disabled = !hasFile || isTheory;
         if (this.btnToggleFavoriteExample) {
             this.btnToggleFavoriteExample.disabled = !hasFile || isTheory;
@@ -2593,9 +2695,7 @@ export class Editor {
             this.btnTogglePendingExample.disabled = !hasFile || isTheory;
             this.btnTogglePendingExample.classList.toggle('is-active', this.currentExamplePending);
             this.btnTogglePendingExample.setAttribute('aria-pressed', String(this.currentExamplePending));
-            this.btnTogglePendingExample.title = this.currentExamplePending
-                ? 'Remove from pending'
-                : 'Add to pending';
+            this.btnTogglePendingExample.title = this.currentExamplePending ? 'Remove from pending' : 'Add to pending';
         }
         if (this.previewFilenameDisplay) {
             this.previewFilenameDisplay.classList.toggle('is-actionable', canRenameCurrentFile);
@@ -2642,8 +2742,9 @@ export class Editor {
             return;
         }
 
-        const hasErrors = [...structuralDiagnostics, ...compileDiagnostics, ...runtimeDiagnostics]
-            .some((diagnostic) => diagnostic.level === 'error');
+        const hasErrors = [...structuralDiagnostics, ...compileDiagnostics, ...runtimeDiagnostics].some(
+            (diagnostic) => diagnostic.level === 'error',
+        );
 
         this.statusDisplay.innerHTML = '';
         this.statusDisplay.className = `editor-status ${hasErrors ? 'error' : 'warning'}`;
@@ -2654,7 +2755,9 @@ export class Editor {
         this.statusDisplay.appendChild(summary);
 
         if (structuralDiagnostics.length > 0) {
-            this.statusDisplay.appendChild(this._buildDiagnosticSection('Structure', structuralDiagnostics, 'structural'));
+            this.statusDisplay.appendChild(
+                this._buildDiagnosticSection('Structure', structuralDiagnostics, 'structural'),
+            );
         }
 
         if (compileDiagnostics.length > 0) {
@@ -2680,15 +2783,16 @@ export class Editor {
 }
 
 // Declaration merging: the methods the mixins below add to the prototype become members of `Editor`.
-export interface Editor extends
-    DiagnosticsMixin,
-    LineHighlightsMixin,
-    SessionManagerMixin,
-    ExercisePanelMixin,
-    TheoryEditorMixin,
-    ShaderDialogsMixin,
-    MetadataDialogsMixin,
-    FileOperationsMixin {}
+export interface Editor
+    extends
+        DiagnosticsMixin,
+        LineHighlightsMixin,
+        SessionManagerMixin,
+        ExercisePanelMixin,
+        TheoryEditorMixin,
+        ShaderDialogsMixin,
+        MetadataDialogsMixin,
+        FileOperationsMixin {}
 
 Object.assign(
     Editor.prototype,

@@ -48,11 +48,12 @@ function spanFromStack(stack: string = ''): SpanStart | null {
 // Dart Sass call stacks look like "- 1:30  bp()\n- 3:3   root stylesheet". Kept only when the message
 // comes from inside a mixin/function (more than one frame), so the learner can see where it was called.
 function parseSassStack(stack: string = ''): SassStackFrame[] {
-    const frames = (String(stack || '')
-        .split('\n')
-        .map((line) => /^-?\s*(\d+):(\d+)\s+(.+?)\s*$/.exec(line.trim()))
-        .filter(Boolean) as RegExpExecArray[])
-        .map(([, line, column, member]) => ({ column: Number(column), line: Number(line), member }));
+    const frames = (
+        String(stack || '')
+            .split('\n')
+            .map((line) => /^-?\s*(\d+):(\d+)\s+(.+?)\s*$/.exec(line.trim()))
+            .filter(Boolean) as RegExpExecArray[]
+    ).map(([, line, column, member]) => ({ column: Number(column), line: Number(line), member }));
     return frames.length > 1 ? frames : [];
 }
 
@@ -81,27 +82,44 @@ export function compileStyle(block: CompilerBlock | null): StyleCompileResult {
 
     if (block.type === 'scss' || block.type === 'sass') {
         const warnings: Diagnostic[] = [];
-        const pushLoggedMessage = (code: string, message: string, span: SpanStart | null | undefined, stack: string = ''): void => {
+        const pushLoggedMessage = (
+            code: string,
+            message: string,
+            span: SpanStart | null | undefined,
+            stack: string = '',
+        ): void => {
             if (warnings.length >= 20) return;
             const frames = parseSassStack(stack);
-            warnings.push(createCompileDiagnostic(
-                'warning',
-                code,
-                String(message || '').trim(),
-                { blocking: false, slot: 'style', type: block.type, ...spanLocation(span), ...(frames.length ? { stack: frames } : {}) }
-            ));
+            warnings.push(
+                createCompileDiagnostic('warning', code, String(message || '').trim(), {
+                    blocking: false,
+                    slot: 'style',
+                    type: block.type,
+                    ...spanLocation(span),
+                    ...(frames.length ? { stack: frames } : {}),
+                }),
+            );
         };
 
         try {
             const result = sass.compileString(block.content || '', {
                 logger: {
-                    debug: (message: string, { span }: { span?: sass.SourceSpan } = {}) => pushLoggedMessage('sass-debug', `@debug: ${message}`, span),
-                    warn: (message: string, { deprecation, span, stack }: { deprecation?: boolean; span?: sass.SourceSpan; stack?: string } = {}) => pushLoggedMessage(
-                        deprecation ? 'sass-deprecation' : 'sass-warning',
-                        message,
-                        span || spanFromStack(stack),
-                        stack
-                    ),
+                    debug: (message: string, { span }: { span?: sass.SourceSpan } = {}) =>
+                        pushLoggedMessage('sass-debug', `@debug: ${message}`, span),
+                    warn: (
+                        message: string,
+                        {
+                            deprecation,
+                            span,
+                            stack,
+                        }: { deprecation?: boolean; span?: sass.SourceSpan; stack?: string } = {},
+                    ) =>
+                        pushLoggedMessage(
+                            deprecation ? 'sass-deprecation' : 'sass-warning',
+                            message,
+                            span || spanFromStack(stack),
+                            stack,
+                        ),
                 },
                 syntax: block.type === 'sass' ? 'indented' : 'scss',
                 style: 'expanded',
@@ -117,17 +135,12 @@ export function compileStyle(block: CompilerBlock | null): StyleCompileResult {
                 css: '',
                 diagnostics: [
                     ...warnings,
-                    createCompileDiagnostic(
-                        'error',
-                        'sass-compile-error',
-                        formatSassErrorMessage(error),
-                        {
-                            slot: 'style',
-                            type: block.type,
-                            ...spanLocation(error?.span),
-                            ...(parseSassStack(error?.sassStack).length ? { stack: parseSassStack(error?.sassStack) } : {}),
-                        }
-                    ),
+                    createCompileDiagnostic('error', 'sass-compile-error', formatSassErrorMessage(error), {
+                        slot: 'style',
+                        type: block.type,
+                        ...spanLocation(error?.span),
+                        ...(parseSassStack(error?.sassStack).length ? { stack: parseSassStack(error?.sassStack) } : {}),
+                    }),
                 ],
             };
         }
@@ -140,7 +153,7 @@ export function compileStyle(block: CompilerBlock | null): StyleCompileResult {
                 'error',
                 'unsupported-style-compiler',
                 `No compiler available for style type "${block.type}".`,
-                { slot: 'style', type: block.type }
+                { slot: 'style', type: block.type },
             ),
         ],
     };

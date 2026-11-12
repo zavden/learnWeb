@@ -112,7 +112,9 @@ function normalizePath(value = ''): string {
 }
 
 function splitLines(content = ''): string[] {
-    const lines = String(content || '').replace(/\r\n/g, '\n').split('\n');
+    const lines = String(content || '')
+        .replace(/\r\n/g, '\n')
+        .split('\n');
 
     while (lines.length > 1 && lines.at(-1) === '') {
         lines.pop();
@@ -122,24 +124,27 @@ function splitLines(content = ''): string[] {
 }
 
 function summarizeRows(rows: readonly ComparisonRow[] = []): ComparisonSummary {
-    return rows.reduce((summary: ComparisonSummary, row) => {
-        if (row.state === 'same') {
-            summary.sameCount += 1;
-        } else if (row.state === 'added') {
-            summary.addedCount += 1;
-        } else if (row.state === 'removed') {
-            summary.removedCount += 1;
-        } else {
-            summary.changedCount += 1;
-        }
+    return rows.reduce(
+        (summary: ComparisonSummary, row) => {
+            if (row.state === 'same') {
+                summary.sameCount += 1;
+            } else if (row.state === 'added') {
+                summary.addedCount += 1;
+            } else if (row.state === 'removed') {
+                summary.removedCount += 1;
+            } else {
+                summary.changedCount += 1;
+            }
 
-        return summary;
-    }, {
-        sameCount: 0,
-        changedCount: 0,
-        addedCount: 0,
-        removedCount: 0,
-    });
+            return summary;
+        },
+        {
+            sameCount: 0,
+            changedCount: 0,
+            addedCount: 0,
+            removedCount: 0,
+        },
+    );
 }
 
 // Above this many DP cells the middle section falls back to a positional comparison.
@@ -152,9 +157,9 @@ function diffLines(attemptLines: readonly string[] = [], solutionLines: readonly
     let prefix = 0;
 
     while (
-        prefix < attemptLines.length
-        && prefix < solutionLines.length
-        && attemptLines[prefix] === solutionLines[prefix]
+        prefix < attemptLines.length &&
+        prefix < solutionLines.length &&
+        attemptLines[prefix] === solutionLines[prefix]
     ) {
         operations.push({ type: 'same', attemptIndex: prefix, solutionIndex: prefix });
         prefix += 1;
@@ -165,9 +170,9 @@ function diffLines(attemptLines: readonly string[] = [], solutionLines: readonly
     const suffix: DiffOperation[] = [];
 
     while (
-        attemptEnd > prefix
-        && solutionEnd > prefix
-        && attemptLines[attemptEnd - 1] === solutionLines[solutionEnd - 1]
+        attemptEnd > prefix &&
+        solutionEnd > prefix &&
+        attemptLines[attemptEnd - 1] === solutionLines[solutionEnd - 1]
     ) {
         attemptEnd -= 1;
         solutionEnd -= 1;
@@ -178,7 +183,11 @@ function diffLines(attemptLines: readonly string[] = [], solutionLines: readonly
     const solutionCount = solutionEnd - prefix;
 
     if (attemptCount > 0 || solutionCount > 0) {
-        if (attemptCount === 0 || solutionCount === 0 || (attemptCount + 1) * (solutionCount + 1) > MAX_LINE_DIFF_CELLS) {
+        if (
+            attemptCount === 0 ||
+            solutionCount === 0 ||
+            (attemptCount + 1) * (solutionCount + 1) > MAX_LINE_DIFF_CELLS
+        ) {
             for (let index = 0; index < attemptCount; index += 1) {
                 operations.push({ type: 'removed', attemptIndex: prefix + index, solutionIndex: null });
             }
@@ -191,9 +200,10 @@ function diffLines(attemptLines: readonly string[] = [], solutionLines: readonly
 
             for (let i = attemptCount - 1; i >= 0; i -= 1) {
                 for (let j = solutionCount - 1; j >= 0; j -= 1) {
-                    lengths[i * width + j] = attemptLines[prefix + i] === solutionLines[prefix + j]
-                        ? lengths[(i + 1) * width + j + 1] + 1
-                        : Math.max(lengths[(i + 1) * width + j], lengths[i * width + j + 1]);
+                    lengths[i * width + j] =
+                        attemptLines[prefix + i] === solutionLines[prefix + j]
+                            ? lengths[(i + 1) * width + j + 1] + 1
+                            : Math.max(lengths[(i + 1) * width + j], lengths[i * width + j + 1]);
                 }
             }
 
@@ -235,7 +245,11 @@ function buildComparisonRows(
     let removedRun: number[] = [];
     let addedRun: number[] = [];
 
-    const createRow = (attemptIndex: number | null, solutionIndex: number | null, state: ComparisonRowState): ComparisonRow => ({
+    const createRow = (
+        attemptIndex: number | null,
+        solutionIndex: number | null,
+        state: ComparisonRowState,
+    ): ComparisonRow => ({
         attemptLineNumber: attemptIndex == null ? null : attemptIndex + 1,
         attemptText: attemptIndex == null ? '' : attemptLines[attemptIndex],
         solutionLineNumber: solutionIndex == null ? null : solutionIndex + 1,
@@ -288,9 +302,7 @@ function createPairId(attemptPath: string, solutionPath: string): string {
 }
 
 function createPairLabel(attemptPath: string, solutionPath: string): string {
-    return attemptPath === solutionPath
-        ? attemptPath
-        : `${attemptPath} -> ${solutionPath}`;
+    return attemptPath === solutionPath ? attemptPath : `${attemptPath} -> ${solutionPath}`;
 }
 
 interface ExplicitPairsInput {
@@ -302,44 +314,51 @@ interface ExplicitPairsInput {
     issues: string[];
 }
 
-function resolveExplicitPairs({ attemptMap, internalSolutionMap, externalSolutionMap, comparePairs, issues }: ExplicitPairsInput): FilePair[] {
+function resolveExplicitPairs({
+    attemptMap,
+    internalSolutionMap,
+    externalSolutionMap,
+    comparePairs,
+    issues,
+}: ExplicitPairsInput): FilePair[] {
     // A pair can miss either file at first; the filter at the end keeps only complete ones.
     type MaybePair = Omit<FilePair, 'attemptFile' | 'solutionFile'> & {
         attemptFile: ComparableFile | null;
         solutionFile: ComparableFile | null;
     };
 
-    return comparePairs.map((pair): MaybePair => {
-        const attemptPath = normalizePath(pair.attemptPath);
-        const solutionPath = normalizePath(pair.solutionPath);
-        const attemptFile = attemptMap.get(attemptPath) || null;
-        const solutionFile = externalSolutionMap.get(solutionPath)
-            || internalSolutionMap.get(solutionPath)
-            || null;
+    return comparePairs
+        .map((pair): MaybePair => {
+            const attemptPath = normalizePath(pair.attemptPath);
+            const solutionPath = normalizePath(pair.solutionPath);
+            const attemptFile = attemptMap.get(attemptPath) || null;
+            const solutionFile = externalSolutionMap.get(solutionPath) || internalSolutionMap.get(solutionPath) || null;
 
-        if (!attemptFile) {
-            issues.push(`Attempt file "${attemptPath}" is not available in this exercise.`);
-        }
+            if (!attemptFile) {
+                issues.push(`Attempt file "${attemptPath}" is not available in this exercise.`);
+            }
 
-        if (!solutionFile) {
-            issues.push(`Solution file "${solutionPath}" could not be resolved for comparison.`);
-        }
+            if (!solutionFile) {
+                issues.push(`Solution file "${solutionPath}" could not be resolved for comparison.`);
+            }
 
-        return {
-            id: createPairId(attemptPath, solutionPath),
-            label: createPairLabel(attemptPath, solutionPath),
-            attemptFile,
-            attemptPath,
-            solutionFile,
-            solutionPath,
-            source: externalSolutionMap.has(solutionPath) ? 'external' : 'internal',
-        };
-    }).filter((pair): pair is FilePair => Boolean(pair.attemptFile && pair.solutionFile));
+            return {
+                id: createPairId(attemptPath, solutionPath),
+                label: createPairLabel(attemptPath, solutionPath),
+                attemptFile,
+                attemptPath,
+                solutionFile,
+                solutionPath,
+                source: externalSolutionMap.has(solutionPath) ? 'external' : 'internal',
+            };
+        })
+        .filter((pair): pair is FilePair => Boolean(pair.attemptFile && pair.solutionFile));
 }
 
-function resolveAutomaticPairs(
-    { attemptMap, externalSolutionMap }: Pick<ExplicitPairsInput, 'attemptMap' | 'externalSolutionMap'>,
-): FilePair[] {
+function resolveAutomaticPairs({
+    attemptMap,
+    externalSolutionMap,
+}: Pick<ExplicitPairsInput, 'attemptMap' | 'externalSolutionMap'>): FilePair[] {
     const pairs: FilePair[] = [];
 
     attemptMap.forEach((attemptFile, attemptPath) => {
@@ -377,15 +396,16 @@ export function resolveExerciseComparison({
     const externalSolutionMap = getFileMap(solutionDocument);
     const comparePairs = Array.isArray(exerciseConfig.comparePairs) ? exerciseConfig.comparePairs : [];
 
-    let pairs = comparePairs.length > 0
-        ? resolveExplicitPairs({
-            attemptMap,
-            internalSolutionMap,
-            externalSolutionMap,
-            comparePairs,
-            issues,
-        })
-        : [];
+    let pairs =
+        comparePairs.length > 0
+            ? resolveExplicitPairs({
+                  attemptMap,
+                  internalSolutionMap,
+                  externalSolutionMap,
+                  comparePairs,
+                  issues,
+              })
+            : [];
 
     if (pairs.length === 0 && solutionDocument) {
         pairs = resolveAutomaticPairs({

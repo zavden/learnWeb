@@ -10,7 +10,8 @@ import type { SourceLineMap } from '../../types/runtime.ts';
 
 const VLQ_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 const VLQ_LOOKUP = new Map(Array.from(VLQ_CHARS, (char, index): [string, number] => [char, index]));
-const INLINE_SOURCE_MAP_PATTERN = /\/\/[#@] sourceMappingURL=data:application\/json;(?:charset=[^;,]+;)?base64,([A-Za-z0-9+/=]+)/g;
+const INLINE_SOURCE_MAP_PATTERN =
+    /\/\/[#@] sourceMappingURL=data:application\/json;(?:charset=[^;,]+;)?base64,([A-Za-z0-9+/=]+)/g;
 
 /** The fields of a source map (v3) this module reads, before they are checked. */
 interface RawSourceMap {

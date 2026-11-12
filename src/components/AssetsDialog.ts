@@ -113,23 +113,29 @@ export class AssetsDialog {
 
         if (!Array.isArray(assets) || assets.length === 0) {
             this.list.replaceChildren(this._message('This topic has no assets/ folder files.'));
-            this.viewer.replaceChildren(this._message('Examples load files from assets/ with relative URLs, e.g. fetch(\'data.json\').'));
+            this.viewer.replaceChildren(
+                this._message("Examples load files from assets/ with relative URLs, e.g. fetch('data.json')."),
+            );
             return;
         }
 
-        this.list.replaceChildren(...assets.map((asset) => {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'assets-dialog-item';
-            button.textContent = asset.path || asset.filename;
-            button.title = asset.path || asset.filename;
-            button.addEventListener('click', () => {
-                this.list.querySelectorAll('.assets-dialog-item.is-active').forEach((item) => item.classList.remove('is-active'));
-                button.classList.add('is-active');
-                this._show(asset);
-            });
-            return button;
-        }));
+        this.list.replaceChildren(
+            ...assets.map((asset) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'assets-dialog-item';
+                button.textContent = asset.path || asset.filename;
+                button.title = asset.path || asset.filename;
+                button.addEventListener('click', () => {
+                    this.list
+                        .querySelectorAll('.assets-dialog-item.is-active')
+                        .forEach((item) => item.classList.remove('is-active'));
+                    button.classList.add('is-active');
+                    this._show(asset);
+                });
+                return button;
+            }),
+        );
         this.list.querySelector<HTMLElement>('.assets-dialog-item')?.click();
     }
 
@@ -160,7 +166,10 @@ export class AssetsDialog {
 
         const language = TEXT_LANGUAGES[extension];
         if (!language) {
-            this.viewer.replaceChildren(header, this._message('Binary file: use «Open raw» to download or inspect it.'));
+            this.viewer.replaceChildren(
+                header,
+                this._message('Binary file: use «Open raw» to download or inspect it.'),
+            );
             return;
         }
 
@@ -168,7 +177,11 @@ export class AssetsDialog {
             const response = await fetch(asset.url);
             const size = Number(response.headers.get('content-length'));
             if (size > MAX_TEXT_BYTES) {
-                if (request === this.request) this.viewer.replaceChildren(header, this._message(`Large file (${formatBytes(size)}): use «Open raw».`));
+                if (request === this.request)
+                    this.viewer.replaceChildren(
+                        header,
+                        this._message(`Large file (${formatBytes(size)}): use «Open raw».`),
+                    );
                 return;
             }
             const text = await response.text();
@@ -177,14 +190,16 @@ export class AssetsDialog {
             pre.className = 'assets-dialog-code';
             const code = document.createElement('code');
             code.className = 'hljs';
-            code.innerHTML = language === 'plaintext'
-                ? text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
-                : highlightCode(text, language);
+            code.innerHTML =
+                language === 'plaintext'
+                    ? text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+                    : highlightCode(text, language);
             pre.appendChild(code);
             if (IMAGE_EXTENSIONS.has(extension)) this.viewer.append(pre);
             else this.viewer.replaceChildren(header, pre);
         } catch (error) {
-            if (request === this.request) this.viewer.replaceChildren(header, this._message(`Could not load the file: ${errorMessage(error)}`));
+            if (request === this.request)
+                this.viewer.replaceChildren(header, this._message(`Could not load the file: ${errorMessage(error)}`));
         }
     }
 

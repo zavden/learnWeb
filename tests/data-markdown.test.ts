@@ -44,7 +44,10 @@ test('frontmatter values with quotes and backslashes survive repeated save cycle
 
     const once = buildExampleDocument(parsed);
     assert.equal(cycle(once, 3), once);
-    assert.equal(parseExampleDocument(cycle(once, 3)).metadata.example_description, parsed.metadata.example_description);
+    assert.equal(
+        parseExampleDocument(cycle(once, 3)).metadata.example_description,
+        parsed.metadata.example_description,
+    );
 });
 
 test('unquoted values with double quotes and invalid escapes are kept literally', () => {
@@ -57,10 +60,20 @@ test('metadata dialog saves keep descriptions with quotes stable', () => {
     let documentModel = parseExampleDocument(`# HTML\n\n${F}html\n<p>x</p>\n${F}\n`);
     const description = 'Use the "alt" attribute on <img> \\ escape';
 
-    documentModel = updateExampleEditorialMetadata(documentModel, { description, tags: 'html', rating: 3, importance: 'useful' });
+    documentModel = updateExampleEditorialMetadata(documentModel, {
+        description,
+        tags: 'html',
+        rating: 3,
+        importance: 'useful',
+    });
     assert.equal(getExampleEditorialMetadata(documentModel).description, description);
 
-    documentModel = updateExampleEditorialMetadata(documentModel, { description: getExampleEditorialMetadata(documentModel).description, tags: 'html', rating: 4, importance: 'useful' });
+    documentModel = updateExampleEditorialMetadata(documentModel, {
+        description: getExampleEditorialMetadata(documentModel).description,
+        tags: 'html',
+        rating: 4,
+        importance: 'useful',
+    });
     assert.equal(getExampleEditorialMetadata(documentModel).description, description);
 });
 
@@ -80,7 +93,10 @@ test('"# HTML-FULL" with an html fence is an html-full block and roundtrips unch
     const source = `# HTML-FULL\n\n${F}html\n<!DOCTYPE html>\n<html lang="en">\n<head><title>x</title></head>\n<body><p>full</p></body>\n</html>\n${F}`;
     const documentModel = parseExampleDocument(source);
 
-    assert.deepEqual(documentModel.blocks.map((block) => block.type), ['html-full']);
+    assert.deepEqual(
+        documentModel.blocks.map((block) => block.type),
+        ['html-full'],
+    );
     assert.deepEqual(getCodes(documentModel), []);
     assert.equal(buildExampleDocument(documentModel), source);
 
@@ -89,8 +105,13 @@ test('"# HTML-FULL" with an html fence is an html-full block and roundtrips unch
 });
 
 test('html-full fences keep working and repo HTML-FULL examples render as full documents', async () => {
-    const legacy = parseExampleDocument(`# HTML-FULL\n\n${F}html-full\n<!DOCTYPE html>\n<html><body></body></html>\n${F}\n`);
-    assert.deepEqual(legacy.blocks.map((block) => block.type), ['html-full']);
+    const legacy = parseExampleDocument(
+        `# HTML-FULL\n\n${F}html-full\n<!DOCTYPE html>\n<html><body></body></html>\n${F}\n`,
+    );
+    assert.deepEqual(
+        legacy.blocks.map((block) => block.type),
+        ['html-full'],
+    );
     assert.match(buildExampleDocument(legacy), /```html-full\n/);
 
     const repoFile = path.join(ROOT, 'material/ch01-templates/sec01-vanilla/top04-html-full/examples/ex01.md');
@@ -144,7 +165,9 @@ ${F}
 // ─── #6 fences ──────────────────────────────────────────
 
 test('content with ``` lines is wrapped in a longer fence and survives save + reload', () => {
-    const base = parseExampleDocument(`# HTML\n\n${F}html\n<pre id="o"></pre>\n${F}\n\n# JavaScript\n\n${F}javascript\nconsole.log(1)\n${F}\n`);
+    const base = parseExampleDocument(
+        `# HTML\n\n${F}html\n<pre id="o"></pre>\n${F}\n\n# JavaScript\n\n${F}javascript\nconsole.log(1)\n${F}\n`,
+    );
     const scriptFile = base.files.find((file) => file.language === 'javascript');
     const code = 'const md = `\n```js\nhello\n```\n`;\nconsole.log(md);';
     const saved = buildExampleDocument(updateDocumentFileContent(base, scriptFile!.id, code));
@@ -167,20 +190,35 @@ test('tilde and long backtick fences are accepted', () => {
 
 test('an indented closing fence closes the block without swallowing the next one', () => {
     const shallow = parseExampleDocument(`# HTML\n\n${F}html\n<p>a</p>\n  ${F}\n\n# CSS\n\n${F}css\np {}\n${F}\n`);
-    assert.deepEqual(shallow.blocks.map((block) => [block.type, block.content]), [['html', '<p>a</p>'], ['css', 'p {}']]);
+    assert.deepEqual(
+        shallow.blocks.map((block) => [block.type, block.content]),
+        [
+            ['html', '<p>a</p>'],
+            ['css', 'p {}'],
+        ],
+    );
 
     const deep = parseExampleDocument(`# HTML\n\n${F}html\n<p>a</p>\n      ${F}\n\n# CSS\n\n${F}css\np {}\n${F}\n`);
-    assert.deepEqual(deep.blocks.map((block) => [block.type, block.content]), [['html', '<p>a</p>'], ['css', 'p {}']]);
+    assert.deepEqual(
+        deep.blocks.map((block) => [block.type, block.content]),
+        [
+            ['html', '<p>a</p>'],
+            ['css', 'p {}'],
+        ],
+    );
     assert.ok(getCodes(deep).includes('recovered-unclosed-fence'));
     assert.equal(hasBlockingDiagnostics(deep), false);
 });
 
 test('a missing closing fence is recovered before the next heading and block', () => {
     const documentModel = parseExampleDocument(`# HTML\n\n${F}html\n<p>a</p>\n\n# CSS\n\n${F}css\np {}\n${F}\n`);
-    assert.deepEqual(documentModel.blocks.map((block) => [block.type, block.content, block.heading]), [
-        ['html', '<p>a</p>', 'HTML'],
-        ['css', 'p {}', 'CSS'],
-    ]);
+    assert.deepEqual(
+        documentModel.blocks.map((block) => [block.type, block.content, block.heading]),
+        [
+            ['html', '<p>a</p>', 'HTML'],
+            ['css', 'p {}', 'CSS'],
+        ],
+    );
     assert.ok(getCodes(documentModel).includes('recovered-unclosed-fence'));
 });
 
@@ -205,16 +243,21 @@ ${F}jsx
 export function App() { return null; }
 ${F}
 `);
-    assert.deepEqual(documentModel.files.map((file) => [file.path, file.content]), [
-        ['src/main.jsx', "console.log('main');"],
-        ['src/App.jsx', 'export function App() { return null; }'],
-    ]);
+    assert.deepEqual(
+        documentModel.files.map((file) => [file.path, file.content]),
+        [
+            ['src/main.jsx', "console.log('main');"],
+            ['src/App.jsx', 'export function App() { return null; }'],
+        ],
+    );
 });
 
 // ─── #7 indentation ─────────────────────────────────────
 
 test('the first code line keeps its indentation relative to the rest', () => {
-    const documentModel = parseExampleDocument(`# JavaScript\n\n${F}javascript\n\n  const a = 1;\nconsole.log(a);  \n\n${F}\n`);
+    const documentModel = parseExampleDocument(
+        `# JavaScript\n\n${F}javascript\n\n  const a = 1;\nconsole.log(a);  \n\n${F}\n`,
+    );
     const block = documentModel.blocks[0];
 
     assert.equal(block.content, '  const a = 1;\nconsole.log(a);  ');
@@ -245,7 +288,10 @@ test('JS-only, TS-only and CSS-only examples are valid and compile with empty ht
 
         const compiled = await compileExampleDocument(documentModel);
         assert.equal(compiled.compiledDocument.html, '', language);
-        assert.equal(buildExampleDocument(parseExampleDocument(buildExampleDocument(documentModel))), buildExampleDocument(documentModel));
+        assert.equal(
+            buildExampleDocument(parseExampleDocument(buildExampleDocument(documentModel))),
+            buildExampleDocument(documentModel),
+        );
     }
 
     const jsCompiled = await compileExampleDocument(parseExampleDocument(sources.javascript));
@@ -254,7 +300,9 @@ test('JS-only, TS-only and CSS-only examples are valid and compile with empty ht
 
 test('empty documents and Vue examples without a template are still blocking', () => {
     assert.ok(getCodes(parseExampleDocument('')).includes('missing-markup'));
-    const vue = parseExampleDocument(`---\nframework: vue\n---\n\n# JavaScript\n\n${F}javascript\nexport default {};\n${F}\n`);
+    const vue = parseExampleDocument(
+        `---\nframework: vue\n---\n\n# JavaScript\n\n${F}javascript\nexport default {};\n${F}\n`,
+    );
     assert.ok(getCodes(vue).includes('missing-markup'));
     assert.equal(hasBlockingDiagnostics(vue), true);
 });
@@ -266,7 +314,9 @@ test('exercise mode needs exercise: true; leftovers only warn', () => {
     assert.equal(getExerciseConfig(disabled).enabled, false);
     assert.ok(getCodes(disabled).includes('exercise-metadata-without-flag'));
 
-    const leftover = parseExampleDocument(`---\nexample_stage: final-solution\nexercise_instructions: "Do it"\n---${HTML_BODY}`);
+    const leftover = parseExampleDocument(
+        `---\nexample_stage: final-solution\nexercise_instructions: "Do it"\n---${HTML_BODY}`,
+    );
     assert.equal(getExerciseConfig(leftover).enabled, false);
     assert.ok(getCodes(leftover).includes('exercise-metadata-without-flag'));
 

@@ -23,9 +23,7 @@ import {
     resolveVimLeaderAction,
     resolveVimShiftAction,
 } from './vimShortcutConfig.ts';
-import {
-    installRegisterControllerBridge,
-} from './vim/clipboardBridge.ts';
+import { installRegisterControllerBridge } from './vim/clipboardBridge.ts';
 
 export type {
     LoadedVimShortcutConfig,
@@ -56,7 +54,9 @@ export {
 export type VimModeLabel = 'NORMAL' | 'INSERT' | 'REPLACE' | 'VISUAL' | 'VISUAL LINE' | 'VISUAL BLOCK';
 
 /** The fields of Vim's per-editor state that decide the mode label (all optional so tests can pass snapshots). */
-export type VimModeSnapshot = Partial<Pick<vimState, 'insertMode' | 'visualBlock' | 'visualLine' | 'visualMode' | 'mode'>>;
+export type VimModeSnapshot = Partial<
+    Pick<vimState, 'insertMode' | 'visualBlock' | 'visualLine' | 'visualMode' | 'mode'>
+>;
 
 /**
  * The payload of the `vim-mode-change` event of @replit/codemirror-vim: `mode` is `normal`, `insert`,
@@ -108,7 +108,10 @@ function ensureVimExCommandsRegistered(): void {
 }
 
 /** The mode label for a Vim state snapshot; `overwrite` (CodeMirror's overwrite flag) turns INSERT into REPLACE. */
-export function getVimModeLabelFromState(vimState: VimModeSnapshot | null | undefined = null, overwrite: boolean = false): VimModeLabel {
+export function getVimModeLabelFromState(
+    vimState: VimModeSnapshot | null | undefined = null,
+    overwrite: boolean = false,
+): VimModeLabel {
     if (!vimState) return 'NORMAL';
     if (vimState.insertMode && overwrite) return 'REPLACE';
     if (vimState.insertMode) return 'INSERT';
@@ -116,7 +119,9 @@ export function getVimModeLabelFromState(vimState: VimModeSnapshot | null | unde
     if (vimState.visualLine) return 'VISUAL LINE';
     if (vimState.visualMode) return 'VISUAL';
 
-    const mode = String(vimState.mode || 'normal').trim().toLowerCase();
+    const mode = String(vimState.mode || 'normal')
+        .trim()
+        .toLowerCase();
     switch (mode) {
         case 'insert':
             return 'INSERT';
@@ -131,8 +136,12 @@ export function getVimModeLabelFromState(vimState: VimModeSnapshot | null | unde
 
 /** The mode label for a `vim-mode-change` event. */
 export function getVimModeLabelFromEvent(event: VimModeChangeEvent | null | undefined = {}): VimModeLabel {
-    const mode = String(event?.mode || 'normal').trim().toLowerCase();
-    const subMode = String(event?.subMode || '').trim().toLowerCase();
+    const mode = String(event?.mode || 'normal')
+        .trim()
+        .toLowerCase();
+    const subMode = String(event?.subMode || '')
+        .trim()
+        .toLowerCase();
 
     if (mode === 'insert') return 'INSERT';
     if (mode === 'replace') return 'REPLACE';
@@ -165,7 +174,10 @@ export function isVimAwaitingInput(vimState: VimInputSnapshot | null | undefined
 }
 
 /** `down` / `up` when `key` is the configured `panels.shift.movePanelDown` / `movePanelUp` token, else `''`. */
-export function resolvePanelFocusDirection(key: string = '', config: Readonly<VimShortcutConfig> | null | undefined = null): PanelFocusDirection | '' {
+export function resolvePanelFocusDirection(
+    key: string = '',
+    config: Readonly<VimShortcutConfig> | null | undefined = null,
+): PanelFocusDirection | '' {
     const panelShift: Partial<VimShortcutConfig['panels']['shift']> = config?.panels?.shift || {};
     const normalizedKey = String(key || '');
     if (!normalizedKey) return '';
@@ -232,35 +244,38 @@ export type VimViewCleanup = () => void;
  * no-op cleanup when the view has no Vim adapter. In normal mode a plain Space never reaches Vim: it
  * starts (or advances) a leader sequence, which times out after 900 ms.
  */
-export function bindVimView(view: EditorView, {
-    isPanelsLayout,
-    isShaderDocument,
-    getShortcutConfig,
-    onModeChange,
-    onQuickSave,
-    onWrite,
-    onToggleAutoRender,
-    onPreviousTab,
-    onNextTab,
-    onOpenFilePicker,
-    onToggleSidebar,
-    onCenterWorkspace,
-    onToggleActivePanelCollapse,
-    onToggleActivePanelMaximize,
-    onAutoFitPanels,
-    onNormalizePanels,
-    onToggleConsole,
-    onToggleShaderPause,
-    onOpenShaderControls,
-    onOpenShaderUniforms,
-    onOpenShaderTextures,
-    onOpenShaderPanel,
-    onResetShaderRuntime,
-    onOpenShortcutHelp,
-    onToggleEditorLayout,
-    onTogglePreviewHeader,
-    onMovePanelFocus,
-}: VimViewBindings = {}): VimViewCleanup {
+export function bindVimView(
+    view: EditorView,
+    {
+        isPanelsLayout,
+        isShaderDocument,
+        getShortcutConfig,
+        onModeChange,
+        onQuickSave,
+        onWrite,
+        onToggleAutoRender,
+        onPreviousTab,
+        onNextTab,
+        onOpenFilePicker,
+        onToggleSidebar,
+        onCenterWorkspace,
+        onToggleActivePanelCollapse,
+        onToggleActivePanelMaximize,
+        onAutoFitPanels,
+        onNormalizePanels,
+        onToggleConsole,
+        onToggleShaderPause,
+        onOpenShaderControls,
+        onOpenShaderUniforms,
+        onOpenShaderTextures,
+        onOpenShaderPanel,
+        onResetShaderRuntime,
+        onOpenShortcutHelp,
+        onToggleEditorLayout,
+        onTogglePreviewHeader,
+        onMovePanelFocus,
+    }: VimViewBindings = {},
+): VimViewCleanup {
     ensureVimExCommandsRegistered();
 
     const cm = getCM(view);
@@ -305,7 +320,9 @@ export function bindVimView(view: EditorView, {
     if (typeof onModeChange === 'function') {
         // EditorState has no `overwrite` property, so this is always undefined (the label starts as
         // NORMAL/INSERT, never REPLACE); kept as it was. Vim's own flag is `cm.state.overwrite`.
-        onModeChange(getVimModeLabelFromState(cm.state?.vim, (view.state as EditorState & { overwrite?: boolean }).overwrite));
+        onModeChange(
+            getVimModeLabelFromState(cm.state?.vim, (view.state as EditorState & { overwrite?: boolean }).overwrite),
+        );
     }
 
     // Shift+letter shortcuts (and panel focus keys).
@@ -316,17 +333,18 @@ export function bindVimView(view: EditorView, {
         if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
 
         const panelsLayout = typeof isPanelsLayout === 'function' ? Boolean(isPanelsLayout()) : false;
-        const shortcutConfig = typeof getShortcutConfig === 'function'
-            ? (getShortcutConfig() || getDefaultVimShortcutConfig())
-            : getDefaultVimShortcutConfig();
+        const shortcutConfig =
+            typeof getShortcutConfig === 'function'
+                ? getShortcutConfig() || getDefaultVimShortcutConfig()
+                : getDefaultVimShortcutConfig();
 
         if (
-            panelsLayout
-            && event.shiftKey
-            && !event.ctrlKey
-            && !event.metaKey
-            && !event.altKey
-            && typeof onMovePanelFocus === 'function'
+            panelsLayout &&
+            event.shiftKey &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.altKey &&
+            typeof onMovePanelFocus === 'function'
         ) {
             const direction = resolvePanelFocusDirection(event.key, shortcutConfig);
 
@@ -439,9 +457,10 @@ export function bindVimView(view: EditorView, {
             return;
         }
 
-        const shortcutConfig = typeof getShortcutConfig === 'function'
-            ? (getShortcutConfig() || getDefaultVimShortcutConfig())
-            : getDefaultVimShortcutConfig();
+        const shortcutConfig =
+            typeof getShortcutConfig === 'function'
+                ? getShortcutConfig() || getDefaultVimShortcutConfig()
+                : getDefaultVimShortcutConfig();
         const action = resolveVimLeaderAction({
             stage: leaderStage,
             key: event.key,

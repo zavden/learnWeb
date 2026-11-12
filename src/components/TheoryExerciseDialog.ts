@@ -17,7 +17,11 @@ import { fetchExample } from '../utils/api.ts';
 import { compileExample } from '../utils/compileClient.ts';
 import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../utils/exampleRenderer.ts';
 import { getExampleEditorialMetadata, isShaderDocument, parseExampleDocument } from '../utils/markdown.ts';
-import { HOSTED_PREVIEW_SANDBOX, markHostedPreviewUnavailable, publishPreviewDocument } from '../utils/renderer/previewHost.ts';
+import {
+    HOSTED_PREVIEW_SANDBOX,
+    markHostedPreviewUnavailable,
+    publishPreviewDocument,
+} from '../utils/renderer/previewHost.ts';
 import { errorMessage } from '../utils/errors.ts';
 import { consoleManagerMixin, type PendingConsoleInspect } from './preview/ConsoleManager.ts';
 import type { Diagnostic } from '../types/diagnostics.ts';
@@ -58,7 +62,6 @@ interface PreviewViewOptions {
     typeErrors?: Diagnostic[];
 }
 
-
 /**
  * Error reports carry no console table; declared absent so `table` can be read on any message that becomes a
  * console line.
@@ -69,9 +72,7 @@ interface NoTableField {
 
 /** The messages of the preview channel that become a line of the dialog console. */
 type ConsoleLineMessage =
-    | ConsoleMessage
-    | (RuntimeErrorMessage & NoTableField)
-    | (UnhandledRejectionMessage & NoTableField);
+    ConsoleMessage | (RuntimeErrorMessage & NoTableField) | (UnhandledRejectionMessage & NoTableField);
 
 // The dialog console reuses the main console's value rendering, so objects expand on click
 // (down to [[Prototype]]) by asking the dialog's iframe, exactly as in the editor preview.
@@ -278,22 +279,20 @@ export class TheoryExerciseDialog {
                 if (requestId !== this.currentRequest) return;
                 const diagnostics = result.compileDiagnostics || [];
                 typeErrors = diagnostics.filter((diagnostic) => diagnostic.code === 'typescript-type');
-                const renderSrcdoc = () => renderCompiledExampleDocument(
-                    result.compiledDocument,
-                    this.currentTopicPath,
-                    diagnostics,
-                    { consoleEnabled: true, renderId }
-                );
+                const renderSrcdoc = () =>
+                    renderCompiledExampleDocument(result.compiledDocument, this.currentTopicPath, diagnostics, {
+                        consoleEnabled: true,
+                        renderId,
+                    });
                 // Like the editor preview, the example runs as a real page on the preview origin
                 // (storage, cookies, IndexedDB, history.pushState, same-origin requests); the
                 // sandboxed srcdoc copy is only the fallback.
                 const hostedUrl = await publishPreviewDocument({
-                    html: renderCompiledExampleDocument(
-                        result.compiledDocument,
-                        this.currentTopicPath,
-                        diagnostics,
-                        { consoleEnabled: true, hosted: true, renderId }
-                    ),
+                    html: renderCompiledExampleDocument(result.compiledDocument, this.currentTopicPath, diagnostics, {
+                        consoleEnabled: true,
+                        hosted: true,
+                        renderId,
+                    }),
                     renderId,
                     topicPath: this.currentTopicPath,
                 });
@@ -306,8 +305,11 @@ export class TheoryExerciseDialog {
             }
 
             // Script-only examples have nothing to show on the page: give the space to the console.
-            const consoleOnly = !isShaderDocument(documentModel)
-                && !(documentModel.blocks || []).some((block) => block.slot === 'markup' && String(block.content || '').trim());
+            const consoleOnly =
+                !isShaderDocument(documentModel) &&
+                !(documentModel.blocks || []).some(
+                    (block) => block.slot === 'markup' && String(block.content || '').trim(),
+                );
 
             this._renderPreview({
                 consoleOnly,
@@ -364,7 +366,15 @@ export class TheoryExerciseDialog {
         }, HOSTED_READY_TIMEOUT_MS);
     }
 
-    private _renderPreview({ iframe, title, description, path, consoleOnly = false, renderId = 0, typeErrors = [] }: PreviewViewOptions): void {
+    private _renderPreview({
+        iframe,
+        title,
+        description,
+        path,
+        consoleOnly = false,
+        renderId = 0,
+        typeErrors = [],
+    }: PreviewViewOptions): void {
         if (!this.stage || !this.empty || !this.title || !this.note || !this.btnOpen) return;
         this.stage.innerHTML = '';
         this.stage.classList.toggle('is-console-only', consoleOnly);

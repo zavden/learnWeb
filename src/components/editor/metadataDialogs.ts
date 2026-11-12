@@ -29,7 +29,17 @@
 //   theory pseudo-document.
 
 import { getVimShortcutSections, getDefaultVimShortcutConfig } from '../../editor/vimSupport.ts';
-import { evaluateDocumentFileTypeChange, getDocumentFileTypeChangeOptions, getDocumentFileVisibilityEntries, getExampleEditorialMetadata, hasBlockingDiagnostics, isShaderDocument, updateDocumentFileType, updateExampleEditorialMetadata, updateDocumentHiddenFiles } from '../../utils/markdown.ts';
+import {
+    evaluateDocumentFileTypeChange,
+    getDocumentFileTypeChangeOptions,
+    getDocumentFileVisibilityEntries,
+    getExampleEditorialMetadata,
+    hasBlockingDiagnostics,
+    isShaderDocument,
+    updateDocumentFileType,
+    updateExampleEditorialMetadata,
+    updateDocumentHiddenFiles,
+} from '../../utils/markdown.ts';
 import type { VimShortcutConfig, VimShortcutHelpSection } from '../../editor/vimSupport.ts';
 import type { ExampleImportance, FileTypeChangeEvaluation, FileVisibilityKey } from '../../types/document.ts';
 import type { Editor, EditorFile, FileTypeDialogOption } from '../Editor.ts';
@@ -61,7 +71,9 @@ export const EXAMPLE_IMPORTANCE_OPTIONS = [
 // Compile-time guard: every `ExampleImportance` level must have an option above (a level missing there
 // makes this line fail to type-check).
 type AssertNever<T extends never> = T;
-type _EveryImportanceLevelHasAnOption = AssertNever<Exclude<ExampleImportance, (typeof EXAMPLE_IMPORTANCE_OPTIONS)[number]['value']>>;
+type _EveryImportanceLevelHasAnOption = AssertNever<
+    Exclude<ExampleImportance, (typeof EXAMPLE_IMPORTANCE_OPTIONS)[number]['value']>
+>;
 
 /** Style of a dialog's hint line: `error` turns it red. */
 type DialogHintType = 'info' | 'error';
@@ -196,7 +208,7 @@ export const metadataDialogsMixin = {
     _setExampleMetadataDialogRating(value: number | string = 0): void {
         // Number.isInteger is true only for numbers; parseInt stringifies anything else (and so truncates
         // a non-integer number: 2.5 → 2).
-        const numericValue = Number.isInteger(value) ? value as number : Number.parseInt(value as string, 10);
+        const numericValue = Number.isInteger(value) ? (value as number) : Number.parseInt(value as string, 10);
         this.exampleMetadataDialogState.rating = Number.isInteger(numericValue)
             ? Math.max(0, Math.min(5, numericValue))
             : 0;
@@ -254,7 +266,9 @@ export const metadataDialogsMixin = {
 
         this._setExampleMetadataDialogRating(editorialMetadata.rating || 0);
         this._syncExampleMetadataImportancePreview();
-        this._setExampleMetadataHint('Tags can use `|` or commas. Rating is optional. Importance maps to gallery colors later.');
+        this._setExampleMetadataHint(
+            'Tags can use `|` or commas. Rating is optional. Importance maps to gallery colors later.',
+        );
         this.exampleMetadataDialog.showModal();
         window.requestAnimationFrame(() => this.exampleDescriptionInput?.focus());
     },
@@ -265,11 +279,7 @@ export const metadataDialogsMixin = {
      * TypeScript narrows it that way: don't read `file` on the `false` branch.
      */
     _canEditFileType(file: EditorFile | null | undefined): file is EditorFile {
-        return Boolean(
-            file
-            && !this._isTheoryDocumentTarget()
-            && !this._isExerciseFileLocked(file)
-        );
+        return Boolean(file && !this._isTheoryDocumentTarget() && !this._isExerciseFileLocked(file));
     },
 
     /** A dialog option built from an evaluation; the fallback when the document API lists no options. */
@@ -278,7 +288,9 @@ export const metadataDialogsMixin = {
             allowed: Boolean(evaluation?.allowed),
             code: evaluation?.code || '',
             expectedPath: evaluation?.expectedPath || '',
-            label: this._getFileDefinition({ language: evaluation?.nextType || '' }).heading || String(evaluation?.nextType || '').toUpperCase(),
+            label:
+                this._getFileDefinition({ language: evaluation?.nextType || '' }).heading ||
+                String(evaluation?.nextType || '').toUpperCase(),
             reason: evaluation?.reason || '',
             value: evaluation?.nextType || '',
             wouldChangePath: Boolean(evaluation?.wouldChangePath),
@@ -337,9 +349,10 @@ export const metadataDialogsMixin = {
                     ? `${file.path} -> ${evaluation.expectedPath}`
                     : file.path;
             } else {
-                this.fileTypePathPreview.textContent = evaluation.currentType === evaluation.nextType
-                    ? 'No block-type changes selected.'
-                    : `${currentDefinition.heading || evaluation.currentType} -> ${nextDefinition.heading || evaluation.nextType}`;
+                this.fileTypePathPreview.textContent =
+                    evaluation.currentType === evaluation.nextType
+                        ? 'No block-type changes selected.'
+                        : `${currentDefinition.heading || evaluation.currentType} -> ${nextDefinition.heading || evaluation.nextType}`;
             }
         }
 
@@ -425,12 +438,11 @@ export const metadataDialogsMixin = {
         const currentDefinition = this._getFileDefinition(file);
         const options = getDocumentFileTypeChangeOptions(this.currentDocument, file.id, { includeCurrent: true });
         const currentEvaluation = evaluateDocumentFileTypeChange(this.currentDocument, file.id, file.language);
-        const normalizedOptions = options.length > 0
-            ? options
-            : [this._buildFileTypeDialogOption(currentEvaluation)];
-        const preferredOption = normalizedOptions.find((option) => option.allowed && option.value !== file.language)
-            || normalizedOptions.find((option) => option.value === file.language)
-            || normalizedOptions[0];
+        const normalizedOptions = options.length > 0 ? options : [this._buildFileTypeDialogOption(currentEvaluation)];
+        const preferredOption =
+            normalizedOptions.find((option) => option.allowed && option.value !== file.language) ||
+            normalizedOptions.find((option) => option.value === file.language) ||
+            normalizedOptions[0];
 
         this.fileTypeDialogState = {
             fileId: file.id,
@@ -439,15 +451,15 @@ export const metadataDialogsMixin = {
         };
 
         if (this.fileTypeDialogTitle) {
-            this.fileTypeDialogTitle.textContent = file.sourceKind === 'virtual'
-                ? 'Change File Badge'
-                : 'Change Block Badge';
+            this.fileTypeDialogTitle.textContent =
+                file.sourceKind === 'virtual' ? 'Change File Badge' : 'Change Block Badge';
         }
 
         if (this.fileTypeDialogNote) {
-            this.fileTypeDialogNote.textContent = file.sourceKind === 'virtual'
-                ? `Selected file: ${file.path}`
-                : `Selected block: ${currentDefinition.heading || file.language}`;
+            this.fileTypeDialogNote.textContent =
+                file.sourceKind === 'virtual'
+                    ? `Selected file: ${file.path}`
+                    : `Selected block: ${currentDefinition.heading || file.language}`;
         }
 
         this._renderFileTypeDialogOptions();
@@ -470,11 +482,14 @@ export const metadataDialogsMixin = {
         }
 
         const nextDocument = updateDocumentFileType(this.currentDocument, file.id, evaluation.nextType);
-        const nextTarget = nextDocument.files.find((entry) => (
-            file.sourceKind === 'virtual'
-                ? entry.path === (evaluation.expectedPath || file.path)
-                : entry.blockId === file.blockId
-        )) || nextDocument.files[0] || null;
+        const nextTarget =
+            nextDocument.files.find((entry) =>
+                file.sourceKind === 'virtual'
+                    ? entry.path === (evaluation.expectedPath || file.path)
+                    : entry.blockId === file.blockId,
+            ) ||
+            nextDocument.files[0] ||
+            null;
 
         if (nextTarget) {
             this.pendingNavigationTarget = { file: nextTarget };
@@ -483,7 +498,10 @@ export const metadataDialogsMixin = {
         this._applyDocument(nextDocument);
         this._emitSessionStateChange();
         this.fileTypeDialog?.close();
-        this._showToast(`Changed badge to ${this._getFileDefinition({ language: evaluation.nextType }).heading || evaluation.nextType}.`, 'success');
+        this._showToast(
+            `Changed badge to ${this._getFileDefinition({ language: evaluation.nextType }).heading || evaluation.nextType}.`,
+            'success',
+        );
     },
 
     /**
@@ -532,7 +550,9 @@ export const metadataDialogsMixin = {
             return;
         }
 
-        this._setFileVisibilityHint(`${hiddenCount} file${hiddenCount === 1 ? '' : 's'} hidden. Hidden files stay in the Markdown document and keep compiling normally.`);
+        this._setFileVisibilityHint(
+            `${hiddenCount} file${hiddenCount === 1 ? '' : 's'} hidden. Hidden files stay in the Markdown document and keep compiling normally.`,
+        );
     },
 
     /** Rebuilds the visibility rows (one Visible/Hidden toggle per file); toggling edits only the dialog state. */
@@ -654,13 +674,8 @@ export const metadataDialogsMixin = {
 
     /** Writes the dialog's hidden keys to `editor_hidden_files` and closes it. */
     _applyFileVisibilityDialog(): void {
-        const nextDocument = updateDocumentHiddenFiles(
-            this.currentDocument,
-            this._getFileVisibilityDialogHiddenKeys(),
-        );
-        const visibleFileCount = getDocumentFileVisibilityEntries(nextDocument)
-            .filter((entry) => !entry.hidden)
-            .length;
+        const nextDocument = updateDocumentHiddenFiles(this.currentDocument, this._getFileVisibilityDialogHiddenKeys());
+        const visibleFileCount = getDocumentFileVisibilityEntries(nextDocument).filter((entry) => !entry.hidden).length;
 
         this._applyDocument(nextDocument);
         this._emitSessionStateChange();
@@ -669,7 +684,7 @@ export const metadataDialogsMixin = {
             visibleFileCount === 0
                 ? 'All files are hidden. Use Visibility to reveal one again.'
                 : 'File visibility updated.',
-            'success'
+            'success',
         );
     },
 
@@ -682,11 +697,7 @@ export const metadataDialogsMixin = {
         const targetEntry = visibilityEntries.find((entry) => entry.file.id === fileId);
         if (!targetEntry?.key) return false;
 
-        const hiddenKeys = new Set(
-            visibilityEntries
-                .filter((entry) => entry.hidden)
-                .map((entry) => entry.key)
-        );
+        const hiddenKeys = new Set(visibilityEntries.filter((entry) => entry.hidden).map((entry) => entry.key));
 
         if (hidden) {
             hiddenKeys.add(targetEntry.key);
@@ -703,7 +714,7 @@ export const metadataDialogsMixin = {
         if (!silent) {
             this._showToast(
                 hidden ? `Hidden: ${targetEntry.file.path}` : `Visible: ${targetEntry.file.path}`,
-                'success'
+                'success',
             );
         }
 
@@ -982,7 +993,10 @@ export const metadataDialogsMixin = {
         const files = this._getVisibleFiles();
         if (files.length <= 1) return;
 
-        const currentIndex = Math.max(0, files.findIndex((file) => file.id === this.activeFileId));
+        const currentIndex = Math.max(
+            0,
+            files.findIndex((file) => file.id === this.activeFileId),
+        );
         const normalizedDirection = direction < 0 ? -1 : 1;
         const nextIndex = (currentIndex + normalizedDirection + files.length) % files.length;
         const nextFile = files[nextIndex];
@@ -1051,9 +1065,8 @@ export const metadataDialogsMixin = {
 
             const detail = document.createElement('div');
             detail.className = 'editor-quick-open-item-detail';
-            detail.textContent = file.name && file.name !== file.path
-                ? `${file.name} • ${file.language}`
-                : file.language;
+            detail.textContent =
+                file.name && file.name !== file.path ? `${file.name} • ${file.language}` : file.language;
 
             item.appendChild(meta);
             item.appendChild(detail);

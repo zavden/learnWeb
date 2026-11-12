@@ -434,13 +434,7 @@ export interface FileVisibilityEntry {
 
 /** Where a file-type (badge) change is evaluated; selects the candidate languages and the rules. */
 export type FileTypeChangeContext =
-    | 'shader'
-    | 'react-virtual'
-    | 'vue-virtual'
-    | 'virtual-generic'
-    | 'react-legacy'
-    | 'vue-legacy'
-    | 'legacy';
+    'shader' | 'react-virtual' | 'vue-virtual' | 'virtual-generic' | 'react-legacy' | 'vue-legacy' | 'legacy';
 
 /** `evaluateDocumentFileTypeChange()`: whether a file can switch to another language, and what would change. */
 export interface FileTypeChangeEvaluation {

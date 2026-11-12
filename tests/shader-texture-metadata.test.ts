@@ -47,7 +47,7 @@ void main() {
         [
             { name: 'u_checker', assetPath: 'checker.svg' },
             { name: 'u_spot', assetPath: 'spotlight.svg' },
-        ]
+        ],
     );
 
     const rebuilt = parseExampleDocument(buildExampleDocument(updated));
@@ -57,6 +57,6 @@ void main() {
         [
             { name: 'u_checker', assetPath: 'checker.svg' },
             { name: 'u_spot', assetPath: 'spotlight.svg' },
-        ]
+        ],
     );
 });

@@ -73,11 +73,12 @@ interface LoopGuard {
  * `window` of the preview as the runtime uses it: the hooks it installs (the install marker under a
  * symbol, the loop guard) and globals looked up by name (`win[name]`).
  */
-type RuntimeWindow = Window & typeof globalThis & {
-    __lwLoop?: LoopGuard;
-    [key: string]: unknown;
-    [key: symbol]: unknown;
-};
+type RuntimeWindow = Window &
+    typeof globalThis & {
+        __lwLoop?: LoopGuard;
+        [key: string]: unknown;
+        [key: symbol]: unknown;
+    };
 
 /** PropertyDescriptor with `unknown` where lib.d.ts says `any`. */
 interface Descriptor {
@@ -172,7 +173,10 @@ interface OutboxItem {
 type MessageOf<K extends RuntimeBridgeMessageKind> = Extract<RuntimeBridgeMessage, { kind: K }>;
 
 /** What createMessage's caller provides for a kind: everything but the envelope, kind and level. */
-type MessageExtra<K extends RuntimeBridgeMessageKind> = DistributiveOmit<MessageOf<K>, 'source' | 'renderId' | 'kind' | 'level' | 'timestamp'>;
+type MessageExtra<K extends RuntimeBridgeMessageKind> = DistributiveOmit<
+    MessageOf<K>,
+    'source' | 'renderId' | 'kind' | 'level' | 'timestamp'
+>;
 
 /** Result of safeGet(): the value, or what the getter / proxy trap threw. */
 type SafeGetResult = { ok: true; value: unknown; error?: undefined } | { ok: false; error: unknown; value?: undefined };
@@ -278,14 +282,19 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
                 g.t = performance.now();
                 if (!g.ch) {
                     g.ch = new MessageChannel();
-                    g.ch.port1.onmessage = () => { g.on = 0; };
+                    g.ch.port1.onmessage = () => {
+                        g.on = 0;
+                    };
                 }
                 g.ch.port2.postMessage(0);
                 return false;
             }
             if ((++g.n & 63) !== 0 || performance.now() - g.t <= 1200) return false;
             g.on = 0;
-            g.msg = 'Possible infinite loop at line ' + line + ': it kept running for more than 1.2s without letting the page update, so LearnWeb stopped it. (Add "loop_protect: false" to the example frontmatter to disable this guard.)';
+            g.msg =
+                'Possible infinite loop at line ' +
+                line +
+                ': it kept running for more than 1.2s without letting the page update, so LearnWeb stopped it. (Add "loop_protect: false" to the example frontmatter to disable this guard.)';
             return true;
         } as LoopGuard;
     }
@@ -306,13 +315,57 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
     const TOP_STRING_LIMIT = 20000;
     // Chrome's Elements tree shows a lone text child inline up to this length, else `…`.
     const INLINE_TEXT_LIMIT = 80;
-    const VOID_ELEMENTS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr']);
+    const VOID_ELEMENTS = new Set([
+        'area',
+        'base',
+        'br',
+        'col',
+        'embed',
+        'hr',
+        'img',
+        'input',
+        'link',
+        'meta',
+        'source',
+        'track',
+        'wbr',
+    ]);
     // Global constructors that are part of JavaScript itself, not of the web platform.
     const LANGUAGE_GLOBALS = new Set([
-        'Object', 'Function', 'Array', 'Number', 'String', 'Boolean', 'Symbol', 'BigInt', 'Date', 'RegExp',
-        'Error', 'EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'AggregateError', 'SuppressedError',
-        'Map', 'Set', 'WeakMap', 'WeakSet', 'WeakRef', 'FinalizationRegistry', 'Promise', 'Proxy',
-        'ArrayBuffer', 'SharedArrayBuffer', 'DataView', 'Iterator', 'AsyncIterator', 'DisposableStack', 'AsyncDisposableStack',
+        'Object',
+        'Function',
+        'Array',
+        'Number',
+        'String',
+        'Boolean',
+        'Symbol',
+        'BigInt',
+        'Date',
+        'RegExp',
+        'Error',
+        'EvalError',
+        'RangeError',
+        'ReferenceError',
+        'SyntaxError',
+        'TypeError',
+        'URIError',
+        'AggregateError',
+        'SuppressedError',
+        'Map',
+        'Set',
+        'WeakMap',
+        'WeakSet',
+        'WeakRef',
+        'FinalizationRegistry',
+        'Promise',
+        'Proxy',
+        'ArrayBuffer',
+        'SharedArrayBuffer',
+        'DataView',
+        'Iterator',
+        'AsyncIterator',
+        'DisposableStack',
+        'AsyncDisposableStack',
     ]);
 
     // Natives captured before user code can patch them. They are typed for how the runtime calls them:
@@ -330,7 +383,11 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
     const arrayFrom = Array.from;
     const NativeError = Error;
     const NativePromise = Promise;
-    const promiseThen = Promise.prototype.then as (this: unknown, onFulfilled: (value: unknown) => void, onRejected?: (reason: unknown) => void) => unknown;
+    const promiseThen = Promise.prototype.then as (
+        this: unknown,
+        onFulfilled: (value: unknown) => void,
+        onRejected?: (reason: unknown) => void,
+    ) => unknown;
     const NativeMap = Map;
     const NativeWeakMap = WeakMap;
     const mapSize = getOwnDesc(Map.prototype, 'size')!.get as NativeMethod<number>;
@@ -348,7 +405,8 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
     const arrayBufferByteLength = getOwnDesc(ArrayBuffer.prototype, 'byteLength')!.get as NativeMethod<number>;
     const symbolToString = Symbol.prototype.toString;
     const nativeSetTimeout = typeof win.setTimeout === 'function' ? win.setTimeout.bind(win) : null;
-    const nowMs = () => (win.performance && typeof win.performance.now === 'function' ? win.performance.now() : Date.now());
+    const nowMs = () =>
+        win.performance && typeof win.performance.now === 'function' ? win.performance.now() : Date.now();
     const parentWin = win.parent;
     const DOC_PATH = normalizePath(win.location ? String(win.location.href || '') : '');
 
@@ -364,11 +422,14 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
             parentWin.postMessage(message, '*');
         } catch {
             try {
-                parentWin.postMessage({
-                    ...message,
-                    parts: [{ kind: 'text', text: String(message.text || '') }],
-                    table: null,
-                }, '*');
+                parentWin.postMessage(
+                    {
+                        ...message,
+                        parts: [{ kind: 'text', text: String(message.text || '') }],
+                        table: null,
+                    },
+                    '*',
+                );
             } catch {
                 // Ignore bridge failures so preview execution can continue.
             }
@@ -380,7 +441,11 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
      * parameter types check each call against src/types/runtime.ts; TypeScript cannot follow the spread
      * of a generic union, hence the cast.
      */
-    function createMessage<K extends RuntimeBridgeMessageKind>(kind: K, level: MessageOf<K>['level'], extra: MessageExtra<K>): MessageOf<K> {
+    function createMessage<K extends RuntimeBridgeMessageKind>(
+        kind: K,
+        level: MessageOf<K>['level'],
+        extra: MessageExtra<K>,
+    ): MessageOf<K> {
         return {
             source: MESSAGE_SOURCE,
             renderId: RENDER_ID,
@@ -448,16 +513,24 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         if (!floodDropped) return;
         const dropped = floodDropped;
         floodDropped = 0;
-        const text = dropped + ' console message' + (dropped === 1 ? '' : 's') + ' dropped (more than ' + FLOOD_LIMIT + ' per second).';
-        enqueue(createMessage('console', 'warn', {
-            method: 'warn',
-            parts: [{ kind: 'text', text }],
-            text,
-            values: [text],
-            groups: [],
-            stackFrames: [],
-            stackText: '',
-        }));
+        const text =
+            dropped +
+            ' console message' +
+            (dropped === 1 ? '' : 's') +
+            ' dropped (more than ' +
+            FLOOD_LIMIT +
+            ' per second).';
+        enqueue(
+            createMessage('console', 'warn', {
+                method: 'warn',
+                parts: [{ kind: 'text', text }],
+                text,
+                values: [text],
+                groups: [],
+                stackFrames: [],
+                stackText: '',
+            }),
+        );
     }
 
     function allowConsoleMessage(): boolean {
@@ -510,15 +583,33 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
             .map((line) => {
                 let match = line.match(/^at\s+(.*?)\s+\((.+):(\d+):(\d+)\)$/);
                 if (match) {
-                    return { functionName: match[1] || '', path: normalizePath(match[2]), line: Number(match[3]), column: Number(match[4]), raw: line };
+                    return {
+                        functionName: match[1] || '',
+                        path: normalizePath(match[2]),
+                        line: Number(match[3]),
+                        column: Number(match[4]),
+                        raw: line,
+                    };
                 }
                 match = line.match(/^at\s+(.+):(\d+):(\d+)$/);
                 if (match) {
-                    return { functionName: '', path: normalizePath(match[1]), line: Number(match[2]), column: Number(match[3]), raw: line };
+                    return {
+                        functionName: '',
+                        path: normalizePath(match[1]),
+                        line: Number(match[2]),
+                        column: Number(match[3]),
+                        raw: line,
+                    };
                 }
                 match = line.match(/^(.*?)@(.+):(\d+):(\d+)$/);
                 if (match) {
-                    return { functionName: match[1] || '', path: normalizePath(match[2]), line: Number(match[3]), column: Number(match[4]), raw: line };
+                    return {
+                        functionName: match[1] || '',
+                        path: normalizePath(match[2]),
+                        line: Number(match[3]),
+                        column: Number(match[4]),
+                        raw: line,
+                    };
                 }
                 return null;
             })
@@ -541,7 +632,12 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
             if (Array.isArray(entry)) {
                 const sources = Array.isArray(range.sources) ? range.sources : [];
                 const source = String(sources[entry[0]] || range.path || '').replace(/^\.\//, '');
-                return { path: source || range.path, line: entry[1], column: candidate === line ? column : null, mapped: true };
+                return {
+                    path: source || range.path,
+                    line: entry[1],
+                    column: candidate === line ? column : null,
+                    mapped: true,
+                };
             }
         }
 
@@ -562,7 +658,8 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
             if (!range.sourceName || path !== range.sourceName) continue;
             const isAbsolute = absolute && line >= range.startLine;
             const relativeLine = isAbsolute ? line - range.startLine + 1 : line;
-            const relativeColumn = isAbsolute && line === range.startLine && column ? column - range.startColumn : column;
+            const relativeColumn =
+                isAbsolute && line === range.startLine && column ? column - range.startColumn : column;
             return { ...frame, ...applySourceMap(range, relativeLine, relativeColumn) };
         }
 
@@ -634,7 +731,9 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
     // NodeList, HTMLCollection and DOMTokenList print like arrays in Chrome: `NodeList(3) [li, li, li]`.
     function isDomList(value: unknown): boolean {
         try {
-            return ['NodeList', 'HTMLCollection', 'DOMTokenList'].some((name) => typeof win[name] === 'function' && value instanceof (win[name] as Function));
+            return ['NodeList', 'HTMLCollection', 'DOMTokenList'].some(
+                (name) => typeof win[name] === 'function' && value instanceof (win[name] as Function),
+            );
         } catch {
             return false;
         }
@@ -761,26 +860,57 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
 
         const tag = safeTag(value);
         switch (tag) {
-            case '[object Map]': if (brand(mapSize, value)) return 'map'; break;
-            case '[object Set]': if (brand(setSize, value)) return 'set'; break;
-            case '[object WeakMap]': if (brand(function () { return weakMapHas.call(this, {}); }, value)) return 'weakmap'; break;
-            case '[object WeakSet]': if (brand(function () { return weakSetHas.call(this, {}); }, value)) return 'weakset'; break;
-            case '[object WeakRef]': return 'weakref';
-            case '[object Date]': if (brand(dateGetTime, value)) return 'date'; break;
-            case '[object RegExp]': return 'regexp';
-            case '[object Error]': return 'error';
-            case '[object Promise]': return 'promise';
+            case '[object Map]':
+                if (brand(mapSize, value)) return 'map';
+                break;
+            case '[object Set]':
+                if (brand(setSize, value)) return 'set';
+                break;
+            case '[object WeakMap]':
+                if (
+                    brand(function () {
+                        return weakMapHas.call(this, {});
+                    }, value)
+                )
+                    return 'weakmap';
+                break;
+            case '[object WeakSet]':
+                if (
+                    brand(function () {
+                        return weakSetHas.call(this, {});
+                    }, value)
+                )
+                    return 'weakset';
+                break;
+            case '[object WeakRef]':
+                return 'weakref';
+            case '[object Date]':
+                if (brand(dateGetTime, value)) return 'date';
+                break;
+            case '[object RegExp]':
+                return 'regexp';
+            case '[object Error]':
+                return 'error';
+            case '[object Promise]':
+                return 'promise';
             case '[object ArrayBuffer]':
-            case '[object SharedArrayBuffer]': return 'arraybuffer';
-            case '[object DataView]': return 'dataview';
-            case '[object Arguments]': return 'arguments';
+            case '[object SharedArrayBuffer]':
+                return 'arraybuffer';
+            case '[object DataView]':
+                return 'dataview';
+            case '[object Arguments]':
+                return 'arguments';
             case '[object Number]':
             case '[object String]':
             case '[object Boolean]':
             case '[object BigInt]':
-            case '[object Symbol]': if (boxedPrimitive(value) !== undefined) return 'boxed'; break;
-            case '[object Window]': return 'window';
-            default: break;
+            case '[object Symbol]':
+                if (boxedPrimitive(value) !== undefined) return 'boxed';
+                break;
+            case '[object Window]':
+                return 'window';
+            default:
+                break;
         }
 
         try {
@@ -800,7 +930,11 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
 
     // The primitive inside a Number/String/Boolean/BigInt/Symbol wrapper object, or undefined.
     function boxedPrimitive(value: unknown): { value: unknown } | undefined {
-        const candidates: NativeMethod<unknown>[] = [Number.prototype.valueOf, String.prototype.valueOf, Boolean.prototype.valueOf];
+        const candidates: NativeMethod<unknown>[] = [
+            Number.prototype.valueOf,
+            String.prototype.valueOf,
+            Boolean.prototype.valueOf,
+        ];
         if (typeof BigInt === 'function') candidates.push(BigInt.prototype.valueOf);
         candidates.push(Symbol.prototype.valueOf);
         for (const valueOf of candidates) {
@@ -897,7 +1031,10 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
     }
 
     // Keys a preview lists: enumerable own keys, or every own key of a `X.prototype` object.
-    function previewKeys(value: unknown, { includeIndices = true }: { includeIndices?: boolean } = {}): (string | symbol)[] {
+    function previewKeys(
+        value: unknown,
+        { includeIndices = true }: { includeIndices?: boolean } = {},
+    ): (string | symbol)[] {
         const includeHidden = Boolean(prototypeOwner(value));
         return safeKeys(value).filter((key) => {
             if (!includeIndices && isIndexKey(key)) return false;
@@ -928,7 +1065,8 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
             .replace(/\n/g, '\\n')
             .replace(/\r/g, '\\r')
             .replace(/\t/g, '\\t')
-            .split(quote).join('\\' + quote);
+            .split(quote)
+            .join('\\' + quote);
         return quote + escaped + quote;
     }
 
@@ -949,20 +1087,35 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
 
     function formatPrimitive(value: unknown, kind: ValueKind, quoted: boolean): string {
         switch (kind) {
-            case 'string': return quoted ? quoteString(value) : truncate(value, TOP_STRING_LIMIT);
-            case 'number': return Object.is(value, -0) ? '-0' : String(value);
-            case 'bigint': return String(value) + 'n';
-            case 'boolean': return String(value);
-            case 'undefined': return 'undefined';
-            case 'null': return 'null';
-            case 'symbol': return symbolText(value);
-            default: return String(value);
+            case 'string':
+                return quoted ? quoteString(value) : truncate(value, TOP_STRING_LIMIT);
+            case 'number':
+                return Object.is(value, -0) ? '-0' : String(value);
+            case 'bigint':
+                return String(value) + 'n';
+            case 'boolean':
+                return String(value);
+            case 'undefined':
+                return 'undefined';
+            case 'null':
+                return 'null';
+            case 'symbol':
+                return symbolText(value);
+            default:
+                return String(value);
         }
     }
 
     function isPrimitiveKind(kind: ValueKind): kind is PrimitiveValueKind {
-        return kind === 'string' || kind === 'number' || kind === 'bigint' || kind === 'boolean'
-            || kind === 'undefined' || kind === 'null' || kind === 'symbol';
+        return (
+            kind === 'string' ||
+            kind === 'number' ||
+            kind === 'bigint' ||
+            kind === 'boolean' ||
+            kind === 'undefined' ||
+            kind === 'null' ||
+            kind === 'symbol'
+        );
     }
 
     /** `Name: message` of an error (never throws, whatever `error` is). */
@@ -971,7 +1124,8 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         const messageResult = safeGet(error, 'message');
         // DOM errors too are titled by their name, as Chrome 155 does: `SyntaxError: Failed to execute
         // 'querySelector'…`, `Uncaught (in promise) AbortError: …` (older versions said `DOMException`).
-        const name = nameResult.ok && typeof nameResult.value === 'string' && nameResult.value ? nameResult.value : 'Error';
+        const name =
+            nameResult.ok && typeof nameResult.value === 'string' && nameResult.value ? nameResult.value : 'Error';
         const message = messageResult.ok && messageResult.value != null ? String(messageResult.value) : '';
         return message ? name + ': ' + message : name;
     }
@@ -1021,9 +1175,10 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
             if (type === 1) {
                 const tag = String(node.nodeName || node.localName || 'element').toLowerCase();
                 const id = typeof node.id === 'string' && node.id ? '#' + node.id : '';
-                const className = typeof node.className === 'string' && node.className.trim()
-                    ? '.' + node.className.trim().split(/\s+/).join('.')
-                    : '';
+                const className =
+                    typeof node.className === 'string' && node.className.trim()
+                        ? '.' + node.className.trim().split(/\s+/).join('.')
+                        : '';
                 return tag + id + className;
             }
             if (type === 10) return String(node.name || 'html');
@@ -1064,7 +1219,10 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
                 const attributes = node.attributes || [];
                 for (let index = 0; index < attributes.length; index += 1) {
                     const attribute = attributes[index];
-                    open += ' ' + attribute.name + (attribute.value === '' ? '' : '="' + truncate(attribute.value, STRING_PREVIEW) + '"');
+                    open +=
+                        ' ' +
+                        attribute.name +
+                        (attribute.value === '' ? '' : '="' + truncate(attribute.value, STRING_PREVIEW) + '"');
                 }
                 open += '>';
                 if (VOID_ELEMENTS.has(tag) && node.namespaceURI === 'http://www.w3.org/1999/xhtml') return open;
@@ -1116,7 +1274,11 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         source = truncate(source, 4000);
         if (/^class[\s{]/.test(source)) return source;
         if (/^(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/.test(source)) return source;
-        const replaced = source.replace(/^(async\s+)?function\b\s*(\*)?\s*/, (match: string, asyncPrefix: string | undefined, star: string | undefined) => (asyncPrefix ? 'async ' : '') + (star ? 'ƒ* ' : 'ƒ '));
+        const replaced = source.replace(
+            /^(async\s+)?function\b\s*(\*)?\s*/,
+            (match: string, asyncPrefix: string | undefined, star: string | undefined) =>
+                (asyncPrefix ? 'async ' : '') + (star ? 'ƒ* ' : 'ƒ '),
+        );
         if (replaced !== source) return replaced;
         return 'ƒ ' + source;
     }
@@ -1126,8 +1288,10 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         const kind = classify(value);
         if (isPrimitiveKind(kind)) return formatPrimitive(value, kind, true);
         switch (kind) {
-            case 'function': return 'ƒ';
-            case 'class': return 'class ' + (functionName(value) || '(anonymous)');
+            case 'function':
+                return 'ƒ';
+            case 'class':
+                return 'class ' + (functionName(value) || '(anonymous)');
             case 'array': {
                 const name = constructorName(value);
                 return (name && name !== 'Array' ? name : 'Array') + '(' + lengthOf(value) + ')';
@@ -1136,25 +1300,40 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
                 const info = typedArrayInfo(value);
                 return info.name + '(' + info.length + ')';
             }
-            case 'map': return 'Map(' + mapSize.call(value) + ')';
-            case 'set': return 'Set(' + setSize.call(value) + ')';
-            case 'weakmap': return 'WeakMap';
-            case 'weakset': return 'WeakSet';
-            case 'weakref': return 'WeakRef';
-            case 'date': return dateText(value);
-            case 'regexp': return regexpText(value);
-            case 'error': return errorHeadline(value);
-            case 'promise': return 'Promise';
-            case 'arraybuffer': return 'ArrayBuffer(' + byteLengthOf(value) + ')';
-            case 'dataview': return 'DataView(' + byteLengthOf(value) + ')';
-            case 'arguments': return 'Arguments(' + lengthOf(value) + ')';
+            case 'map':
+                return 'Map(' + mapSize.call(value) + ')';
+            case 'set':
+                return 'Set(' + setSize.call(value) + ')';
+            case 'weakmap':
+                return 'WeakMap';
+            case 'weakset':
+                return 'WeakSet';
+            case 'weakref':
+                return 'WeakRef';
+            case 'date':
+                return dateText(value);
+            case 'regexp':
+                return regexpText(value);
+            case 'error':
+                return errorHeadline(value);
+            case 'promise':
+                return 'Promise';
+            case 'arraybuffer':
+                return 'ArrayBuffer(' + byteLengthOf(value) + ')';
+            case 'dataview':
+                return 'DataView(' + byteLengthOf(value) + ')';
+            case 'arguments':
+                return 'Arguments(' + lengthOf(value) + ')';
             case 'boxed': {
                 const boxed = boxedPrimitive(value);
                 return boxedTypeName(boxed && boxed.value);
             }
-            case 'window': return 'Window';
-            case 'node': return nodeLabel(value as NodeLike);
-            case 'domlist': return (constructorName(value) || 'NodeList') + '(' + lengthOf(value) + ')';
+            case 'window':
+                return 'Window';
+            case 'node':
+                return nodeLabel(value as NodeLike);
+            case 'domlist':
+                return (constructorName(value) || 'NodeList') + '(' + lengthOf(value) + ')';
             default: {
                 const proto = safeProto(value);
                 if (proto === null && isModuleNamespace(value)) return 'Module';
@@ -1168,12 +1347,18 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
 
     function boxedTypeName(primitive: unknown): string {
         switch (typeof primitive) {
-            case 'number': return 'Number';
-            case 'string': return 'String';
-            case 'boolean': return 'Boolean';
-            case 'bigint': return 'BigInt';
-            case 'symbol': return 'Symbol';
-            default: return 'Object';
+            case 'number':
+                return 'Number';
+            case 'string':
+                return 'String';
+            case 'boolean':
+                return 'Boolean';
+            case 'bigint':
+                return 'BigInt';
+            case 'symbol':
+                return 'Symbol';
+            default:
+                return 'Object';
         }
     }
 
@@ -1274,21 +1459,36 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
             }
             case 'typedarray': {
                 const info = typedArrayInfo(value);
-                return info.name + arrayLengthText(info.length) + ' [' + arrayLikePreviewItems(value, info.length).join(', ') + ']';
+                return (
+                    info.name +
+                    arrayLengthText(info.length) +
+                    ' [' +
+                    arrayLikePreviewItems(value, info.length).join(', ') +
+                    ']'
+                );
             }
-            case 'node': return mode === 'top' && !(ctx && ctx.dir) ? nodeTitle(value as NodeLike) : nodeLabel(value as NodeLike);
+            case 'node':
+                return mode === 'top' && !(ctx && ctx.dir)
+                    ? nodeTitle(value as NodeLike)
+                    : nodeLabel(value as NodeLike);
             case 'domlist': {
                 const length = lengthOf(value);
                 const items = arrayLikePreviewItems(value, length);
                 platformPreviewItems(value, ['length']).forEach((item) => items.push(item));
                 return (constructorName(value) || 'NodeList') + arrayLengthText(length) + ' [' + items.join(', ') + ']';
             }
-            case 'map': return 'Map(' + mapSize.call(value) + ') {' + collectionItems(value, 'map').join(', ') + '}';
-            case 'set': return 'Set(' + setSize.call(value) + ') {' + collectionItems(value, 'set').join(', ') + '}';
-            case 'weakmap': return 'WeakMap {}';
-            case 'weakset': return 'WeakSet {}';
-            case 'weakref': return 'WeakRef {}';
-            case 'promise': return promisePreview(value as object, ctx, mode);
+            case 'map':
+                return 'Map(' + mapSize.call(value) + ') {' + collectionItems(value, 'map').join(', ') + '}';
+            case 'set':
+                return 'Set(' + setSize.call(value) + ') {' + collectionItems(value, 'set').join(', ') + '}';
+            case 'weakmap':
+                return 'WeakMap {}';
+            case 'weakset':
+                return 'WeakSet {}';
+            case 'weakref':
+                return 'WeakRef {}';
+            case 'promise':
+                return promisePreview(value as object, ctx, mode);
             case 'boxed': {
                 const boxed = boxedPrimitive(value);
                 const primitive = boxed ? boxed.value : undefined;
@@ -1306,12 +1506,14 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
                         prefix = name + ' ';
                     } else {
                         const tag = safeGet(value, Symbol.toStringTag);
-                        if (tag.ok && typeof tag.value === 'string' && tag.value && tag.value !== 'Object') prefix = tag.value + ' ';
+                        if (tag.ok && typeof tag.value === 'string' && tag.value && tag.value !== 'Object')
+                            prefix = tag.value + ' ';
                     }
                 }
-                const entries = proto !== null && isPlatformObject(value)
-                    ? platformPreviewItems(value)
-                    : objectEntriesPreview(value, previewKeys(value));
+                const entries =
+                    proto !== null && isPlatformObject(value)
+                        ? platformPreviewItems(value)
+                        : objectEntriesPreview(value, previewKeys(value));
                 return prefix + '{' + entries.join(', ') + '}';
             }
             default:
@@ -1333,13 +1535,17 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         try {
             // Note: observing a promise marks it as handled, so a logged promise that later rejects
             // is shown as `<rejected>` instead of producing an "Uncaught (in promise)" report.
-            promiseThen.call(promise, (value) => {
-                record.state = 'fulfilled';
-                record.value = value;
-            }, (reason) => {
-                record.state = 'rejected';
-                record.value = reason;
-            });
+            promiseThen.call(
+                promise,
+                (value) => {
+                    record.state = 'fulfilled';
+                    record.value = value;
+                },
+                (reason) => {
+                    record.state = 'rejected';
+                    record.value = reason;
+                },
+            );
         } catch {
             // Not a real promise.
         }
@@ -1347,7 +1553,9 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
     }
 
     function promiseStatePreview(promise: object): string {
-        const record: { state: PromiseRecord['state']; value?: unknown } = promiseStates.get(promise) || { state: 'pending' };
+        const record: { state: PromiseRecord['state']; value?: unknown } = promiseStates.get(promise) || {
+            state: 'pending',
+        };
         if (record.state === 'pending') return 'Promise {<pending>}';
         return 'Promise {<' + record.state + '>: ' + shortPreview(record.value) + '}';
     }
@@ -1457,14 +1665,20 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         if (target instanceof EntriesView) {
             let index = 0;
             try {
-                const iterator = (target as EntriesViewData).kind === 'map' ? mapEntries.call((target as EntriesViewData).owner) : setValues.call((target as EntriesViewData).owner);
+                const iterator =
+                    (target as EntriesViewData).kind === 'map'
+                        ? mapEntries.call((target as EntriesViewData).owner)
+                        : setValues.call((target as EntriesViewData).owner);
                 for (let step = iterator.next(); !step.done; step = iterator.next()) {
                     if (index >= EXPAND_LIMIT) {
                         properties.push({ name: '…', more: true });
                         break;
                     }
                     if ((target as EntriesViewData).kind === 'map') {
-                        const entry = new (EntryView as unknown as EntryViewConstructor)((step.value as MapEntry)[0], (step.value as MapEntry)[1]);
+                        const entry = new (EntryView as unknown as EntryViewConstructor)(
+                            (step.value as MapEntry)[0],
+                            (step.value as MapEntry)[1],
+                        );
                         properties.push({
                             name: String(index),
                             value: {
@@ -1480,7 +1694,11 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
                     index += 1;
                 }
             } catch (error) {
-                properties.push({ name: '[[Exception]]', internal: true, value: { type: 'string', preview: errorHeadline(error) } });
+                properties.push({
+                    name: '[[Exception]]',
+                    internal: true,
+                    value: { type: 'string', preview: errorHeadline(error) },
+                });
             }
             return properties;
         }
@@ -1497,20 +1715,31 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         try {
             keys = ownKeys(target);
         } catch (error) {
-            properties.push({ name: '[[Exception]]', internal: true, value: { type: 'string', preview: errorHeadline(error) } });
+            properties.push({
+                name: '[[Exception]]',
+                internal: true,
+                value: { type: 'string', preview: errorHeadline(error) },
+            });
         }
         // Browser objects keep their data in native accessors: Chrome lists them with their values.
         const readNative = (key: string | symbol): RemoteValue => {
             const result = safeGet(target, key);
             return result.ok
                 ? describe(result.value, 'prop')
-                : { type: 'string', subtype: 'exception', preview: '[Exception: ' + (isErrorValue(result.error) ? errorHeadline(result.error) : shortPreview(result.error)) + ']' };
+                : {
+                      type: 'string',
+                      subtype: 'exception',
+                      preview:
+                          '[Exception: ' +
+                          (isErrorValue(result.error) ? errorHeadline(result.error) : shortPreview(result.error)) +
+                          ']',
+                  };
         };
 
         let count = 0;
         for (const key of keys) {
             if (count >= EXPAND_LIMIT) {
-                properties.push({ name: '…', more: true, preview: (keys.length - count) + ' more' });
+                properties.push({ name: '…', more: true, preview: keys.length - count + ' more' });
                 break;
             }
             let descriptor: Descriptor | null | undefined = null;
@@ -1551,12 +1780,21 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
             properties.push({
                 name: '[[Entries]]',
                 internal: true,
-                value: { type: 'object', subtype: 'entries', preview: 'Array(' + size + ')', handle: handleFor(new (EntriesView as unknown as EntriesViewConstructor)(kind, target), false) },
+                value: {
+                    type: 'object',
+                    subtype: 'entries',
+                    preview: 'Array(' + size + ')',
+                    handle: handleFor(new (EntriesView as unknown as EntriesViewConstructor)(kind, target), false),
+                },
             });
         }
         if (kind === 'boxed') {
             const boxed = boxedPrimitive(target);
-            properties.push({ name: '[[PrimitiveValue]]', internal: true, value: describe(boxed ? boxed.value : undefined, 'prop') });
+            properties.push({
+                name: '[[PrimitiveValue]]',
+                internal: true,
+                value: describe(boxed ? boxed.value : undefined, 'prop'),
+            });
         }
         if (kind === 'weakref') {
             const deref = safeGet(target, 'deref');
@@ -1572,7 +1810,11 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
             try {
                 const bytes = new Uint8Array(target as ArrayBufferLike, 0, Math.min(byteLengthOf(target), 64));
                 const hex = arrayFrom(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(' ');
-                properties.push({ name: '[[Uint8Contents]]', internal: true, value: { type: 'string', preview: '<' + hex + (byteLengthOf(target) > 64 ? ' …' : '') + '>' } });
+                properties.push({
+                    name: '[[Uint8Contents]]',
+                    internal: true,
+                    value: { type: 'string', preview: '<' + hex + (byteLengthOf(target) > 64 ? ' …' : '') + '>' },
+                });
             } catch {
                 // Detached buffers.
             }
@@ -1580,7 +1822,11 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         }
         if (kind === 'promise') {
             const record = trackPromise(target as object);
-            properties.push({ name: '[[PromiseState]]', internal: true, value: { type: 'string', preview: "'" + record.state + "'" } });
+            properties.push({
+                name: '[[PromiseState]]',
+                internal: true,
+                value: { type: 'string', preview: "'" + record.state + "'" },
+            });
             if (record.state !== 'pending') {
                 properties.push({ name: '[[PromiseResult]]', internal: true, value: describe(record.value, 'prop') });
             }
@@ -1588,7 +1834,12 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
 
         const proto = safeProto(target);
         if (proto !== null && proto !== undefined) {
-            properties.push({ name: '[[Prototype]]', internal: true, value: describe(proto, 'proto'), receiver: receiverHandle });
+            properties.push({
+                name: '[[Prototype]]',
+                internal: true,
+                value: describe(proto, 'proto'),
+                receiver: receiverHandle,
+            });
         }
 
         return properties;
@@ -1621,7 +1872,17 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         if (key === undefined) return { ok: false, error: 'Unknown property.' };
         const result = safeGet(owner, key, receiver);
         if (!result.ok) {
-            return { ok: true, value: { type: 'string', subtype: 'exception', preview: '[Exception: ' + (isErrorValue(result.error) ? errorHeadline(result.error) : shortPreview(result.error)) + ']' } };
+            return {
+                ok: true,
+                value: {
+                    type: 'string',
+                    subtype: 'exception',
+                    preview:
+                        '[Exception: ' +
+                        (isErrorValue(result.error) ? errorHeadline(result.error) : shortPreview(result.error)) +
+                        ']',
+                },
+            };
         }
         return { ok: true, value: describe(result.value, 'prop') };
     }
@@ -1683,7 +1944,12 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
                 if (spec === 's') {
                     buffer += typeof arg === 'string' ? arg : shortPreview(arg).replace(/^'(.*)'$/s, '$1');
                 } else if (spec === 'd' || spec === 'i') {
-                    buffer += typeof arg === 'bigint' ? String(arg) + 'n' : typeof arg === 'symbol' ? 'NaN' : String(Number.parseInt(arg as string, 10)); // parseInt coerces any value, as %d does
+                    buffer +=
+                        typeof arg === 'bigint'
+                            ? String(arg) + 'n'
+                            : typeof arg === 'symbol'
+                              ? 'NaN'
+                              : String(Number.parseInt(arg as string, 10)); // parseInt coerces any value, as %d does
                 } else if (spec === 'f') {
                     buffer += typeof arg === 'symbol' ? 'NaN' : String(Number.parseFloat(arg as string)); // likewise
                 } else if (spec === 'o' || spec === 'O') {
@@ -1759,7 +2025,12 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         const hasKeyColumn = kind === 'map';
         const rows = entries.map(([key, value, mapKey]) => {
             const row: TableRow = { key, cells: {}, value: '', mapKey: hasKeyColumn ? shortPreview(mapKey) : '' };
-            if (value !== null && (typeof value === 'object' || typeof value === 'function') && classify(value) !== 'date' && classify(value) !== 'regexp') {
+            if (
+                value !== null &&
+                (typeof value === 'object' || typeof value === 'function') &&
+                classify(value) !== 'date' &&
+                classify(value) !== 'regexp'
+            ) {
                 ownEnumerableKeys(value).forEach((columnKey) => {
                     if (!columnSet.has(columnKey)) {
                         columnSet.add(columnKey);
@@ -1787,7 +2058,9 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
             rows: rows.map((row) => {
                 const cells = [row.key];
                 if (hasKeyColumn) cells.push(row.mapKey);
-                selectedColumns.forEach((column) => cells.push(hasOwn.call(row.cells, column) ? row.cells[column] : ''));
+                selectedColumns.forEach((column) =>
+                    cells.push(hasOwn.call(row.cells, column) ? row.cells[column] : ''),
+                );
                 if (hasValueColumn) cells.push(row.value);
                 return cells;
             }),
@@ -1889,7 +2162,11 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         groupCollapsed: (args) => {
             groupSequence += 1;
             const id = groupSequence;
-            emit('log', args.length ? args : ['console.groupCollapsed'], { method: 'group', groupId: id, collapsed: true });
+            emit('log', args.length ? args : ['console.groupCollapsed'], {
+                method: 'group',
+                groupId: id,
+                collapsed: true,
+            });
             groupStack.push(id);
         },
         groupEnd: () => {
@@ -1923,7 +2200,9 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
                 emitText('warn', "Timer '" + label + "' does not exist", 'timeLog');
                 return;
             }
-            emit('log', [label + ': ' + formatDuration(nowMs() - timers.get(label)!), ...args.slice(1)], { method: 'timeLog' });
+            emit('log', [label + ': ' + formatDuration(nowMs() - timers.get(label)!), ...args.slice(1)], {
+                method: 'timeLog',
+            });
         },
         timeEnd: (args) => {
             const label = labelOf(args);
@@ -1947,14 +2226,17 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         trace: (args) => emit('log', args.length ? args : ['console.trace'], { method: 'trace', withStack: true }),
         clear: () => {
             groupStack.length = 0;
-            enqueue(createMessage('console-clear', 'log', { text: 'Console was cleared', values: ['Console was cleared'] }));
+            enqueue(
+                createMessage('console-clear', 'log', { text: 'Console was cleared', values: ['Console was cleared'] }),
+            );
         },
     };
 
     // The console patch: every method above is replaced by a wrapper that reports the call, then runs
     // the original (so the browser's own DevTools still see it). Reporting never throws into user code.
     Object.keys(consoleImplementations).forEach((method) => {
-        const original: ConsoleFunction | null = typeof consoleObject[method] === 'function' ? consoleObject[method].bind(consoleObject) : null;
+        const original: ConsoleFunction | null =
+            typeof consoleObject[method] === 'function' ? consoleObject[method].bind(consoleObject) : null;
         originals[method] = original;
         const implementation = consoleImplementations[method];
         try {
@@ -2018,30 +2300,35 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         const errorName = errorNameOf(error);
         const hasMappedFrame = frames.some((frame) => frame.mapped);
         if ((event.filename || event.lineno) && (errorName === 'SyntaxError' || !hasMappedFrame)) {
-            const fallback = mapFrame({
-                functionName: '',
-                path: normalizePath(event.filename || ''),
-                line: Number(event.lineno) || 0,
-                column: Number(event.colno) || null,
-                raw: '',
-            }, true);
+            const fallback = mapFrame(
+                {
+                    functionName: '',
+                    path: normalizePath(event.filename || ''),
+                    line: Number(event.lineno) || 0,
+                    column: Number(event.colno) || null,
+                    raw: '',
+                },
+                true,
+            );
             if (fallback && (fallback.mapped || frames.length === 0)) frames = [fallback, ...frames];
         }
 
         const location = primaryLocation(frames);
-        enqueue(createMessage('runtime-error', 'error', {
-            errorName,
-            parts: [{ kind: 'text', text: message }],
-            text: message,
-            values: [message],
-            groups: [],
-            location,
-            path: location ? location.path : null,
-            line: location ? location.line : null,
-            column: location ? location.column : null,
-            stackFrames: frames,
-            stackText,
-        }));
+        enqueue(
+            createMessage('runtime-error', 'error', {
+                errorName,
+                parts: [{ kind: 'text', text: message }],
+                text: message,
+                values: [message],
+                groups: [],
+                location,
+                path: location ? location.path : null,
+                line: location ? location.line : null,
+                column: location ? location.column : null,
+                stackFrames: frames,
+                stackText,
+            }),
+        );
     }
     win.addEventListener('error', onWindowError);
 
@@ -2049,7 +2336,12 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
     // never at window, so the learner saw nothing. Chrome's console shows the failed request: do the same,
     // finding it in the resource timings (asset routes send Timing-Allow-Origin, so srcdoc copies see it too).
     const reportedFailures = new Set<string>();
-    const HTTP_STATUS_TEXT: Record<number, string> = { 400: 'Bad Request', 403: 'Forbidden', 404: 'Not Found', 500: 'Internal Server Error' };
+    const HTTP_STATUS_TEXT: Record<number, string> = {
+        400: 'Bad Request',
+        403: 'Forbidden',
+        404: 'Not Found',
+        500: 'Internal Server Error',
+    };
     function failedScriptRequests(): PerformanceResourceTiming[] {
         let entries: PerformanceResourceTiming[] = [];
         try {
@@ -2057,7 +2349,10 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         } catch {
             return [];
         }
-        return entries.filter((entry) => entry.initiatorType === 'script' && entry.responseStatus >= 400 && !reportedFailures.has(entry.name));
+        return entries.filter(
+            (entry) =>
+                entry.initiatorType === 'script' && entry.responseStatus >= 400 && !reportedFailures.has(entry.name),
+        );
     }
     function shortUrl(url: string): string {
         const base = String((doc && doc.baseURI) || '').replace(/[^/]*$/, '');
@@ -2065,36 +2360,50 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
     }
     /** Report a script that failed to load as a 'runtime-error' (errorName 'NetworkError'). */
     function reportLoadFailure(text: string): void {
-        enqueue(createMessage('runtime-error', 'error', {
-            errorName: 'NetworkError',
-            parts: [{ kind: 'text', text }],
-            text,
-            values: [text],
-            groups: [],
-            location: null,
-            path: null,
-            line: null,
-            column: null,
-            stackFrames: [],
-            stackText: '',
-        }));
+        enqueue(
+            createMessage('runtime-error', 'error', {
+                errorName: 'NetworkError',
+                parts: [{ kind: 'text', text }],
+                text,
+                values: [text],
+                groups: [],
+                location: null,
+                path: null,
+                line: null,
+                column: null,
+                stackFrames: [],
+                stackText: '',
+            }),
+        );
     }
     if (doc && typeof doc.addEventListener === 'function') {
-        doc.addEventListener('error', (event) => {
-            const target = event && event.target as HTMLScriptElement | null; // only <script> targets pass the check
-            if (!target || target.tagName !== 'SCRIPT') return;
-            const failed = failedScriptRequests();
-            if (failed.length === 0) {
-                const src = target.src ? shortUrl(target.src) : '';
-                reportLoadFailure(src ? `Failed to load script: ${src}` : 'Failed to load module script: one of its imports could not be loaded');
-                return;
-            }
-            failed.forEach((entry) => {
-                reportedFailures.add(entry.name);
-                const statusText = HTTP_STATUS_TEXT[entry.responseStatus] ? ` (${HTTP_STATUS_TEXT[entry.responseStatus]})` : '';
-                reportLoadFailure(`GET ${shortUrl(entry.name)} net::ERR_ABORTED ${entry.responseStatus}${statusText}`);
-            });
-        }, true);
+        doc.addEventListener(
+            'error',
+            (event) => {
+                const target = event && (event.target as HTMLScriptElement | null); // only <script> targets pass the check
+                if (!target || target.tagName !== 'SCRIPT') return;
+                const failed = failedScriptRequests();
+                if (failed.length === 0) {
+                    const src = target.src ? shortUrl(target.src) : '';
+                    reportLoadFailure(
+                        src
+                            ? `Failed to load script: ${src}`
+                            : 'Failed to load module script: one of its imports could not be loaded',
+                    );
+                    return;
+                }
+                failed.forEach((entry) => {
+                    reportedFailures.add(entry.name);
+                    const statusText = HTTP_STATUS_TEXT[entry.responseStatus]
+                        ? ` (${HTTP_STATUS_TEXT[entry.responseStatus]})`
+                        : '';
+                    reportLoadFailure(
+                        `GET ${shortUrl(entry.name)} net::ERR_ABORTED ${entry.responseStatus}${statusText}`,
+                    );
+                });
+            },
+            true,
+        );
     }
 
     /** The rejection reporter: an unhandled rejection becomes an 'unhandled-rejection' message. */
@@ -2104,26 +2413,31 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         const message = describeThrown(reason, 'Uncaught (in promise)');
         const described: ErrorStack = isErrorValue(reason) ? describeErrorStack(reason) : { frames: [], stackText: '' };
         const location = primaryLocation(described.frames);
-        enqueue(createMessage('unhandled-rejection', 'error', {
-            errorName: errorNameOf(reason),
-            parts: [{ kind: 'text', text: message }],
-            text: message,
-            values: [message],
-            groups: [],
-            location,
-            path: location ? location.path : null,
-            line: location ? location.line : null,
-            column: location ? location.column : null,
-            stackFrames: described.frames,
-            stackText: described.stackText,
-        }));
+        enqueue(
+            createMessage('unhandled-rejection', 'error', {
+                errorName: errorNameOf(reason),
+                parts: [{ kind: 'text', text: message }],
+                text: message,
+                values: [message],
+                groups: [],
+                location,
+                path: location ? location.path : null,
+                line: location ? location.line : null,
+                column: location ? location.column : null,
+                stackFrames: described.frames,
+                stackText: described.stackText,
+            }),
+        );
     }
     win.addEventListener('unhandledrejection', onUnhandledRejection);
 
     // Listeners run in registration order, so the page's `error`/`unhandledrejection` listeners (and `onerror`)
     // would run after LearnWeb's. Re-adding ours after each one the page adds keeps them last, like Chrome's report.
     (function keepReportsLast() {
-        const reporters: ReporterTable = { error: onWindowError as EventListener, unhandledrejection: onUnhandledRejection as EventListener };
+        const reporters: ReporterTable = {
+            error: onWindowError as EventListener,
+            unhandledrejection: onUnhandledRejection as EventListener,
+        };
         const add = win.addEventListener;
         const remove = win.removeEventListener;
         if (typeof add !== 'function' || typeof remove !== 'function') return;
@@ -2135,7 +2449,12 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
             Object.defineProperty(win, 'addEventListener', {
                 configurable: true,
                 writable: true,
-                value: function addEventListener(this: unknown, type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) {
+                value: function addEventListener(
+                    this: unknown,
+                    type: string,
+                    listener: EventListenerOrEventListenerObject,
+                    options?: boolean | AddEventListenerOptions,
+                ) {
                     const target = this == null ? win : this;
                     const result = add.call(target, type, listener, options);
                     if (target === win && hasOwn.call(reporters, type) && listener !== reporters[type]) moveLast(type);
@@ -2189,25 +2508,32 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
             const ctx: FormatContext = { promises: [] };
             const value = describe(result, 'top', ctx);
             const text = value.preview;
-            enqueue(createMessage('command-result', 'info', {
-                commandId: data.commandId || null,
-                parts: [{ kind: 'value', value }],
-                text,
-                values: [text],
-                groups: [],
-            }), ctx);
+            enqueue(
+                createMessage('command-result', 'info', {
+                    commandId: data.commandId || null,
+                    parts: [{ kind: 'value', value }],
+                    text,
+                    values: [text],
+                    groups: [],
+                }),
+                ctx,
+            );
         } catch (error) {
             const message = describeThrown(error, 'Uncaught');
-            const described: ErrorStack = isErrorValue(error) ? describeErrorStack(error) : { frames: [], stackText: '' };
-            enqueue(createMessage('command-error', 'error', {
-                commandId: data.commandId || null,
-                parts: [{ kind: 'text', text: message }],
-                text: message,
-                values: [message],
-                groups: [],
-                stackFrames: described.frames,
-                stackText: described.stackText,
-            }));
+            const described: ErrorStack = isErrorValue(error)
+                ? describeErrorStack(error)
+                : { frames: [], stackText: '' };
+            enqueue(
+                createMessage('command-error', 'error', {
+                    commandId: data.commandId || null,
+                    parts: [{ kind: 'text', text: message }],
+                    text: message,
+                    values: [message],
+                    groups: [],
+                    stackFrames: described.frames,
+                    stackText: described.stackText,
+                }),
+            );
         }
     }
 
@@ -2228,7 +2554,14 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         if (action === 'inspect') {
             handleInspect(data as ConsoleInspectCommand)
                 .catch((error: unknown): InspectFailure => ({ ok: false, error: errorHeadline(error) }))
-                .then((result) => send(createMessage('inspect-result', 'info', { requestId: (data as ConsoleInspectCommand).requestId, ...result })));
+                .then((result) =>
+                    send(
+                        createMessage('inspect-result', 'info', {
+                            requestId: (data as ConsoleInspectCommand).requestId,
+                            ...result,
+                        }),
+                    ),
+                );
             return;
         }
 
@@ -2239,7 +2572,12 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
             } catch (error) {
                 result = { ok: false, error: errorHeadline(error) };
             }
-            send(createMessage('inspect-result', 'info', { requestId: (data as ConsoleGetPropertyCommand).requestId, ...result }));
+            send(
+                createMessage('inspect-result', 'info', {
+                    requestId: (data as ConsoleGetPropertyCommand).requestId,
+                    ...result,
+                }),
+            );
         }
     });
 
@@ -2251,9 +2589,12 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         const form = event.target as HTMLFormElement | null; // checked to be a <form> below
         if (!form || String(form.tagName || '').toUpperCase() !== 'FORM') return;
         const submitter = event.submitter || null;
-        const attribute = (element: Element | null, name: string): string | null => (element && typeof element.getAttribute === 'function' ? element.getAttribute(name) : null);
+        const attribute = (element: Element | null, name: string): string | null =>
+            element && typeof element.getAttribute === 'function' ? element.getAttribute(name) : null;
         // Attributes, not form.method/form.action: a control named "method" or "action" shadows those properties.
-        const rawMethod = String(attribute(submitter, 'formmethod') || attribute(form, 'method') || 'get').toLowerCase();
+        const rawMethod = String(
+            attribute(submitter, 'formmethod') || attribute(form, 'method') || 'get',
+        ).toLowerCase();
         const method = ['get', 'post', 'dialog'].includes(rawMethod) ? rawMethod : 'get';
         if (method === 'dialog') return;
 
@@ -2291,7 +2632,9 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         if (method === 'get') {
             // GET replaces the action's query string with the form data (the fragment stays).
             try {
-                const query = new win.URLSearchParams(entries.map(([name, value]) => [name, isFile(value) ? value.name : String(value)])).toString();
+                const query = new win.URLSearchParams(
+                    entries.map(([name, value]) => [name, isFile(value) ? value.name : String(value)]),
+                ).toString();
                 const action = rawAction || '';
                 const hashIndex = action.indexOf('#');
                 const withoutHash = hashIndex === -1 ? action : action.slice(0, hashIndex);
@@ -2303,11 +2646,17 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
                 // Keep the raw action.
             }
         } else {
-            const rawEnctype = String(attribute(submitter, 'formenctype') || attribute(form, 'enctype') || '').toLowerCase();
-            const enctype = ['multipart/form-data', 'text/plain'].includes(rawEnctype) ? rawEnctype : 'application/x-www-form-urlencoded';
+            const rawEnctype = String(
+                attribute(submitter, 'formenctype') || attribute(form, 'enctype') || '',
+            ).toLowerCase();
+            const enctype = ['multipart/form-data', 'text/plain'].includes(rawEnctype)
+                ? rawEnctype
+                : 'application/x-www-form-urlencoded';
             target += ' (' + enctype + ')';
         }
-        emit('info', ['Form submitted (navigation blocked in preview): ' + method.toUpperCase() + ' ' + target, data], { method: 'form-submit' });
+        emit('info', ['Form submitted (navigation blocked in preview): ' + method.toUpperCase() + ' ' + target, data], {
+            method: 'form-submit',
+        });
     });
 
     // ─── Links to other sites ──────────────────────────────
@@ -2315,8 +2664,19 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
     // Following a link to another site would replace the preview with that site (or with an error
     // page when the site refuses to be framed). Such links open in a new tab instead.
     win.addEventListener('click', (event) => {
-        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-        const anchor = event.target && typeof (event.target as Element).closest === 'function' ? (event.target as Element).closest<HTMLAnchorElement>('a[href]') : null;
+        if (
+            event.defaultPrevented ||
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+        )
+            return;
+        const anchor =
+            event.target && typeof (event.target as Element).closest === 'function'
+                ? (event.target as Element).closest<HTMLAnchorElement>('a[href]')
+                : null;
         if (!anchor || anchor.hasAttribute('download')) return;
         const target = String(anchor.getAttribute('target') || '').toLowerCase();
         if (target && target !== '_self' && target !== '_top' && target !== '_parent') return;
@@ -2333,23 +2693,47 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         } catch {
             // Ignore: popups may be blocked.
         }
-        if (CONSOLE_ENABLED) emit('info', ['Link opened in a new tab (the preview stays on this page): ' + url.href], { method: 'link' });
+        if (CONSOLE_ENABLED)
+            emit('info', ['Link opened in a new tab (the preview stays on this page): ' + url.href], {
+                method: 'link',
+            });
     });
 
     // ─── Dialogs during live editing ───────────────────────
 
     if (cfg.suppressDialogs) {
-        const describeDialogArgs = (args: unknown[]): string => args.map((arg) => (typeof arg === 'string' ? JSON.stringify(arg) : shortPreview(arg))).join(', ');
+        const describeDialogArgs = (args: unknown[]): string =>
+            args.map((arg) => (typeof arg === 'string' ? JSON.stringify(arg) : shortPreview(arg))).join(', ');
         const notify = (name: string, args: unknown[], result?: string): void => {
-            const text = name + '(' + describeDialogArgs(args) + ') skipped while editing'
-                + (result === undefined ? '' : ' (returned ' + result + ')')
-                + ' — press ⟳ Refresh to run it with dialogs.';
-            enqueue(createMessage('dialog-suppressed', 'info', { text, values: [text], parts: [{ kind: 'text', text }], groups: [], location: primaryLocation(captureCallerFrames()) }));
+            const text =
+                name +
+                '(' +
+                describeDialogArgs(args) +
+                ') skipped while editing' +
+                (result === undefined ? '' : ' (returned ' + result + ')') +
+                ' — press ⟳ Refresh to run it with dialogs.';
+            enqueue(
+                createMessage('dialog-suppressed', 'info', {
+                    text,
+                    values: [text],
+                    parts: [{ kind: 'text', text }],
+                    groups: [],
+                    location: primaryLocation(captureCallerFrames()),
+                }),
+            );
         };
         try {
-            win.alert = function alert(...args: unknown[]) { notify('alert', args); };
-            win.confirm = function confirm(...args: unknown[]) { notify('confirm', args, 'false'); return false; };
-            win.prompt = function prompt(...args: unknown[]) { notify('prompt', args, 'null'); return null; };
+            win.alert = function alert(...args: unknown[]) {
+                notify('alert', args);
+            };
+            win.confirm = function confirm(...args: unknown[]) {
+                notify('confirm', args, 'false');
+                return false;
+            };
+            win.prompt = function prompt(...args: unknown[]) {
+                notify('prompt', args, 'null');
+                return null;
+            };
         } catch {
             // Ignore.
         }
@@ -2362,12 +2746,38 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
         const data = new NativeMap<string, string>();
         const proto = {};
         Object.defineProperties(proto, {
-            getItem: { value: function getItem(key: unknown) { const name = String(key); return data.has(name) ? data.get(name) : null; } },
-            setItem: { value: function setItem(key: unknown, value: unknown) { data.set(String(key), String(value)); } },
-            removeItem: { value: function removeItem(key: unknown) { data.delete(String(key)); } },
-            clear: { value: function clear() { data.clear(); } },
-            key: { value: function key(index: number) { const keys = arrayFrom(data.keys()); return index >= 0 && index < keys.length ? keys[index] : null; } },
-            length: { get() { return data.size; } },
+            getItem: {
+                value: function getItem(key: unknown) {
+                    const name = String(key);
+                    return data.has(name) ? data.get(name) : null;
+                },
+            },
+            setItem: {
+                value: function setItem(key: unknown, value: unknown) {
+                    data.set(String(key), String(value));
+                },
+            },
+            removeItem: {
+                value: function removeItem(key: unknown) {
+                    data.delete(String(key));
+                },
+            },
+            clear: {
+                value: function clear() {
+                    data.clear();
+                },
+            },
+            key: {
+                value: function key(index: number) {
+                    const keys = arrayFrom(data.keys());
+                    return index >= 0 && index < keys.length ? keys[index] : null;
+                },
+            },
+            length: {
+                get() {
+                    return data.size;
+                },
+            },
             [Symbol.toStringTag]: { value: 'Storage' },
         });
         return new Proxy(Object.create(proto) as Storage, {
@@ -2428,7 +2838,10 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
             try {
                 Object.defineProperty(doc, 'cookie', {
                     configurable: true,
-                    get: () => arrayFrom(jar.entries()).map(([name, value]) => (name ? name + '=' + value : value)).join('; '),
+                    get: () =>
+                        arrayFrom(jar.entries())
+                            .map(([name, value]) => (name ? name + '=' + value : value))
+                            .join('; '),
                     set: (input: unknown) => {
                         const segments = String(input).split(';');
                         const pair = segments.shift() || '';
@@ -2455,8 +2868,19 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
     if (OPAQUE_MODE && doc) {
         // With <base href> pointing at the assets folder, `href="#id"` would navigate the frame away.
         doc.addEventListener('click', (event) => {
-            if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-            const target = event.target && typeof (event.target as Element).closest === 'function' ? (event.target as Element).closest('a[href]') : null;
+            if (
+                event.defaultPrevented ||
+                event.button !== 0 ||
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey
+            )
+                return;
+            const target =
+                event.target && typeof (event.target as Element).closest === 'function'
+                    ? (event.target as Element).closest('a[href]')
+                    : null;
             if (!target) return;
             const href = target.getAttribute('href') || '';
             if (href[0] !== '#') return;
@@ -2467,7 +2891,10 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
             } catch {
                 let element: HTMLElement | null = null;
                 try {
-                    element = doc.getElementById(decodeURIComponent(fragment)) || doc.getElementsByName(decodeURIComponent(fragment))[0] || null;
+                    element =
+                        doc.getElementById(decodeURIComponent(fragment)) ||
+                        doc.getElementsByName(decodeURIComponent(fragment))[0] ||
+                        null;
                 } catch {
                     element = null;
                 }
@@ -2479,7 +2906,13 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
     // Lets the parent know the document booted (hosted previews fall back to srcdoc otherwise).
     send(createMessage('runtime-ready', 'info', {}));
 
-    if (OPAQUE_MODE && typeof win.Worker === 'function' && typeof win.Blob === 'function' && win.URL && typeof win.URL.createObjectURL === 'function') {
+    if (
+        OPAQUE_MODE &&
+        typeof win.Worker === 'function' &&
+        typeof win.Blob === 'function' &&
+        win.URL &&
+        typeof win.URL.createObjectURL === 'function'
+    ) {
         // An opaque origin cannot start a worker from an http URL; bootstrap it from a blob instead.
         const NativeWorker = win.Worker;
         const WorkerShim = function Worker(url: string | URL, options?: WorkerOptions): Worker {
@@ -2493,7 +2926,10 @@ export function learncodeRuntimeBridge(config: RuntimeBridgeConfig | null | unde
             // Chrome 155 fails every module worker whose script is a blob: URL of an opaque origin (a plain `error`
             // event, even for inline Blob code) but runs one from a data: URL, which may import http and blob URLs.
             if (options && options.type === 'module' && /^(https?|blob):/i.test(absolute)) {
-                return new NativeWorker('data:text/javascript,' + encodeURIComponent('import ' + JSON.stringify(absolute) + ';'), options);
+                return new NativeWorker(
+                    'data:text/javascript,' + encodeURIComponent('import ' + JSON.stringify(absolute) + ';'),
+                    options,
+                );
             }
             try {
                 return new NativeWorker(url, options);

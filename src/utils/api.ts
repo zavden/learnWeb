@@ -77,7 +77,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
         try {
             const data = (await res.json()) as Partial<ApiErrorBody>;
             if (data.error) message = data.error;
-        } catch { }
+        } catch {}
         throw new Error(message);
     }
     return res.json() as Promise<T>;
@@ -269,7 +269,11 @@ export async function createItem(
 }
 
 /** `PATCH .../examples/:filename`: overwrites an existing example. */
-export async function modifyExample(topicPath: string, filename: string, content: string): Promise<ExampleModifyResponse> {
+export async function modifyExample(
+    topicPath: string,
+    filename: string,
+    content: string,
+): Promise<ExampleModifyResponse> {
     const body: ExampleModifyRequest = { content };
     const res = await fetch(topicUrl(topicPath, `/examples/${encodeURIComponent(filename)}`), {
         method: 'PATCH',
@@ -288,7 +292,11 @@ export async function removeExample(topicPath: string, filename: string): Promis
 }
 
 /** `PUT .../examples/:oldFilename`: renames an example. Rejects when `newFilename` already exists. */
-export async function renameExample(topicPath: string, oldFilename: string, newFilename: string): Promise<ExampleRenameResponse> {
+export async function renameExample(
+    topicPath: string,
+    oldFilename: string,
+    newFilename: string,
+): Promise<ExampleRenameResponse> {
     const body: ExampleRenameRequest = { newFilename };
     const res = await fetch(topicUrl(topicPath, `/examples/${encodeURIComponent(oldFilename)}`), {
         method: 'PUT',

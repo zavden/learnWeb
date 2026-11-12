@@ -7,7 +7,10 @@ test('links to .md files in theory open the example preview instead of navigatin
     const html = renderTheoryHtml('Mira [el colapso](03-colapso-de-margenes.md) y [este](./examples/04-x.md).', {
         topicPath: 'ch03-css/sec02-modelo-de-cajas/top03-margenes',
     });
-    assert.match(html, /<a href="#" class="theory-example-link" data-theory-exercise-preview="03-colapso-de-margenes\.md" title="Abrir 03-colapso-de-margenes\.md">el colapso<\/a>/);
+    assert.match(
+        html,
+        /<a href="#" class="theory-example-link" data-theory-exercise-preview="03-colapso-de-margenes\.md" title="Abrir 03-colapso-de-margenes\.md">el colapso<\/a>/,
+    );
     assert.match(html, /data-theory-exercise-preview="04-x\.md"/);
 });
 

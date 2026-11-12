@@ -40,10 +40,7 @@ export {
     hasBlockingDiagnostics,
 } from './markdown/documentApi.ts';
 
-export {
-    evaluateDocumentFileTypeChange,
-    getDocumentFileTypeChangeOptions,
-} from './markdown/fileTypeChange.ts';
+export { evaluateDocumentFileTypeChange, getDocumentFileTypeChangeOptions } from './markdown/fileTypeChange.ts';
 
 export {
     updateDocumentFileContent,

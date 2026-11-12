@@ -8,10 +8,7 @@
 // lookups by text (`LANGUAGE_LABELS[...]`, `BLOCK_ALIASES[...]`) do not filter inherited keys such as
 // `constructor`, exactly like the original JavaScript.
 
-import {
-    getBlockDefinition,
-    normalizeBlockType,
-} from '../../config/exampleBlocks.ts';
+import { getBlockDefinition, normalizeBlockType } from '../../config/exampleBlocks.ts';
 import type { Diagnostic, DiagnosticDetails, DiagnosticLevel } from '../../types/diagnostics.ts';
 import type {
     BlockSlot,
@@ -114,7 +111,12 @@ function normalizeResolutionMetadataLiteral(value: MetadataValue = ''): string {
 }
 
 /** Builds a structural diagnostic: `{ level, code, message, ...details }`. */
-export function createDiagnostic(level: DiagnosticLevel, code: string, message: string, details: DiagnosticDetails = {}): Diagnostic {
+export function createDiagnostic(
+    level: DiagnosticLevel,
+    code: string,
+    message: string,
+    details: DiagnosticDetails = {},
+): Diagnostic {
     return { level, code, message, ...details };
 }
 
@@ -168,12 +170,14 @@ export function isIndentedFenceClosingLine(line: string | null = '', fence: Fenc
 export function getFenceForContent(content: string | null = ''): string {
     let longestRun = 0;
 
-    String(content ?? '').split('\n').forEach((line) => {
-        const match = line.match(/^[ \t]*(`{3,})/);
-        if (match) {
-            longestRun = Math.max(longestRun, match[1].length);
-        }
-    });
+    String(content ?? '')
+        .split('\n')
+        .forEach((line) => {
+            const match = line.match(/^[ \t]*(`{3,})/);
+            if (match) {
+                longestRun = Math.max(longestRun, match[1].length);
+            }
+        });
 
     return '`'.repeat(Math.max(3, longestRun + 1));
 }
@@ -306,14 +310,16 @@ export function normalizeExampleDescriptionMetadataValue(value: MetadataValue | 
  * Parses `example_tags`: a list, or text separated by `|` (when it contains one) or by commas. Tags are
  * trimmed, lower-cased and their inner whitespace collapsed; empty and repeated tags are dropped.
  */
-export function parseExampleTagsMetadataValue(value: MetadataValue | readonly string[] | null | undefined = ''): ParsedExampleTags {
+export function parseExampleTagsMetadataValue(
+    value: MetadataValue | readonly string[] | null | undefined = '',
+): ParsedExampleTags {
     const diagnostics: Diagnostic[] = [];
 
     const rawEntries: readonly unknown[] = Array.isArray(value)
         ? value
         : String(value ?? '').trim()
-            ? String(value ?? '').split(String(value).includes('|') ? '|' : ',')
-            : [];
+          ? String(value ?? '').split(String(value).includes('|') ? '|' : ',')
+          : [];
 
     const tags: string[] = [];
     const seen = new Set<string>();
@@ -327,12 +333,14 @@ export function parseExampleTagsMetadataValue(value: MetadataValue | readonly st
         if (!normalizedTag) return;
 
         if (seen.has(normalizedTag)) {
-            diagnostics.push(createDiagnostic(
-                'warning',
-                'duplicate-example-tag',
-                `Example tag "${normalizedTag}" is declared more than once. Only the first value is used.`,
-                { tag: normalizedTag }
-            ));
+            diagnostics.push(
+                createDiagnostic(
+                    'warning',
+                    'duplicate-example-tag',
+                    `Example tag "${normalizedTag}" is declared more than once. Only the first value is used.`,
+                    { tag: normalizedTag },
+                ),
+            );
             return;
         }
 
@@ -351,9 +359,7 @@ export function parseExampleTagsMetadataValue(value: MetadataValue | readonly st
 export function parseExampleRatingValue(value: MetadataValue | null | undefined): number | null {
     if (value === undefined || value === null || value === '') return null;
 
-    const numericValue = typeof value === 'number'
-        ? value
-        : Number.parseInt(String(value).trim(), 10);
+    const numericValue = typeof value === 'number' ? value : Number.parseInt(String(value).trim(), 10);
 
     if (!Number.isInteger(numericValue) || numericValue < 1 || numericValue > 5) {
         return null;
@@ -370,14 +376,21 @@ export function normalizeExampleRatingMetadataValue(value: MetadataValue | null 
 
 /** `example_importance` lower-cased when it is a valid level, `''` otherwise. */
 export function parseExampleImportanceValue(value: MetadataValue | null | undefined = ''): ExampleImportance | '' {
-    const normalizedValue = String(value ?? '').trim().toLowerCase();
-    return EXAMPLE_IMPORTANCE_VALUES.has(normalizedValue) ? normalizedValue as ExampleImportance : '';
+    const normalizedValue = String(value ?? '')
+        .trim()
+        .toLowerCase();
+    return EXAMPLE_IMPORTANCE_VALUES.has(normalizedValue) ? (normalizedValue as ExampleImportance) : '';
 }
 
 /** The valid importance level; otherwise the raw value lower-cased (validation reports it). */
 export function normalizeExampleImportanceMetadataValue(value: MetadataValue | null | undefined): string {
     const parsed = parseExampleImportanceValue(value);
-    return parsed || String(value ?? '').trim().toLowerCase();
+    return (
+        parsed ||
+        String(value ?? '')
+            .trim()
+            .toLowerCase()
+    );
 }
 
 /**
@@ -544,7 +557,12 @@ export function isLikelyVirtualAssetPath(path: string = ''): boolean {
  * Builds a legacy block. `type` must be a registered block type or alias: an unknown type throws a
  * TypeError (callers check `getBlockDefinition()` first). The heading defaults to the canonical one.
  */
-export function buildBlock(type: string, content: string, headingOverride: string | null = null, id: string = ''): ExampleBlock {
+export function buildBlock(
+    type: string,
+    content: string,
+    headingOverride: string | null = null,
+    id: string = '',
+): ExampleBlock {
     const normalizedType = normalizeBlockType(type);
     // `!` and `as BlockType`: callers only pass registered types (an unknown one throws here, as before).
     const definition = getBlockDefinition(normalizedType)!;
@@ -653,7 +671,9 @@ export function parseMetadataValue(rawValue: string = ''): MetadataValue {
         try {
             const parsed: unknown = JSON.parse(value);
             if (typeof parsed === 'string') return parsed;
-        } catch { /* fall through */ }
+        } catch {
+            /* fall through */
+        }
 
         return value.slice(1, -1);
     }
@@ -691,11 +711,7 @@ export function parseFrontmatter(lines: readonly string[] = []): ParsedFrontmatt
 
     if (endIndex === -1) {
         diagnostics.push(
-            createDiagnostic(
-                'error',
-                'unclosed-frontmatter',
-                'Frontmatter starts with "---" but is never closed.'
-            )
+            createDiagnostic('error', 'unclosed-frontmatter', 'Frontmatter starts with "---" but is never closed.'),
         );
 
         return {
@@ -718,8 +734,8 @@ export function parseFrontmatter(lines: readonly string[] = []): ParsedFrontmatt
                     'warning',
                     'invalid-frontmatter-line',
                     `Ignoring unsupported frontmatter line at ${index + 1}.`,
-                    { line: index + 1 }
-                )
+                    { line: index + 1 },
+                ),
             );
             continue;
         }
@@ -732,8 +748,8 @@ export function parseFrontmatter(lines: readonly string[] = []): ParsedFrontmatt
                     'warning',
                     'duplicate-frontmatter-key',
                     `Frontmatter key "${key}" is declared more than once. The last value wins.`,
-                    { key, line: index + 1 }
-                )
+                    { key, line: index + 1 },
+                ),
             );
         }
 
@@ -754,11 +770,11 @@ export function serializeMetadataValue(value: MetadataValue): string {
     }
 
     if (
-        typeof value === 'string'
-        && /^[A-Za-z0-9_./-]+$/.test(value)
-        && value !== 'true'
-        && value !== 'false'
-        && !isCanonicalNumberLiteral(value)
+        typeof value === 'string' &&
+        /^[A-Za-z0-9_./-]+$/.test(value) &&
+        value !== 'true' &&
+        value !== 'false' &&
+        !isCanonicalNumberLiteral(value)
     ) {
         return value;
     }
@@ -787,19 +803,13 @@ export function buildFrontmatter(metadata: ExampleMetadataInput = {}): string {
  */
 export function parseExerciseListValue(value: MetadataValue | readonly string[] | null | undefined): string[] {
     if (Array.isArray(value)) {
-        return value
-            .map((entry) => String(entry || '').trim())
-            .filter(Boolean);
+        return value.map((entry) => String(entry || '').trim()).filter(Boolean);
     }
 
     const text = String(value || '').trim();
     if (!text) return [];
 
-    const separator = text.includes('||')
-        ? '||'
-        : text.includes('|')
-            ? '|'
-            : ',';
+    const separator = text.includes('||') ? '||' : text.includes('|') ? '|' : ',';
 
     return text
         .split(separator)
@@ -813,9 +823,7 @@ export function parseExerciseListValue(value: MetadataValue | readonly string[] 
  */
 export function parseExerciseTextListValue(value: MetadataValue | readonly string[] | null | undefined): string[] {
     if (Array.isArray(value)) {
-        return value
-            .map((entry) => String(entry ?? '').trim())
-            .filter(Boolean);
+        return value.map((entry) => String(entry ?? '').trim()).filter(Boolean);
     }
 
     const text = String(value ?? '').trim();
@@ -884,11 +892,16 @@ export function getVirtualLanguageFamily(language: string = ''): VirtualLanguage
 }
 
 /** Whether the file is the project's entry: marked `@role entry` or named by `metadata.entry`. */
-export function isDocumentEntryFile(documentModel: ExampleDocumentInput | null | undefined, file: VirtualFile | null | undefined): boolean {
+export function isDocumentEntryFile(
+    documentModel: ExampleDocumentInput | null | undefined,
+    file: VirtualFile | null | undefined,
+): boolean {
     if (!file) return false;
 
-    return file.role === 'entry'
-        || normalizeVirtualPath(documentModel?.metadata?.entry || '') === normalizeVirtualPath(file.path || '');
+    return (
+        file.role === 'entry' ||
+        normalizeVirtualPath(documentModel?.metadata?.entry || '') === normalizeVirtualPath(file.path || '')
+    );
 }
 
 /**

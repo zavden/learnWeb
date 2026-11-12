@@ -12,20 +12,32 @@ const files = [
 
 test('quick open preserves original order when query is empty', () => {
     const matches = buildQuickOpenMatches(files, '');
-    assert.deepEqual(matches.map((file) => file.id), ['a', 'b', 'c', 'd']);
+    assert.deepEqual(
+        matches.map((file) => file.id),
+        ['a', 'b', 'c', 'd'],
+    );
 });
 
 test('quick open prioritizes exact and prefix matches on file name and path', () => {
     const matches = buildQuickOpenMatches(files, 'app');
-    assert.deepEqual(matches.map((file) => file.id), ['a']);
+    assert.deepEqual(
+        matches.map((file) => file.id),
+        ['a'],
+    );
 });
 
 test('quick open matches by multiple tokens across path and role', () => {
     const matches = buildQuickOpenMatches(files, 'style css');
-    assert.deepEqual(matches.map((file) => file.id), ['c']);
+    assert.deepEqual(
+        matches.map((file) => file.id),
+        ['c'],
+    );
 });
 
 test('quick open can match nested path segments', () => {
     const matches = buildQuickOpenMatches(files, 'components button');
-    assert.deepEqual(matches.map((file) => file.id), ['b']);
+    assert.deepEqual(
+        matches.map((file) => file.id),
+        ['b'],
+    );
 });

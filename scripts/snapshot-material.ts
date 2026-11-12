@@ -52,7 +52,11 @@ import type { TheoryExerciseEmbeds } from '../src/types/theory.ts';
 import { buildRuntimeBridgeScriptBody } from '../src/utils/renderer/runtimeBridge.ts';
 import { validateShaderPreviewDocument } from '../src/utils/shaderPreviewDiagnostics.ts';
 import { extractTheoryExerciseReferences, loadTheoryExerciseEmbeds } from '../src/utils/theoryExerciseEmbeds.ts';
-import { renderTheoryExportDocument, renderTheoryHtml, renderTheoryPreviewDocument } from '../src/utils/theoryRenderer.ts';
+import {
+    renderTheoryExportDocument,
+    renderTheoryHtml,
+    renderTheoryPreviewDocument,
+} from '../src/utils/theoryRenderer.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MATERIAL_DIR = path.join(ROOT, 'material');
@@ -120,12 +124,15 @@ function compileDocument(documentModel: ExampleDocument): Promise<CompileRespons
     const cacheKey = createCompileCacheKey({ document: documentModel });
     if (!compileCache.has(cacheKey)) {
         const compiled = compileExampleDocumentIsolated(documentModel);
-        compileCache.set(cacheKey, compiled.then((result) => ({
-            document: documentModel,
-            compiledDocument: result.compiledDocument,
-            compileDiagnostics: result.compileDiagnostics,
-            compileMeta: { cacheKey, cacheStatus: 'miss' },
-        })));
+        compileCache.set(
+            cacheKey,
+            compiled.then((result) => ({
+                document: documentModel,
+                compiledDocument: result.compiledDocument,
+                compileDiagnostics: result.compileDiagnostics,
+                compileMeta: { cacheKey, cacheStatus: 'miss' },
+            })),
+        );
     }
     return compileCache.get(cacheKey)!; // set just above when it was missing
 }
@@ -145,7 +152,8 @@ globalThis.fetch = async (input: string | URL | Request, init: RequestInit = {})
 
     if (segments.length === 7 && segments[0] === 'api' && segments[1] === 'topic' && segments[5] === 'examples') {
         const file = path.join(MATERIAL_DIR, segments[2], segments[3], segments[4], 'examples', segments[6]);
-        if (!file.startsWith(MATERIAL_DIR) || !fs.existsSync(file)) return jsonResponse({ error: 'File not found' }, 404);
+        if (!file.startsWith(MATERIAL_DIR) || !fs.existsSync(file))
+            return jsonResponse({ error: 'File not found' }, 404);
         return jsonResponse({ content: fs.readFileSync(file, 'utf-8') });
     }
 
@@ -156,7 +164,8 @@ globalThis.fetch = async (input: string | URL | Request, init: RequestInit = {})
 
 function listDirs(dir: string): string[] {
     if (!fs.existsSync(dir)) return [];
-    return fs.readdirSync(dir, { withFileTypes: true })
+    return fs
+        .readdirSync(dir, { withFileTypes: true })
         .filter((entry) => entry.isDirectory())
         .map((entry) => entry.name)
         .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
@@ -175,8 +184,9 @@ function listTopics(): TopicRef[] {
         for (const section of listDirs(path.join(MATERIAL_DIR, chapter))) {
             for (const topic of listDirs(path.join(MATERIAL_DIR, chapter, section))) {
                 const dir = path.join(MATERIAL_DIR, chapter, section, topic);
-                const selected = targets.length === 0
-                    || targets.some((target) => dir === target || dir.startsWith(`${target}${path.sep}`));
+                const selected =
+                    targets.length === 0 ||
+                    targets.some((target) => dir === target || dir.startsWith(`${target}${path.sep}`));
                 if (selected) topics.push({ dir, topicPath: `${chapter}/${section}/${topic}` });
             }
         }
@@ -187,7 +197,8 @@ function listTopics(): TopicRef[] {
 function listExamples(topicDir: string): string[] {
     const dir = path.join(topicDir, 'examples');
     if (!fs.existsSync(dir)) return [];
-    return fs.readdirSync(dir)
+    return fs
+        .readdirSync(dir)
         .filter((name) => name.toLowerCase().endsWith('.md') && name.toLowerCase() !== 'readme.md')
         .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
 }
@@ -200,33 +211,55 @@ async function snapshotExample(topicPath: string, topicDir: string, filename: st
     const documentModel: ExampleDocument = parseExampleDocument(content);
 
     record(`${key}#parse`, documentModel);
-    record(`${key}#meta`, attempt(() => ({
-        blocking: hasBlockingDiagnostics(documentModel),
-        editorial: getExampleEditorialMetadata(documentModel),
-        exercise: getExerciseConfig(documentModel),
-        shader: isShaderDocument(documentModel) ? getShaderConfig(documentModel) : null,
-        stage: getExampleStage(documentModel),
-    })));
-    record(`${key}#serialize`, attempt(() => buildExampleDocument(documentModel)));
+    record(
+        `${key}#meta`,
+        attempt(() => ({
+            blocking: hasBlockingDiagnostics(documentModel),
+            editorial: getExampleEditorialMetadata(documentModel),
+            exercise: getExerciseConfig(documentModel),
+            shader: isShaderDocument(documentModel) ? getShaderConfig(documentModel) : null,
+            stage: getExampleStage(documentModel),
+        })),
+    );
+    record(
+        `${key}#serialize`,
+        attempt(() => buildExampleDocument(documentModel)),
+    );
 
     if (isShaderDocument(documentModel)) {
         const structural = documentModel.diagnostics || [];
-        const diagnostics = attempt(() => (structural.some((diagnostic) => diagnostic.level === 'error')
-            ? []
-            : validateShaderPreviewDocument(documentModel)));
+        const diagnostics = attempt(() =>
+            structural.some((diagnostic) => diagnostic.level === 'error')
+                ? []
+                : validateShaderPreviewDocument(documentModel),
+        );
         record(`${key}#shader-diagnostics`, diagnostics);
-        record(`${key}#render-preview`, attempt(() => withoutRuntime(renderShaderExampleDocument(documentModel, {
-            consoleEnabled: false,
-            diagnostics: [...structural, ...(Array.isArray(diagnostics) ? diagnostics : [])],
-            renderId: 1,
-            topicPath,
-        }))));
-        record(`${key}#render-card`, attempt(() => withoutRuntime(renderShaderExampleDocument(documentModel, {
-            diagnostics: structural,
-            renderId: 0,
-            shaderControls: { paused: true, stillFrame: true },
-            topicPath,
-        }))));
+        record(
+            `${key}#render-preview`,
+            attempt(() =>
+                withoutRuntime(
+                    renderShaderExampleDocument(documentModel, {
+                        consoleEnabled: false,
+                        diagnostics: [...structural, ...(Array.isArray(diagnostics) ? diagnostics : [])],
+                        renderId: 1,
+                        topicPath,
+                    }),
+                ),
+            ),
+        );
+        record(
+            `${key}#render-card`,
+            attempt(() =>
+                withoutRuntime(
+                    renderShaderExampleDocument(documentModel, {
+                        diagnostics: structural,
+                        renderId: 0,
+                        shaderControls: { paused: true, stillFrame: true },
+                        topicPath,
+                    }),
+                ),
+            ),
+        );
         return;
     }
 
@@ -241,19 +274,36 @@ async function snapshotExample(topicPath: string, topicDir: string, filename: st
     const diagnostics = result.compileDiagnostics || [];
     const renderOptions = { consoleEnabled: true, renderId: 1, suppressDialogs: false };
     record(`${key}#compile`, { compiledDocument: result.compiledDocument, compileDiagnostics: diagnostics });
-    record(`${key}#compiled-views`, attempt(() => ({
-        scripts: buildCompiledScriptFiles(documentModel, result),
-        styles: buildCompiledStyleFiles(documentModel, result),
-    })));
-    record(`${key}#render-hosted`, attempt(() => withoutRuntime(
-        renderCompiledExampleDocument(result.compiledDocument, topicPath, diagnostics, { ...renderOptions, hosted: true }),
-    )));
-    record(`${key}#render-srcdoc`, attempt(() => withoutRuntime(
-        renderCompiledExampleDocument(result.compiledDocument, topicPath, diagnostics, renderOptions),
-    )));
-    record(`${key}#render-card`, attempt(() => withoutRuntime(
-        renderCompiledExampleDocument(result.compiledDocument, topicPath, diagnostics),
-    )));
+    record(
+        `${key}#compiled-views`,
+        attempt(() => ({
+            scripts: buildCompiledScriptFiles(documentModel, result),
+            styles: buildCompiledStyleFiles(documentModel, result),
+        })),
+    );
+    record(
+        `${key}#render-hosted`,
+        attempt(() =>
+            withoutRuntime(
+                renderCompiledExampleDocument(result.compiledDocument, topicPath, diagnostics, {
+                    ...renderOptions,
+                    hosted: true,
+                }),
+            ),
+        ),
+    );
+    record(
+        `${key}#render-srcdoc`,
+        attempt(() =>
+            withoutRuntime(
+                renderCompiledExampleDocument(result.compiledDocument, topicPath, diagnostics, renderOptions),
+            ),
+        ),
+    );
+    record(
+        `${key}#render-card`,
+        attempt(() => withoutRuntime(renderCompiledExampleDocument(result.compiledDocument, topicPath, diagnostics))),
+    );
 }
 
 async function snapshotTheory(topicPath: string, topicDir: string): Promise<void> {
@@ -262,7 +312,10 @@ async function snapshotTheory(topicPath: string, topicDir: string): Promise<void
 
     const key = `${topicPath}/main.md`;
     const content = fs.readFileSync(file, 'utf-8');
-    record(`${key}#references`, attempt(() => extractTheoryExerciseReferences(content)));
+    record(
+        `${key}#references`,
+        attempt(() => extractTheoryExerciseReferences(content)),
+    );
 
     let exerciseEmbeds: TheoryExerciseEmbeds = {};
     try {
@@ -273,14 +326,24 @@ async function snapshotTheory(topicPath: string, topicDir: string): Promise<void
         record(`${key}#embeds`, `ERROR: ${errorMessage(error)}`);
     }
 
-    record(`${key}#html`, attempt(() => renderTheoryHtml(content, { exerciseEmbeds, topicPath })));
-    record(`${key}#preview-document`, attempt(() => withoutRuntime(
-        renderTheoryPreviewDocument(content, { exerciseEmbeds, renderId: 1, topicPath }),
-    )));
+    record(
+        `${key}#html`,
+        attempt(() => renderTheoryHtml(content, { exerciseEmbeds, topicPath })),
+    );
+    record(
+        `${key}#preview-document`,
+        attempt(() => withoutRuntime(renderTheoryPreviewDocument(content, { exerciseEmbeds, renderId: 1, topicPath }))),
+    );
     // The export starts with a comment that carries the export time.
-    record(`${key}#export-document`, attempt(() => withoutRuntime(
-        renderTheoryExportDocument(content, { exerciseEmbeds, topicPath }),
-    ).replace(/^<!-- Exported from LearnWeb — .*? -->/, '<!-- Exported from LearnWeb -->')));
+    record(
+        `${key}#export-document`,
+        attempt(() =>
+            withoutRuntime(renderTheoryExportDocument(content, { exerciseEmbeds, topicPath })).replace(
+                /^<!-- Exported from LearnWeb — .*? -->/,
+                '<!-- Exported from LearnWeb -->',
+            ),
+        ),
+    );
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────────────────────────
@@ -291,10 +354,15 @@ let examples = 0;
 
 record('runtime#source', RUNTIME_SOURCE_JSON);
 if (targets.length === 0) {
-    record('material#tree', attempt(() => buildMaterialTree(MATERIAL_DIR, {
-        hiddenStateFile: path.join(MATERIAL_DIR, '.no-hidden-state'),
-        includeHidden: true,
-    })));
+    record(
+        'material#tree',
+        attempt(() =>
+            buildMaterialTree(MATERIAL_DIR, {
+                hiddenStateFile: path.join(MATERIAL_DIR, '.no-hidden-state'),
+                includeHidden: true,
+            }),
+        ),
+    );
 }
 
 for (const [index, topic] of topics.entries()) {
@@ -309,7 +377,9 @@ for (const [index, topic] of topics.entries()) {
 await shutdownIsolatedCompiler();
 
 const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
-console.log(`Snapshot: ${topics.length} topics, ${examples} examples, ${Object.keys(snapshot).length} entries in ${seconds}s`);
+console.log(
+    `Snapshot: ${topics.length} topics, ${examples} examples, ${Object.keys(snapshot).length} entries in ${seconds}s`,
+);
 
 if (outFile) {
     fs.mkdirSync(path.dirname(path.resolve(outFile)), { recursive: true });

@@ -78,7 +78,15 @@ export class Sidebar {
     private expandedSectionIds: Set<string>;
     private readonly btnPending: HTMLElement | null;
 
-    constructor({ onTopicSelect, onCreateClick, onClipboardDefaultToggle, onFavoritesClick, onPendingClick, onPreviewInfoToggle, onVimDefaultToggle }: SidebarOptions) {
+    constructor({
+        onTopicSelect,
+        onCreateClick,
+        onClipboardDefaultToggle,
+        onFavoritesClick,
+        onPendingClick,
+        onPreviewInfoToggle,
+        onVimDefaultToggle,
+    }: SidebarOptions) {
         this.onTopicSelect = onTopicSelect;
         this.onCreateClick = onCreateClick;
         this.onClipboardDefaultToggle = onClipboardDefaultToggle;
@@ -111,8 +119,12 @@ export class Sidebar {
         this.btnFavorites?.addEventListener('click', () => this.onFavoritesClick?.());
         this.btnPending = document.getElementById('btn-pending');
         this.btnPending?.addEventListener('click', () => this.onPendingClick?.());
-        this.btnSidebarPreviewInfo?.addEventListener('click', () => this.onPreviewInfoToggle?.(!this.previewInfoVisible));
-        this.btnSidebarClipboardDefault?.addEventListener('click', () => this.onClipboardDefaultToggle?.(!this.clipboardDefaultEnabled));
+        this.btnSidebarPreviewInfo?.addEventListener('click', () =>
+            this.onPreviewInfoToggle?.(!this.previewInfoVisible),
+        );
+        this.btnSidebarClipboardDefault?.addEventListener('click', () =>
+            this.onClipboardDefaultToggle?.(!this.clipboardDefaultEnabled),
+        );
         this.btnSidebarVimDefault?.addEventListener('click', () => this.onVimDefaultToggle?.(!this.vimDefaultEnabled));
         this.btnToggleHiddenChapters?.addEventListener('click', () => this.toggleHiddenChapters());
         this.btnCollapseTree?.addEventListener('click', () => this.collapseAll());
@@ -125,9 +137,7 @@ export class Sidebar {
         // Always fetch hidden chapters too: "hidden" only affects what the tree shows,
         // topic lookups (session restore, favorites, pending, create) need all of them.
         this.fullTree = await fetchTree({ includeHidden: true });
-        this.tree = this.showHiddenChapters
-            ? this.fullTree
-            : this.fullTree.filter((chapter) => !chapter.hidden);
+        this.tree = this.showHiddenChapters ? this.fullTree : this.fullTree.filter((chapter) => !chapter.hidden);
         this._syncExpansionState();
         this.render();
         if (this.activeTopicPath) {
@@ -192,7 +202,13 @@ export class Sidebar {
                 const secDiv = document.createElement('div');
                 secDiv.className = 'tree-section';
 
-                const secItem = this._createItem(section.label, 'section-item', true, sectionExpanded, section.labelSource);
+                const secItem = this._createItem(
+                    section.label,
+                    'section-item',
+                    true,
+                    sectionExpanded,
+                    section.labelSource,
+                );
                 secDiv.appendChild(secItem);
 
                 const topicsDiv = document.createElement('div');
@@ -240,7 +256,13 @@ export class Sidebar {
         });
     }
 
-    private _createItem(label: string, className: string, hasArrow: boolean, isExpanded: boolean = false, labelSource: MaterialLabelSource = 'slug'): HTMLDivElement {
+    private _createItem(
+        label: string,
+        className: string,
+        hasArrow: boolean,
+        isExpanded: boolean = false,
+        labelSource: MaterialLabelSource = 'slug',
+    ): HTMLDivElement {
         const div = document.createElement('div');
         div.className = `tree-item ${className}`;
 
@@ -271,7 +293,12 @@ export class Sidebar {
         this._setSectionExpanded(sectionKey, nextExpanded, item, childrenDiv);
     }
 
-    private _setChapterExpanded(chapterKey: string, expanded: boolean, item: HTMLElement, childrenDiv: HTMLElement): void {
+    private _setChapterExpanded(
+        chapterKey: string,
+        expanded: boolean,
+        item: HTMLElement,
+        childrenDiv: HTMLElement,
+    ): void {
         if (expanded) {
             this.expandedChapterIds.add(chapterKey);
         } else {
@@ -281,7 +308,12 @@ export class Sidebar {
         this._applyExpandedState(item, childrenDiv, expanded);
     }
 
-    private _setSectionExpanded(sectionKey: string, expanded: boolean, item: HTMLElement, childrenDiv: HTMLElement): void {
+    private _setSectionExpanded(
+        sectionKey: string,
+        expanded: boolean,
+        item: HTMLElement,
+        childrenDiv: HTMLElement,
+    ): void {
         if (expanded) {
             this.expandedSectionIds.add(sectionKey);
         } else {
@@ -316,7 +348,6 @@ export class Sidebar {
         this.expandedSectionIds = new Set(
             Array.from(this.expandedSectionIds).filter((sectionKey) => availableSectionIds.has(sectionKey)),
         );
-
     }
 
     private _getChapterKey(chapterId: string): string {
@@ -407,7 +438,9 @@ export class Sidebar {
         if (this.btnSidebarClipboardDefault) {
             this.btnSidebarClipboardDefault.classList.toggle('is-active', this.clipboardDefaultEnabled);
             this.btnSidebarClipboardDefault.setAttribute('aria-pressed', String(this.clipboardDefaultEnabled));
-            this.btnSidebarClipboardDefault.title = this.clipboardDefaultEnabled ? 'Disable system clipboard default' : 'Enable system clipboard default';
+            this.btnSidebarClipboardDefault.title = this.clipboardDefaultEnabled
+                ? 'Disable system clipboard default'
+                : 'Enable system clipboard default';
             this.btnSidebarClipboardDefault.setAttribute('aria-label', this.btnSidebarClipboardDefault.title);
         }
 
@@ -497,7 +530,9 @@ export class Sidebar {
 
         const nextHidden = !chapter.hidden;
         const action = nextHidden ? 'Hide' : 'Restore';
-        const confirmed = window.confirm(`${action} chapter "${chapter.label}" ${nextHidden ? 'from' : 'to'} the normal sidebar view?`);
+        const confirmed = window.confirm(
+            `${action} chapter "${chapter.label}" ${nextHidden ? 'from' : 'to'} the normal sidebar view?`,
+        );
         if (!confirmed) return;
 
         try {

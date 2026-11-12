@@ -9,7 +9,10 @@ test('shaderVecToHex converts normalized vec3 values to hex', () => {
 
 test('shaderHexToVec converts hex colors to normalized vec3 values', () => {
     const vector = shaderHexToVec('#4080ff');
-    assert.deepEqual(vector.map((value) => Number(value.toFixed(4))), [0.251, 0.502, 1]);
+    assert.deepEqual(
+        vector.map((value) => Number(value.toFixed(4))),
+        [0.251, 0.502, 1],
+    );
 });
 
 test('shaderAlphaToUnit clamps invalid alpha values to 0..1', () => {

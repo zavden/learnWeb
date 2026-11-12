@@ -14,11 +14,7 @@
 
 import { Marked } from 'marked';
 import type { Tokenizer } from 'marked';
-import type {
-    TheoryExportDocumentOptions,
-    TheoryHtmlOptions,
-    TheoryPreviewDocumentOptions,
-} from '../types/theory.ts';
+import type { TheoryExportDocumentOptions, TheoryHtmlOptions, TheoryPreviewDocumentOptions } from '../types/theory.ts';
 import { injectTheoryExerciseEmbeds } from './theoryExerciseEmbeds.ts';
 import hljs from 'highlight.js/lib/core';
 import hljsXml from 'highlight.js/lib/languages/xml';
@@ -102,7 +98,9 @@ const PLAIN_TEXT_LANGUAGES = new Set(['text', 'txt', 'plain', 'plaintext']);
  * names are only escaped, an unknown or empty language is auto-detected.
  */
 export function highlightCode(code: string, lang: string | null | undefined): string {
-    const requested = String(lang || '').trim().toLowerCase();
+    const requested = String(lang || '')
+        .trim()
+        .toLowerCase();
     const language = HIGHLIGHT_LANGUAGE_ALIASES[requested] || requested;
 
     if (PLAIN_TEXT_LANGUAGES.has(language)) {
@@ -112,7 +110,9 @@ export function highlightCode(code: string, lang: string | null | undefined): st
     if (language && hljs.getLanguage(language)) {
         try {
             return hljs.highlight(code, { language }).value;
-        } catch (_) { /* fall through */ }
+        } catch (_) {
+            /* fall through */
+        }
     }
     return hljs.highlightAuto(code).value;
 }
@@ -125,7 +125,8 @@ export function highlightCode(code: string, lang: string | null | undefined): st
 const THEORY_ALLOWED_TAGS = new Set(['details', 'summary', 'kbd', 'mark', 'sub', 'sup', 'br', 'small', 'abbr']);
 const THEORY_ALLOWED_ATTRIBUTES = new Set(['class', 'title', 'open']);
 const THEORY_VOID_TAGS = new Set(['br']);
-const RAW_HTML_PIECE_PATTERN = /<!--[\s\S]*?-->|<(\/?)([A-Za-z][A-Za-z0-9-]*)((?:\s+[^\s"'<>\/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*)\s*(\/?)>/g;
+const RAW_HTML_PIECE_PATTERN =
+    /<!--[\s\S]*?-->|<(\/?)([A-Za-z][A-Za-z0-9-]*)((?:\s+[^\s"'<>\/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*)\s*(\/?)>/g;
 const RAW_HTML_ATTRIBUTE_PATTERN = /([^\s"'<>\/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
 
 function escapeRawHtmlText(text: string = ''): string {
@@ -201,7 +202,11 @@ function cleanUrl(href: string = ''): string | null {
 }
 
 function isCommentOnlyHtml(html: string | null | undefined = ''): boolean {
-    return String(html ?? '').replace(/<!--[\s\S]*?-->/g, '').trim() === '';
+    return (
+        String(html ?? '')
+            .replace(/<!--[\s\S]*?-->/g, '')
+            .trim() === ''
+    );
 }
 
 // ─── Asset URLs ─────────────────────────────────────────
@@ -216,11 +221,13 @@ function encodeTopicPath(topicPath: string | null | undefined = ''): string {
 
 function isExternalOrAbsoluteUrl(href: string | null | undefined = ''): boolean {
     const value = String(href || '').trim();
-    return value === ''
-        || value.startsWith('#')
-        || value.startsWith('/')
-        || value.startsWith('?')
-        || /^[a-z][a-z0-9+.-]*:/i.test(value);
+    return (
+        value === '' ||
+        value.startsWith('#') ||
+        value.startsWith('/') ||
+        value.startsWith('?') ||
+        /^[a-z][a-z0-9+.-]*:/i.test(value)
+    );
 }
 
 /**
@@ -228,7 +235,10 @@ function isExternalOrAbsoluteUrl(href: string | null | undefined = ''): boolean 
  * "diagram.png", "./diagram.png", "assets/diagram.png" and "./assets/img/x.png" all work. Absolute, external,
  * `#`/`?` and `..` URLs, and any URL without a topic path, come back unchanged (trimmed).
  */
-export function resolveTheoryAssetUrl(href: string | null | undefined = '', topicPath: string | null | undefined = ''): string {
+export function resolveTheoryAssetUrl(
+    href: string | null | undefined = '',
+    topicPath: string | null | undefined = '',
+): string {
     const value = String(href || '').trim();
     const encodedTopicPath = encodeTopicPath(topicPath);
 
@@ -236,9 +246,7 @@ export function resolveTheoryAssetUrl(href: string | null | undefined = '', topi
         return value;
     }
 
-    const relativePath = value
-        .replace(/^(\.\/)+/, '')
-        .replace(/^assets\//, '');
+    const relativePath = value.replace(/^(\.\/)+/, '').replace(/^assets\//, '');
 
     if (!relativePath || relativePath.split(/[/?#]/)[0] === '..' || relativePath.split('/').includes('..')) {
         return value;
@@ -248,7 +256,9 @@ export function resolveTheoryAssetUrl(href: string | null | undefined = '', topi
 }
 
 function looksLikeAssetLink(href: string | null | undefined = ''): boolean {
-    const value = String(href || '').trim().replace(/^(\.\/)+/, '');
+    const value = String(href || '')
+        .trim()
+        .replace(/^(\.\/)+/, '');
     if (value.startsWith('assets/')) return true;
 
     const pathPart = value.split(/[?#]/)[0];
@@ -328,17 +338,20 @@ function getTheoryMarked(): Marked {
                     return `<a href="#" class="theory-example-link" data-theory-exercise-preview="${filename}"${titleAttribute}>${text}</a>`;
                 }
 
-                const resolvedHref = cleanUrl(looksLikeAssetLink(rawHref)
-                    ? resolveTheoryAssetUrl(rawHref, currentRenderContext.topicPath)
-                    : rawHref);
+                const resolvedHref = cleanUrl(
+                    looksLikeAssetLink(rawHref)
+                        ? resolveTheoryAssetUrl(rawHref, currentRenderContext.topicPath)
+                        : rawHref,
+                );
                 if (resolvedHref === null) return text;
 
                 // title arrives already escaped by marked. External and asset links open in a
                 // new tab so they never navigate the app (or the preview frame) away.
                 const titleAttribute = title ? ` title="${title}"` : '';
-                const targetAttribute = /^https?:\/\//i.test(resolvedHref) || resolvedHref.startsWith('/api/')
-                    ? ' target="_blank" rel="noopener noreferrer"'
-                    : '';
+                const targetAttribute =
+                    /^https?:\/\//i.test(resolvedHref) || resolvedHref.startsWith('/api/')
+                        ? ' target="_blank" rel="noopener noreferrer"'
+                        : '';
                 return `<a href="${resolvedHref}"${titleAttribute}${targetAttribute}>${text}</a>`;
             },
         },
@@ -353,14 +366,17 @@ function getTheoryMarked(): Marked {
  * CSS, and a script that fills the exercise preview slots from an embedded payload. Starts with an
  * "Exported from LearnWeb" comment carrying the topic path and the export time (so it is not deterministic).
  */
-export function renderTheoryExportDocument(content: string | null | undefined = '', options: TheoryExportDocumentOptions = {}): string {
+export function renderTheoryExportDocument(
+    content: string | null | undefined = '',
+    options: TheoryExportDocumentOptions = {},
+): string {
     const topicPath = String(options.topicPath || '').trim();
     const title = String(options.title || topicPath || 'Theory').trim();
     const previewPayload: Record<string, string> = Object.fromEntries(
         Object.entries(options.exerciseEmbeds || {}).map(([filename, embed]): [string, string] => [
             filename,
             typeof embed?.previewSrcdoc === 'string' ? embed.previewSrcdoc : '',
-        ])
+        ]),
     );
     const serializedPreviewPayload = serializeInlineScriptValue(previewPayload);
     const renderedContent = String(content || '').trim()
@@ -832,21 +848,24 @@ export function renderTheoryHtml(content: string | null | undefined = '', option
  * button or an example link is activated, and fills the exercise preview slots with sandboxed iframes from an
  * embedded payload.
  */
-export function renderTheoryPreviewDocument(content: string | null | undefined = '', options: TheoryPreviewDocumentOptions = {}): string {
+export function renderTheoryPreviewDocument(
+    content: string | null | undefined = '',
+    options: TheoryPreviewDocumentOptions = {},
+): string {
     const assetBase = options.topicPath ? `/api/topic/${encodeTopicPath(options.topicPath)}/assets/` : '';
     const renderId = Number.isFinite(options.renderId) ? options.renderId : 0;
     const previewPayload: Record<string, string> = Object.fromEntries(
         Object.entries(options.exerciseEmbeds || {}).map(([filename, embed]): [string, string] => [
             filename,
             typeof embed?.previewSrcdoc === 'string' ? embed.previewSrcdoc : '',
-        ])
+        ]),
     );
     const serializedPreviewPayload = serializeInlineScriptValue(previewPayload);
     const renderedContent = String(content || '').trim()
         ? renderTheoryHtml(content, {
-            exerciseEmbeds: options.exerciseEmbeds || {},
-            topicPath: options.topicPath || '',
-        })
+              exerciseEmbeds: options.exerciseEmbeds || {},
+              topicPath: options.topicPath || '',
+          })
         : `
         <div class="theory-empty-state">
           <div class="theory-empty-icon">📝</div>

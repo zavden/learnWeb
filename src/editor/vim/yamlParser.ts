@@ -18,10 +18,7 @@ function parseScalar(rawValue: string | null | undefined): string {
     const value = String(rawValue ?? '').trim();
     if (!value) return '';
 
-    if (
-        (value.startsWith('"') && value.endsWith('"'))
-        || (value.startsWith('\'') && value.endsWith('\''))
-    ) {
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
         return value.slice(1, -1);
     }
 
@@ -41,7 +38,7 @@ export function stripYamlInlineComment(line: string = ''): string {
             continue;
         }
 
-        if (char === '"' || char === '\'') {
+        if (char === '"' || char === "'") {
             quote = char;
             continue;
         }
@@ -62,7 +59,9 @@ export function stripYamlInlineComment(line: string = ''): string {
 export function parseSimpleYamlObject(source: string = ''): YamlMapping {
     const root: YamlMapping = {};
     const stack: { indent: number; value: YamlMapping }[] = [{ indent: -1, value: root }];
-    const lines = String(source || '').replace(/\r\n?/g, '\n').split('\n');
+    const lines = String(source || '')
+        .replace(/\r\n?/g, '\n')
+        .split('\n');
 
     lines.forEach((rawLine, index) => {
         if (!rawLine.trim()) return;

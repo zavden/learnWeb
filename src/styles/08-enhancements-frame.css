@@ -79,7 +79,7 @@
   padding: 14px 18px;
   background: #0d1117;
   color: #abb2bf;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 13px;
   line-height: 1.55;
 }
@@ -200,7 +200,10 @@
   list-style: none;
   border-top: 1px solid rgba(148, 163, 184, 0.2);
   background: #0b1120;
-  font: 12px/1.5 "JetBrains Mono", ui-monospace, monospace;
+  font:
+    12px/1.5 'JetBrains Mono',
+    ui-monospace,
+    monospace;
 }
 
 .theory-exercise-dialog-console.hidden {
@@ -239,13 +242,18 @@
   border-top: 1px solid rgba(248, 113, 113, 0.35);
   background: #1c1017;
   color: #fca5a5;
-  font: 12px/1.5 "JetBrains Mono", ui-monospace, monospace;
+  font:
+    12px/1.5 'JetBrains Mono',
+    ui-monospace,
+    monospace;
 }
 
 .theory-exercise-dialog-types-title {
   margin: 0 0 2px;
   color: #fecaca;
-  font: 600 12px/1.5 system-ui, sans-serif;
+  font:
+    600 12px/1.5 system-ui,
+    sans-serif;
 }
 
 .theory-exercise-dialog-types ol {
@@ -422,15 +430,24 @@
   background: transparent;
   color: var(--text-secondary, #cbd5e1);
   padding: 6px 10px;
-  font: 12px/1.4 "JetBrains Mono", ui-monospace, monospace;
+  font:
+    12px/1.4 'JetBrains Mono',
+    ui-monospace,
+    monospace;
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.assets-dialog-item:hover { background: rgba(148, 163, 184, 0.1); }
-.assets-dialog-item.is-active { border-color: rgba(96, 165, 250, 0.5); background: rgba(96, 165, 250, 0.12); color: #e2e8f0; }
+.assets-dialog-item:hover {
+  background: rgba(148, 163, 184, 0.1);
+}
+.assets-dialog-item.is-active {
+  border-color: rgba(96, 165, 250, 0.5);
+  background: rgba(96, 165, 250, 0.12);
+  color: #e2e8f0;
+}
 
 .assets-dialog-viewer {
   min-width: 0;
@@ -453,8 +470,12 @@
   font-size: 12px;
 }
 
-.assets-dialog-viewer-header a { color: #93c5fd; }
-.assets-dialog-message { padding: 12px; }
+.assets-dialog-viewer-header a {
+  color: #93c5fd;
+}
+.assets-dialog-message {
+  padding: 12px;
+}
 
 .assets-dialog-image {
   display: block;
@@ -466,16 +487,50 @@
 .assets-dialog-code {
   margin: 0;
   padding: 12px 14px;
-  font: 12.5px/1.6 "JetBrains Mono", ui-monospace, monospace;
+  font:
+    12.5px/1.6 'JetBrains Mono',
+    ui-monospace,
+    monospace;
   color: #abb2bf;
   white-space: pre;
 }
 
-.assets-dialog-code .hljs-comment, .assets-dialog-code .hljs-quote { color: #5c6370; font-style: italic; }
-.assets-dialog-code .hljs-keyword, .assets-dialog-code .hljs-doctag { color: #c678dd; }
-.assets-dialog-code .hljs-literal { color: #56b6c2; }
-.assets-dialog-code .hljs-string, .assets-dialog-code .hljs-regexp, .assets-dialog-code .hljs-attribute { color: #98c379; }
-.assets-dialog-code .hljs-number, .assets-dialog-code .hljs-attr, .assets-dialog-code .hljs-variable, .assets-dialog-code .hljs-type, .assets-dialog-code .hljs-selector-class { color: #d19a66; }
-.assets-dialog-code .hljs-title, .assets-dialog-code .hljs-symbol, .assets-dialog-code .hljs-meta, .assets-dialog-code .hljs-selector-id { color: #61aeee; }
-.assets-dialog-code .hljs-built_in, .assets-dialog-code .hljs-title.class_ { color: #e6c07b; }
-.assets-dialog-code .hljs-name, .assets-dialog-code .hljs-selector-tag, .assets-dialog-code .hljs-subst { color: #e06c75; }
+.assets-dialog-code .hljs-comment,
+.assets-dialog-code .hljs-quote {
+  color: #5c6370;
+  font-style: italic;
+}
+.assets-dialog-code .hljs-keyword,
+.assets-dialog-code .hljs-doctag {
+  color: #c678dd;
+}
+.assets-dialog-code .hljs-literal {
+  color: #56b6c2;
+}
+.assets-dialog-code .hljs-string,
+.assets-dialog-code .hljs-regexp,
+.assets-dialog-code .hljs-attribute {
+  color: #98c379;
+}
+.assets-dialog-code .hljs-number,
+.assets-dialog-code .hljs-attr,
+.assets-dialog-code .hljs-variable,
+.assets-dialog-code .hljs-type,
+.assets-dialog-code .hljs-selector-class {
+  color: #d19a66;
+}
+.assets-dialog-code .hljs-title,
+.assets-dialog-code .hljs-symbol,
+.assets-dialog-code .hljs-meta,
+.assets-dialog-code .hljs-selector-id {
+  color: #61aeee;
+}
+.assets-dialog-code .hljs-built_in,
+.assets-dialog-code .hljs-title.class_ {
+  color: #e6c07b;
+}
+.assets-dialog-code .hljs-name,
+.assets-dialog-code .hljs-selector-tag,
+.assets-dialog-code .hljs-subst {
+  color: #e06c75;
+}

@@ -141,23 +141,41 @@ export interface BuildResultOptions {
 /** Reads and validates the harness query string (`path`, `ms`, `only`, `logs`, `show`, `card`, `w`, `h`). */
 export function parseVerifyParams(search = ''): VerifyParams {
     const params = new URLSearchParams(search);
-    const path = String(params.get('path') || '').trim().replace(/^\/+|\/+$/g, '');
+    const path = String(params.get('path') || '')
+        .trim()
+        .replace(/^\/+|\/+$/g, '');
     const rawMs = Number.parseInt(params.get('ms') || '', 10);
     const ms = Number.isFinite(rawMs) ? Math.min(Math.max(rawMs, 200), 20000) : DEFAULT_OBSERVE_MS;
     const only = String(params.get('only') || '').trim();
-    const isOn = (name: string): boolean => ['1', 'true', 'yes'].includes(String(params.get(name) || '').trim().toLowerCase());
+    const isOn = (name: string): boolean =>
+        ['1', 'true', 'yes'].includes(
+            String(params.get(name) || '')
+                .trim()
+                .toLowerCase(),
+        );
     // show=1 keeps the last example on screen (for visual checks) in a frame of w×h CSS pixels.
     const size = (name: string, fallback: number): number => {
         const value = Number.parseInt(params.get(name) || '', 10);
         return Number.isFinite(value) ? Math.min(Math.max(value, 200), 2400) : fallback;
     };
     // card=1 runs each example like a gallery/theory card: a srcdoc copy with sandbox="allow-scripts" only.
-    return { path, ms, only, logs: isOn('logs'), show: isOn('show'), card: isOn('card'), width: size('w', 480), height: size('h', 270) };
+    return {
+        path,
+        ms,
+        only,
+        logs: isOn('logs'),
+        show: isOn('show'),
+        card: isOn('card'),
+        width: size('w', 480),
+        height: size('h', 270),
+    };
 }
 
 /** Topic paths ("ch/sec/top") under a chapter, section or topic path, in tree order. */
 export function collectTopicPaths(tree: TopicTreeLike[] = [], path = ''): string[] {
-    const [chapterId, sectionId, topicId] = String(path || '').split('/').filter(Boolean);
+    const [chapterId, sectionId, topicId] = String(path || '')
+        .split('/')
+        .filter(Boolean);
     const topics: string[] = [];
 
     (Array.isArray(tree) ? tree : []).forEach((chapter) => {
@@ -175,7 +193,10 @@ export function collectTopicPaths(tree: TopicTreeLike[] = [], path = ''): string
 }
 
 /** Example filenames (.md) from an `/examples` listing, optionally limited to a prefix, in natural order. */
-export function filterExampleFiles(files: Array<string | { filename?: string; name?: string } | null> = [], only = ''): string[] {
+export function filterExampleFiles(
+    files: Array<string | { filename?: string; name?: string } | null> = [],
+    only = '',
+): string[] {
     return (Array.isArray(files) ? files : [])
         .map((file) => (typeof file === 'string' ? file : file?.filename || file?.name || ''))
         .filter((file) => file.toLowerCase().endsWith('.md'))
@@ -184,7 +205,10 @@ export function filterExampleFiles(files: Array<string | { filename?: string; na
 }
 
 function firstLine(message: unknown = ''): string {
-    const line = String(message ?? '').split('\n').find((entry) => entry.trim()) || '';
+    const line =
+        String(message ?? '')
+            .split('\n')
+            .find((entry) => entry.trim()) || '';
     return line.length > MESSAGE_LIMIT ? `${line.slice(0, MESSAGE_LIMIT)}…` : line;
 }
 
@@ -221,14 +245,19 @@ export function problemsFromCompileDiagnostics(diagnostics: Array<Partial<Diagno
 }
 
 /** Problems reported by the preview runtime (postMessage payloads from the iframe). */
-export function problemsFromRuntimeMessages(messages: Array<RuntimeMessageLike | null | undefined> = []): VerifyProblem[] {
+export function problemsFromRuntimeMessages(
+    messages: Array<RuntimeMessageLike | null | undefined> = [],
+): VerifyProblem[] {
     const problems: VerifyProblem[] = [];
 
     (Array.isArray(messages) ? messages : []).forEach((message) => {
         if (!message || typeof message !== 'object') return;
-        const text = typeof message.text === 'string'
-            ? message.text
-            : Array.isArray(message.values) ? message.values.join(' ') : '';
+        const text =
+            typeof message.text === 'string'
+                ? message.text
+                : Array.isArray(message.values)
+                  ? message.values.join(' ')
+                  : '';
         const location = message.location && typeof message.location === 'object' ? message.location : null;
         const base: Pick<VerifyProblem, 'message' | 'file' | 'line'> = {
             message: firstLine(text),
@@ -250,12 +279,14 @@ export function problemsFromRuntimeMessages(messages: Array<RuntimeMessageLike |
         if (message.kind === 'shader-stats' && Array.isArray(message.textures)) {
             message.textures
                 .filter((texture) => texture?.status === 'error' || texture?.status === 'upload-error')
-                .forEach((texture) => problems.push({
-                    kind: 'texture',
-                    message: `Texture "${texture.name}" (${texture.assetPath}) failed to load`,
-                    file: texture.assetPath || '',
-                    line: null,
-                }));
+                .forEach((texture) =>
+                    problems.push({
+                        kind: 'texture',
+                        message: `Texture "${texture.name}" (${texture.assetPath}) failed to load`,
+                        file: texture.assetPath || '',
+                        line: null,
+                    }),
+                );
         }
     });
 
@@ -277,14 +308,20 @@ export function dedupeProblems(problems: VerifyProblem[] = []): VerifyProblem[] 
  * Console output of a run as plain text lines ("log: ✓ total"), for checking what an example prints
  * (exercise self-checks, audits). Only used when the harness runs with &logs=1.
  */
-export function consoleLinesFromMessages(messages: Array<RuntimeMessageLike | null | undefined> = [], limit = 200): string[] {
+export function consoleLinesFromMessages(
+    messages: Array<RuntimeMessageLike | null | undefined> = [],
+    limit = 200,
+): string[] {
     const lines: string[] = [];
     (Array.isArray(messages) ? messages : []).forEach((message) => {
         if (!message || typeof message !== 'object' || message.kind !== 'console') return;
         if (message.method === 'clear') return;
-        const text = typeof message.text === 'string'
-            ? message.text
-            : Array.isArray(message.values) ? message.values.join(' ') : '';
+        const text =
+            typeof message.text === 'string'
+                ? message.text
+                : Array.isArray(message.values)
+                  ? message.values.join(' ')
+                  : '';
         lines.push(`${message.method || message.level || 'log'}: ${text}`.slice(0, LOG_LINE_LIMIT));
     });
     return lines.slice(0, limit);
@@ -297,7 +334,11 @@ export function consoleLinesFromMessages(messages: Array<RuntimeMessageLike | nu
  * - warn: no problems but the page never reported that its runtime booted
  * - ok
  */
-export function classifyResult({ stage = '', problems = [], ready = true }: { stage?: string; problems?: VerifyProblem[]; ready?: boolean } = {}): VerifyStatus {
+export function classifyResult({
+    stage = '',
+    problems = [],
+    ready = true,
+}: { stage?: string; problems?: VerifyProblem[]; ready?: boolean } = {}): VerifyStatus {
     const unique = dedupeProblems(problems);
     if (unique.length > 0) {
         return EXPECTED_PROBLEM_STAGES.has(String(stage || '').toLowerCase()) ? 'expected' : 'error';
@@ -306,7 +347,17 @@ export function classifyResult({ stage = '', problems = [], ready = true }: { st
 }
 
 /** Assembles the result of one example: classifies it and adds a "not-ready" problem when the runtime never booted. */
-export function buildResult({ topicPath = '', file = '', stage = '', problems = [], ready = true, mode = '', durationMs = 0, note = '', logs = null }: BuildResultOptions = {}): VerifyResult {
+export function buildResult({
+    topicPath = '',
+    file = '',
+    stage = '',
+    problems = [],
+    ready = true,
+    mode = '',
+    durationMs = 0,
+    note = '',
+    logs = null,
+}: BuildResultOptions = {}): VerifyResult {
     const unique = dedupeProblems(problems);
     const result: VerifyResult = {
         path: `${topicPath}/examples/${file}`,
@@ -320,7 +371,14 @@ export function buildResult({ topicPath = '', file = '', stage = '', problems = 
         problems: unique,
     };
     if (!ready && unique.length === 0) {
-        result.problems = [{ kind: 'not-ready', message: 'The preview runtime never reported ready (page did not boot?)', file: '', line: null }];
+        result.problems = [
+            {
+                kind: 'not-ready',
+                message: 'The preview runtime never reported ready (page did not boot?)',
+                file: '',
+                line: null,
+            },
+        ];
     }
     if (note) result.note = note;
     if (Array.isArray(logs)) result.logs = logs;

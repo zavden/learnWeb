@@ -22,12 +22,14 @@ const RETRY_AFTER_FAILURE_MS = 15000;
 let unavailableUntil = 0;
 
 /** `sandbox` of an iframe that loads a hosted (cross-origin) preview document. */
-export const HOSTED_PREVIEW_SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads allow-pointer-lock allow-presentation';
+export const HOSTED_PREVIEW_SANDBOX =
+    'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads allow-pointer-lock allow-presentation';
 /**
  * `sandbox` of an iframe that loads a preview through `srcdoc`. srcdoc documents inherit the app's origin
  * when `allow-same-origin` is present, so it must never be granted to them.
  */
-export const SRCDOC_PREVIEW_SANDBOX = 'allow-scripts allow-forms allow-modals allow-popups allow-downloads allow-pointer-lock';
+export const SRCDOC_PREVIEW_SANDBOX =
+    'allow-scripts allow-forms allow-modals allow-popups allow-downloads allow-pointer-lock';
 
 /**
  * Set `iframe.srcdoc = html` two animation frames from now, if the iframe is still in the document and
@@ -37,10 +39,16 @@ export const SRCDOC_PREVIEW_SANDBOX = 'allow-scripts allow-forms allow-modals al
  * has a size in this page can run its scripts with a 0×0 viewport (measured in Chrome 155: `canvas.clientWidth`
  * was 0, so a WebGL card drew into a 1×1 buffer). Attach the frame first, then call this.
  */
-export function loadSrcdocWhenLaidOut(iframe: HTMLIFrameElement, html: string, shouldLoad: () => boolean = () => true): void {
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-        if (iframe.isConnected && shouldLoad()) iframe.srcdoc = html;
-    }));
+export function loadSrcdocWhenLaidOut(
+    iframe: HTMLIFrameElement,
+    html: string,
+    shouldLoad: () => boolean = () => true,
+): void {
+    requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+            if (iframe.isConnected && shouldLoad()) iframe.srcdoc = html;
+        }),
+    );
 }
 
 /** False for 15 s after a failure (`markHostedPreviewUnavailable()`); meanwhile previews go straight to srcdoc. */
@@ -88,7 +96,11 @@ export type PublishPreviewDocumentOptions = Partial<PreviewDocumentRequest>;
  * (with `HOSTED_PREVIEW_SANDBOX`), or `null` when hosted previews are unavailable: then load the srcdoc
  * variant instead. Never rejects; a failure is logged and disables hosted previews for 15 s.
  */
-export async function publishPreviewDocument({ html = '', topicPath = '', renderId = 0 }: PublishPreviewDocumentOptions = {}): Promise<string | null> {
+export async function publishPreviewDocument({
+    html = '',
+    topicPath = '',
+    renderId = 0,
+}: PublishPreviewDocumentOptions = {}): Promise<string | null> {
     if (!isHostedPreviewAvailable() || !canUseHostedPreview() || typeof fetch !== 'function') return null;
 
     try {

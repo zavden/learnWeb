@@ -103,7 +103,10 @@ function buildShaderStatusMarkup(title: string = '', message: string = ''): stri
 }
 
 /** The runtime bridge <script>, only when the preview has a console. */
-function buildShaderBridgeMarkup({ consoleEnabled = false, renderId = 0 }: { consoleEnabled?: boolean; renderId?: number } = {}): string {
+function buildShaderBridgeMarkup({
+    consoleEnabled = false,
+    renderId = 0,
+}: { consoleEnabled?: boolean; renderId?: number } = {}): string {
     return consoleEnabled ? buildRuntimeBridgeMarkup(renderId) : '';
 }
 
@@ -937,14 +940,16 @@ function buildShaderRuntimeScript({
  * Build the preview document (complete HTML text) of a shader example. The page needs WebGL; when the
  * document lacks a vertex or fragment block, or `diagnostics` has an error, it only shows why.
  */
-export function renderShaderExampleDocument(documentModel: ExampleDocumentInput = {}, options: RenderShaderExampleOptions = {}): string {
+export function renderShaderExampleDocument(
+    documentModel: ExampleDocumentInput = {},
+    options: RenderShaderExampleOptions = {},
+): string {
     const blocks = Array.isArray(documentModel?.blocks) ? documentModel.blocks : [];
     const diagnostics = Array.isArray(options.diagnostics) ? options.diagnostics : [];
     const shaderConfig = getShaderConfig(documentModel);
     const consoleEnabled = Boolean(options.consoleEnabled);
-    const shaderControls: ShaderPreviewControls = options.shaderControls && typeof options.shaderControls === 'object'
-        ? options.shaderControls
-        : {};
+    const shaderControls: ShaderPreviewControls =
+        options.shaderControls && typeof options.shaderControls === 'object' ? options.shaderControls : {};
     const topicPath = String(options.topicPath || '').trim();
     // `!`: Number.isFinite() is true only for a number, but it does not narrow.
     const renderId = Number.isFinite(options.renderId) ? options.renderId! : 0;
@@ -952,31 +957,34 @@ export function renderShaderExampleDocument(documentModel: ExampleDocumentInput 
     const fragmentBlock = blocks.find((block) => block.type === 'fragment') || null;
     const blockingDiagnostics = diagnostics.filter((diagnostic) => diagnostic.level === 'error');
     const resolution = shaderConfig.resolution || { width: 800, height: 600 };
-    const runtimeResolution = shaderControls?.currentResolution && Number.isFinite(shaderControls.currentResolution.width)
-        && Number.isFinite(shaderControls.currentResolution.height)
-        ? shaderControls.currentResolution
-        : resolution;
+    const runtimeResolution =
+        shaderControls?.currentResolution &&
+        Number.isFinite(shaderControls.currentResolution.width) &&
+        Number.isFinite(shaderControls.currentResolution.height)
+            ? shaderControls.currentResolution
+            : resolution;
     const customUniformSource: ShaderCustomUniformValue[] = Array.isArray(shaderControls?.customUniforms)
         ? shaderControls.customUniforms
-        : (shaderConfig.customUniforms || []);
+        : shaderConfig.customUniforms || [];
     const customUniforms = customUniformSource.map((uniform) => ({
-            name: uniform.name,
-            type: uniform.type,
-            value: Array.isArray(uniform.value)
-                ? uniform.value.map((entry) => Number(entry))
-                : typeof uniform.value === 'boolean'
-                    ? uniform.value
-                    : Number(uniform.value),
-        }));
-    const textures = Array.isArray(shaderControls?.textures) && shaderControls.textures.length > 0
-        ? shaderControls.textures.map((texture) => ({
-            assetPath: texture.assetPath,
-            name: texture.name,
-        }))
-        : (shaderConfig.textures || []).map((texture) => ({
-            assetPath: texture.assetPath,
-            name: texture.name,
-        }));
+        name: uniform.name,
+        type: uniform.type,
+        value: Array.isArray(uniform.value)
+            ? uniform.value.map((entry) => Number(entry))
+            : typeof uniform.value === 'boolean'
+              ? uniform.value
+              : Number(uniform.value),
+    }));
+    const textures =
+        Array.isArray(shaderControls?.textures) && shaderControls.textures.length > 0
+            ? shaderControls.textures.map((texture) => ({
+                  assetPath: texture.assetPath,
+                  name: texture.name,
+              }))
+            : (shaderConfig.textures || []).map((texture) => ({
+                  assetPath: texture.assetPath,
+                  name: texture.name,
+              }));
     const assetBase = getTopicAssetBase(topicPath);
     const diagnosticsMarkup = consoleEnabled ? '' : buildDiagnosticsMarkup(diagnostics);
     const bridgeMarkup = buildShaderBridgeMarkup({ consoleEnabled, renderId });
@@ -984,8 +992,8 @@ export function renderShaderExampleDocument(documentModel: ExampleDocumentInput 
     const missingSource = !vertexBlock || !fragmentBlock || blockingDiagnostics.length > 0;
     const statusTitle = missingSource ? 'Shader preview unavailable' : '';
     const statusMessage = missingSource
-        ? blockingDiagnostics.map((diagnostic) => diagnostic.message).join('\n')
-            || 'Shader documents need valid Vertex and Fragment blocks.'
+        ? blockingDiagnostics.map((diagnostic) => diagnostic.message).join('\n') ||
+          'Shader documents need valid Vertex and Fragment blocks.'
         : '';
 
     return `<!DOCTYPE html>
@@ -1158,21 +1166,25 @@ export function renderShaderExampleDocument(documentModel: ExampleDocumentInput 
     </section>
     ${diagnosticsMarkup}
   </main>
-  ${missingSource ? '' : buildShaderRuntimeScript({
-        assetBase,
-        consoleEnabled,
-        controls: {
-            customUniforms,
-            paused: shaderControls?.paused === undefined ? true : Boolean(shaderControls.paused),
-            resolution: runtimeResolution,
-            stillFrame: Boolean(shaderControls?.stillFrame),
-            textures,
-        },
-        renderId,
-        fragmentSource: fragmentBlock.content || '',
-        resolution: runtimeResolution,
-        vertexSource: vertexBlock.content || '',
-    })}
+  ${
+      missingSource
+          ? ''
+          : buildShaderRuntimeScript({
+                assetBase,
+                consoleEnabled,
+                controls: {
+                    customUniforms,
+                    paused: shaderControls?.paused === undefined ? true : Boolean(shaderControls.paused),
+                    resolution: runtimeResolution,
+                    stillFrame: Boolean(shaderControls?.stillFrame),
+                    textures,
+                },
+                renderId,
+                fragmentSource: fragmentBlock.content || '',
+                resolution: runtimeResolution,
+                vertexSource: vertexBlock.content || '',
+            })
+  }
 </body>
 </html>`;
 }

@@ -4,11 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import {
-    buildMaterialTree,
-    readHiddenState,
-    setChapterHidden,
-} from '../src/utils/materialTree.ts';
+import { buildMaterialTree, readHiddenState, setChapterHidden } from '../src/utils/materialTree.ts';
 
 function createTopic(materialDir: string, chapterId: string, sectionId: string, topicId: string) {
     const topicDir = path.join(materialDir, chapterId, sectionId, topicId);

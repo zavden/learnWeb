@@ -27,17 +27,9 @@ import {
     getTypeScriptFile,
     withCompiledStyleFiles,
 } from './compiledStyleView.ts';
-import {
-    formatExampleRatingStars,
-    getExampleImportanceMeta,
-} from './exampleEditorial.ts';
+import { formatExampleRatingStars, getExampleImportanceMeta } from './exampleEditorial.ts';
 import { renderCompiledExampleDocument, renderShaderExampleDocument } from './exampleRenderer.ts';
-import {
-    getExampleEditorialMetadata,
-    getExampleStage,
-    isShaderDocument,
-    parseExampleDocument,
-} from './markdown.ts';
+import { getExampleEditorialMetadata, getExampleStage, isShaderDocument, parseExampleDocument } from './markdown.ts';
 import { highlightCode } from './theoryRenderer.ts';
 import { parseHighlights } from './highlights.ts';
 
@@ -72,23 +64,24 @@ function normalizeFilename(value: string | null | undefined = ''): string {
 function buildTheoryExerciseEmbedBody(embed: TheoryExerciseEmbedInput = {}): string {
     const filename = normalizeFilename(embed.filename);
     const description = String(embed.description || '').trim();
-    const tags = Array.isArray(embed.tags)
-        ? embed.tags.filter((tag) => String(tag || '').trim()).slice(0, 5)
-        : [];
+    const tags = Array.isArray(embed.tags) ? embed.tags.filter((tag) => String(tag || '').trim()).slice(0, 5) : [];
     const rating = formatExampleRatingStars(embed.rating);
     const importanceMeta = getExampleImportanceMeta(embed.importance);
     const stageLabel = EXAMPLE_STAGE_LABELS[String(embed.stage || '').trim()] || '';
     const exists = embed.exists !== false;
     const title = description || filename || 'Exercise';
     const summary = exists
-        ? (description ? `Opens ${filename}` : 'Preview and jump directly to this exercise.')
+        ? description
+            ? `Opens ${filename}`
+            : 'Preview and jump directly to this exercise.'
         : 'Referenced exercise was not found in this topic.';
 
-    const tagsMarkup = tags.length > 0
-        ? `<div class="theory-exercise-embed-tags">${tags
-            .map((tag) => `<span class="theory-exercise-embed-tag">${escapeHtml(tag)}</span>`)
-            .join('')}</div>`
-        : '';
+    const tagsMarkup =
+        tags.length > 0
+            ? `<div class="theory-exercise-embed-tags">${tags
+                  .map((tag) => `<span class="theory-exercise-embed-tag">${escapeHtml(tag)}</span>`)
+                  .join('')}</div>`
+            : '';
     const previewMarkup = `<div class="theory-exercise-embed-preview${embed.previewSrcdoc ? '' : ' is-empty'}" data-theory-exercise-preview-slot="${escapeHtml(filename)}"><span>${exists ? 'Loading preview...' : 'Exercise missing'}</span></div>`;
 
     const metaBits: string[] = [];
@@ -97,7 +90,7 @@ function buildTheoryExerciseEmbedBody(embed: TheoryExerciseEmbedInput = {}): str
     }
     if (importanceMeta) {
         metaBits.push(
-            `<span class="theory-exercise-embed-badge is-${escapeHtml(importanceMeta.accent)}">${escapeHtml(importanceMeta.label)}</span>`
+            `<span class="theory-exercise-embed-badge is-${escapeHtml(importanceMeta.accent)}">${escapeHtml(importanceMeta.label)}</span>`,
         );
     }
     if (rating) {
@@ -135,12 +128,16 @@ export function parseExerciseShortcode(raw: string | null | undefined = ''): The
     }
 
     const filename = normalized.slice(0, mdDashIndex + 3); // includes '.md', excludes '-'
-    const filterPart = normalized.slice(mdDashIndex + 4);  // after '.md-'
+    const filterPart = normalized.slice(mdDashIndex + 4); // after '.md-'
 
     let codeFilter: string[] | null = null;
     if (filterPart) {
         if (filterPart.startsWith('(') && filterPart.endsWith(')')) {
-            codeFilter = filterPart.slice(1, -1).split('|').map((s) => s.trim()).filter(Boolean);
+            codeFilter = filterPart
+                .slice(1, -1)
+                .split('|')
+                .map((s) => s.trim())
+                .filter(Boolean);
         } else {
             codeFilter = [filterPart.trim()];
         }
@@ -156,7 +153,7 @@ const FENCE_OPENING_PATTERN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 // blocks, so shortcodes shown as code samples stay literal.
 function mapOutsideCodeFences(
     source: string | null | undefined = '',
-    transform: (segment: string) => string = (segment) => segment
+    transform: (segment: string) => string = (segment) => segment,
 ): string {
     const lines = String(source ?? '').split('\n');
     const output: string[] = [];
@@ -218,9 +215,7 @@ export function extractTheoryExerciseReferences(content: string | null | undefin
 export function renderTheoryExerciseEmbedMarkup(embed: TheoryExerciseEmbedInput = {}): string {
     const filename = normalizeFilename(embed.filename);
     const exists = embed.exists !== false;
-    const interactiveAttrs = exists
-        ? ' role="button" tabindex="0"'
-        : '';
+    const interactiveAttrs = exists ? ' role="button" tabindex="0"' : '';
 
     return `<div class="theory-exercise-embed${exists ? '' : ' is-missing'}" data-theory-exercise-file="${escapeHtml(filename)}" data-theory-exercise-exists="${exists ? '1' : '0'}"${interactiveAttrs}>${buildTheoryExerciseEmbedBody({ ...embed, filename })}</div>`;
 }
@@ -234,9 +229,9 @@ function getHighlightLanguage(language: string | null | undefined): string {
 // color ids come from author text; `satisfies` keeps the keys in step with `HighlightColorId`.
 const EMBED_HIGHLIGHT_BG: Record<string, string> = {
     yellow: 'rgba(250, 204, 21, 0.18)',
-    green:  'rgba(74, 222, 128, 0.18)',
-    blue:   'rgba(96, 165, 250, 0.18)',
-    red:    'rgba(248, 113, 113, 0.18)',
+    green: 'rgba(74, 222, 128, 0.18)',
+    blue: 'rgba(96, 165, 250, 0.18)',
+    red: 'rgba(248, 113, 113, 0.18)',
     purple: 'rgba(192, 132, 252, 0.18)',
     orange: 'rgba(251, 146, 60, 0.18)',
 } satisfies Record<HighlightColorId, string>;
@@ -257,7 +252,10 @@ function splitHighlightedLines(html: string): string[] {
             i++;
         } else if (html[i] === '<') {
             const end = html.indexOf('>', i);
-            if (end === -1) { current += html.slice(i); break; }
+            if (end === -1) {
+                current += html.slice(i);
+                break;
+            }
             const tag = html.slice(i, end + 1);
             if (/^<\/span\b/.test(tag)) openTags.pop();
             else if (/^<span\b/.test(tag)) openTags.push(tag);
@@ -279,12 +277,14 @@ function buildHighlightedCodeHtml(content: string, lang: string, highlights: Lin
     const hlMap = new Map(highlights.map(({ line, colorId }): [number, string] => [line, colorId]));
     const lines = splitHighlightedLines(highlighted);
 
-    return lines.map((lineHtml, i) => {
-        const colorId = hlMap.get(i + 1);
-        if (!colorId) return lineHtml;
-        const bg = EMBED_HIGHLIGHT_BG[colorId] || EMBED_HIGHLIGHT_BG.yellow;
-        return `<span style="display:inline-block;width:100%;background:${bg}">${lineHtml}</span>`;
-    }).join('\n');
+    return lines
+        .map((lineHtml, i) => {
+            const colorId = hlMap.get(i + 1);
+            if (!colorId) return lineHtml;
+            const bg = EMBED_HIGHLIGHT_BG[colorId] || EMBED_HIGHLIGHT_BG.yellow;
+            return `<span style="display:inline-block;width:100%;background:${bg}">${lineHtml}</span>`;
+        })
+        .join('\n');
 }
 
 // Tabs added by the app (not part of the example file), e.g. the CSS a SCSS block compiles to.
@@ -315,14 +315,20 @@ function buildTheoryCodeEmbedActions(embed: TheoryExerciseEmbedInput = {}): stri
  * The code of an embed as highlighted `<pre>` blocks: one file plain, several as tabs. `codeFilter` picks files by
  * name or path, in the order given (`null`: all); filter names that match nothing are skipped.
  */
-export function renderTheoryCodeEmbedMarkup(embed: TheoryExerciseEmbedInput = {}, codeFilter: string[] | null = null): string {
+export function renderTheoryCodeEmbedMarkup(
+    embed: TheoryExerciseEmbedInput = {},
+    codeFilter: string[] | null = null,
+): string {
     const filename = normalizeFilename(embed.filename);
     const allFiles = Array.isArray(embed.codeFiles) ? embed.codeFiles : [];
 
-    const files = codeFilter === null
-        ? allFiles
-        // `filter(Boolean)` drops the names that matched no file.
-        : codeFilter.map((name) => allFiles.find((f) => matchesCodeFilter(f, [name]))).filter(Boolean) as TheoryCodeFile[];
+    const files =
+        codeFilter === null
+            ? allFiles
+            : // `filter(Boolean)` drops the names that matched no file.
+              (codeFilter
+                  .map((name) => allFiles.find((f) => matchesCodeFilter(f, [name])))
+                  .filter(Boolean) as TheoryCodeFile[]);
 
     if (files.length === 0) {
         return `<div class="theory-code-embed is-empty" data-theory-code-file="${escapeHtml(filename)}"><p>No files to display.</p></div>`;
@@ -344,22 +350,26 @@ export function renderTheoryCodeEmbedMarkup(embed: TheoryExerciseEmbedInput = {}
         ].join('');
     }
 
-    const tabs = files.map((file, i) => {
-        const generatedAttrs = file.generated
-            ? ` title="${escapeHtml(GENERATED_FILE_TITLES[file.language] || GENERATED_FILE_TITLES.css)}"`
-            : '';
-        return `<button type="button" class="theory-code-embed-tab${i === 0 ? ' is-active' : ''}${file.generated ? ' is-generated' : ''}" data-code-tab="${i}"${generatedAttrs}>${escapeHtml(file.name || file.path || '')}</button>`;
-    }).join('');
+    const tabs = files
+        .map((file, i) => {
+            const generatedAttrs = file.generated
+                ? ` title="${escapeHtml(GENERATED_FILE_TITLES[file.language] || GENERATED_FILE_TITLES.css)}"`
+                : '';
+            return `<button type="button" class="theory-code-embed-tab${i === 0 ? ' is-active' : ''}${file.generated ? ' is-generated' : ''}" data-code-tab="${i}"${generatedAttrs}>${escapeHtml(file.name || file.path || '')}</button>`;
+        })
+        .join('');
 
-    const panels = files.map((file, i) => {
-        const lang = getHighlightLanguage(file.language);
-        const codeHtml = buildHighlightedCodeHtml(file.content || '', lang, file.highlights);
-        return [
-            `<div class="theory-code-embed-panel${i === 0 ? ' is-active' : ''}" data-code-panel="${i}">`,
-            `<pre><code class="hljs language-${escapeHtml(lang)}">${codeHtml}</code></pre>`,
-            `</div>`,
-        ].join('');
-    }).join('');
+    const panels = files
+        .map((file, i) => {
+            const lang = getHighlightLanguage(file.language);
+            const codeHtml = buildHighlightedCodeHtml(file.content || '', lang, file.highlights);
+            return [
+                `<div class="theory-code-embed-panel${i === 0 ? ' is-active' : ''}" data-code-panel="${i}">`,
+                `<pre><code class="hljs language-${escapeHtml(lang)}">${codeHtml}</code></pre>`,
+                `</div>`,
+            ].join('');
+        })
+        .join('');
 
     return [
         `<div class="theory-code-embed" data-theory-code-file="${escapeHtml(filename)}">`,
@@ -378,32 +388,32 @@ export function renderTheoryCodeEmbedMarkup(embed: TheoryExerciseEmbedInput = {}
 export function injectTheoryExerciseEmbeds(
     content: string | null | undefined = '',
     exerciseEmbeds: Readonly<Record<string, TheoryExerciseEmbedInput>> | null | undefined = {},
-    wrapEmbed: ((html: string) => string) | null = null
+    wrapEmbed: ((html: string) => string) | null = null,
 ): string {
     const source = typeof content === 'string' ? content : String(content ?? '');
-    const embedMap = exerciseEmbeds && typeof exerciseEmbeds === 'object'
-        ? exerciseEmbeds
-        : {};
+    const embedMap = exerciseEmbeds && typeof exerciseEmbeds === 'object' ? exerciseEmbeds : {};
 
-    return mapOutsideCodeFences(source, (segment) => segment.replace(THEORY_EXERCISE_SHORTCODE_PATTERN, (_match, rawContent) => {
-        const parsed = parseExerciseShortcode(rawContent);
-        const embed: TheoryExerciseEmbedInput = embedMap[parsed.filename] || {
-            codeFiles: [],
-            description: '',
-            exists: false,
-            filename: parsed.filename,
-            importance: '',
-            rating: null,
-            stage: '',
-            tags: [],
-        };
+    return mapOutsideCodeFences(source, (segment) =>
+        segment.replace(THEORY_EXERCISE_SHORTCODE_PATTERN, (_match, rawContent) => {
+            const parsed = parseExerciseShortcode(rawContent);
+            const embed: TheoryExerciseEmbedInput = embedMap[parsed.filename] || {
+                codeFiles: [],
+                description: '',
+                exists: false,
+                filename: parsed.filename,
+                importance: '',
+                rating: null,
+                stage: '',
+                tags: [],
+            };
 
-        const html = parsed.codeEmbed
-            ? renderTheoryCodeEmbedMarkup(embed, parsed.codeFilter)
-            : renderTheoryExerciseEmbedMarkup(embed);
+            const html = parsed.codeEmbed
+                ? renderTheoryCodeEmbedMarkup(embed, parsed.codeFilter)
+                : renderTheoryExerciseEmbedMarkup(embed);
 
-        return typeof wrapEmbed === 'function' ? wrapEmbed(html) : html;
-    }));
+            return typeof wrapEmbed === 'function' ? wrapEmbed(html) : html;
+        }),
+    );
 }
 
 /**
@@ -415,7 +425,7 @@ export function injectTheoryExerciseEmbeds(
  */
 export async function loadTheoryExerciseEmbeds(
     topicPath: string | null | undefined,
-    content: string | null | undefined = ''
+    content: string | null | undefined = '',
 ): Promise<TheoryExerciseEmbeds> {
     const normalizedTopicPath = String(topicPath || '').trim();
     const filenames = extractTheoryExerciseReferences(content);
@@ -433,7 +443,7 @@ export async function loadTheoryExerciseEmbeds(
 
                 const highlightsMap = parseHighlights(
                     String(documentModel.metadata?.highlights || ''),
-                    documentModel.files
+                    documentModel.files,
                 );
 
                 const codeFiles: TheoryCodeFile[] = documentModel.files.map((file) => {
@@ -442,8 +452,8 @@ export async function loadTheoryExerciseEmbeds(
                         content: file.content,
                         highlights: fileLineMap
                             ? Array.from(fileLineMap.entries())
-                                .sort(([a], [b]) => a - b)
-                                .map(([line, colorId]) => ({ line, colorId }))
+                                  .sort(([a], [b]) => a - b)
+                                  .map(([line, colorId]) => ({ line, colorId }))
                             : [],
                         language: file.language,
                         name: file.name,
@@ -472,46 +482,52 @@ export async function loadTheoryExerciseEmbeds(
                         previewSrcdoc = renderCompiledExampleDocument(
                             result.compiledDocument,
                             normalizedTopicPath,
-                            result.compileDiagnostics || []
+                            result.compileDiagnostics || [],
                         );
                     }
                 } catch {
                     // Compilation failed — code files are still available, just no preview
                 }
 
-                return [filename, {
-                    codeFiles: withCompiledStyleFiles(
-                        withCompiledStyleFiles(
-                            codeFiles,
-                            getPreprocessedStyleFile(documentModel)?.path || '',
-                            generatedFiles
+                return [
+                    filename,
+                    {
+                        codeFiles: withCompiledStyleFiles(
+                            withCompiledStyleFiles(
+                                codeFiles,
+                                getPreprocessedStyleFile(documentModel)?.path || '',
+                                generatedFiles,
+                            ),
+                            getTypeScriptFile(documentModel)?.path || '',
+                            generatedScriptFiles,
                         ),
-                        getTypeScriptFile(documentModel)?.path || '',
-                        generatedScriptFiles
-                    ),
-                    description: editorial.description || '',
-                    exists: true,
-                    filename,
-                    importance: editorial.importance || '',
-                    previewSrcdoc,
-                    rating: editorial.rating ?? null,
-                    stage: getExampleStage(documentModel) || '',
-                    tags: Array.isArray(editorial.tags) ? editorial.tags : [],
-                }];
+                        description: editorial.description || '',
+                        exists: true,
+                        filename,
+                        importance: editorial.importance || '',
+                        previewSrcdoc,
+                        rating: editorial.rating ?? null,
+                        stage: getExampleStage(documentModel) || '',
+                        tags: Array.isArray(editorial.tags) ? editorial.tags : [],
+                    },
+                ];
             } catch {
-                return [filename, {
-                    codeFiles: [],
-                    description: '',
-                    exists: false,
+                return [
                     filename,
-                    importance: '',
-                    previewSrcdoc: '',
-                    rating: null,
-                    stage: '',
-                    tags: [],
-                }];
+                    {
+                        codeFiles: [],
+                        description: '',
+                        exists: false,
+                        filename,
+                        importance: '',
+                        previewSrcdoc: '',
+                        rating: null,
+                        stage: '',
+                        tags: [],
+                    },
+                ];
             }
-        })
+        }),
     );
 
     return Object.fromEntries(entries);

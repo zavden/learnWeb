@@ -20,7 +20,11 @@
 // - There is no resolution dialog: the canvas size is changed in the preview's shader panel and written
 //   into the document on save (`_getPersistableDocument` in theoryEditor.ts).
 
-import { getShaderConfig, updateShaderUniformDefinitions, updateShaderTextureDefinitions } from '../../utils/markdown.ts';
+import {
+    getShaderConfig,
+    updateShaderUniformDefinitions,
+    updateShaderTextureDefinitions,
+} from '../../utils/markdown.ts';
 import { fetchTopicAssets } from '../../utils/api.ts';
 import { errorMessage } from '../../utils/errors.ts';
 import type {
@@ -53,9 +57,23 @@ export interface ShaderUniformFormDraft {
 export type ShaderTextureFormDraft = Required<ShaderTextureDraft>;
 
 /** Uniform types the dialog accepts (the `#shader-uniform-type` options); each must be a `ShaderUniformType`. */
-export const SHADER_UNIFORM_TYPE_OPTIONS: LiteralList<ShaderUniformType> = ['float', 'int', 'bool', 'vec2', 'vec3', 'vec4'];
+export const SHADER_UNIFORM_TYPE_OPTIONS: LiteralList<ShaderUniformType> = [
+    'float',
+    'int',
+    'bool',
+    'vec2',
+    'vec3',
+    'vec4',
+];
 /** Names the dialog refuses because the shader runtime sets them; each must be a `ShaderBuiltinUniform`. */
-export const SHADER_BUILT_IN_UNIFORM_NAMES: LiteralList<ShaderBuiltinUniform> = ['u_time', 'u_delta', 'u_resolution', 'u_mouse', 'u_mouse_pressed', 'u_frame'];
+export const SHADER_BUILT_IN_UNIFORM_NAMES: LiteralList<ShaderBuiltinUniform> = [
+    'u_time',
+    'u_delta',
+    'u_resolution',
+    'u_mouse',
+    'u_mouse_pressed',
+    'u_frame',
+];
 
 /** Editor mixin: the shader uniform and texture dialogs (see the header of this file). */
 export const shaderDialogsMixin = {
@@ -82,7 +100,9 @@ export const shaderDialogsMixin = {
 
     /** Number of components of `vec2`–`vec4` (2–4); 0 for any other type. */
     _getShaderVectorSize(type: string = ''): number {
-        const match = String(type || '').trim().match(/^vec([234])$/);
+        const match = String(type || '')
+            .trim()
+            .match(/^vec([234])$/);
         return match ? Number.parseInt(match[1], 10) : 0;
     },
 
@@ -90,22 +110,16 @@ export const shaderDialogsMixin = {
     _cloneShaderUniform(uniform: ShaderUniformDraft = {}): ShaderUniformDialogEntry {
         return {
             control: uniform?.control ? { ...uniform.control } : null,
-            defaultValue: Array.isArray(uniform?.defaultValue)
-                ? [...uniform.defaultValue]
-                : uniform?.defaultValue,
+            defaultValue: Array.isArray(uniform?.defaultValue) ? [...uniform.defaultValue] : uniform?.defaultValue,
             name: String(uniform?.name || ''),
             type: String(uniform?.type || ''),
-            value: Array.isArray(uniform?.value)
-                ? [...uniform.value]
-                : uniform?.value,
+            value: Array.isArray(uniform?.value) ? [...uniform.value] : uniform?.value,
         };
     },
 
     /** The dialog's working list of uniforms (despite the name, not the whole state object). */
     _getShaderUniformDialogState(): ShaderUniformDialogEntry[] {
-        return Array.isArray(this.shaderUniformDialogState.uniforms)
-            ? this.shaderUniformDialogState.uniforms
-            : [];
+        return Array.isArray(this.shaderUniformDialogState.uniforms) ? this.shaderUniformDialogState.uniforms : [];
     },
 
     _setShaderUniformDialogHint(message: string, type: 'info' | 'error' = 'info'): void {
@@ -149,8 +163,8 @@ export const shaderDialogsMixin = {
             this.shaderUniformDialogTypeHint.textContent = supportsRange
                 ? 'Float and int can use optional slider ranges.'
                 : isVector
-                    ? `Set ${vectorSize} numeric components for ${type}.`
-                    : 'Boolean uniforms use a true/false default value.';
+                  ? `Set ${vectorSize} numeric components for ${type}.`
+                  : 'Boolean uniforms use a true/false default value.';
         }
     },
 
@@ -181,7 +195,9 @@ export const shaderDialogsMixin = {
         if (this.btnShaderUniformAdd) {
             this.btnShaderUniformAdd.textContent = 'Add Uniform';
         }
-        this._setShaderUniformDialogHint('This dialog writes `shader_uniforms` in frontmatter. Names must be unique and cannot reuse built-in uniforms.');
+        this._setShaderUniformDialogHint(
+            'This dialog writes `shader_uniforms` in frontmatter. Names must be unique and cannot reuse built-in uniforms.',
+        );
     },
 
     /** The list's one-line summary of a uniform: `type = default[min, max, step]`. */
@@ -195,9 +211,10 @@ export const shaderDialogsMixin = {
         const defaultValue = Array.isArray(uniform?.defaultValue)
             ? uniform.defaultValue.join(', ')
             : formatScalar(uniform?.defaultValue);
-        const range = uniform?.control?.kind === 'range'
-            ? `[${uniform.control.min}, ${uniform.control.max}, ${uniform.control.step}]`
-            : '';
+        const range =
+            uniform?.control?.kind === 'range'
+                ? `[${uniform.control.min}, ${uniform.control.max}, ${uniform.control.step}]`
+                : '';
 
         return `${type} = ${defaultValue}${range}`;
     },
@@ -250,7 +267,9 @@ export const shaderDialogsMixin = {
             this.btnShaderUniformAdd.textContent = 'Update Uniform';
         }
 
-        this._setShaderUniformDialogHint('Edit the selected uniform and press `Update Uniform` to keep the metadata in sync.');
+        this._setShaderUniformDialogHint(
+            'Edit the selected uniform and press `Update Uniform` to keep the metadata in sync.',
+        );
     },
 
     /** Rebuilds the uniform list (with Edit and Remove buttons per entry) from the dialog state. */
@@ -307,8 +326,8 @@ export const shaderDialogsMixin = {
                     this._resetShaderUniformDialogForm();
                 } else if (
                     // `Number.isInteger` is not a type guard: the `!` below rely on it.
-                    Number.isInteger(this.shaderUniformDialogState.editingIndex)
-                    && this.shaderUniformDialogState.editingIndex! > index
+                    Number.isInteger(this.shaderUniformDialogState.editingIndex) &&
+                    this.shaderUniformDialogState.editingIndex! > index
                 ) {
                     this.shaderUniformDialogState.editingIndex! -= 1;
                 }
@@ -334,9 +353,7 @@ export const shaderDialogsMixin = {
 
     /** The dialog's working list of textures (despite the name, not the whole state object). */
     _getShaderTextureDialogState(): ShaderTexture[] {
-        return Array.isArray(this.shaderTextureDialogState.textures)
-            ? this.shaderTextureDialogState.textures
-            : [];
+        return Array.isArray(this.shaderTextureDialogState.textures) ? this.shaderTextureDialogState.textures : [];
     },
 
     _setShaderTextureDialogHint(message: string, type: 'info' | 'error' = 'info'): void {
@@ -349,8 +366,7 @@ export const shaderDialogsMixin = {
     _cloneShaderTexturesFromDocument(): ShaderTexture[] {
         if (!this._isShaderDocument()) return [];
 
-        return getShaderConfig(this.currentDocument).textures
-            .map((texture) => this._cloneShaderTexture(texture));
+        return getShaderConfig(this.currentDocument).textures.map((texture) => this._cloneShaderTexture(texture));
     },
 
     /** Selects an asset (`TopicAsset.path`, `''` for none) in the state and the hidden input, then redraws the picker. */
@@ -379,7 +395,9 @@ export const shaderDialogsMixin = {
         if (this.btnShaderTextureAdd) {
             this.btnShaderTextureAdd.textContent = 'Add Texture';
         }
-        this._setShaderTextureDialogHint('Sampler names must be unique and must match the sampler uniforms in your shader.');
+        this._setShaderTextureDialogHint(
+            'Sampler names must be unique and must match the sampler uniforms in your shader.',
+        );
     },
 
     /** Loads a texture into the form for editing; `index` is its position in the dialog's list. */
@@ -399,7 +417,9 @@ export const shaderDialogsMixin = {
             this.btnShaderTextureAdd.textContent = 'Update Texture';
         }
 
-        this._setShaderTextureDialogHint('Edit the selected mapping and press `Update Texture` to keep `shader_textures` in sync.');
+        this._setShaderTextureDialogHint(
+            'Edit the selected mapping and press `Update Texture` to keep `shader_textures` in sync.',
+        );
     },
 
     /** Rebuilds the texture list (with Edit and Remove buttons per entry) from the dialog state. */
@@ -456,8 +476,8 @@ export const shaderDialogsMixin = {
                     this._resetShaderTextureDialogForm();
                 } else if (
                     // `Number.isInteger` is not a type guard: the `!` below rely on it.
-                    Number.isInteger(this.shaderTextureDialogState.editingIndex)
-                    && this.shaderTextureDialogState.editingIndex! > index
+                    Number.isInteger(this.shaderTextureDialogState.editingIndex) &&
+                    this.shaderTextureDialogState.editingIndex! > index
                 ) {
                     this.shaderTextureDialogState.editingIndex! -= 1;
                 }
@@ -477,9 +497,7 @@ export const shaderDialogsMixin = {
     _renderShaderTextureAssetOptions(): void {
         if (!this.shaderTextureAssets || !this.shaderTextureAssetsEmpty) return;
 
-        const assets = Array.isArray(this.shaderTextureDialogState.assets)
-            ? this.shaderTextureDialogState.assets
-            : [];
+        const assets = Array.isArray(this.shaderTextureDialogState.assets) ? this.shaderTextureDialogState.assets : [];
 
         this.shaderTextureAssets.innerHTML = '';
 
@@ -539,7 +557,11 @@ export const shaderDialogsMixin = {
             return 'Select an asset from the topic assets list.';
         }
 
-        if (this._getShaderTextureDialogState().some((texture, index) => texture.name === draft.name && index !== editingIndex)) {
+        if (
+            this._getShaderTextureDialogState().some(
+                (texture, index) => texture.name === draft.name && index !== editingIndex,
+            )
+        ) {
             return 'That sampler name already exists in this document.';
         }
 
@@ -598,7 +620,7 @@ export const shaderDialogsMixin = {
             this._setShaderTextureDialogHint(
                 this.shaderTextureDialogState.assets.length > 0
                     ? 'Sampler names must be unique and must match the sampler uniforms in your shader.'
-                    : 'No assets were found in this topic. Add image files to the topic `assets/` folder first.'
+                    : 'No assets were found in this topic. Add image files to the topic `assets/` folder first.',
             );
         } catch (error) {
             this.shaderTextureDialogState.assets = [];
@@ -643,14 +665,18 @@ export const shaderDialogsMixin = {
             defaultValue = Number.parseFloat(this.shaderUniformDefaultScalar?.value || '0');
         }
 
-        const hasRangeInput = [this.shaderUniformRangeMin, this.shaderUniformRangeMax, this.shaderUniformRangeStep]
-            .some((input) => String(input?.value || '').trim() !== '');
+        const hasRangeInput = [
+            this.shaderUniformRangeMin,
+            this.shaderUniformRangeMax,
+            this.shaderUniformRangeStep,
+        ].some((input) => String(input?.value || '').trim() !== '');
         let control: ShaderUniformControl | null = null;
 
         if (hasRangeInput && ['float', 'int'].includes(type)) {
-            const parseValue = (input: HTMLInputElement | null): number => type === 'int'
-                ? Number.parseInt(String(input?.value || '').trim(), 10)
-                : Number.parseFloat(String(input?.value || '').trim());
+            const parseValue = (input: HTMLInputElement | null): number =>
+                type === 'int'
+                    ? Number.parseInt(String(input?.value || '').trim(), 10)
+                    : Number.parseFloat(String(input?.value || '').trim());
             control = {
                 kind: 'range',
                 min: parseValue(this.shaderUniformRangeMin),
@@ -689,7 +715,11 @@ export const shaderDialogsMixin = {
             return 'Built-in uniforms cannot be redefined here.';
         }
 
-        if (this._getShaderUniformDialogState().some((uniform, index) => uniform.name === draft.name && index !== editingIndex)) {
+        if (
+            this._getShaderUniformDialogState().some(
+                (uniform, index) => uniform.name === draft.name && index !== editingIndex,
+            )
+        ) {
             return 'That uniform name already exists in this document.';
         }
 
@@ -774,16 +804,18 @@ export const shaderDialogsMixin = {
         if (!this.shaderUniformDialog) return;
 
         this._rememberEditorFocusTarget();
-        this.shaderUniformDialogState.uniforms = this.currentDocument
-            ? this._cloneShaderUniformsFromDocument()
-            : [];
+        this.shaderUniformDialogState.uniforms = this.currentDocument ? this._cloneShaderUniformsFromDocument() : [];
         this._renderShaderUniformDialogList();
         this._resetShaderUniformDialogForm();
-        this._setShaderUniformDialogHint('This dialog writes `shader_uniforms` in frontmatter. Names must be unique and cannot reuse built-in uniforms.');
+        this._setShaderUniformDialogHint(
+            'This dialog writes `shader_uniforms` in frontmatter. Names must be unique and cannot reuse built-in uniforms.',
+        );
         this.shaderUniformDialog.showModal();
 
         if (uniformName) {
-            const uniformIndex = this._getShaderUniformDialogState().findIndex((uniform) => uniform.name === uniformName);
+            const uniformIndex = this._getShaderUniformDialogState().findIndex(
+                (uniform) => uniform.name === uniformName,
+            );
             if (uniformIndex >= 0) {
                 this._fillShaderUniformDialogForm(this._getShaderUniformDialogState()[uniformIndex], uniformIndex);
             }
@@ -809,11 +841,12 @@ export const shaderDialogsMixin = {
     _cloneShaderUniformsFromDocument(): ShaderUniformDialogEntry[] {
         if (!this._isShaderDocument()) return [];
 
-        return getShaderConfig(this.currentDocument).customUniforms
-            .map((uniform) => this._cloneShaderUniform({
+        return getShaderConfig(this.currentDocument).customUniforms.map((uniform) =>
+            this._cloneShaderUniform({
                 ...uniform,
                 value: Array.isArray(uniform.value) ? [...uniform.value] : uniform.value,
-            }));
+            }),
+        );
     },
 
     /** Apply: writes the dialog's list as `shader_uniforms`, applies the new document and closes the dialog. */

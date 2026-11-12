@@ -113,8 +113,14 @@ global:
 
     assert.equal(state.source, 'default');
     assert.ok(state.warnings.length > 0);
-    assert.equal(resolveVimLeaderAction({ stage: 1, key: 'e', layoutMode: 'tabs', config: state.config }), 'toggleSidebar');
-    assert.equal(resolveVimLeaderAction({ stage: 1, key: 'm', layoutMode: 'tabs', config: state.config }), 'centerWorkspace');
+    assert.equal(
+        resolveVimLeaderAction({ stage: 1, key: 'e', layoutMode: 'tabs', config: state.config }),
+        'toggleSidebar',
+    );
+    assert.equal(
+        resolveVimLeaderAction({ stage: 1, key: 'm', layoutMode: 'tabs', config: state.config }),
+        'centerWorkspace',
+    );
 });
 
 test('shortcut help sections are derived from the active shortcut config', () => {
@@ -134,8 +140,14 @@ shaders:
     });
 
     assert.equal(sections[0].title, 'General');
-    assert.ok(sections[0].items.some((item) => item.key === 'Shift+W' && /Save the current document/.test(item.description)));
-    assert.ok(sections[2].items.some((item) => item.key === 'Space, Space, z' && /shader runtime panel/.test(item.description)));
+    assert.ok(
+        sections[0].items.some((item) => item.key === 'Shift+W' && /Save the current document/.test(item.description)),
+    );
+    assert.ok(
+        sections[2].items.some(
+            (item) => item.key === 'Space, Space, z' && /shader runtime panel/.test(item.description),
+        ),
+    );
 });
 
 test('clipboard bridge syncs Vim yanks without hijacking navigator.clipboard', async () => {

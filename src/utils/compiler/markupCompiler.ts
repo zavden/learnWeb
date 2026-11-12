@@ -31,12 +31,17 @@ interface PugCompileError extends Error {
 }
 
 /** Compiles the markup block of a plain example; `null` (no markup block) gives empty output. */
-export function compileMarkup(block: CompilerBlock | null, { loopProtect = true }: CompileMarkupOptions = {}): MarkupCompileResult {
+export function compileMarkup(
+    block: CompilerBlock | null,
+    { loopProtect = true }: CompileMarkupOptions = {},
+): MarkupCompileResult {
     const result = compileMarkupSource(block);
     if (!loopProtect) return result;
     return {
         ...result,
-        fullDocumentHtml: result.fullDocumentHtml ? addLoopGuardsToHtml(result.fullDocumentHtml) : result.fullDocumentHtml,
+        fullDocumentHtml: result.fullDocumentHtml
+            ? addLoopGuardsToHtml(result.fullDocumentHtml)
+            : result.fullDocumentHtml,
         html: result.html ? addLoopGuardsToHtml(result.html) : result.html,
     };
 }
@@ -88,7 +93,7 @@ function compileMarkupSource(block: CompilerBlock | null): MarkupCompileResult {
                         'error',
                         'pug-compile-error',
                         line ? `${message} (line ${line}${column ? `, column ${column}` : ''})` : message,
-                        { column, line, slot: 'markup', type: 'pug' }
+                        { column, line, slot: 'markup', type: 'pug' },
                     ),
                 ],
             };
@@ -103,7 +108,7 @@ function compileMarkupSource(block: CompilerBlock | null): MarkupCompileResult {
                 'error',
                 'unsupported-markup-compiler',
                 `No compiler available for markup type "${block.type}".`,
-                { slot: 'markup', type: block.type }
+                { slot: 'markup', type: block.type },
             ),
         ],
     };

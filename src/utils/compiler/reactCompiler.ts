@@ -49,12 +49,9 @@ function validateReactSingleFileAppBlock(appBlock: CompilerBlock | null): Diagno
 
     if (!appBlock) {
         diagnostics.push(
-            createCompileDiagnostic(
-                'error',
-                'missing-react-entry',
-                'React examples require a JSX or TSX app block.',
-                { slot: 'app' }
-            )
+            createCompileDiagnostic('error', 'missing-react-entry', 'React examples require a JSX or TSX app block.', {
+                slot: 'app',
+            }),
         );
         return diagnostics;
     }
@@ -65,8 +62,8 @@ function validateReactSingleFileAppBlock(appBlock: CompilerBlock | null): Diagno
                 'error',
                 'unsupported-react-app-block',
                 `React examples require JSX or TSX, not "${appBlock.type}".`,
-                { slot: 'app', type: appBlock.type }
-            )
+                { slot: 'app', type: appBlock.type },
+            ),
         );
     }
 
@@ -76,8 +73,8 @@ function validateReactSingleFileAppBlock(appBlock: CompilerBlock | null): Diagno
                 'error',
                 'react-single-file-imports-not-supported',
                 'React single-file examples cannot use import statements yet.',
-                { slot: 'app', type: appBlock.type }
-            )
+                { slot: 'app', type: appBlock.type },
+            ),
         );
     }
 
@@ -87,8 +84,8 @@ function validateReactSingleFileAppBlock(appBlock: CompilerBlock | null): Diagno
                 'error',
                 'react-single-file-exports-not-supported',
                 'React single-file examples cannot use export statements yet.',
-                { slot: 'app', type: appBlock.type }
-            )
+                { slot: 'app', type: appBlock.type },
+            ),
         );
     }
 
@@ -102,13 +99,14 @@ interface ReactSingleFileBundleInput {
     loader: 'jsx' | 'tsx';
 }
 
-async function buildReactSingleFileBundle({ appSource, appPath, loader }: ReactSingleFileBundleInput): Promise<{ js: string; css: string }> {
+async function buildReactSingleFileBundle({
+    appSource,
+    appPath,
+    loader,
+}: ReactSingleFileBundleInput): Promise<{ js: string; css: string }> {
     const entryPath = '__learncode_react_single__/entry.js';
     const normalizedAppPath = normalizeSourcePath(appPath, `react-example.${loader}`);
-    const appImportPath = `./${path.posix.relative(
-        path.posix.dirname(entryPath),
-        normalizedAppPath,
-    )}`;
+    const appImportPath = `./${path.posix.relative(path.posix.dirname(entryPath), normalizedAppPath)}`;
 
     const files = new Map<string, InlineModule>([
         [
@@ -174,10 +172,7 @@ export async function compileReactSingleFileDocument(sourceDocument: CompileSour
                 css: styleResult.css,
                 js: '',
             },
-            compileDiagnostics: [
-                ...styleResult.diagnostics,
-                ...appDiagnostics,
-            ],
+            compileDiagnostics: [...styleResult.diagnostics, ...appDiagnostics],
         };
     }
 
@@ -197,26 +192,20 @@ export async function compileReactSingleFileDocument(sourceDocument: CompileSour
                 css: [styleResult.css, bundle.css].filter(Boolean).join('\n\n'),
                 js: bundle.js,
             },
-            compileDiagnostics: [
-                ...styleResult.diagnostics,
-                ...appDiagnostics,
-            ],
+            compileDiagnostics: [...styleResult.diagnostics, ...appDiagnostics],
         };
     } catch (caught) {
         // esbuild throws a BuildFailure (one entry in `errors` per problem); anything else only has a message.
         const error = caught as Partial<BuildFailure>;
-        const diagnostics = (error.errors || []).map((entry) => createCompileDiagnostic(
-            'error',
-            'react-build-error',
-            entry.text || 'Failed to compile React example.',
-            {
+        const diagnostics = (error.errors || []).map((entry) =>
+            createCompileDiagnostic('error', 'react-build-error', entry.text || 'Failed to compile React example.', {
                 column: entry.location?.column ?? null,
                 file: entry.location?.file ?? null,
                 line: entry.location?.line ?? null,
                 slot: 'app',
                 type: appBlock?.type || 'jsx',
-            }
-        ));
+            }),
+        );
 
         if (diagnostics.length === 0) {
             diagnostics.push(
@@ -224,8 +213,8 @@ export async function compileReactSingleFileDocument(sourceDocument: CompileSour
                     'error',
                     'react-build-error',
                     error.message || 'Failed to compile React example.',
-                    { slot: 'app', type: appBlock?.type || 'jsx' }
-                )
+                    { slot: 'app', type: appBlock?.type || 'jsx' },
+                ),
             );
         }
 
@@ -236,16 +225,16 @@ export async function compileReactSingleFileDocument(sourceDocument: CompileSour
                 css: styleResult.css,
                 js: '',
             },
-            compileDiagnostics: [
-                ...styleResult.diagnostics,
-                ...diagnostics,
-            ],
+            compileDiagnostics: [...styleResult.diagnostics, ...diagnostics],
         };
     }
 }
 
 /** The project files keyed by normalized path, with SCSS/Sass compiled to CSS (a failed file becomes empty). */
-function createVirtualReactFileMap(files: readonly VirtualFile[] = []): { diagnostics: Diagnostic[]; map: Map<string, ProjectModule> } {
+function createVirtualReactFileMap(files: readonly VirtualFile[] = []): {
+    diagnostics: Diagnostic[];
+    map: Map<string, ProjectModule>;
+} {
     const diagnostics: Diagnostic[] = [];
     const map = new Map<string, ProjectModule>();
 
@@ -268,8 +257,8 @@ function createVirtualReactFileMap(files: readonly VirtualFile[] = []): { diagno
                         'error',
                         'sass-compile-error',
                         (error as Error).message || `Failed to compile "${virtualPath}".`,
-                        { file: virtualPath, type: language }
-                    )
+                        { file: virtualPath, type: language },
+                    ),
                 );
                 contents = '';
             }
@@ -311,7 +300,7 @@ export async function compileReactMultiFileDocument(sourceDocument: CompileSourc
                     entryPath
                         ? `Entry file "${entryPath}" does not exist in this project.`
                         : 'React multi-file examples must declare a valid entry file.',
-                    { entry: entryPath || null }
+                    { entry: entryPath || null },
                 ),
             ],
         };
@@ -321,23 +310,23 @@ export async function compileReactMultiFileDocument(sourceDocument: CompileSourc
         const result = await build({
             absWorkingDir: process.cwd(),
             bundle: true,
-        define: {
-            'process.env.NODE_ENV': '"development"',
-        },
-        entryPoints: [VIRTUAL_ENTRY],
-        format: 'iife',
-        jsx: 'automatic',
-        jsxImportSource: 'react',
-        logLevel: 'silent',
-        minify: false,
-        outdir: 'out',
-        platform: 'browser',
-        plugins: [createVirtualFilesPlugin(fileMap, entryPath)],
-        sourcemap: 'inline',
-        sourcesContent: true,
-        target: ['es2020'],
-        write: false,
-    });
+            define: {
+                'process.env.NODE_ENV': '"development"',
+            },
+            entryPoints: [VIRTUAL_ENTRY],
+            format: 'iife',
+            jsx: 'automatic',
+            jsxImportSource: 'react',
+            logLevel: 'silent',
+            minify: false,
+            outdir: 'out',
+            platform: 'browser',
+            plugins: [createVirtualFilesPlugin(fileMap, entryPath)],
+            sourcemap: 'inline',
+            sourcesContent: true,
+            target: ['es2020'],
+            write: false,
+        });
 
         return {
             compiledDocument: {
@@ -351,24 +340,26 @@ export async function compileReactMultiFileDocument(sourceDocument: CompileSourc
     } catch (caught) {
         // esbuild throws a BuildFailure (one entry in `errors` per problem); anything else only has a message.
         const error = caught as Partial<BuildFailure>;
-        const buildDiagnostics = (error.errors || []).map((entry) => createCompileDiagnostic(
-            'error',
-            'react-build-error',
-            entry.text || 'Failed to compile React multi-file example.',
-            {
-                column: entry.location?.column ?? null,
-                file: entry.location?.file ?? null,
-                line: entry.location?.line ?? null,
-            }
-        ));
+        const buildDiagnostics = (error.errors || []).map((entry) =>
+            createCompileDiagnostic(
+                'error',
+                'react-build-error',
+                entry.text || 'Failed to compile React multi-file example.',
+                {
+                    column: entry.location?.column ?? null,
+                    file: entry.location?.file ?? null,
+                    line: entry.location?.line ?? null,
+                },
+            ),
+        );
 
         if (buildDiagnostics.length === 0) {
             buildDiagnostics.push(
                 createCompileDiagnostic(
                     'error',
                     'react-build-error',
-                    error.message || 'Failed to compile React multi-file example.'
-                )
+                    error.message || 'Failed to compile React multi-file example.',
+                ),
             );
         }
 
@@ -379,10 +370,7 @@ export async function compileReactMultiFileDocument(sourceDocument: CompileSourc
                 css: '',
                 js: '',
             },
-            compileDiagnostics: [
-                ...fileDiagnostics,
-                ...buildDiagnostics,
-            ],
+            compileDiagnostics: [...fileDiagnostics, ...buildDiagnostics],
         };
     }
 }

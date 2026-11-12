@@ -72,26 +72,35 @@ function createVueSfcScopeToken(sourcePath: string = ''): string {
 }
 
 function normalizeVueSfcScriptLanguage(language: string | undefined = ''): string {
-    const normalized = String(language || '').trim().toLowerCase();
+    const normalized = String(language || '')
+        .trim()
+        .toLowerCase();
     if (!normalized || normalized === 'js' || normalized === 'javascript') return 'javascript';
     if (normalized === 'ts' || normalized === 'typescript') return 'typescript';
     return normalized;
 }
 
 function normalizeVueSfcStyleLanguage(language: string | undefined = ''): string {
-    const normalized = String(language || '').trim().toLowerCase();
+    const normalized = String(language || '')
+        .trim()
+        .toLowerCase();
     if (!normalized || normalized === 'css') return 'css';
     if (normalized === 'scss' || normalized === 'sass') return normalized;
     return normalized;
 }
 
 function normalizeVueSfcTemplateLanguage(language: string | undefined = ''): string {
-    const normalized = String(language || '').trim().toLowerCase();
+    const normalized = String(language || '')
+        .trim()
+        .toLowerCase();
     return normalized || 'html';
 }
 
 /** Position of a Vue error in the `.vue` file: lines inside `block` are shifted by the block's start line. */
-function toVueSfcDiagnosticPosition(error: VueCompileError | null, block: Pick<SFCBlock, 'loc'> | null = null): { line: number | null; column: number | null } {
+function toVueSfcDiagnosticPosition(
+    error: VueCompileError | null,
+    block: Pick<SFCBlock, 'loc'> | null = null,
+): { line: number | null; column: number | null } {
     const line = error?.loc?.start?.line ?? null;
     const column = error?.loc?.start?.column ?? null;
 
@@ -119,17 +128,12 @@ function createVueSfcDiagnostic(
 ): Diagnostic {
     const position = toVueSfcDiagnosticPosition(error, block);
 
-    return createCompileDiagnostic(
-        level,
-        code,
-        message,
-        {
-            column: position.column,
-            file: sourcePath || null,
-            line: position.line,
-            ...extra,
-        }
-    );
+    return createCompileDiagnostic(level, code, message, {
+        column: position.column,
+        file: sourcePath || null,
+        line: position.line,
+        ...extra,
+    });
 }
 
 function validateVueSingleFile(markupBlock: CompilerBlock | null, scriptBlock: CompilerBlock | null): Diagnostic[] {
@@ -142,8 +146,8 @@ function validateVueSingleFile(markupBlock: CompilerBlock | null, scriptBlock: C
                 'error',
                 'missing-vue-template',
                 'Vue examples require an HTML block for the template.',
-                { slot: 'markup' }
-            )
+                { slot: 'markup' },
+            ),
         );
         return diagnostics;
     }
@@ -154,8 +158,8 @@ function validateVueSingleFile(markupBlock: CompilerBlock | null, scriptBlock: C
                 'error',
                 'invalid-vue-template-block',
                 `Vue examples require an HTML block for the template, not "${markupBlock.type}".`,
-                { slot: 'markup', type: markupBlock.type }
-            )
+                { slot: 'markup', type: markupBlock.type },
+            ),
         );
     }
 
@@ -169,8 +173,8 @@ function validateVueSingleFile(markupBlock: CompilerBlock | null, scriptBlock: C
                 'error',
                 'invalid-vue-script-block',
                 `Vue examples require JavaScript or TypeScript for the script block, not "${scriptBlock.type}".`,
-                { slot: 'script', type: scriptBlock.type }
-            )
+                { slot: 'script', type: scriptBlock.type },
+            ),
         );
         return diagnostics;
     }
@@ -181,8 +185,8 @@ function validateVueSingleFile(markupBlock: CompilerBlock | null, scriptBlock: C
                 'error',
                 'vue-single-file-relative-imports-not-supported',
                 'Vue single-file examples cannot use relative imports yet.',
-                { slot: 'script', type: scriptBlock.type }
-            )
+                { slot: 'script', type: scriptBlock.type },
+            ),
         );
     }
 
@@ -192,23 +196,19 @@ function validateVueSingleFile(markupBlock: CompilerBlock | null, scriptBlock: C
                 'error',
                 'vue-single-file-default-export-required',
                 'Vue single-file examples with a script block must export a default component definition, for example `export default { setup() { ... } }` or `export default defineComponent({ ... })`.',
-                { slot: 'script', type: scriptBlock.type }
-            )
+                { slot: 'script', type: scriptBlock.type },
+            ),
         );
     }
 
-    if (
-        /\bdata\s*\(/.test(scriptSource)
-        || /\bmethods\s*:/.test(scriptSource)
-        || /\bcomputed\s*:/.test(scriptSource)
-    ) {
+    if (/\bdata\s*\(/.test(scriptSource) || /\bmethods\s*:/.test(scriptSource) || /\bcomputed\s*:/.test(scriptSource)) {
         diagnostics.push(
             createCompileDiagnostic(
                 'warning',
                 'vue-options-api-detected',
                 'Options API still works, but new Vue examples should prefer Composition API via `setup()` or `defineComponent(...)`.',
-                { slot: 'script', type: scriptBlock.type }
-            )
+                { slot: 'script', type: scriptBlock.type },
+            ),
         );
     }
 
@@ -216,7 +216,10 @@ function validateVueSingleFile(markupBlock: CompilerBlock | null, scriptBlock: C
 }
 
 /** Compiles an HTML template into a module exporting `render`; errors leave `code` empty. */
-function compileVueTemplateModule(templateSource: string = '', sourcePath: string = 'template.html'): VueTemplateModule {
+function compileVueTemplateModule(
+    templateSource: string = '',
+    sourcePath: string = 'template.html',
+): VueTemplateModule {
     const errors: CompilerError[] = [];
     const result = compileVueTemplate(templateSource || '', {
         filename: sourcePath || 'template.html',
@@ -226,23 +229,23 @@ function compileVueTemplateModule(templateSource: string = '', sourcePath: strin
         },
     });
 
-    const diagnostics = errors.map((error) => createCompileDiagnostic(
-        'error',
-        'vue-template-compile-error',
-        error.message || 'Failed to compile Vue template.',
-        {
-            column: error.loc?.start?.column ?? null,
-            file: sourcePath || null,
-            line: error.loc?.start?.line ?? null,
-            slot: 'markup',
-            type: 'html',
-        }
-    ));
+    const diagnostics = errors.map((error) =>
+        createCompileDiagnostic(
+            'error',
+            'vue-template-compile-error',
+            error.message || 'Failed to compile Vue template.',
+            {
+                column: error.loc?.start?.column ?? null,
+                file: sourcePath || null,
+                line: error.loc?.start?.line ?? null,
+                slot: 'markup',
+                type: 'html',
+            },
+        ),
+    );
 
     return {
-        code: result?.code
-            ? `${result.code}\nexport default render;\n`
-            : '',
+        code: result?.code ? `${result.code}\nexport default render;\n` : '',
         diagnostics,
     };
 }
@@ -269,19 +272,14 @@ function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.
         for (const error of parsed.errors || []) {
             diagnostics.push(
                 typeof error === 'string'
-                    ? createCompileDiagnostic(
-                        'error',
-                        'vue-sfc-parse-error',
-                        error,
-                        { file: sourcePath || null }
-                    )
+                    ? createCompileDiagnostic('error', 'vue-sfc-parse-error', error, { file: sourcePath || null })
                     : createVueSfcDiagnostic(
-                        'error',
-                        'vue-sfc-parse-error',
-                        error.message || 'Failed to parse Vue SFC.',
-                        sourcePath,
-                        error
-                    )
+                          'error',
+                          'vue-sfc-parse-error',
+                          error.message || 'Failed to parse Vue SFC.',
+                          sourcePath,
+                          error,
+                      ),
             );
         }
     } catch (error) {
@@ -290,8 +288,8 @@ function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.
                 'error',
                 'vue-sfc-parse-error',
                 (error as Error).message || 'Failed to parse Vue SFC.',
-                { file: sourcePath || null }
-            )
+                { file: sourcePath || null },
+            ),
         );
 
         return {
@@ -311,36 +309,45 @@ function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.
         };
     }
 
-    if (/<template\b[^>]*\bsrc\s*=/i.test(source) && !hasDiagnosticCode(diagnostics, 'vue-sfc-template-src-not-supported')) {
+    if (
+        /<template\b[^>]*\bsrc\s*=/i.test(source) &&
+        !hasDiagnosticCode(diagnostics, 'vue-sfc-template-src-not-supported')
+    ) {
         diagnostics.push(
             createCompileDiagnostic(
                 'error',
                 'vue-sfc-template-src-not-supported',
                 `Vue SFC "${sourcePath}" cannot use <template src="..."> yet.`,
-                { file: sourcePath || null }
-            )
+                { file: sourcePath || null },
+            ),
         );
     }
 
-    if (/<script\b[^>]*\bsrc\s*=/i.test(source) && !hasDiagnosticCode(diagnostics, 'vue-sfc-script-src-not-supported')) {
+    if (
+        /<script\b[^>]*\bsrc\s*=/i.test(source) &&
+        !hasDiagnosticCode(diagnostics, 'vue-sfc-script-src-not-supported')
+    ) {
         diagnostics.push(
             createCompileDiagnostic(
                 'error',
                 'vue-sfc-script-src-not-supported',
                 `Vue SFC "${sourcePath}" cannot use external <script src="..."> blocks yet.`,
-                { file: sourcePath || null }
-            )
+                { file: sourcePath || null },
+            ),
         );
     }
 
-    if (/<style\b[^>]*\bmodule(?:\s|>|=)/i.test(source) && !hasDiagnosticCode(diagnostics, 'vue-sfc-style-module-not-supported')) {
+    if (
+        /<style\b[^>]*\bmodule(?:\s|>|=)/i.test(source) &&
+        !hasDiagnosticCode(diagnostics, 'vue-sfc-style-module-not-supported')
+    ) {
         diagnostics.push(
             createCompileDiagnostic(
                 'error',
                 'vue-sfc-style-module-not-supported',
                 `Vue SFC "${sourcePath}" does not support CSS modules yet.`,
-                { file: sourcePath || null }
-            )
+                { file: sourcePath || null },
+            ),
         );
     }
 
@@ -350,8 +357,8 @@ function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.
                 'error',
                 'vue-sfc-template-required',
                 `Vue SFC "${sourcePath}" must include a <template> block.`,
-                { file: sourcePath || null }
-            )
+                { file: sourcePath || null },
+            ),
         );
     }
 
@@ -361,8 +368,8 @@ function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.
                 'error',
                 'vue-sfc-custom-block-not-supported',
                 `Vue SFC "${sourcePath}" uses custom blocks, which are not supported yet.`,
-                { file: sourcePath || null }
-            )
+                { file: sourcePath || null },
+            ),
         );
     }
 
@@ -372,8 +379,8 @@ function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.
                 'error',
                 'vue-sfc-template-src-not-supported',
                 `Vue SFC "${sourcePath}" cannot use <template src="..."> yet.`,
-                { file: sourcePath || null }
-            )
+                { file: sourcePath || null },
+            ),
         );
     }
 
@@ -384,19 +391,22 @@ function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.
                 'error',
                 'vue-sfc-template-language-not-supported',
                 `Vue SFC "${sourcePath}" only supports plain HTML templates for now.`,
-                { file: sourcePath || null, language: templateLanguage }
-            )
+                { file: sourcePath || null, language: templateLanguage },
+            ),
         );
     }
 
-    if ((descriptor.script?.src || descriptor.scriptSetup?.src) && !hasDiagnosticCode(diagnostics, 'vue-sfc-script-src-not-supported')) {
+    if (
+        (descriptor.script?.src || descriptor.scriptSetup?.src) &&
+        !hasDiagnosticCode(diagnostics, 'vue-sfc-script-src-not-supported')
+    ) {
         diagnostics.push(
             createCompileDiagnostic(
                 'error',
                 'vue-sfc-script-src-not-supported',
                 `Vue SFC "${sourcePath}" cannot use external <script src="..."> blocks yet.`,
-                { file: sourcePath || null }
-            )
+                { file: sourcePath || null },
+            ),
         );
     }
 
@@ -409,8 +419,8 @@ function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.
                 'error',
                 'vue-sfc-script-language-not-supported',
                 `Vue SFC "${sourcePath}" only supports JavaScript or TypeScript script blocks.`,
-                { file: sourcePath || null, language: normalScriptLanguage }
-            )
+                { file: sourcePath || null, language: normalScriptLanguage },
+            ),
         );
     }
 
@@ -420,23 +430,19 @@ function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.
                 'error',
                 'vue-sfc-script-language-not-supported',
                 `Vue SFC "${sourcePath}" only supports JavaScript or TypeScript script blocks.`,
-                { file: sourcePath || null, language: setupScriptLanguage }
-            )
+                { file: sourcePath || null, language: setupScriptLanguage },
+            ),
         );
     }
 
-    if (
-        descriptor.script
-        && descriptor.scriptSetup
-        && normalScriptLanguage !== setupScriptLanguage
-    ) {
+    if (descriptor.script && descriptor.scriptSetup && normalScriptLanguage !== setupScriptLanguage) {
         diagnostics.push(
             createCompileDiagnostic(
                 'error',
                 'vue-sfc-script-language-mismatch',
                 `Vue SFC "${sourcePath}" cannot mix <script> and <script setup> with different languages.`,
-                { file: sourcePath || null }
-            )
+                { file: sourcePath || null },
+            ),
         );
     }
 
@@ -447,8 +453,8 @@ function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.
                     'error',
                     'vue-sfc-style-src-not-supported',
                     `Vue SFC "${sourcePath}" cannot use <style src="..."> yet.`,
-                    { file: sourcePath || null }
-                )
+                    { file: sourcePath || null },
+                ),
             );
         }
 
@@ -458,8 +464,8 @@ function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.
                     'error',
                     'vue-sfc-style-module-not-supported',
                     `Vue SFC "${sourcePath}" does not support CSS modules yet.`,
-                    { file: sourcePath || null }
-                )
+                    { file: sourcePath || null },
+                ),
             );
         }
 
@@ -470,8 +476,8 @@ function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.
                     'error',
                     'vue-sfc-style-language-not-supported',
                     `Vue SFC "${sourcePath}" only supports CSS, SCSS or SASS styles.`,
-                    { file: sourcePath || null, language: styleLanguage }
-                )
+                    { file: sourcePath || null, language: styleLanguage },
+                ),
             );
         }
     });
@@ -493,9 +499,7 @@ function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.
                 id: scopeToken,
                 genDefaultAs: '__sfc__',
             });
-            scriptLanguage = descriptor.scriptSetup
-                ? setupScriptLanguage
-                : normalScriptLanguage;
+            scriptLanguage = descriptor.scriptSetup ? setupScriptLanguage : normalScriptLanguage;
         }
     } catch (error) {
         diagnostics.push(
@@ -503,8 +507,8 @@ function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.
                 'error',
                 'vue-sfc-script-compile-error',
                 (error as Error).message || `Failed to compile the script block in "${sourcePath}".`,
-                { file: sourcePath || null }
-            )
+                { file: sourcePath || null },
+            ),
         );
     }
 
@@ -543,8 +547,8 @@ function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.
                 error.message || `Failed to compile the template in "${sourcePath}".`,
                 sourcePath,
                 error,
-                descriptor.template
-            )
+                descriptor.template,
+            ),
         );
     });
 
@@ -566,8 +570,8 @@ function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.
                         'error',
                         'sass-compile-error',
                         (error as Error).message || `Failed to compile style block in "${sourcePath}".`,
-                        { file: sourcePath || null, type: styleLanguage }
-                    )
+                        { file: sourcePath || null, type: styleLanguage },
+                    ),
                 );
                 return;
             }
@@ -583,12 +587,9 @@ function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.
         (compiledStyle.errors || []).forEach((error) => {
             if (typeof error === 'string') {
                 diagnostics.push(
-                    createCompileDiagnostic(
-                        'error',
-                        'vue-sfc-style-compile-error',
-                        error,
-                        { file: sourcePath || null }
-                    )
+                    createCompileDiagnostic('error', 'vue-sfc-style-compile-error', error, {
+                        file: sourcePath || null,
+                    }),
                 );
                 return;
             }
@@ -600,8 +601,8 @@ function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.
                     error.message || `Failed to compile a style block in "${sourcePath}".`,
                     sourcePath,
                     error,
-                    styleBlock
-                )
+                    styleBlock,
+                ),
             );
         });
 
@@ -637,7 +638,13 @@ function compileVueSfcFile(source: string = '', sourcePath: string = 'Component.
     };
 }
 
-function buildVueSingleFileEntry({ componentImportPath, templateImportPath }: { componentImportPath: string; templateImportPath: string }): string {
+function buildVueSingleFileEntry({
+    componentImportPath,
+    templateImportPath,
+}: {
+    componentImportPath: string;
+    templateImportPath: string;
+}): string {
     return `
 import { createApp } from 'vue';
 import componentDefinition from ${JSON.stringify(componentImportPath)};
@@ -669,11 +676,17 @@ interface VueSingleFileBundleInput {
     templatePath: string;
 }
 
-async function buildVueSingleFileBundle({ scriptPath, scriptSource, scriptLoader, templateCode, templatePath }: VueSingleFileBundleInput): Promise<{ js: string }> {
+async function buildVueSingleFileBundle({
+    scriptPath,
+    scriptSource,
+    scriptLoader,
+    templateCode,
+    templatePath,
+}: VueSingleFileBundleInput): Promise<{ js: string }> {
     const entryPath = '__learncode_vue_single__/entry.js';
     const normalizedScriptPath = normalizeSourcePath(
         scriptPath,
-        scriptLoader === 'ts' ? 'component.ts' : 'component.js'
+        scriptLoader === 'ts' ? 'component.ts' : 'component.js',
     );
     const normalizedTemplatePath = normalizeSourcePath(templatePath, 'index.html');
     const componentImportPath = `./${path.posix.relative(path.posix.dirname(entryPath), normalizedScriptPath)}`;
@@ -745,8 +758,9 @@ export async function compileVueSingleFileDocument(sourceDocument: CompileSource
     const styleResult = compileStyle(styleBlock);
     const validationDiagnostics = validateVueSingleFile(markupBlock, scriptBlock);
     const templateResult = compileVueTemplateModule(markupBlock?.content || '', markupFile?.path || 'index.html');
-    const hasBlockingDiagnostics = [...validationDiagnostics, ...templateResult.diagnostics]
-        .some((diagnostic) => diagnostic.level === 'error');
+    const hasBlockingDiagnostics = [...validationDiagnostics, ...templateResult.diagnostics].some(
+        (diagnostic) => diagnostic.level === 'error',
+    );
 
     if (hasBlockingDiagnostics) {
         return {
@@ -756,11 +770,7 @@ export async function compileVueSingleFileDocument(sourceDocument: CompileSource
                 css: styleResult.css,
                 js: '',
             },
-            compileDiagnostics: [
-                ...styleResult.diagnostics,
-                ...validationDiagnostics,
-                ...templateResult.diagnostics,
-            ],
+            compileDiagnostics: [...styleResult.diagnostics, ...validationDiagnostics, ...templateResult.diagnostics],
         };
     }
 
@@ -780,33 +790,22 @@ export async function compileVueSingleFileDocument(sourceDocument: CompileSource
                 css: styleResult.css,
                 js: bundle.js,
             },
-            compileDiagnostics: [
-                ...styleResult.diagnostics,
-                ...validationDiagnostics,
-                ...templateResult.diagnostics,
-            ],
+            compileDiagnostics: [...styleResult.diagnostics, ...validationDiagnostics, ...templateResult.diagnostics],
         };
     } catch (caught) {
         // esbuild throws a BuildFailure (one entry in `errors` per problem); anything else only has a message.
         const error = caught as Partial<BuildFailure>;
-        const diagnostics = (error.errors || []).map((entry) => createCompileDiagnostic(
-            'error',
-            'vue-build-error',
-            entry.text || 'Failed to compile Vue example.',
-            {
+        const diagnostics = (error.errors || []).map((entry) =>
+            createCompileDiagnostic('error', 'vue-build-error', entry.text || 'Failed to compile Vue example.', {
                 column: entry.location?.column ?? null,
                 file: entry.location?.file ?? null,
                 line: entry.location?.line ?? null,
-            }
-        ));
+            }),
+        );
 
         if (diagnostics.length === 0) {
             diagnostics.push(
-                createCompileDiagnostic(
-                    'error',
-                    'vue-build-error',
-                    error.message || 'Failed to compile Vue example.'
-                )
+                createCompileDiagnostic('error', 'vue-build-error', error.message || 'Failed to compile Vue example.'),
             );
         }
 
@@ -817,10 +816,7 @@ export async function compileVueSingleFileDocument(sourceDocument: CompileSource
                 css: styleResult.css,
                 js: '',
             },
-            compileDiagnostics: [
-                ...styleResult.diagnostics,
-                ...diagnostics,
-            ],
+            compileDiagnostics: [...styleResult.diagnostics, ...diagnostics],
         };
     }
 }
@@ -830,7 +826,11 @@ export async function compileVueSingleFileDocument(sourceDocument: CompileSource
  * `.html` → template module, `.vue` → component module (its CSS goes to `extractedStyles`). A template or
  * component that produced no code gets a placeholder module (an empty `render` / component).
  */
-function createVirtualVueFileMap(files: readonly VirtualFile[] = []): { diagnostics: Diagnostic[]; extractedStyles: string[]; map: Map<string, ProjectModule> } {
+function createVirtualVueFileMap(files: readonly VirtualFile[] = []): {
+    diagnostics: Diagnostic[];
+    extractedStyles: string[];
+    map: Map<string, ProjectModule>;
+} {
     const diagnostics: Diagnostic[] = [];
     const map = new Map<string, ProjectModule>();
     const extractedStyles: string[] = [];
@@ -856,8 +856,8 @@ function createVirtualVueFileMap(files: readonly VirtualFile[] = []): { diagnost
                         'error',
                         'sass-compile-error',
                         (error as Error).message || `Failed to compile "${virtualPath}".`,
-                        { file: virtualPath, type: language }
-                    )
+                        { file: virtualPath, type: language },
+                    ),
                 );
                 contents = '';
                 loader = 'css';
@@ -921,7 +921,7 @@ export async function compileVueMultiFileDocument(sourceDocument: CompileSourceD
                     entryPath
                         ? `Entry file "${entryPath}" does not exist in this project.`
                         : 'Vue multi-file examples must declare a valid entry file.',
-                    { entry: entryPath || null }
+                    { entry: entryPath || null },
                 ),
             ],
         };
@@ -943,30 +943,29 @@ export async function compileVueMultiFileDocument(sourceDocument: CompileSourceD
         const result = await build({
             absWorkingDir: process.cwd(),
             bundle: true,
-        define: {
-            'process.env.NODE_ENV': '"development"',
-        },
-        entryPoints: [VIRTUAL_ENTRY],
-        format: 'iife',
-        logLevel: 'silent',
-        minify: false,
-        outdir: 'out',
-        platform: 'browser',
-        plugins: [createVirtualFilesPlugin(fileMap, entryPath)],
-        sourcemap: 'inline',
-        sourcesContent: true,
-        target: ['es2020'],
-        write: false,
-    });
+            define: {
+                'process.env.NODE_ENV': '"development"',
+            },
+            entryPoints: [VIRTUAL_ENTRY],
+            format: 'iife',
+            logLevel: 'silent',
+            minify: false,
+            outdir: 'out',
+            platform: 'browser',
+            plugins: [createVirtualFilesPlugin(fileMap, entryPath)],
+            sourcemap: 'inline',
+            sourcesContent: true,
+            target: ['es2020'],
+            write: false,
+        });
 
         return {
             compiledDocument: {
                 framework: 'vue',
                 html: '<div id="app"></div>',
-                css: [
-                    result.outputFiles?.find((file) => file.path.endsWith('.css'))?.text || '',
-                    ...extractedStyles,
-                ].filter(Boolean).join('\n\n'),
+                css: [result.outputFiles?.find((file) => file.path.endsWith('.css'))?.text || '', ...extractedStyles]
+                    .filter(Boolean)
+                    .join('\n\n'),
                 js: result.outputFiles?.find((file) => file.path.endsWith('.js'))?.text || '',
             },
             compileDiagnostics: fileDiagnostics,
@@ -974,24 +973,26 @@ export async function compileVueMultiFileDocument(sourceDocument: CompileSourceD
     } catch (caught) {
         // esbuild throws a BuildFailure (one entry in `errors` per problem); anything else only has a message.
         const error = caught as Partial<BuildFailure>;
-        const buildDiagnostics = (error.errors || []).map((entry) => createCompileDiagnostic(
-            'error',
-            'vue-build-error',
-            entry.text || 'Failed to compile Vue multi-file example.',
-            {
-                column: entry.location?.column ?? null,
-                file: entry.location?.file ?? null,
-                line: entry.location?.line ?? null,
-            }
-        ));
+        const buildDiagnostics = (error.errors || []).map((entry) =>
+            createCompileDiagnostic(
+                'error',
+                'vue-build-error',
+                entry.text || 'Failed to compile Vue multi-file example.',
+                {
+                    column: entry.location?.column ?? null,
+                    file: entry.location?.file ?? null,
+                    line: entry.location?.line ?? null,
+                },
+            ),
+        );
 
         if (buildDiagnostics.length === 0) {
             buildDiagnostics.push(
                 createCompileDiagnostic(
                     'error',
                     'vue-build-error',
-                    error.message || 'Failed to compile Vue multi-file example.'
-                )
+                    error.message || 'Failed to compile Vue multi-file example.',
+                ),
             );
         }
 
@@ -1002,10 +1003,7 @@ export async function compileVueMultiFileDocument(sourceDocument: CompileSourceD
                 css: '',
                 js: '',
             },
-            compileDiagnostics: [
-                ...fileDiagnostics,
-                ...buildDiagnostics,
-            ],
+            compileDiagnostics: [...fileDiagnostics, ...buildDiagnostics],
         };
     }
 }

@@ -30,18 +30,8 @@ import {
     VUE_MULTI_FILE_ENTRY_LANGUAGE_OPTIONS,
     VUE_MULTI_FILE_LANGUAGE_OPTIONS,
 } from './constants.ts';
-import {
-    buildBlock,
-    buildVirtualFile,
-    cloneMetadata,
-    normalizeMetadata,
-    parseFrontmatter,
-} from './core.ts';
-import {
-    deriveFilesFromBlocks,
-    getDocumentFileVisibilityKey,
-    inferRendererMode,
-} from './documentMeta.ts';
+import { buildBlock, buildVirtualFile, cloneMetadata, normalizeMetadata, parseFrontmatter } from './core.ts';
+import { deriveFilesFromBlocks, getDocumentFileVisibilityKey, inferRendererMode } from './documentMeta.ts';
 import { parseEditorHiddenFilesMetadataValue } from './shader.ts';
 import {
     buildLegacyMarkdown,
@@ -115,7 +105,9 @@ export function synchronizeDocument(documentModel: ExampleDocumentInput | null |
 }
 
 /** Every file of the (synchronized) document with its visibility key and whether `editor_hidden_files` hides it. */
-export function getDocumentFileVisibilityEntries(documentModel: ExampleDocumentInput | null | undefined): FileVisibilityEntry[] {
+export function getDocumentFileVisibilityEntries(
+    documentModel: ExampleDocumentInput | null | undefined,
+): FileVisibilityEntry[] {
     const document = synchronizeDocument(documentModel);
     const files = document.files || [];
     const parsedHiddenFiles = parseEditorHiddenFilesMetadataValue(document.metadata?.editor_hidden_files);
@@ -133,7 +125,9 @@ export function getDocumentFileVisibilityEntries(documentModel: ExampleDocumentI
 }
 
 /** Keys of the files `editor_hidden_files` hides, in file order. */
-export function getHiddenFileVisibilityKeys(documentModel: ExampleDocumentInput | null | undefined): FileVisibilityKey[] {
+export function getHiddenFileVisibilityKeys(
+    documentModel: ExampleDocumentInput | null | undefined,
+): FileVisibilityKey[] {
     return getDocumentFileVisibilityEntries(documentModel)
         .filter((entry) => entry.hidden)
         .map((entry) => entry.key);
@@ -143,9 +137,15 @@ export function getHiddenFileVisibilityKeys(documentModel: ExampleDocumentInput 
  * Languages the "add file" menu offers for this document: by framework for virtual files (`[]` without
  * one), the missing shader stage for shader documents, by framework for legacy blocks.
  */
-export function getDocumentLanguageOptions(documentModel: ExampleDocumentInput | null | undefined): (FileLanguage | BlockAlias)[] {
-    const framework = String(documentModel?.metadata?.framework || '').trim().toLowerCase();
-    const rendererMode = String(documentModel?.rendererMode || '').trim().toLowerCase();
+export function getDocumentLanguageOptions(
+    documentModel: ExampleDocumentInput | null | undefined,
+): (FileLanguage | BlockAlias)[] {
+    const framework = String(documentModel?.metadata?.framework || '')
+        .trim()
+        .toLowerCase();
+    const rendererMode = String(documentModel?.rendererMode || '')
+        .trim()
+        .toLowerCase();
 
     if (documentModel?.sourceFormat === 'virtual-files') {
         if (framework === 'react') {
@@ -179,12 +179,15 @@ export function getDocumentLanguageOptions(documentModel: ExampleDocumentInput |
 export function getDocumentEntryCandidates(documentModel: ExampleDocumentInput | null | undefined): VirtualFile[] {
     if (documentModel?.sourceFormat !== 'virtual-files') return [];
 
-    const framework = String(documentModel?.metadata?.framework || '').trim().toLowerCase();
-    const entryLanguages = framework === 'react'
-        ? REACT_MULTI_FILE_ENTRY_LANGUAGE_OPTIONS
-        : framework === 'vue'
-            ? VUE_MULTI_FILE_ENTRY_LANGUAGE_OPTIONS
-            : null;
+    const framework = String(documentModel?.metadata?.framework || '')
+        .trim()
+        .toLowerCase();
+    const entryLanguages =
+        framework === 'react'
+            ? REACT_MULTI_FILE_ENTRY_LANGUAGE_OPTIONS
+            : framework === 'vue'
+              ? VUE_MULTI_FILE_ENTRY_LANGUAGE_OPTIONS
+              : null;
 
     if (!entryLanguages) return [];
 
@@ -196,15 +199,19 @@ export function getDocumentEntryCandidates(documentModel: ExampleDocumentInput |
 export function createExampleDocumentFromPreset(presetId: string = 'html-css-javascript'): ExampleDocument {
     const preset = getSessionPreset(presetId);
     const metadata = normalizeMetadata(preset.metadata || {});
-    const blocks = (preset.blocks || []).map((block, index) => buildBlock(block.type, block.content, null, `${block.type}-${index}`));
-    const files = (preset.files || []).map((file, index) => buildVirtualFile({
-        path: file.path,
-        language: file.language,
-        content: file.content,
-        role: file.role || '',
-        sourceKind: 'virtual',
-        index,
-    }));
+    const blocks = (preset.blocks || []).map((block, index) =>
+        buildBlock(block.type, block.content, null, `${block.type}-${index}`),
+    );
+    const files = (preset.files || []).map((file, index) =>
+        buildVirtualFile({
+            path: file.path,
+            language: file.language,
+            content: file.content,
+            role: file.role || '',
+            sourceKind: 'virtual',
+            index,
+        }),
+    );
 
     const sourceFormat: SourceFormat = files.length > 0 ? 'virtual-files' : 'legacy-blocks';
     const documentModel = {
@@ -244,7 +251,9 @@ export function cloneExampleDocument(documentModel: ExampleDocumentInput | null 
  * diagnostic, and the result is synchronized.
  */
 export function parseExampleDocument(text: string | null = ''): ExampleDocument {
-    const source = String(text ?? '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+    const source = String(text ?? '')
+        .replace(/^\uFEFF/, '')
+        .replace(/\r\n?/g, '\n');
     const lines = source.split('\n');
     const { metadata, startIndex, diagnostics: frontmatterDiagnostics } = parseFrontmatter(lines);
     const diagnostics: Diagnostic[] = [...frontmatterDiagnostics];

@@ -20,7 +20,10 @@ export default tseslint.config(
             '@typescript-eslint/consistent-type-imports': ['error', { fixStyle: 'inline-type-imports' }],
             '@typescript-eslint/no-explicit-any': 'error',
             // Unused parameters stay: they document the signature that callers rely on.
-            '@typescript-eslint/no-unused-vars': ['error', { args: 'none', varsIgnorePattern: '^_', caughtErrors: 'none' }],
+            '@typescript-eslint/no-unused-vars': [
+                'error',
+                { args: 'none', varsIgnorePattern: '^_', caughtErrors: 'none' },
+            ],
             '@typescript-eslint/no-non-null-assertion': 'off',
             // `interface Dialog extends BorrowedMethods {}` is how a class adopts mixin methods.
             '@typescript-eslint/no-empty-object-type': ['error', { allowInterfaces: 'with-single-extends' }],

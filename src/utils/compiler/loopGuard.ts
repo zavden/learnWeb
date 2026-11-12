@@ -21,14 +21,15 @@ export const LOOP_GUARD_LIMIT_MS = 1200;
 
 // A single hoisted function declaration (no top-level statements), so it is already usable
 // while the learner's code runs above it.
-const GUARD_HELPER = `function ${LOOP_GUARD_NAME}(l){var g=${LOOP_GUARD_NAME};`
-    + 'if(!g.on){g.on=1;g.n=0;g.t=performance.now();'
-    + 'if(!g.ch){g.ch=new MessageChannel();g.ch.port1.onmessage=function(){g.on=0;};}'
-    + 'g.ch.port2.postMessage(0);return false;}'
-    + `if((++g.n&63)!==0||performance.now()-g.t<=${LOOP_GUARD_LIMIT_MS})return false;`
-    + "g.on=0;g.msg='Possible infinite loop at line '+l+': "
-    + `it kept running for more than ${LOOP_GUARD_LIMIT_MS / 1000}s without letting the page update, so LearnWeb stopped it. `
-    + `(Add "loop_protect: false" to the example frontmatter to disable this guard.)';return true;}`;
+const GUARD_HELPER =
+    `function ${LOOP_GUARD_NAME}(l){var g=${LOOP_GUARD_NAME};` +
+    'if(!g.on){g.on=1;g.n=0;g.t=performance.now();' +
+    'if(!g.ch){g.ch=new MessageChannel();g.ch.port1.onmessage=function(){g.on=0;};}' +
+    'g.ch.port2.postMessage(0);return false;}' +
+    `if((++g.n&63)!==0||performance.now()-g.t<=${LOOP_GUARD_LIMIT_MS})return false;` +
+    "g.on=0;g.msg='Possible infinite loop at line '+l+': " +
+    `it kept running for more than ${LOOP_GUARD_LIMIT_MS / 1000}s without letting the page update, so LearnWeb stopped it. ` +
+    `(Add "loop_protect: false" to the example frontmatter to disable this guard.)';return true;}`;
 
 /** `addLoopGuards()` options. */
 export interface AddLoopGuardsOptions {
@@ -64,11 +65,13 @@ type SourceFileWithParseDiagnostics = ts.SourceFile & { parseDiagnostics?: reado
 type LoopStatement = ts.WhileStatement | ts.DoStatement | ts.ForStatement | ts.ForInStatement | ts.ForOfStatement;
 
 function isLoop(node: ts.Node): node is LoopStatement {
-    return ts.isWhileStatement(node)
-        || ts.isDoStatement(node)
-        || ts.isForStatement(node)
-        || ts.isForInStatement(node)
-        || ts.isForOfStatement(node);
+    return (
+        ts.isWhileStatement(node) ||
+        ts.isDoStatement(node) ||
+        ts.isForStatement(node) ||
+        ts.isForInStatement(node) ||
+        ts.isForOfStatement(node)
+    );
 }
 
 function buildGuardStatement(line: number): string {
@@ -80,7 +83,15 @@ function buildGuardStatement(line: number): string {
  * single-statement bodies in braces), without adding or removing lines. The code must parse: callers
  * check for syntax errors first, since guards inserted into broken code could move the real error.
  */
-export function addLoopGuards(source: string = '', { fileName = 'script.js', scriptKind = ts.ScriptKind.JS, appendHelper = true, lineOffset = 0 }: AddLoopGuardsOptions = {}): LoopGuardResult {
+export function addLoopGuards(
+    source: string = '',
+    {
+        fileName = 'script.js',
+        scriptKind = ts.ScriptKind.JS,
+        appendHelper = true,
+        lineOffset = 0,
+    }: AddLoopGuardsOptions = {},
+): LoopGuardResult {
     const text = String(source ?? '');
     if (!/\b(for|while|do)\b/.test(text)) {
         return { code: text, guarded: 0 };
@@ -127,14 +138,22 @@ export function addLoopGuards(source: string = '', { fileName = 'script.js', scr
 }
 
 /** Syntax errors of a script according to the TypeScript parser (never type errors), in source order. */
-export function getSyntaxDiagnostics(source: string = '', { fileName = 'script.js', scriptKind = ts.ScriptKind.JS }: SyntaxDiagnosticsOptions = {}): SyntaxDiagnostic[] {
-    const sourceFile = ts.createSourceFile(fileName, String(source ?? ''), ts.ScriptTarget.Latest, true, scriptKind) as SourceFileWithParseDiagnostics;
+export function getSyntaxDiagnostics(
+    source: string = '',
+    { fileName = 'script.js', scriptKind = ts.ScriptKind.JS }: SyntaxDiagnosticsOptions = {},
+): SyntaxDiagnostic[] {
+    const sourceFile = ts.createSourceFile(
+        fileName,
+        String(source ?? ''),
+        ts.ScriptTarget.Latest,
+        true,
+        scriptKind,
+    ) as SourceFileWithParseDiagnostics;
     const diagnostics = Array.isArray(sourceFile.parseDiagnostics) ? sourceFile.parseDiagnostics : [];
 
     return diagnostics.map((diagnostic) => {
-        const position = typeof diagnostic.start === 'number'
-            ? sourceFile.getLineAndCharacterOfPosition(diagnostic.start)
-            : null;
+        const position =
+            typeof diagnostic.start === 'number' ? sourceFile.getLineAndCharacterOfPosition(diagnostic.start) : null;
         return {
             column: position ? position.character + 1 : null,
             line: position ? position.line + 1 : null,
@@ -155,20 +174,23 @@ export function addLoopGuardsToHtml(html: string = ''): string {
     const source = String(html ?? '');
     if (!/<script\b/i.test(source) || !/\b(for|while|do)\b/.test(source)) return source;
 
-    return source.replace(INLINE_SCRIPT_PATTERN, (match: string, open: string, attributes: string, content: string, close: string, offset: number) => {
-        if (/\bsrc\s*=/i.test(attributes)) return match;
-        const typeMatch = /\btype\s*=\s*["']?([^"'\s>]*)/i.exec(attributes);
-        if (typeMatch && !JS_SCRIPT_TYPES.has(typeMatch[1].trim().toLowerCase())) return match;
-        if (!/\b(for|while|do)\b/.test(content)) return match;
+    return source.replace(
+        INLINE_SCRIPT_PATTERN,
+        (match: string, open: string, attributes: string, content: string, close: string, offset: number) => {
+            if (/\bsrc\s*=/i.test(attributes)) return match;
+            const typeMatch = /\btype\s*=\s*["']?([^"'\s>]*)/i.exec(attributes);
+            if (typeMatch && !JS_SCRIPT_TYPES.has(typeMatch[1].trim().toLowerCase())) return match;
+            if (!/\b(for|while|do)\b/.test(content)) return match;
 
-        try {
-            if (getSyntaxDiagnostics(content, { fileName: 'inline.js' }).length > 0) return match;
-            // Messages name the line in the HTML document, not inside the script.
-            const lineOffset = (source.slice(0, offset + open.length).match(/\n/g) || []).length;
-            const { code } = addLoopGuards(content, { appendHelper: false, fileName: 'inline.js', lineOffset });
-            return `${open}${code}${close}`;
-        } catch {
-            return match;
-        }
-    });
+            try {
+                if (getSyntaxDiagnostics(content, { fileName: 'inline.js' }).length > 0) return match;
+                // Messages name the line in the HTML document, not inside the script.
+                const lineOffset = (source.slice(0, offset + open.length).match(/\n/g) || []).length;
+                const { code } = addLoopGuards(content, { appendHelper: false, fileName: 'inline.js', lineOffset });
+                return `${open}${code}${close}`;
+            } catch {
+                return match;
+            }
+        },
+    );
 }

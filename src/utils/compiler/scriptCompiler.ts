@@ -65,28 +65,34 @@ function guardLoops(source: string, { enabled, fileName, scriptKind }: GuardLoop
     }
 }
 
-function compileJavaScript(block: CompilerBlock, { sourcePath, loopProtect }: { sourcePath: string; loopProtect: boolean }): ScriptCompileResult {
+function compileJavaScript(
+    block: CompilerBlock,
+    { sourcePath, loopProtect }: { sourcePath: string; loopProtect: boolean },
+): ScriptCompileResult {
     const filePath = normalizeSourcePath(sourcePath, 'script.js');
     const source = block.content || '';
     const syntaxDiagnostics = checkJavaScriptSyntax(source, { fileName: filePath });
 
-    const diagnostics = syntaxDiagnostics.map((diagnostic) => createCompileDiagnostic(
-        'error',
-        'javascript-syntax',
-        /^SyntaxError\b/.test(diagnostic.message) ? diagnostic.message : `SyntaxError: ${diagnostic.message}`,
-        {
-            column: diagnostic.column,
-            file: filePath,
-            line: diagnostic.line,
-            slot: 'script',
-            type: 'javascript',
-        }
-    ));
+    const diagnostics = syntaxDiagnostics.map((diagnostic) =>
+        createCompileDiagnostic(
+            'error',
+            'javascript-syntax',
+            /^SyntaxError\b/.test(diagnostic.message) ? diagnostic.message : `SyntaxError: ${diagnostic.message}`,
+            {
+                column: diagnostic.column,
+                file: filePath,
+                line: diagnostic.line,
+                slot: 'script',
+                type: 'javascript',
+            },
+        ),
+    );
 
     // Inserting guards into code that does not parse could move the real error around.
-    const code = syntaxDiagnostics.length === 0
-        ? guardLoops(source, { enabled: loopProtect, fileName: filePath, scriptKind: ts.ScriptKind.JS })
-        : source;
+    const code =
+        syntaxDiagnostics.length === 0
+            ? guardLoops(source, { enabled: loopProtect, fileName: filePath, scriptKind: ts.ScriptKind.JS })
+            : source;
 
     return {
         js: appendSourceUrl(code, filePath),
@@ -94,7 +100,10 @@ function compileJavaScript(block: CompilerBlock, { sourcePath, loopProtect }: { 
     };
 }
 
-function compileTypeScript(block: CompilerBlock, { sourcePath, loopProtect, typeCheck }: Required<CompileScriptOptions>): ScriptCompileResult {
+function compileTypeScript(
+    block: CompilerBlock,
+    { sourcePath, loopProtect, typeCheck }: Required<CompileScriptOptions>,
+): ScriptCompileResult {
     const filePath = normalizeSourcePath(sourcePath, 'script.ts');
     const source = block.content || '';
     const transpileOptions: ts.TranspileOptions = {
@@ -114,12 +123,11 @@ function compileTypeScript(block: CompilerBlock, { sourcePath, loopProtect, type
 
     const syntaxCheck = ts.transpileModule(source, transpileOptions);
     const syntaxDiagnostics = syntaxCheck.diagnostics || [];
-    const guardedSource = syntaxDiagnostics.length === 0
-        ? guardLoops(source, { enabled: loopProtect, fileName: filePath, scriptKind: ts.ScriptKind.TS })
-        : source;
-    const result = guardedSource === source
-        ? syntaxCheck
-        : ts.transpileModule(guardedSource, transpileOptions);
+    const guardedSource =
+        syntaxDiagnostics.length === 0
+            ? guardLoops(source, { enabled: loopProtect, fileName: filePath, scriptKind: ts.ScriptKind.TS })
+            : source;
+    const result = guardedSource === source ? syntaxCheck : ts.transpileModule(guardedSource, transpileOptions);
 
     const diagnostics = syntaxDiagnostics.map((diagnostic) => {
         const sourceFile = diagnostic.file;
@@ -136,35 +144,39 @@ function compileTypeScript(block: CompilerBlock, { sourcePath, loopProtect, type
                 line: position ? position.line + 1 : null,
                 slot: 'script',
                 type: 'typescript',
-            }
+            },
         );
     });
 
     if (typeCheck && syntaxDiagnostics.length === 0) {
         try {
             for (const diagnostic of typeCheckTypeScript(source, { sourcePath: filePath })) {
-                diagnostics.push(createCompileDiagnostic(
-                    diagnostic.warning ? 'warning' : 'error',
-                    'typescript-type',
-                    `TS${diagnostic.code}: ${diagnostic.message}`,
-                    {
-                        // Like `tsc`, type errors are reported but the JavaScript still runs.
-                        blocking: false,
-                        column: diagnostic.column,
-                        file: filePath,
-                        line: diagnostic.line,
-                        slot: 'script',
-                        type: 'typescript',
-                    }
-                ));
+                diagnostics.push(
+                    createCompileDiagnostic(
+                        diagnostic.warning ? 'warning' : 'error',
+                        'typescript-type',
+                        `TS${diagnostic.code}: ${diagnostic.message}`,
+                        {
+                            // Like `tsc`, type errors are reported but the JavaScript still runs.
+                            blocking: false,
+                            column: diagnostic.column,
+                            file: filePath,
+                            line: diagnostic.line,
+                            slot: 'script',
+                            type: 'typescript',
+                        },
+                    ),
+                );
             }
         } catch (error) {
-            diagnostics.push(createCompileDiagnostic(
-                'warning',
-                'typescript-typecheck-failed',
-                `Type checking failed: ${errorMessage(error)}`,
-                { blocking: false, slot: 'script', type: 'typescript' }
-            ));
+            diagnostics.push(
+                createCompileDiagnostic(
+                    'warning',
+                    'typescript-typecheck-failed',
+                    `Type checking failed: ${errorMessage(error)}`,
+                    { blocking: false, slot: 'script', type: 'typescript' },
+                ),
+            );
         }
     }
 
@@ -185,7 +197,10 @@ function stripSourceMapComment(code: string = ''): string {
  * Compiles the script block of a plain example (`javascript` or `typescript`); `null` (no script block)
  * gives empty output, any other block type an `unsupported-script-compiler` error.
  */
-export function compileScript(block: CompilerBlock | null, { sourcePath = '', loopProtect = true, typeCheck = true }: CompileScriptOptions = {}): ScriptCompileResult {
+export function compileScript(
+    block: CompilerBlock | null,
+    { sourcePath = '', loopProtect = true, typeCheck = true }: CompileScriptOptions = {},
+): ScriptCompileResult {
     if (!block) {
         return {
             js: '',
@@ -208,7 +223,7 @@ export function compileScript(block: CompilerBlock | null, { sourcePath = '', lo
                 'error',
                 'unsupported-script-compiler',
                 `No compiler available for script type "${block.type}".`,
-                { slot: 'script', type: block.type }
+                { slot: 'script', type: block.type },
             ),
         ],
     };

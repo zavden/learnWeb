@@ -81,27 +81,27 @@ export type CompileThreadMessage =
 /** Page → compile Web Worker. */
 export type CompileWorkerRequest =
     | {
-        type: 'compile';
-        /** Echoed in the answer so the page can settle the right promise. */
-        requestId: number;
-        payload: CompileRequest;
-    }
+          type: 'compile';
+          /** Echoed in the answer so the page can settle the right promise. */
+          requestId: number;
+          payload: CompileRequest;
+      }
     /** Empties the worker's result cache (the server keeps its own). */
     | { type: 'clear-cache' };
 
 /** Compile Web Worker → page: one answer per `compile` request. */
 export type CompileWorkerResponse =
     | {
-        type: 'compile-result';
-        requestId: number;
-        ok: true;
-        /** `hit` when the worker answered from its own cache, else what the server reported. */
-        cacheStatus: CompileCacheStatus;
-        result: CompileResponse;
-    }
+          type: 'compile-result';
+          requestId: number;
+          ok: true;
+          /** `hit` when the worker answered from its own cache, else what the server reported. */
+          cacheStatus: CompileCacheStatus;
+          result: CompileResponse;
+      }
     | {
-        type: 'compile-result';
-        requestId: number;
-        ok: false;
-        error: string;
-    };
+          type: 'compile-result';
+          requestId: number;
+          ok: false;
+          error: string;
+      };

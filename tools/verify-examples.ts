@@ -16,7 +16,11 @@ import { fetchExample, fetchExamples, fetchTree } from '../src/utils/api.ts';
 import { compileExample } from '../src/utils/compileClient.ts';
 import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../src/utils/exampleRenderer.ts';
 import { getExampleStage, getShaderConfig, isShaderDocument, parseExampleDocument } from '../src/utils/markdown.ts';
-import { HOSTED_PREVIEW_SANDBOX, SRCDOC_PREVIEW_SANDBOX, publishPreviewDocument } from '../src/utils/renderer/previewHost.ts';
+import {
+    HOSTED_PREVIEW_SANDBOX,
+    SRCDOC_PREVIEW_SANDBOX,
+    publishPreviewDocument,
+} from '../src/utils/renderer/previewHost.ts';
 import type { Diagnostic } from '../src/types/diagnostics.ts';
 import type { ExampleDocument } from '../src/types/document.ts';
 import type { PreviewFrameMessage } from '../src/types/runtime.ts';
@@ -39,7 +43,8 @@ import {
     summarizeResults,
 } from './verify-core.ts';
 
-const FRAME_ALLOW = 'fullscreen *; clipboard-read *; clipboard-write *; autoplay *; geolocation *; camera *; microphone *; display-capture *; screen-wake-lock *; web-share *; gamepad *; picture-in-picture *';
+const FRAME_ALLOW =
+    'fullscreen *; clipboard-read *; clipboard-write *; autoplay *; geolocation *; camera *; microphone *; display-capture *; screen-wake-lock *; web-share *; gamepad *; picture-in-picture *';
 const READY_GRACE_MS = 3000;
 // Gallery and inline theory cards: srcdoc copies without allow-forms/popups/downloads (origin "null").
 const CARD_SANDBOX = 'allow-scripts';
@@ -123,9 +128,10 @@ function appendRow(result: VerifyResult): void {
     status.className = 'status-cell';
 
     const messages = document.createElement('td');
-    messages.textContent = result.problems.slice(0, 3).map(formatProblem).join('\n')
-        + (result.problems.length > 3 ? `\n… ${result.problems.length - 3} more` : '')
-        + (result.note ? `${result.problems.length ? '\n' : ''}(${result.note})` : '');
+    messages.textContent =
+        result.problems.slice(0, 3).map(formatProblem).join('\n') +
+        (result.problems.length > 3 ? `\n… ${result.problems.length - 3} more` : '') +
+        (result.note ? `${result.problems.length ? '\n' : ''}(${result.note})` : '');
 
     row.append(file, stage, status, messages);
     elements.rows.appendChild(row);
@@ -174,10 +180,21 @@ async function waitForObservation(state: RunState, ms: number): Promise<void> {
     }
 }
 
-async function verifyShader(documentModel: VerifiedDocument, topicPath: string, state: RunState): Promise<VerifyProblem[]> {
+async function verifyShader(
+    documentModel: VerifiedDocument,
+    topicPath: string,
+    state: RunState,
+): Promise<VerifyProblem[]> {
     const problems: VerifyProblem[] = [];
     const shaderDiagnostics = validateShaderPreviewDocument(documentModel);
-    problems.push(...problemsFromCompileDiagnostics(shaderDiagnostics.map((diagnostic: Partial<Diagnostic>) => ({ ...diagnostic, file: diagnostic.file || diagnostic.slot || '' }))));
+    problems.push(
+        ...problemsFromCompileDiagnostics(
+            shaderDiagnostics.map((diagnostic: Partial<Diagnostic>) => ({
+                ...diagnostic,
+                file: diagnostic.file || diagnostic.slot || '',
+            })),
+        ),
+    );
 
     const shaderConfig = getShaderConfig(documentModel);
     state.iframe.setAttribute('sandbox', SRCDOC_PREVIEW_SANDBOX);
@@ -192,7 +209,11 @@ async function verifyShader(documentModel: VerifiedDocument, topicPath: string, 
     return problems;
 }
 
-async function verifyCompiled(documentModel: VerifiedDocument, topicPath: string, state: RunState): Promise<VerifyProblem[]> {
+async function verifyCompiled(
+    documentModel: VerifiedDocument,
+    topicPath: string,
+    state: RunState,
+): Promise<VerifyProblem[]> {
     const result = await compileExample({ document: documentModel });
     const diagnostics = result.compileDiagnostics || [];
     const markupPath = (documentModel.files || []).find((file) => file.slot === 'markup')?.path || 'index.html';
@@ -208,12 +229,20 @@ async function verifyCompiled(documentModel: VerifiedDocument, topicPath: string
         state.iframe.removeAttribute('allow');
         state.iframe.removeAttribute('allowfullscreen');
         state.iframe.setAttribute('sandbox', CARD_SANDBOX);
-        state.iframe.srcdoc = renderCompiledExampleDocument(result.compiledDocument, topicPath, diagnostics, renderOptions);
+        state.iframe.srcdoc = renderCompiledExampleDocument(
+            result.compiledDocument,
+            topicPath,
+            diagnostics,
+            renderOptions,
+        );
         state.mode = 'card';
         return problemsFromCompileDiagnostics(diagnostics);
     }
 
-    const hostedHtml = renderCompiledExampleDocument(result.compiledDocument, topicPath, diagnostics, { ...renderOptions, hosted: true });
+    const hostedHtml = renderCompiledExampleDocument(result.compiledDocument, topicPath, diagnostics, {
+        ...renderOptions,
+        hosted: true,
+    });
     const hostedUrl = await publishPreviewDocument({ html: hostedHtml, renderId: state.renderId, topicPath });
 
     if (hostedUrl) {
@@ -223,7 +252,12 @@ async function verifyCompiled(documentModel: VerifiedDocument, topicPath: string
         state.mode = 'hosted';
     } else {
         state.iframe.setAttribute('sandbox', SRCDOC_PREVIEW_SANDBOX);
-        state.iframe.srcdoc = renderCompiledExampleDocument(result.compiledDocument, topicPath, diagnostics, renderOptions);
+        state.iframe.srcdoc = renderCompiledExampleDocument(
+            result.compiledDocument,
+            topicPath,
+            diagnostics,
+            renderOptions,
+        );
         state.mode = 'srcdoc';
     }
 
@@ -231,7 +265,12 @@ async function verifyCompiled(documentModel: VerifiedDocument, topicPath: string
 }
 
 /** Runs one example for `ms` and reports what it did. Never throws: a harness failure becomes a `harness` problem. */
-async function verifyExample(topicPath: string, file: string, ms: number, { logs = false, show = false, card = false }: { logs?: boolean; show?: boolean; card?: boolean } = {}): Promise<VerifyResult> {
+async function verifyExample(
+    topicPath: string,
+    file: string,
+    ms: number,
+    { logs = false, show = false, card = false }: { logs?: boolean; show?: boolean; card?: boolean } = {},
+): Promise<VerifyResult> {
     const startedAt = performance.now();
     teardownFrame();
     renderSequence += 1;
@@ -257,10 +296,10 @@ async function verifyExample(topicPath: string, file: string, ms: number, { logs
         problems.push(...problemsFromStructuralDiagnostics(documentModel.diagnostics));
 
         if (isShaderDocument(documentModel)) {
-            problems.push(...await verifyShader(documentModel, topicPath, state));
+            problems.push(...(await verifyShader(documentModel, topicPath, state)));
             note = 'shader: compile/link + one still frame';
         } else {
-            problems.push(...await verifyCompiled(documentModel, topicPath, state));
+            problems.push(...(await verifyCompiled(documentModel, topicPath, state)));
         }
 
         await waitForObservation(state, ms);
@@ -315,7 +354,11 @@ async function run(): Promise<void> {
             const files = filterExampleFiles(await fetchExamples(topicPath), only);
             files.forEach((file) => queue.push({ topicPath, file }));
         } catch (error) {
-            const result = buildResult({ topicPath, file: '(listing)', problems: [{ kind: 'harness', message: errorMessage(error), file: '', line: null }] });
+            const result = buildResult({
+                topicPath,
+                file: '(listing)',
+                problems: [{ kind: 'harness', message: errorMessage(error), file: '', line: null }],
+            });
             verifyWindow.__verifyResults.push(result);
             appendRow(result);
         }

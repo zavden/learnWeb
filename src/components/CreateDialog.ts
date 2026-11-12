@@ -76,8 +76,9 @@ export class CreateDialog {
         this.presetGroup = byId('preset-group');
         this.nameInput = byId('create-name');
         this.btnCancel = byId('btn-cancel-create');
-        this.btnSubmit = (document.getElementById('btn-submit-create') as HTMLButtonElement | null)
-            || this.form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+        this.btnSubmit =
+            (document.getElementById('btn-submit-create') as HTMLButtonElement | null) ||
+            this.form?.querySelector<HTMLButtonElement>('button[type="submit"]');
         this.hint = document.getElementById('create-dialog-hint');
 
         this.tree = [];
@@ -128,9 +129,7 @@ export class CreateDialog {
                 return;
             }
 
-            const options = type === 'example'
-                ? { sessionPreset: this.presetSelect.value }
-                : {};
+            const options = type === 'example' ? { sessionPreset: this.presetSelect.value } : {};
 
             this._setSubmitting(true);
             try {
@@ -177,7 +176,10 @@ export class CreateDialog {
         }
 
         if (!this.isSubmitting && needsParent && !hasParent) {
-            this._setHint(`No ${PARENT_LABELS[type] || 'parent'} available. Create one first (or use Show Hidden in the sidebar).`, 'error');
+            this._setHint(
+                `No ${PARENT_LABELS[type] || 'parent'} available. Create one first (or use Show Hidden in the sidebar).`,
+                'error',
+            );
         } else if (!this.isSubmitting && this.hint?.classList.contains('is-error') && hasParent) {
             this._setHint('');
         }

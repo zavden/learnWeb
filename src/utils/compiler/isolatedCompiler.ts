@@ -49,9 +49,7 @@ function getSlotForFailure(sourceDocument: CompileSourceDocument | null | undefi
 function buildFailureResult(code: string, message: string, sourceDocument: CompileSourceDocument): CompileResult {
     return {
         compiledDocument: { css: '', html: '', js: '' },
-        compileDiagnostics: [
-            { code, level: 'error', message, slot: getSlotForFailure(sourceDocument) },
-        ],
+        compileDiagnostics: [{ code, level: 'error', message, slot: getSlotForFailure(sourceDocument) }],
     };
 }
 
@@ -60,7 +58,10 @@ function startWorker(): Worker {
     worker = instance;
 
     workerReady = new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error('Compile worker did not start in time.')), WORKER_BOOT_TIMEOUT_MS);
+        const timer = setTimeout(
+            () => reject(new Error('Compile worker did not start in time.')),
+            WORKER_BOOT_TIMEOUT_MS,
+        );
         instance.once('message', (message: CompileThreadMessage) => {
             if (message?.type === 'ready') {
                 clearTimeout(timer);

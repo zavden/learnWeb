@@ -73,13 +73,13 @@ interface ExampleTypeMeta {
 }
 
 const EXAMPLE_TYPE_META = {
-    html:    { label: 'HTML',    className: 'type-html' },
-    js:      { label: 'JS',      className: 'type-js' },
-    ts:      { label: 'TS',      className: 'type-ts' },
-    vue:     { label: 'VUE',     className: 'type-vue' },
-    react:   { label: 'REACT',   className: 'type-react' },
-    svg:     { label: 'SVG',     className: 'type-svg' },
-    shader:  { label: 'SHADER',  className: 'type-shader' },
+    html: { label: 'HTML', className: 'type-html' },
+    js: { label: 'JS', className: 'type-js' },
+    ts: { label: 'TS', className: 'type-ts' },
+    vue: { label: 'VUE', className: 'type-vue' },
+    react: { label: 'REACT', className: 'type-react' },
+    svg: { label: 'SVG', className: 'type-svg' },
+    shader: { label: 'SHADER', className: 'type-shader' },
 } satisfies Record<string, ExampleTypeMeta>;
 
 /** The kinds of example the gallery tells apart (the keys of {@link EXAMPLE_TYPE_META}). */
@@ -158,11 +158,7 @@ async function buildExamplePreviewSrcdoc(documentModel: ExampleDocument, topicPa
     }
 
     const result = await compileExample({ document: documentModel });
-    return renderCompiledExampleDocument(
-        result.compiledDocument,
-        topicPath,
-        result.compileDiagnostics || []
-    );
+    return renderCompiledExampleDocument(result.compiledDocument, topicPath, result.compileDiagnostics || []);
 }
 
 /** Longest code excerpt shown on a console-only card; the rest is summarized as "N more lines". */
@@ -241,12 +237,13 @@ export class Gallery {
         this._loadGate = createRequestGate();
         this._previewRecords = new Map();
         this._previewsSuspended = false;
-        this._previewObserver = typeof IntersectionObserver === 'function'
-            ? new IntersectionObserver((entries) => this._handlePreviewIntersections(entries), {
-                root: this.grid,
-                rootMargin: PREVIEW_ROOT_MARGIN,
-            })
-            : null;
+        this._previewObserver =
+            typeof IntersectionObserver === 'function'
+                ? new IntersectionObserver((entries) => this._handlePreviewIntersections(entries), {
+                      root: this.grid,
+                      rootMargin: PREVIEW_ROOT_MARGIN,
+                  })
+                : null;
 
         this.btnMetaToggle?.addEventListener('click', () => {
             this.setMetaOverlayHidden(!this.metaOverlayHidden);
@@ -422,9 +419,7 @@ export class Gallery {
         title.textContent = filename;
         footer.appendChild(title);
 
-        const pendingKey = topicPath
-            ? `material/${topicPath}/examples/${filename}`
-            : '';
+        const pendingKey = topicPath ? `material/${topicPath}/examples/${filename}` : '';
         const isPending = pendingKey ? this.pendingPaths.has(pendingKey) : false;
         if (isPending) {
             const pendingBadge = document.createElement('span');
@@ -502,7 +497,8 @@ export class Gallery {
 
         const existingEntries = (entries || []).filter((entry) => entry?.exists);
         if (existingEntries.length === 0) {
-            this.grid.innerHTML = '<div class="empty-state">No pending examples. Pick a topic in the sidebar to browse its examples.</div>';
+            this.grid.innerHTML =
+                '<div class="empty-state">No pending examples. Pick a topic in the sidebar to browse its examples.</div>';
             return false;
         }
 
@@ -517,7 +513,10 @@ export class Gallery {
     }
 
     /** Card of a pending entry: like `createCard`, but it names the example's topic and opens through `onOpenEntry`. */
-    private async _createPendingCard(entry: PendingEntry, onOpenEntry: GalleryPendingOptions['onOpenEntry']): Promise<PendingCard> {
+    private async _createPendingCard(
+        entry: PendingEntry,
+        onOpenEntry: GalleryPendingOptions['onOpenEntry'],
+    ): Promise<PendingCard> {
         const div = document.createElement('div');
         div.className = 'example-card';
         div.title = entry.path;
@@ -597,7 +596,10 @@ export class Gallery {
         });
     }
 
-    private _registerPreview(preview: Element | null | undefined, buildPreview: PreviewBuilder | null | undefined): void {
+    private _registerPreview(
+        preview: Element | null | undefined,
+        buildPreview: PreviewBuilder | null | undefined,
+    ): void {
         if (!preview || typeof buildPreview !== 'function') return;
 
         const record: PreviewRecord = {
@@ -652,11 +654,11 @@ export class Gallery {
         }
 
         if (
-            record.iframe
-            || this._previewsSuspended
-            || (!record.visible && this._previewObserver)
-            || this._previewRecords.get(preview) !== record
-            || !preview.isConnected
+            record.iframe ||
+            this._previewsSuspended ||
+            (!record.visible && this._previewObserver) ||
+            this._previewRecords.get(preview) !== record ||
+            !preview.isConnected
         ) {
             return;
         }
@@ -694,7 +696,9 @@ export class Gallery {
     /** Which type tag and filter an example belongs to: shader, framework, SVG, script-only (JS/TS) or plain HTML. */
     private _getExampleType(documentModel: ExampleDocument): GalleryExampleType {
         if (isShaderDocument(documentModel)) return 'shader';
-        const framework = String(documentModel?.metadata?.framework || '').trim().toLowerCase();
+        const framework = String(documentModel?.metadata?.framework || '')
+            .trim()
+            .toLowerCase();
         if (framework === 'vue') return 'vue';
         if (framework === 'react') return 'react';
         const files = documentModel?.files || [];
@@ -786,9 +790,7 @@ export class Gallery {
         if (!this.btnMetaToggle) return;
         this.btnMetaToggle.textContent = this.metaOverlayHidden ? 'Show Info' : 'Hide Info';
         this.btnMetaToggle.setAttribute('aria-pressed', String(!this.metaOverlayHidden));
-        this.btnMetaToggle.title = this.metaOverlayHidden
-            ? 'Show example info overlay'
-            : 'Hide example info overlay';
+        this.btnMetaToggle.title = this.metaOverlayHidden ? 'Show example info overlay' : 'Hide example info overlay';
     }
 
     /** The card's info overlay (description, tags, rating, importance); an empty one when there is nothing to show. */

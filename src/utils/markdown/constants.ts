@@ -7,13 +7,7 @@
 // `LiteralList`, so iterating them yields the literal union while `has()` / `includes()` still accept any
 // string (what they test is raw author input). Nothing here is mutated at runtime.
 
-import type {
-    BlockAlias,
-    BlockType,
-    FileLanguage,
-    ShaderBlockType,
-    VirtualFileRole,
-} from '../../types/document.ts';
+import type { BlockAlias, BlockType, FileLanguage, ShaderBlockType, VirtualFileRole } from '../../types/document.ts';
 
 /**
  * A read-only Set of known string literals: its elements are `T`, but `has()` accepts any string because
@@ -48,15 +42,29 @@ export const SUPPORTED_FRAMEWORKS: LiteralSet<(typeof FRAMEWORK_NAMES)[number]> 
 /** Values accepted by `renderer:`; also the possible `rendererMode` of a document. */
 export const SUPPORTED_RENDERERS: LiteralSet<(typeof RENDERER_NAMES)[number]> = new Set(RENDERER_NAMES);
 /** Values accepted by `mode:` (after `normalizeModeValue()`). */
-export const SUPPORTED_FRAMEWORK_MODES: LiteralSet<(typeof FRAMEWORK_MODE_NAMES)[number]> = new Set(FRAMEWORK_MODE_NAMES);
+export const SUPPORTED_FRAMEWORK_MODES: LiteralSet<(typeof FRAMEWORK_MODE_NAMES)[number]> = new Set(
+    FRAMEWORK_MODE_NAMES,
+);
 /** Block types that make a legacy document a shader example. */
 export const SHADER_BLOCK_TYPES: LiteralSet<(typeof SHADER_STAGE_NAMES)[number]> = new Set(SHADER_STAGE_NAMES);
 /** Uniforms the shader runtime always sets; custom uniforms with these names are ignored with a warning. */
-export const SHADER_BUILTIN_UNIFORMS: LiteralList<(typeof SHADER_BUILTIN_UNIFORM_NAMES)[number]> = Object.freeze(SHADER_BUILTIN_UNIFORM_NAMES);
+export const SHADER_BUILTIN_UNIFORMS: LiteralList<(typeof SHADER_BUILTIN_UNIFORM_NAMES)[number]> =
+    Object.freeze(SHADER_BUILTIN_UNIFORM_NAMES);
 /** Types allowed in `shader_uniforms` declarations. */
-export const SHADER_CUSTOM_UNIFORM_TYPES: LiteralSet<(typeof SHADER_UNIFORM_TYPE_NAMES)[number]> = new Set(SHADER_UNIFORM_TYPE_NAMES);
+export const SHADER_CUSTOM_UNIFORM_TYPES: LiteralSet<(typeof SHADER_UNIFORM_TYPE_NAMES)[number]> = new Set(
+    SHADER_UNIFORM_TYPE_NAMES,
+);
 /** Image extensions a shader texture asset may have. */
-export const SHADER_TEXTURE_EXTENSIONS: LiteralSet<string> = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.bmp', '.svg']);
+export const SHADER_TEXTURE_EXTENSIONS: LiteralSet<string> = new Set([
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.webp',
+    '.avif',
+    '.bmp',
+    '.svg',
+]);
 
 const EXERCISE_METADATA_KEY_NAMES = [
     'exercise',
@@ -77,29 +85,54 @@ const EXAMPLE_STAGE_NAMES = [
     'exercise',
     'professional',
 ] as const;
-const EXAMPLE_IMPORTANCE_NAMES = [
-    'trivial',
-    'useful',
-    'important',
-    'critical',
-] as const;
+const EXAMPLE_IMPORTANCE_NAMES = ['trivial', 'useful', 'important', 'critical'] as const;
 
 /** The `exercise` flag and every `exercise_*` key (exercise mode; leftovers without the flag are reported). */
-export const EXERCISE_METADATA_KEYS: LiteralSet<(typeof EXERCISE_METADATA_KEY_NAMES)[number]> = new Set(EXERCISE_METADATA_KEY_NAMES);
+export const EXERCISE_METADATA_KEYS: LiteralSet<(typeof EXERCISE_METADATA_KEY_NAMES)[number]> = new Set(
+    EXERCISE_METADATA_KEY_NAMES,
+);
 /** Valid `example_stage:` values. */
 export const EXAMPLE_STAGE_VALUES: LiteralSet<(typeof EXAMPLE_STAGE_NAMES)[number]> = new Set(EXAMPLE_STAGE_NAMES);
 /** Valid `example_importance:` values, from least to most important. */
-export const EXAMPLE_IMPORTANCE_VALUES: LiteralSet<(typeof EXAMPLE_IMPORTANCE_NAMES)[number]> = new Set(EXAMPLE_IMPORTANCE_NAMES);
+export const EXAMPLE_IMPORTANCE_VALUES: LiteralSet<(typeof EXAMPLE_IMPORTANCE_NAMES)[number]> = new Set(
+    EXAMPLE_IMPORTANCE_NAMES,
+);
 /** Block types that can be the app block of a React single-file example. */
 export const REACT_APP_BLOCK_TYPES: LiteralSet<BlockType> = new Set<BlockType>(['jsx', 'tsx']);
 /** Languages a React multi-file project accepts. */
-export const REACT_MULTI_FILE_LANGUAGES: LiteralSet<FileLanguage> = new Set<FileLanguage>(['jsx', 'tsx', 'javascript', 'typescript', 'css', 'scss', 'sass', 'json']);
+export const REACT_MULTI_FILE_LANGUAGES: LiteralSet<FileLanguage> = new Set<FileLanguage>([
+    'jsx',
+    'tsx',
+    'javascript',
+    'typescript',
+    'css',
+    'scss',
+    'sass',
+    'json',
+]);
 /** Languages a React entry file may use. */
-export const REACT_MULTI_FILE_ENTRY_LANGUAGES: LiteralSet<FileLanguage> = new Set<FileLanguage>(['jsx', 'tsx', 'javascript', 'typescript']);
+export const REACT_MULTI_FILE_ENTRY_LANGUAGES: LiteralSet<FileLanguage> = new Set<FileLanguage>([
+    'jsx',
+    'tsx',
+    'javascript',
+    'typescript',
+]);
 /** Languages a Vue multi-file project accepts (`html` files are render templates). */
-export const VUE_MULTI_FILE_LANGUAGES: LiteralSet<FileLanguage> = new Set<FileLanguage>(['html', 'javascript', 'typescript', 'css', 'scss', 'sass', 'json', 'vue']);
+export const VUE_MULTI_FILE_LANGUAGES: LiteralSet<FileLanguage> = new Set<FileLanguage>([
+    'html',
+    'javascript',
+    'typescript',
+    'css',
+    'scss',
+    'sass',
+    'json',
+    'vue',
+]);
 /** Languages a Vue entry file may use. */
-export const VUE_MULTI_FILE_ENTRY_LANGUAGES: LiteralSet<FileLanguage> = new Set<FileLanguage>(['javascript', 'typescript']);
+export const VUE_MULTI_FILE_ENTRY_LANGUAGES: LiteralSet<FileLanguage> = new Set<FileLanguage>([
+    'javascript',
+    'typescript',
+]);
 /** Extensions of binary assets: a `## @file` with one of them is reported as an unsupported virtual asset. */
 export const LIKELY_VIRTUAL_ASSET_EXTENSIONS: LiteralSet<string> = new Set([
     '.png',
@@ -161,9 +194,13 @@ const VIRTUAL_FILE_ROLE_NAMES = [
  * Frontmatter keys the parser knows: matched case-insensitively, stored lower-case and normalized by
  * `normalizeMetadata()`. Other keys are kept verbatim.
  */
-export const KNOWN_METADATA_KEYS: LiteralSet<(typeof KNOWN_METADATA_KEY_NAMES)[number]> = new Set(KNOWN_METADATA_KEY_NAMES);
+export const KNOWN_METADATA_KEYS: LiteralSet<(typeof KNOWN_METADATA_KEY_NAMES)[number]> = new Set(
+    KNOWN_METADATA_KEY_NAMES,
+);
 /** `@role` values accepted without an `unsupported-file-role` warning. */
-export const ALLOWED_VIRTUAL_FILE_ROLES: LiteralSet<(typeof VIRTUAL_FILE_ROLE_NAMES)[number]> = new Set(VIRTUAL_FILE_ROLE_NAMES);
+export const ALLOWED_VIRTUAL_FILE_ROLES: LiteralSet<(typeof VIRTUAL_FILE_ROLE_NAMES)[number]> = new Set(
+    VIRTUAL_FILE_ROLE_NAMES,
+);
 
 // Option lists of the editor's "add file" / "change badge" menus (re-exported by src/utils/markdown.ts).
 
@@ -187,13 +224,43 @@ export const SHADER_BLOCK_LANGUAGE_OPTIONS: LiteralList<ShaderBlockType> = ['ver
 /** Block languages offered for React single-file examples. */
 export const LEGACY_REACT_BLOCK_LANGUAGE_OPTIONS: LiteralList<BlockType> = ['jsx', 'tsx', 'css', 'scss', 'sass'];
 /** Block languages offered for Vue single-file examples. */
-export const LEGACY_VUE_BLOCK_LANGUAGE_OPTIONS: LiteralList<BlockType> = ['html', 'css', 'scss', 'sass', 'javascript', 'typescript'];
+export const LEGACY_VUE_BLOCK_LANGUAGE_OPTIONS: LiteralList<BlockType> = [
+    'html',
+    'css',
+    'scss',
+    'sass',
+    'javascript',
+    'typescript',
+];
 /** File languages offered for React multi-file projects. */
-export const REACT_MULTI_FILE_LANGUAGE_OPTIONS: LiteralList<FileLanguage> = ['jsx', 'tsx', 'javascript', 'typescript', 'css', 'scss', 'sass', 'json'];
+export const REACT_MULTI_FILE_LANGUAGE_OPTIONS: LiteralList<FileLanguage> = [
+    'jsx',
+    'tsx',
+    'javascript',
+    'typescript',
+    'css',
+    'scss',
+    'sass',
+    'json',
+];
 /** Languages a React entry file can be switched to. */
-export const REACT_MULTI_FILE_ENTRY_LANGUAGE_OPTIONS: LiteralList<FileLanguage> = ['jsx', 'tsx', 'javascript', 'typescript'];
+export const REACT_MULTI_FILE_ENTRY_LANGUAGE_OPTIONS: LiteralList<FileLanguage> = [
+    'jsx',
+    'tsx',
+    'javascript',
+    'typescript',
+];
 /** File languages offered for Vue multi-file projects. */
-export const VUE_MULTI_FILE_LANGUAGE_OPTIONS: LiteralList<FileLanguage> = ['html', 'javascript', 'typescript', 'css', 'scss', 'sass', 'json', 'vue'];
+export const VUE_MULTI_FILE_LANGUAGE_OPTIONS: LiteralList<FileLanguage> = [
+    'html',
+    'javascript',
+    'typescript',
+    'css',
+    'scss',
+    'sass',
+    'json',
+    'vue',
+];
 /** Languages a Vue entry file can be switched to. */
 export const VUE_MULTI_FILE_ENTRY_LANGUAGE_OPTIONS: LiteralList<FileLanguage> = ['javascript', 'typescript'];
 /** Role menu of a virtual file (`''` = no role). */
@@ -244,15 +311,42 @@ export const LEGACY_SCRIPT_LANGUAGE_OPTIONS: LiteralList<BlockType> = ['javascri
 /** App-block languages of a React single-file example. */
 export const LEGACY_APP_LANGUAGE_OPTIONS: LiteralList<BlockType> = ['jsx', 'tsx'];
 /** Languages a React source (non-style, non-JSON) file can switch between. */
-export const REACT_MULTI_FILE_CODE_LANGUAGE_OPTIONS: LiteralList<FileLanguage> = ['jsx', 'tsx', 'javascript', 'typescript'];
+export const REACT_MULTI_FILE_CODE_LANGUAGE_OPTIONS: LiteralList<FileLanguage> = [
+    'jsx',
+    'tsx',
+    'javascript',
+    'typescript',
+];
 /** Languages a Vue source module can switch between. */
 export const VUE_MULTI_FILE_CODE_LANGUAGE_OPTIONS: LiteralList<FileLanguage> = ['javascript', 'typescript'];
 /** Roles of React files that hold source code (`''` = no role). */
-export const REACT_MULTI_FILE_CODE_ROLES: LiteralSet<VirtualFileRole | ''> = new Set<VirtualFileRole | ''>(['', 'app', 'component', 'context', 'hook', 'page', 'reducer', 'script', 'util']);
+export const REACT_MULTI_FILE_CODE_ROLES: LiteralSet<VirtualFileRole | ''> = new Set<VirtualFileRole | ''>([
+    '',
+    'app',
+    'component',
+    'context',
+    'hook',
+    'page',
+    'reducer',
+    'script',
+    'util',
+]);
 /** Roles of Vue files that hold source code modules (`''` = no role). */
-export const VUE_MULTI_FILE_CODE_ROLES: LiteralSet<VirtualFileRole | ''> = new Set<VirtualFileRole | ''>(['', 'context', 'hook', 'page', 'reducer', 'script', 'util']);
+export const VUE_MULTI_FILE_CODE_ROLES: LiteralSet<VirtualFileRole | ''> = new Set<VirtualFileRole | ''>([
+    '',
+    'context',
+    'hook',
+    'page',
+    'reducer',
+    'script',
+    'util',
+]);
 /** Roles a Vue SFC (`.vue`) file may have. */
-export const VUE_MULTI_FILE_SFC_ROLES: LiteralSet<VirtualFileRole> = new Set<VirtualFileRole>(['app', 'component', 'page']);
+export const VUE_MULTI_FILE_SFC_ROLES: LiteralSet<VirtualFileRole> = new Set<VirtualFileRole>([
+    'app',
+    'component',
+    'page',
+]);
 /** Display names of the languages, for those without a block definition (block types use `BlockDefinition.heading`). */
 export const LANGUAGE_LABELS = {
     css: 'CSS',

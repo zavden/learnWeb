@@ -89,7 +89,10 @@ export function getDiagnosticSeverity(level: string = ''): DiagnosticSeverity {
  * Builds the decorations for a document: one entry per line (an error wins over warnings on the same
  * line). Returns {@link EMPTY_EDITOR_DIAGNOSTICS} when nothing has a usable line.
  */
-export function buildEditorDiagnosticSets(doc: Text, diagnostics: EditorLineDiagnostic[] = []): Readonly<EditorDiagnosticSets> {
+export function buildEditorDiagnosticSets(
+    doc: Text,
+    diagnostics: EditorLineDiagnostic[] = [],
+): Readonly<EditorDiagnosticSets> {
     if (!Array.isArray(diagnostics) || diagnostics.length === 0) {
         return EMPTY_EDITOR_DIAGNOSTICS;
     }
@@ -280,7 +283,11 @@ export const diagnosticsMixin = {
     },
 
     /** The grey line under a diagnostic message: category • location • code. */
-    _formatDiagnosticMeta(diagnostic: Diagnostic, target: DiagnosticTarget | null | undefined, category: DiagnosticCategory): string {
+    _formatDiagnosticMeta(
+        diagnostic: Diagnostic,
+        target: DiagnosticTarget | null | undefined,
+        category: DiagnosticCategory,
+    ): string {
         const parts = [category === 'structural' ? 'Structure' : category === 'runtime' ? 'Runtime' : 'Compile'];
 
         if (target?.file?.path) {
@@ -317,7 +324,9 @@ export const diagnosticsMixin = {
      * become the pseudo paths `__slot__:script`, `__slot__:markup` and `__slot__:entry`.
      */
     _normalizeDiagnosticPath(value: string | null | undefined = ''): string {
-        const raw = String(value || '').trim().replaceAll('\\', '/');
+        const raw = String(value || '')
+            .trim()
+            .replaceAll('\\', '/');
         if (!raw) return '';
 
         if (raw.startsWith('learncode-virtual:')) {
@@ -407,7 +416,9 @@ export const diagnosticsMixin = {
         }
 
         if (diagnostic.type) {
-            const typeMatches = files.filter((file) => file.language === diagnostic.type || file.blockType === diagnostic.type);
+            const typeMatches = files.filter(
+                (file) => file.language === diagnostic.type || file.blockType === diagnostic.type,
+            );
             if (typeMatches.length === 1) {
                 return typeMatches[0];
             }

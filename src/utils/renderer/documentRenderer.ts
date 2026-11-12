@@ -181,7 +181,13 @@ function finalizeBridgeConfig(html: string = '', config: RuntimeBridgeConfig = {
     return html.replace(RUNTIME_BRIDGE_CONFIG_PLACEHOLDER, () => json);
 }
 
-function buildBridgeConfig({ consoleEnabled, renderId, hosted, suppressDialogs, ranges }: BridgeSettings & { ranges: SourceRange[] }): RuntimeBridgeConfig {
+function buildBridgeConfig({
+    consoleEnabled,
+    renderId,
+    hosted,
+    suppressDialogs,
+    ranges,
+}: BridgeSettings & { ranges: SourceRange[] }): RuntimeBridgeConfig {
     return {
         consoleEnabled: Boolean(consoleEnabled),
         mode: hosted ? 'hosted' : 'srcdoc',
@@ -206,10 +212,12 @@ function findInsertionPoint(html: string = ''): { index: number; wrapInHead: boo
     const masked = maskHtmlComments(html);
     const bodyStart = masked.search(/<body\b/i);
     const headEnd = masked.search(/<\/head\s*>/i);
-    const limit = [bodyStart, headEnd].filter((index) => index >= 0).reduce((min, index) => Math.min(min, index), masked.length);
+    const limit = [bodyStart, headEnd]
+        .filter((index) => index >= 0)
+        .reduce((min, index) => Math.min(min, index), masked.length);
 
     // `<meta charset>` must stay within the first bytes of the document, so the runtime goes after it.
-    const charsetPattern = /<meta\b[^>]*\bcharset\s*=[^>]*>/ig;
+    const charsetPattern = /<meta\b[^>]*\bcharset\s*=[^>]*>/gi;
     let charset = charsetPattern.exec(masked);
     while (charset && charset.index >= limit) charset = null;
     if (charset) return { index: charset.index + charset[0].length, wrapInHead: false };
@@ -232,9 +240,8 @@ function renderFullDocument(documentHtml: string = '', options: FullDocumentOpti
     let html = String(documentHtml || '');
 
     // Everything is injected inline (no new lines) so the learner's line numbers stay valid.
-    const baseMarkup = assetBase && !hosted && !/<base\b[^>]*\bhref\s*=/i.test(html)
-        ? `<base href="${assetBase}">`
-        : '';
+    const baseMarkup =
+        assetBase && !hosted && !/<base\b[^>]*\bhref\s*=/i.test(html) ? `<base href="${assetBase}">` : '';
     const injected = `${baseMarkup}${buildRuntimeBridgeMarkupWithPlaceholder()}`;
     const insertion = findInsertionPoint(html);
     const markup = insertion.wrapInHead ? `<head>${injected}</head>` : injected;
@@ -243,18 +250,21 @@ function renderFullDocument(documentHtml: string = '', options: FullDocumentOpti
     if (diagnosticsMarkup) {
         const flatDiagnostics = diagnosticsMarkup.replace(/\n\s*/g, ' ');
         const bodyClose = maskHtmlComments(html).search(/<\/body>/i);
-        html = bodyClose >= 0
-            ? `${html.slice(0, bodyClose)}${flatDiagnostics}${html.slice(bodyClose)}`
-            : `${html}${flatDiagnostics}`;
+        html =
+            bodyClose >= 0
+                ? `${html.slice(0, bodyClose)}${flatDiagnostics}${html.slice(bodyClose)}`
+                : `${html}${flatDiagnostics}`;
     }
 
-    const ranges: SourceRange[] = [{
-        kind: 'document',
-        path: markupPath || 'index.html',
-        startLine: 1,
-        startColumn: 0,
-        endLine: Number.MAX_SAFE_INTEGER,
-    }];
+    const ranges: SourceRange[] = [
+        {
+            kind: 'document',
+            path: markupPath || 'index.html',
+            startLine: 1,
+            startColumn: 0,
+            endLine: Number.MAX_SAFE_INTEGER,
+        },
+    ];
 
     return finalizeBridgeConfig(html, buildBridgeConfig({ ...options, ranges }));
 }
@@ -267,12 +277,15 @@ const SVG_BASE_STYLES = `
 :where(.learncode-svg-preview) > :where(svg) { display: block; flex: 0 0 auto; max-width: none; height: auto; background: #fff; }`;
 
 /** Base styles of React and Vue examples. */
-const FRAMEWORK_BASE_STYLES = 'html, body { margin: 0; padding: 0; } body { padding: 16px; box-sizing: border-box; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }';
+const FRAMEWORK_BASE_STYLES =
+    'html, body { margin: 0; padding: 0; } body { padding: 16px; box-sizing: border-box; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }';
 
 function getBaseStyles({ framework, isPureSvgDocument, hasBlockingDiagnostics }: BaseStyleOptions): string {
     if (isPureSvgDocument) return SVG_BASE_STYLES;
-    if (framework === 'react') return `${FRAMEWORK_BASE_STYLES}${hasBlockingDiagnostics ? '' : ' #root { min-height: calc(100vh - 32px); }'}`;
-    if (framework === 'vue') return `${FRAMEWORK_BASE_STYLES}${hasBlockingDiagnostics ? '' : ' #app { min-height: calc(100vh - 32px); }'}`;
+    if (framework === 'react')
+        return `${FRAMEWORK_BASE_STYLES}${hasBlockingDiagnostics ? '' : ' #root { min-height: calc(100vh - 32px); }'}`;
+    if (framework === 'vue')
+        return `${FRAMEWORK_BASE_STYLES}${hasBlockingDiagnostics ? '' : ' #app { min-height: calc(100vh - 32px); }'}`;
     // Plain HTML examples get the browser's real defaults (8px body margin, default fonts…) so CSS
     // lessons behave exactly like a standalone page.
     return '';
@@ -311,11 +324,12 @@ export function renderCompiledExampleDocument(
     // `!`: Number.isFinite() is true only for a number, but it does not narrow.
     const renderId = Number.isFinite(options.renderId) ? options.renderId! : 0;
     const markupPath = options.markupPath || 'index.html';
-    const visibleDiagnostics = (Array.isArray(diagnostics) ? diagnostics : []).filter((diagnostic) => diagnostic?.blocking !== false);
+    const visibleDiagnostics = (Array.isArray(diagnostics) ? diagnostics : []).filter(
+        (diagnostic) => diagnostic?.blocking !== false,
+    );
     const hasBlockingDiagnostics = visibleDiagnostics.some(isBlockingDiagnostic);
-    const diagnosticsMarkup = consoleEnabled && !hasBlockingDiagnostics
-        ? ''
-        : buildDiagnosticsMarkup(visibleDiagnostics);
+    const diagnosticsMarkup =
+        consoleEnabled && !hasBlockingDiagnostics ? '' : buildDiagnosticsMarkup(visibleDiagnostics);
     const sharedOptions = {
         consoleEnabled,
         hosted,
@@ -341,7 +355,9 @@ export function renderCompiledExampleDocument(
     const mapsMarkup = Boolean(html) && (markupType === 'html' || markupType === 'svg' || !markupType);
 
     const builder = buildDocumentBuilder();
-    builder.append(`<!DOCTYPE html>\n<html lang="${getDocumentLanguage(compiledDocument?.lang)}">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n`);
+    builder.append(
+        `<!DOCTYPE html>\n<html lang="${getDocumentLanguage(compiledDocument?.lang)}">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n`,
+    );
     if (assetBase && !hosted) builder.append(`<base href="${assetBase}">\n`);
     builder.append(`${buildRuntimeBridgeMarkupWithPlaceholder()}\n`);
     if (baseStyles) builder.append(`<style>${baseStyles}\n</style>\n`);

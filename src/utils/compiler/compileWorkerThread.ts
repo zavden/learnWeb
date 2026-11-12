@@ -16,7 +16,11 @@ parentPort!.on('message', async (message: CompileThreadRequest) => {
         const result = await compileExampleDocument(message.document);
         parentPort!.postMessage({ id: message.id, ok: true, result } satisfies CompileThreadMessage);
     } catch (error) {
-        parentPort!.postMessage({ error: errorMessage(error), id: message.id, ok: false } satisfies CompileThreadMessage);
+        parentPort!.postMessage({
+            error: errorMessage(error),
+            id: message.id,
+            ok: false,
+        } satisfies CompileThreadMessage);
     }
 });
 

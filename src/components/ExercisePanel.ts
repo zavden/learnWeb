@@ -115,7 +115,14 @@ export class ExercisePanel {
     private readonly comparisonStatus: HTMLElement | null;
     private readonly comparisonGrid: HTMLElement | null;
 
-    constructor({ onRevealHint, onRevealReferences, onRevealSolution, onSelectComparisonPair, onToggleCollapse, onToggleComparison }: ExercisePanelOptions = {}) {
+    constructor({
+        onRevealHint,
+        onRevealReferences,
+        onRevealSolution,
+        onSelectComparisonPair,
+        onToggleCollapse,
+        onToggleComparison,
+    }: ExercisePanelOptions = {}) {
         this.panel = document.getElementById('exercise-panel');
         this.body = document.getElementById('exercise-panel-body');
         this.title = document.getElementById('exercise-title');
@@ -140,7 +147,9 @@ export class ExercisePanel {
         this.btnRevealReferences?.addEventListener('click', () => onRevealReferences?.());
         this.btnRevealSolution?.addEventListener('click', () => onRevealSolution?.());
         this.btnCompare?.addEventListener('click', () => onToggleComparison?.());
-        this.comparisonSelect?.addEventListener('change', (event) => onSelectComparisonPair?.((event.target as HTMLSelectElement).value));
+        this.comparisonSelect?.addEventListener('change', (event) =>
+            onSelectComparisonPair?.((event.target as HTMLSelectElement).value),
+        );
 
         this.clear();
     }
@@ -188,20 +197,24 @@ export class ExercisePanel {
             const parts = [];
 
             if (presentation.lockedFileCount > 0) {
-                parts.push(`${presentation.lockedFileCount} locked file${presentation.lockedFileCount === 1 ? '' : 's'}`);
+                parts.push(
+                    `${presentation.lockedFileCount} locked file${presentation.lockedFileCount === 1 ? '' : 's'}`,
+                );
             }
 
             if (presentation.hiddenReferenceCount > 0) {
-                parts.push(`${presentation.hiddenReferenceCount} hidden reference file${presentation.hiddenReferenceCount === 1 ? '' : 's'}`);
+                parts.push(
+                    `${presentation.hiddenReferenceCount} hidden reference file${presentation.hiddenReferenceCount === 1 ? '' : 's'}`,
+                );
             }
 
             if (presentation.hiddenSolutionCount > 0) {
-                parts.push(`${presentation.hiddenSolutionCount} hidden solution file${presentation.hiddenSolutionCount === 1 ? '' : 's'}`);
+                parts.push(
+                    `${presentation.hiddenSolutionCount} hidden solution file${presentation.hiddenSolutionCount === 1 ? '' : 's'}`,
+                );
             }
 
-            this.summary.textContent = parts.length > 0
-                ? parts.join(' • ')
-                : 'Exercise workspace ready';
+            this.summary.textContent = parts.length > 0 ? parts.join(' • ') : 'Exercise workspace ready';
         }
 
         const hints = Array.isArray(presentation.hints) ? presentation.hints : [];
@@ -222,9 +235,7 @@ export class ExercisePanel {
             const remaining = Number(presentation.remainingHintCount || 0);
             this.btnHint.classList.toggle('hidden', Number(presentation.totalHintCount || 0) === 0);
             this.btnHint.disabled = remaining === 0;
-            this.btnHint.textContent = remaining > 0
-                ? `Show Hint (${remaining})`
-                : 'All Hints Shown';
+            this.btnHint.textContent = remaining > 0 ? `Show Hint (${remaining})` : 'All Hints Shown';
         }
 
         if (this.btnRevealReferences) {
@@ -282,8 +293,8 @@ export class ExercisePanel {
             const statusMessage = comparison.loading
                 ? 'Loading linked solution example...'
                 : comparison.error
-                    ? comparison.error
-                    : issues[0] || '';
+                  ? comparison.error
+                  : issues[0] || '';
 
             this.comparisonStatus.textContent = statusMessage;
             this.comparisonStatus.classList.toggle('hidden', !statusMessage);

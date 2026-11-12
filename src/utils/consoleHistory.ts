@@ -42,7 +42,9 @@ function sanitizeEntries(entries: unknown = []): string[] {
  * A valid session from whatever is given: entries are trimmed and capped, and an out-of-range `index`
  * becomes `null`. With no argument it is an empty session.
  */
-export function createConsoleHistorySession(session: Partial<ConsoleHistorySession> | null = {}): ConsoleHistorySession {
+export function createConsoleHistorySession(
+    session: Partial<ConsoleHistorySession> | null = {},
+): ConsoleHistorySession {
     const entries = sanitizeEntries(session?.entries);
     const rawIndex = Number.isInteger(session?.index) ? (session?.index as number) : null;
 
@@ -70,9 +72,10 @@ export function rememberConsoleCommand(
     }
 
     const lastEntry = nextSession.entries.at(-1);
-    const nextEntries = lastEntry === trimmedCommand
-        ? nextSession.entries
-        : [...nextSession.entries, trimmedCommand].slice(-Math.max(1, limit));
+    const nextEntries =
+        lastEntry === trimmedCommand
+            ? nextSession.entries
+            : [...nextSession.entries, trimmedCommand].slice(-Math.max(1, limit));
 
     return {
         draft: '',
@@ -82,7 +85,10 @@ export function rememberConsoleCommand(
 }
 
 /** Stops browsing because the user edited the input: `draft` becomes the text to come back to. */
-export function resetConsoleHistoryNavigation(session: Partial<ConsoleHistorySession> | null = {}, draft = ''): ConsoleHistorySession {
+export function resetConsoleHistoryNavigation(
+    session: Partial<ConsoleHistorySession> | null = {},
+    draft = '',
+): ConsoleHistorySession {
     const nextSession = createConsoleHistorySession(session);
 
     return {
@@ -114,9 +120,7 @@ export function navigateConsoleHistory(
     }
 
     if (direction === -1) {
-        const nextIndex = nextSession.index === null
-            ? entries.length - 1
-            : Math.max(0, nextSession.index - 1);
+        const nextIndex = nextSession.index === null ? entries.length - 1 : Math.max(0, nextSession.index - 1);
 
         return {
             changed: true,

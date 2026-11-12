@@ -35,7 +35,9 @@ class CompileClient {
             try {
                 this.worker = new Worker(new URL('../workers/compileWorker.ts', import.meta.url), { type: 'module' });
                 this.worker.addEventListener('message', (event) => this._handleWorkerMessage(event));
-                this.worker.addEventListener('error', (event) => this._handleWorkerFailure(event?.message || 'Worker error'));
+                this.worker.addEventListener('error', (event) =>
+                    this._handleWorkerFailure(event?.message || 'Worker error'),
+                );
             } catch (error) {
                 this.worker = null;
                 this.workerDisabled = true;

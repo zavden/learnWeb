@@ -46,14 +46,19 @@ function readFileHead(filePath: string, byteCount = LABEL_READ_BYTES): string {
         descriptor = fs.openSync(filePath, 'r');
         const buffer = Buffer.alloc(byteCount);
         const bytesRead = fs.readSync(descriptor, buffer, 0, byteCount, 0);
-        return buffer.subarray(0, bytesRead).toString('utf-8').replace(/^\uFEFF/, '');
+        return buffer
+            .subarray(0, bytesRead)
+            .toString('utf-8')
+            .replace(/^\uFEFF/, '');
     } catch {
         return '';
     } finally {
         if (descriptor !== null) {
             try {
                 fs.closeSync(descriptor);
-            } catch { /* ignore */ }
+            } catch {
+                /* ignore */
+            }
         }
     }
 }
@@ -64,7 +69,10 @@ function readFileHead(filePath: string, byteCount = LABEL_READ_BYTES): string {
  */
 export function readFolderLabel(folderPath: string): string {
     const head = readFileHead(path.join(folderPath, LABEL_FILE_NAME));
-    const firstLine = head.split(/\r?\n/).map((line) => line.trim()).find(Boolean);
+    const firstLine = head
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find(Boolean);
     return firstLine || '';
 }
 
@@ -92,7 +100,10 @@ export function readTopicHeadingLabel(topicPath: string): string {
 
         const headingMatch = line.match(/^ {0,3}#[ \t]+(.+?)[ \t]*$/);
         if (headingMatch) {
-            const text = headingMatch[1].replace(/[ \t]+#+$/, '').replace(/`([^`]+)`/g, '$1').trim();
+            const text = headingMatch[1]
+                .replace(/[ \t]+#+$/, '')
+                .replace(/`([^`]+)`/g, '$1')
+                .trim();
             if (text) return text;
         }
     }
@@ -125,12 +136,14 @@ export function compareMaterialEntries(left = '', right = ''): number {
 export function normalizeHiddenState(rawState: unknown = {}): HiddenState {
     const state = rawState as RawHiddenState | null | undefined;
     const chapterIds: unknown[] = Array.isArray(state?.chapters) ? state.chapters : [];
-    const chapters = Array.from(new Set(
-        chapterIds
-            .map((chapterId) => String(chapterId || '').trim())
-            .filter(Boolean)
-            .filter((chapterId) => /^ch\d+-.+/.test(chapterId)),
-    )).sort();
+    const chapters = Array.from(
+        new Set(
+            chapterIds
+                .map((chapterId) => String(chapterId || '').trim())
+                .filter(Boolean)
+                .filter((chapterId) => /^ch\d+-.+/.test(chapterId)),
+        ),
+    ).sort();
 
     return { chapters };
 }
@@ -212,8 +225,7 @@ export function buildMaterialTree(
             return {
                 id: chapterId,
                 hidden: hiddenChapters.has(chapterId),
-                label: chapterLabel
-                    || (parsedChapter ? parsedChapter.label.replace(/-/g, ' ') : chapterId),
+                label: chapterLabel || (parsedChapter ? parsedChapter.label.replace(/-/g, ' ') : chapterId),
                 labelSource: chapterLabel ? 'custom' : 'slug',
                 number: parsedChapter?.number ?? 0,
                 sections: sections.map((sectionId): MaterialSection => {
@@ -221,14 +233,16 @@ export function buildMaterialTree(
                     const parsedSection = parseDirName(sectionId);
                     const topics = fs
                         .readdirSync(sectionPath)
-                        .filter((entry) => entry.startsWith('top') && fs.statSync(path.join(sectionPath, entry)).isDirectory())
+                        .filter(
+                            (entry) =>
+                                entry.startsWith('top') && fs.statSync(path.join(sectionPath, entry)).isDirectory(),
+                        )
                         .sort(compareMaterialEntries);
 
                     const sectionLabel = readFolderLabel(sectionPath);
                     return {
                         id: sectionId,
-                        label: sectionLabel
-                            || (parsedSection ? parsedSection.label.replace(/-/g, ' ') : sectionId),
+                        label: sectionLabel || (parsedSection ? parsedSection.label.replace(/-/g, ' ') : sectionId),
                         labelSource: sectionLabel ? 'custom' : 'slug',
                         number: parsedSection?.number ?? 0,
                         topics: topics.map((topicId): MaterialTopic => {
@@ -236,8 +250,7 @@ export function buildMaterialTree(
                             const topicLabel = readTopicHeadingLabel(path.join(sectionPath, topicId));
                             return {
                                 id: topicId,
-                                label: topicLabel
-                                    || (parsedTopic ? parsedTopic.label.replace(/-/g, ' ') : topicId),
+                                label: topicLabel || (parsedTopic ? parsedTopic.label.replace(/-/g, ' ') : topicId),
                                 labelSource: topicLabel ? 'custom' : 'slug',
                                 number: parsedTopic?.number ?? 0,
                                 path: `${chapterId}/${sectionId}/${topicId}`,

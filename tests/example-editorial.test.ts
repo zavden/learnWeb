@@ -17,17 +17,23 @@ test('example editorial helpers expose importance metadata and formatted stars',
 });
 
 test('example editorial helper detects when metadata is effectively empty', () => {
-    assert.equal(hasExampleEditorialMetadata({
-        description: '',
-        tags: [],
-        rating: null,
-        importance: '',
-    }), false);
+    assert.equal(
+        hasExampleEditorialMetadata({
+            description: '',
+            tags: [],
+            rating: null,
+            importance: '',
+        }),
+        false,
+    );
 
-    assert.equal(hasExampleEditorialMetadata({
-        description: 'Short summary',
-        tags: [],
-        rating: null,
-        importance: '',
-    }), true);
+    assert.equal(
+        hasExampleEditorialMetadata({
+            description: 'Short summary',
+            tags: [],
+            rating: null,
+            importance: '',
+        }),
+        true,
+    );
 });

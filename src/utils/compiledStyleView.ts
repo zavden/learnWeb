@@ -31,7 +31,12 @@ const SASS_MESSAGE_LABELS: Readonly<Record<string, string | undefined>> = {
 
 // Failures that leave the page without CSS: Sass errors and the isolated compiler stopping a job
 // (an endless @while hits the timeout or the memory limit).
-const COMPILE_FAILURE_CODES = new Set(['compile-out-of-memory', 'compile-timeout', 'compile-worker-crashed', 'sass-compile-error']);
+const COMPILE_FAILURE_CODES = new Set([
+    'compile-out-of-memory',
+    'compile-timeout',
+    'compile-worker-crashed',
+    'sass-compile-error',
+]);
 
 /** Path (and name) of the generated CSS tab. */
 export const COMPILED_CSS_PATH = 'compiled.css';
@@ -43,7 +48,12 @@ export const SASS_OUTPUT_PATH = 'sass-output.txt';
 /** The SCSS/Sass file of a legacy example's style slot, or `null`. */
 export function getPreprocessedStyleFile(documentModel: ExampleDocumentInput | null | undefined): VirtualFile | null {
     const files = Array.isArray(documentModel?.files) ? documentModel.files : [];
-    return files.find((file): file is VirtualFile => file?.slot === 'style' && (file.language === 'scss' || file.language === 'sass')) || null;
+    return (
+        files.find(
+            (file): file is VirtualFile =>
+                file?.slot === 'style' && (file.language === 'scss' || file.language === 'sass'),
+        ) || null
+    );
 }
 
 /**
@@ -55,7 +65,10 @@ export function getPreprocessedStyleFile(documentModel: ExampleDocumentInput | n
  *     styles.scss 3:3   root stylesheet
  * ```
  */
-export function formatSassMessages(diagnostics: readonly Diagnostic[] = [], fileName: string = 'styles.scss'): string[] {
+export function formatSassMessages(
+    diagnostics: readonly Diagnostic[] = [],
+    fileName: string = 'styles.scss',
+): string[] {
     return (Array.isArray(diagnostics) ? diagnostics : [])
         .filter((diagnostic) => SASS_MESSAGE_LABELS[diagnostic?.code])
         .map((diagnostic) => {
@@ -66,21 +79,28 @@ export function formatSassMessages(diagnostics: readonly Diagnostic[] = [], file
                 .trim();
             const frames: SassStackFrame[] = Array.isArray(diagnostic.stack) ? diagnostic.stack : [];
             const width = Math.max(0, ...frames.map((frame) => `${frame.line}:${frame.column}`.length));
-            const stackLines = frames.map((frame) => `    ${fileName} ${`${frame.line}:${frame.column}`.padEnd(width)}  ${frame.member}`);
+            const stackLines = frames.map(
+                (frame) => `    ${fileName} ${`${frame.line}:${frame.column}`.padEnd(width)}  ${frame.member}`,
+            );
             return [`${where} ${SASS_MESSAGE_LABELS[diagnostic.code]}: ${message}`, ...stackLines].join('\n');
         });
 }
 
 /** Whether the compile left the page without CSS (a Sass error, or the compiler stopped the job). */
 export function hasSassCompileError(diagnostics: readonly Diagnostic[] = []): boolean {
-    return (Array.isArray(diagnostics) ? diagnostics : []).some((diagnostic) => COMPILE_FAILURE_CODES.has(diagnostic?.code));
+    return (Array.isArray(diagnostics) ? diagnostics : []).some((diagnostic) =>
+        COMPILE_FAILURE_CODES.has(diagnostic?.code),
+    );
 }
 
 /**
  * Generated code files for a Sass example: the compiled CSS (when it compiled) and the compiler
  * messages (when there are any). Returns [] for examples without a SCSS/SASS block.
  */
-export function buildCompiledStyleFiles(documentModel: ExampleDocumentInput | null | undefined, compileResult: CompileResult | null | undefined): GeneratedCodeFile[] {
+export function buildCompiledStyleFiles(
+    documentModel: ExampleDocumentInput | null | undefined,
+    compileResult: CompileResult | null | undefined,
+): GeneratedCodeFile[] {
     const styleFile = getPreprocessedStyleFile(documentModel);
     if (!styleFile || !compileResult) return [];
 
@@ -122,18 +142,23 @@ export function getTypeScriptFile(documentModel: ExampleDocumentInput | null | u
  * The JavaScript a TypeScript example compiles to (types erased; `enum` and parameter properties
  * become real code). Returns [] for other examples or when the TypeScript has syntax errors.
  */
-export function buildCompiledScriptFiles(documentModel: ExampleDocumentInput | null | undefined, compileResult: CompileResult | null | undefined): GeneratedCodeFile[] {
+export function buildCompiledScriptFiles(
+    documentModel: ExampleDocumentInput | null | undefined,
+    compileResult: CompileResult | null | undefined,
+): GeneratedCodeFile[] {
     if (!getTypeScriptFile(documentModel) || !compileResult) return [];
     const js = String(compileResult.compiledDocument?.jsView || '').trimEnd();
     if (!js) return [];
-    return [{
-        content: `${js}\n`,
-        generated: true,
-        highlights: [],
-        language: 'javascript',
-        name: COMPILED_JS_PATH,
-        path: COMPILED_JS_PATH,
-    }];
+    return [
+        {
+            content: `${js}\n`,
+            generated: true,
+            highlights: [],
+            language: 'javascript',
+            name: COMPILED_JS_PATH,
+            path: COMPILED_JS_PATH,
+        },
+    ];
 }
 
 /**

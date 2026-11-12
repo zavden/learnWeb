@@ -11,9 +11,7 @@
 // the `type` parameters below are plain strings (anything outside the uniform types falls through to the
 // numeric case).
 
-import {
-    normalizeBlockType,
-} from '../../config/exampleBlocks.ts';
+import { normalizeBlockType } from '../../config/exampleBlocks.ts';
 import type { Diagnostic } from '../../types/diagnostics.ts';
 import type {
     FileVisibilityKey,
@@ -27,11 +25,7 @@ import type {
     ShaderUniformType,
     ShaderUniformValue,
 } from '../../types/document.ts';
-import {
-    SHADER_BUILTIN_UNIFORMS,
-    SHADER_CUSTOM_UNIFORM_TYPES,
-    SHADER_TEXTURE_EXTENSIONS,
-} from './constants.ts';
+import { SHADER_BUILTIN_UNIFORMS, SHADER_CUSTOM_UNIFORM_TYPES, SHADER_TEXTURE_EXTENSIONS } from './constants.ts';
 import {
     createDiagnostic,
     getFileExtension,
@@ -123,9 +117,7 @@ export function cloneShaderUniformValue(value: ShaderUniformValue): ShaderUnifor
 
 /** A copy of a range control, or `null` when there is none. */
 export function cloneShaderUniformControl(control: ShaderUniformControl | null = null): ShaderUniformControl | null {
-    return control && typeof control === 'object'
-        ? { ...control }
-        : null;
+    return control && typeof control === 'object' ? { ...control } : null;
 }
 
 /**
@@ -140,7 +132,10 @@ export function serializeShaderUniformValue(type: string, value: ShaderUniformVa
     if (type.startsWith('vec')) {
         const size = Number.parseInt(type.slice(3), 10) || 2;
         const vector = Array.isArray(value) ? value : Array.from({ length: size }, () => 0);
-        return vector.slice(0, size).map((entry) => String(Number(entry))).join(',');
+        return vector
+            .slice(0, size)
+            .map((entry) => String(Number(entry)))
+            .join(',');
     }
 
     return String(Number(value));
@@ -167,16 +162,17 @@ export function parseShaderUniformDefaultValue(type: string, rawValue: string | 
 
     if (type.startsWith('vec')) {
         const size = Number.parseInt(type.slice(3), 10);
-        const parts = value.split(',').map((entry) => entry.trim()).filter(Boolean);
+        const parts = value
+            .split(',')
+            .map((entry) => entry.trim())
+            .filter(Boolean);
         if (!Number.isFinite(size) || size <= 1 || parts.length !== size) return null;
 
         const vector = parts.map((entry) => Number.parseFloat(entry));
         return vector.every((entry) => Number.isFinite(entry)) ? vector : null;
     }
 
-    const numericValue = type === 'int'
-        ? Number.parseInt(value, 10)
-        : Number.parseFloat(value);
+    const numericValue = type === 'int' ? Number.parseInt(value, 10) : Number.parseFloat(value);
 
     if (!Number.isFinite(numericValue)) {
         return null;
@@ -212,43 +208,50 @@ export function parseShaderUniformControlValue(
 
     const diagnostics: Diagnostic[] = [];
     if (!['float', 'int'].includes(type)) {
-        diagnostics.push(createDiagnostic(
-            'warning',
-            'unsupported-shader-uniform-control',
-            `Shader uniform "${name}" only supports range controls for float or int types.`,
-            { declaration, name, uniformType: type }
-        ));
+        diagnostics.push(
+            createDiagnostic(
+                'warning',
+                'unsupported-shader-uniform-control',
+                `Shader uniform "${name}" only supports range controls for float or int types.`,
+                { declaration, name, uniformType: type },
+            ),
+        );
         return {
             control: null,
             diagnostics,
         };
     }
 
-    const parts = text.split(',').map((entry) => entry.trim()).filter(Boolean);
+    const parts = text
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean);
     if (parts.length !== 3) {
-        diagnostics.push(createDiagnostic(
-            'warning',
-            'invalid-shader-uniform-control',
-            `Shader uniform "${name}" has an invalid control hint. Use "[min,max,step]".`,
-            { declaration, name }
-        ));
+        diagnostics.push(
+            createDiagnostic(
+                'warning',
+                'invalid-shader-uniform-control',
+                `Shader uniform "${name}" has an invalid control hint. Use "[min,max,step]".`,
+                { declaration, name },
+            ),
+        );
         return {
             control: null,
             diagnostics,
         };
     }
 
-    const numericParts = parts.map((entry) => type === 'int'
-        ? Number.parseInt(entry, 10)
-        : Number.parseFloat(entry));
+    const numericParts = parts.map((entry) => (type === 'int' ? Number.parseInt(entry, 10) : Number.parseFloat(entry)));
 
     if (!numericParts.every((entry) => Number.isFinite(entry))) {
-        diagnostics.push(createDiagnostic(
-            'warning',
-            'invalid-shader-uniform-control',
-            `Shader uniform "${name}" has an invalid control hint. Use numeric "[min,max,step]".`,
-            { declaration, name }
-        ));
+        diagnostics.push(
+            createDiagnostic(
+                'warning',
+                'invalid-shader-uniform-control',
+                `Shader uniform "${name}" has an invalid control hint. Use numeric "[min,max,step]".`,
+                { declaration, name },
+            ),
+        );
         return {
             control: null,
             diagnostics,
@@ -257,12 +260,14 @@ export function parseShaderUniformControlValue(
 
     const [min, max, step] = numericParts;
     if (max <= min || step <= 0) {
-        diagnostics.push(createDiagnostic(
-            'warning',
-            'invalid-shader-uniform-control',
-            `Shader uniform "${name}" must use control values where max > min and step > 0.`,
-            { declaration, name }
-        ));
+        diagnostics.push(
+            createDiagnostic(
+                'warning',
+                'invalid-shader-uniform-control',
+                `Shader uniform "${name}" must use control values where max > min and step > 0.`,
+                { declaration, name },
+            ),
+        );
         return {
             control: null,
             diagnostics,
@@ -270,12 +275,14 @@ export function parseShaderUniformControlValue(
     }
 
     if (type === 'int' && !numericParts.every((entry) => Number.isInteger(entry))) {
-        diagnostics.push(createDiagnostic(
-            'warning',
-            'invalid-shader-uniform-control',
-            `Shader uniform "${name}" must use integer control values for int uniforms.`,
-            { declaration, name }
-        ));
+        diagnostics.push(
+            createDiagnostic(
+                'warning',
+                'invalid-shader-uniform-control',
+                `Shader uniform "${name}" must use integer control values for int uniforms.`,
+                { declaration, name },
+            ),
+        );
         return {
             control: null,
             diagnostics,
@@ -283,12 +290,14 @@ export function parseShaderUniformControlValue(
     }
 
     if (typeof defaultValue === 'number' && (defaultValue < min || defaultValue > max)) {
-        diagnostics.push(createDiagnostic(
-            'warning',
-            'shader-uniform-default-out-of-range',
-            `Shader uniform "${name}" default value is outside its declared control range.`,
-            { declaration, name, max, min, value: defaultValue }
-        ));
+        diagnostics.push(
+            createDiagnostic(
+                'warning',
+                'shader-uniform-default-out-of-range',
+                `Shader uniform "${name}" default value is outside its declared control range.`,
+                { declaration, name, max, min, value: defaultValue },
+            ),
+        );
         return {
             control: null,
             diagnostics,
@@ -324,18 +333,25 @@ export function parseShaderUniformMetadataValue(value: MetadataValue | null = ''
 
     const uniforms: ShaderUniform[] = [];
     const diagnostics: Diagnostic[] = [];
-    const entries = text.split('|').map((entry) => entry.trim()).filter(Boolean);
+    const entries = text
+        .split('|')
+        .map((entry) => entry.trim())
+        .filter(Boolean);
     const seenNames = new Set<string>();
 
     entries.forEach((entry) => {
-        const match = entry.match(/^([A-Za-z_][\w]*)\s*:\s*(float|int|bool|vec2|vec3|vec4)\s*=\s*(.+?)(?:\[([^\]]+)\])?$/i);
+        const match = entry.match(
+            /^([A-Za-z_][\w]*)\s*:\s*(float|int|bool|vec2|vec3|vec4)\s*=\s*(.+?)(?:\[([^\]]+)\])?$/i,
+        );
         if (!match) {
-            diagnostics.push(createDiagnostic(
-                'warning',
-                'invalid-shader-uniform-declaration',
-                `Shader uniform declaration "${entry}" is invalid. Use "name:type=value".`,
-                { declaration: entry }
-            ));
+            diagnostics.push(
+                createDiagnostic(
+                    'warning',
+                    'invalid-shader-uniform-declaration',
+                    `Shader uniform declaration "${entry}" is invalid. Use "name:type=value".`,
+                    { declaration: entry },
+                ),
+            );
             return;
         }
 
@@ -347,42 +363,50 @@ export function parseShaderUniformMetadataValue(value: MetadataValue | null = ''
 
         // Unreachable in practice (the pattern above only accepts these types), kept as a safety net.
         if (!SHADER_CUSTOM_UNIFORM_TYPES.has(type)) {
-            diagnostics.push(createDiagnostic(
-                'warning',
-                'unsupported-shader-uniform-type',
-                `Shader uniform "${name}" uses unsupported type "${type}".`,
-                { declaration: entry, name, uniformType: type }
-            ));
+            diagnostics.push(
+                createDiagnostic(
+                    'warning',
+                    'unsupported-shader-uniform-type',
+                    `Shader uniform "${name}" uses unsupported type "${type}".`,
+                    { declaration: entry, name, uniformType: type },
+                ),
+            );
             return;
         }
 
         if (SHADER_BUILTIN_UNIFORMS.includes(name)) {
-            diagnostics.push(createDiagnostic(
-                'warning',
-                'shader-uniform-conflicts-built-in',
-                `Shader uniform "${name}" conflicts with a built-in uniform and will be ignored.`,
-                { declaration: entry, name }
-            ));
+            diagnostics.push(
+                createDiagnostic(
+                    'warning',
+                    'shader-uniform-conflicts-built-in',
+                    `Shader uniform "${name}" conflicts with a built-in uniform and will be ignored.`,
+                    { declaration: entry, name },
+                ),
+            );
             return;
         }
 
         if (seenNames.has(name)) {
-            diagnostics.push(createDiagnostic(
-                'warning',
-                'duplicate-shader-uniform',
-                `Shader uniform "${name}" is declared more than once. Only the first declaration is used.`,
-                { declaration: entry, name }
-            ));
+            diagnostics.push(
+                createDiagnostic(
+                    'warning',
+                    'duplicate-shader-uniform',
+                    `Shader uniform "${name}" is declared more than once. Only the first declaration is used.`,
+                    { declaration: entry, name },
+                ),
+            );
             return;
         }
 
         if (defaultValue == null) {
-            diagnostics.push(createDiagnostic(
-                'warning',
-                'invalid-shader-uniform-default',
-                `Shader uniform "${name}" has an invalid default for type "${type}".`,
-                { declaration: entry, name, uniformType: type }
-            ));
+            diagnostics.push(
+                createDiagnostic(
+                    'warning',
+                    'invalid-shader-uniform-default',
+                    `Shader uniform "${name}" has an invalid default for type "${type}".`,
+                    { declaration: entry, name, uniformType: type },
+                ),
+            );
             return;
         }
 
@@ -397,9 +421,12 @@ export function parseShaderUniformMetadataValue(value: MetadataValue | null = ''
     });
 
     return {
-        normalizedValue: uniforms.map((uniform) => (
-            `${uniform.name}:${uniform.type}=${serializeShaderUniformValue(uniform.type, uniform.defaultValue)}${serializeShaderUniformControl(uniform.control)}`
-        )).join('|'),
+        normalizedValue: uniforms
+            .map(
+                (uniform) =>
+                    `${uniform.name}:${uniform.type}=${serializeShaderUniformValue(uniform.type, uniform.defaultValue)}${serializeShaderUniformControl(uniform.control)}`,
+            )
+            .join('|'),
         uniforms,
         diagnostics,
     };
@@ -412,7 +439,9 @@ export function parseShaderUniformMetadataValue(value: MetadataValue | null = ''
  */
 export function serializeShaderUniformDeclaration(uniform: ShaderUniformDraft | null = {}): string {
     const name = String(uniform?.name || '').trim();
-    const type = String(uniform?.type || '').trim().toLowerCase();
+    const type = String(uniform?.type || '')
+        .trim()
+        .toLowerCase();
 
     if (!name || !SHADER_CUSTOM_UNIFORM_TYPES.has(type)) {
         return '';
@@ -440,18 +469,23 @@ export function parseShaderTextureMetadataValue(value: MetadataValue | null = ''
 
     const textures: ShaderTexture[] = [];
     const diagnostics: Diagnostic[] = [];
-    const entries = text.split('|').map((entry) => entry.trim()).filter(Boolean);
+    const entries = text
+        .split('|')
+        .map((entry) => entry.trim())
+        .filter(Boolean);
     const seenNames = new Set<string>();
 
     entries.forEach((entry) => {
         const match = entry.match(/^([A-Za-z_][\w]*)\s*=\s*(.+)$/);
         if (!match) {
-            diagnostics.push(createDiagnostic(
-                'warning',
-                'invalid-shader-texture-declaration',
-                `Shader texture declaration "${entry}" is invalid. Use "uniformName=asset-file".`,
-                { declaration: entry }
-            ));
+            diagnostics.push(
+                createDiagnostic(
+                    'warning',
+                    'invalid-shader-texture-declaration',
+                    `Shader texture declaration "${entry}" is invalid. Use "uniformName=asset-file".`,
+                    { declaration: entry },
+                ),
+            );
             return;
         }
 
@@ -461,42 +495,50 @@ export function parseShaderTextureMetadataValue(value: MetadataValue | null = ''
         const assetExtension = getFileExtension(assetPath);
 
         if (seenNames.has(name)) {
-            diagnostics.push(createDiagnostic(
-                'warning',
-                'duplicate-shader-texture',
-                `Shader texture "${name}" is declared more than once. Only the first declaration is used.`,
-                { declaration: entry, name }
-            ));
+            diagnostics.push(
+                createDiagnostic(
+                    'warning',
+                    'duplicate-shader-texture',
+                    `Shader texture "${name}" is declared more than once. Only the first declaration is used.`,
+                    { declaration: entry, name },
+                ),
+            );
             return;
         }
 
         if (!assetPath || assetIssue) {
-            diagnostics.push(createDiagnostic(
-                'warning',
-                'invalid-shader-texture-path',
-                `Shader texture "${name}" points to an invalid asset path.`,
-                { declaration: entry, name, assetPath }
-            ));
+            diagnostics.push(
+                createDiagnostic(
+                    'warning',
+                    'invalid-shader-texture-path',
+                    `Shader texture "${name}" points to an invalid asset path.`,
+                    { declaration: entry, name, assetPath },
+                ),
+            );
             return;
         }
 
         if (assetPath.includes('/')) {
-            diagnostics.push(createDiagnostic(
-                'warning',
-                'nested-shader-texture-path-not-supported',
-                `Shader texture "${name}" must reference a top-level file in the topic assets folder.`,
-                { declaration: entry, name, assetPath }
-            ));
+            diagnostics.push(
+                createDiagnostic(
+                    'warning',
+                    'nested-shader-texture-path-not-supported',
+                    `Shader texture "${name}" must reference a top-level file in the topic assets folder.`,
+                    { declaration: entry, name, assetPath },
+                ),
+            );
             return;
         }
 
         if (!SHADER_TEXTURE_EXTENSIONS.has(assetExtension)) {
-            diagnostics.push(createDiagnostic(
-                'warning',
-                'unsupported-shader-texture-extension',
-                `Shader texture "${name}" uses unsupported asset extension "${assetExtension || '(none)'}".`,
-                { declaration: entry, name, assetPath }
-            ));
+            diagnostics.push(
+                createDiagnostic(
+                    'warning',
+                    'unsupported-shader-texture-extension',
+                    `Shader texture "${name}" uses unsupported asset extension "${assetExtension || '(none)'}".`,
+                    { declaration: entry, name, assetPath },
+                ),
+            );
             return;
         }
 
@@ -581,22 +623,26 @@ export function parseEditorHiddenFilesMetadataValue(value: MetadataValue | null 
         const normalizedKey = normalizeEditorHiddenFileKey(entry);
 
         if (!normalizedKey) {
-            diagnostics.push(createDiagnostic(
-                'warning',
-                'invalid-editor-hidden-file-entry',
-                `Hidden file entry "${entry}" is invalid. Use "file:path/to/file" or "block:type:index".`,
-                { value: entry }
-            ));
+            diagnostics.push(
+                createDiagnostic(
+                    'warning',
+                    'invalid-editor-hidden-file-entry',
+                    `Hidden file entry "${entry}" is invalid. Use "file:path/to/file" or "block:type:index".`,
+                    { value: entry },
+                ),
+            );
             return;
         }
 
         if (seenKeys.has(normalizedKey)) {
-            diagnostics.push(createDiagnostic(
-                'warning',
-                'duplicate-editor-hidden-file-entry',
-                `Hidden file entry "${normalizedKey}" is declared more than once. Only the first value is used.`,
-                { value: normalizedKey }
-            ));
+            diagnostics.push(
+                createDiagnostic(
+                    'warning',
+                    'duplicate-editor-hidden-file-entry',
+                    `Hidden file entry "${normalizedKey}" is declared more than once. Only the first value is used.`,
+                    { value: normalizedKey },
+                ),
+            );
             return;
         }
 

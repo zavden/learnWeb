@@ -24,7 +24,7 @@ function parseNumberList(body: string): string[] {
 }
 
 function parseChannel(token: string, scale = 255): number {
-    return token.endsWith('%') ? (parseFloat(token) / 100) : parseFloat(token) / scale;
+    return token.endsWith('%') ? parseFloat(token) / 100 : parseFloat(token) / scale;
 }
 
 function hslToRgb(h: number, s: number, l: number): Rgb {
@@ -42,14 +42,14 @@ function oklchToRgb(L: number, C: number, H: number): Rgb {
     const b = C * Math.sin(hr);
     const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
     const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
-    const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+    const s_ = L - 0.0894841775 * a - 1.291485548 * b;
     const l = l_ ** 3;
     const m = m_ ** 3;
     const s = s_ ** 3;
     const linear = [
         4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
         -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
-        -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+        -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
     ];
     return linear.map((channel) => {
         const value = clamp01(channel);
@@ -67,7 +67,10 @@ function parseColor(input: string): Rgb {
         return [0, 2, 4].map((index) => parseInt(hex.slice(index, index + 2), 16) / 255);
     }
     match = /^rgba?\((.+)\)$/.exec(text);
-    if (match) return parseNumberList(match[1]).slice(0, 3).map((token) => parseChannel(token));
+    if (match)
+        return parseNumberList(match[1])
+            .slice(0, 3)
+            .map((token) => parseChannel(token));
     match = /^hsla?\((.+)\)$/.exec(text);
     if (match) {
         const [h, s, l] = parseNumberList(match[1]);
@@ -82,7 +85,8 @@ function parseColor(input: string): Rgb {
 }
 
 function luminance([r, g, b]: Rgb): number {
-    const linear = (channel: number): number => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+    const linear = (channel: number): number =>
+        channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
     return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
 }
 

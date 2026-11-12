@@ -96,9 +96,10 @@ export class FavoritesDialog {
 
         const renderToken = ++this._renderToken;
         this.grid.innerHTML = '';
-        this.note.textContent = entries.length === 0
-            ? 'Your favorites list is empty.'
-            : `${entries.length} favorite${entries.length === 1 ? '' : 's'} across all topics.`;
+        this.note.textContent =
+            entries.length === 0
+                ? 'Your favorites list is empty.'
+                : `${entries.length} favorite${entries.length === 1 ? '' : 's'} across all topics.`;
 
         if (entries.length === 0) {
             this.empty.classList.remove('hidden');
@@ -153,7 +154,7 @@ export class FavoritesDialog {
                         srcdoc = renderCompiledExampleDocument(
                             result.compiledDocument,
                             entry.topicPath,
-                            result.compileDiagnostics || []
+                            result.compileDiagnostics || [],
                         );
                     }
 

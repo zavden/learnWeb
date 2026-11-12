@@ -45,12 +45,14 @@ import {
 
 /** Whether any `exercise_*` key (not the `exercise` flag itself) has a value. */
 export function hasExerciseMetadata(metadata: ExampleMetadataInput = {}): boolean {
-    return Array.from(EXERCISE_METADATA_KEYS).filter((key) => key !== 'exercise').some((key) => {
-        const value = metadata[key];
-        if (value === undefined || value === null) return false;
-        if (typeof value === 'string') return value.trim() !== '';
-        return true;
-    });
+    return Array.from(EXERCISE_METADATA_KEYS)
+        .filter((key) => key !== 'exercise')
+        .some((key) => {
+            const value = metadata[key];
+            if (value === undefined || value === null) return false;
+            if (typeof value === 'string') return value.trim() !== '';
+            return true;
+        });
 }
 
 /** The exercise metadata parsed into lists (see `ExerciseConfig`); usable on any document. */
@@ -91,12 +93,16 @@ export function getExerciseConfig(documentModel: ExampleDocumentInput | null | u
 
 /** `example_stage` when it is a valid stage, `''` otherwise. */
 export function getExampleStage(documentModel: ExampleDocumentInput | null | undefined): ExampleStage | '' {
-    const stage = String(documentModel?.metadata?.example_stage || '').trim().toLowerCase();
-    return EXAMPLE_STAGE_VALUES.has(stage) ? stage as ExampleStage : '';
+    const stage = String(documentModel?.metadata?.example_stage || '')
+        .trim()
+        .toLowerCase();
+    return EXAMPLE_STAGE_VALUES.has(stage) ? (stage as ExampleStage) : '';
 }
 
 /** Description, tags, rating and importance, normalized (invalid values read as empty). */
-export function getExampleEditorialMetadata(documentModel: ExampleDocumentInput | null | undefined): ExampleEditorialMetadata {
+export function getExampleEditorialMetadata(
+    documentModel: ExampleDocumentInput | null | undefined,
+): ExampleEditorialMetadata {
     const metadata = documentModel?.metadata || {};
     const parsedTags = parseExampleTagsMetadataValue(metadata.example_tags);
 
@@ -115,7 +121,11 @@ export function hasShaderBlocks(blocks: readonly ExampleBlock[] | null = []): bo
 }
 
 /** `shader` for legacy documents with `renderer: shader` or shader blocks; `web` otherwise (virtual files are always web). */
-export function inferRendererMode({ blocks = [], metadata = {}, sourceFormat = 'legacy-blocks' }: ExampleDocumentInput = {}): RendererMode {
+export function inferRendererMode({
+    blocks = [],
+    metadata = {},
+    sourceFormat = 'legacy-blocks',
+}: ExampleDocumentInput = {}): RendererMode {
     if (sourceFormat === 'legacy-blocks' && (metadata.renderer === 'shader' || hasShaderBlocks(blocks))) {
         return 'shader';
     }
@@ -153,9 +163,9 @@ export function getShaderConfig(documentModel: ExampleDocumentInput | null | und
         rendererMode,
         resolution: parsedResolution
             ? {
-                width: parsedResolution.width,
-                height: parsedResolution.height,
-            }
+                  width: parsedResolution.width,
+                  height: parsedResolution.height,
+              }
             : null,
         resolutionText: String(metadata.resolution || '').trim(),
         shaderUniformsText: parsedCustomUniforms.normalizedValue || String(metadata.shader_uniforms || '').trim(),
@@ -172,7 +182,10 @@ export function isShaderDocument(documentModel: ExampleDocumentInput | null | un
  * The file's key for `editor_hidden_files`: `file:<path>` for virtual files, `block:<type>:<n>` for the
  * n-th legacy file of that block type among `files` (by `order` when the file is not in `files`).
  */
-export function getDocumentFileVisibilityKey(file: VirtualFile | null | undefined, files: readonly VirtualFile[] = []): FileVisibilityKey {
+export function getDocumentFileVisibilityKey(
+    file: VirtualFile | null | undefined,
+    files: readonly VirtualFile[] = [],
+): FileVisibilityKey {
     if (!file) return '';
 
     if (file.sourceKind === 'virtual') {
@@ -198,9 +211,7 @@ export function getDocumentFileVisibilityKey(file: VirtualFile | null | undefine
         }
     }
 
-    const fallbackOrder = Number.isFinite(file?.order)
-        ? Number.parseInt(String(file.order), 10) + 1
-        : 1;
+    const fallbackOrder = Number.isFinite(file?.order) ? Number.parseInt(String(file.order), 10) + 1 : 1;
 
     return `block:${blockType}:${Math.max(1, fallbackOrder)}`;
 }

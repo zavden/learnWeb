@@ -647,13 +647,14 @@ interface ShaderControlEnvelope {
 }
 
 /** Commands of the shader panel to the shader page script (it ignores them for another renderId). */
-export type ShaderControlMessage = ShaderControlEnvelope & (
-    | { action: 'set-resolution'; resolution: ShaderResolution }
-    | { action: 'set-paused'; paused: boolean }
-    /** Restart time, frame count and mouse state. */
-    | { action: 'reset-runtime' }
-    /** `uniformType` is sent but not read by the page. */
-    | { action: 'set-custom-uniform'; name: string; uniformType: string; value: number | number[] | boolean }
-    /** Reload every texture (handled by the page; the app currently never sends it). */
-    | { action: 'refresh-textures' }
-);
+export type ShaderControlMessage = ShaderControlEnvelope &
+    (
+        | { action: 'set-resolution'; resolution: ShaderResolution }
+        | { action: 'set-paused'; paused: boolean }
+        /** Restart time, frame count and mouse state. */
+        | { action: 'reset-runtime' }
+        /** `uniformType` is sent but not read by the page. */
+        | { action: 'set-custom-uniform'; name: string; uniformType: string; value: number | number[] | boolean }
+        /** Reload every texture (handled by the page; the app currently never sends it). */
+        | { action: 'refresh-textures' }
+    );

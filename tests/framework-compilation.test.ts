@@ -20,7 +20,7 @@ function loadExampleDocument(relativePath: string): ExampleDocument {
 
 test('legacy HTML/CSS/JavaScript example from ch00-tests compiles with runtime path metadata', async () => {
     const documentModel = loadExampleDocument(
-        'material/ch00-tests/sec00-test/top01-olds/examples/html-css-javascript.md'
+        'material/ch00-tests/sec00-test/top01-olds/examples/html-css-javascript.md',
     );
     const result = await compileExampleDocument(documentModel);
 
@@ -32,9 +32,7 @@ test('legacy HTML/CSS/JavaScript example from ch00-tests compiles with runtime p
 });
 
 test('React single-file JSX example from ch00-tests compiles into a root-mounted application', async () => {
-    const documentModel = loadExampleDocument(
-        'material/ch00-tests/sec00-test/top01-olds/examples/react-jsx-css.md'
-    );
+    const documentModel = loadExampleDocument('material/ch00-tests/sec00-test/top01-olds/examples/react-jsx-css.md');
     const result = await compileExampleDocument(documentModel);
 
     assert.deepEqual(getErrorDiagnostics(result.compileDiagnostics), []);
@@ -46,7 +44,7 @@ test('React single-file JSX example from ch00-tests compiles into a root-mounted
 
 test('React multi-file TSX example from ch00-tests compiles with inline sourcemaps', async () => {
     const documentModel = loadExampleDocument(
-        'material/ch00-tests/sec00-test/top01-olds/examples/react-project-tsx.md'
+        'material/ch00-tests/sec00-test/top01-olds/examples/react-project-tsx.md',
     );
     const result = await compileExampleDocument(documentModel);
 
@@ -58,9 +56,7 @@ test('React multi-file TSX example from ch00-tests compiles with inline sourcema
 });
 
 test('Vue single-file TypeScript example from ch00-tests compiles into an app-mounted bundle', async () => {
-    const documentModel = loadExampleDocument(
-        'material/ch00-tests/sec00-test/top00-test/examples/vue-typescript.md'
-    );
+    const documentModel = loadExampleDocument('material/ch00-tests/sec00-test/top00-test/examples/vue-typescript.md');
     const result = await compileExampleDocument(documentModel);
 
     assert.deepEqual(getErrorDiagnostics(result.compileDiagnostics), []);
@@ -71,7 +67,7 @@ test('Vue single-file TypeScript example from ch00-tests compiles into an app-mo
 
 test('Vue SFC multi-file example from ch00-tests compiles with bundled JS and extracted styles', async () => {
     const documentModel = loadExampleDocument(
-        'material/ch00-tests/sec00-test/top00-test/examples/vue-project-sfc-javascript.md'
+        'material/ch00-tests/sec00-test/top00-test/examples/vue-project-sfc-javascript.md',
     );
     const result = await compileExampleDocument(documentModel);
 

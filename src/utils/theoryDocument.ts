@@ -43,7 +43,11 @@ export function createTheoryDocument(content: string | null | undefined = ''): T
  * `null` and `undefined`.
  */
 export function isTheoryDocument(documentModel: TheoryDocumentInput | null | undefined = {}): boolean {
-    return String(documentModel?.metadata?.editorTarget || '').trim().toLowerCase() === 'theory';
+    return (
+        String(documentModel?.metadata?.editorTarget || '')
+            .trim()
+            .toLowerCase() === 'theory'
+    );
 }
 
 /** The Markdown text of a theory document (its `main.md`, else its first file); `''` for any other document. */
@@ -53,8 +57,7 @@ export function getTheoryDocumentContent(documentModel: TheoryDocumentInput | nu
     }
 
     // `documentModel` is not null here: `isTheoryDocument()` returned true, which needs a `metadata`.
-    const file = (documentModel!.files || []).find((entry) => entry?.path === 'main.md')
-        || documentModel!.files?.[0];
+    const file = (documentModel!.files || []).find((entry) => entry?.path === 'main.md') || documentModel!.files?.[0];
 
     return typeof file?.content === 'string' ? file.content : '';
 }

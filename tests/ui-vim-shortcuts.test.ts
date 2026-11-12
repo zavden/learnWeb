@@ -1,14 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-    isVimAwaitingInput,
-    resolvePanelFocusDirection,
-} from '../src/editor/vimSupport.ts';
-import {
-    getDefaultVimShortcutConfig,
-    loadVimShortcutConfig,
-} from '../src/editor/vimShortcutConfig.ts';
+import { isVimAwaitingInput, resolvePanelFocusDirection } from '../src/editor/vimSupport.ts';
+import { getDefaultVimShortcutConfig, loadVimShortcutConfig } from '../src/editor/vimShortcutConfig.ts';
 import { parseSimpleYamlObject, stripYamlInlineComment } from '../src/editor/vim/yamlParser.ts';
 
 test('vim pending-input detection lets f/r/t/operators keep their next key', () => {
@@ -43,10 +37,9 @@ test('yaml parser supports inline comments but keeps quoted hashes', () => {
     assert.equal(stripYamlInlineComment("    toggleSidebar: '#'"), "    toggleSidebar: '#'");
     assert.equal(stripYamlInlineComment('    key: a#b'), '    key: a#b');
 
-    assert.deepEqual(
-        parseSimpleYamlObject('global:   # context\n  leader:\n    toggleSidebar: q # comment\n'),
-        { global: { leader: { toggleSidebar: 'q' } } },
-    );
+    assert.deepEqual(parseSimpleYamlObject('global:   # context\n  leader:\n    toggleSidebar: q # comment\n'), {
+        global: { leader: { toggleSidebar: 'q' } },
+    });
 
     const result = loadVimShortcutConfig('global:\n  leader:\n    toggleSidebar: q  # open tree\n');
     assert.equal(result.source, 'file');

@@ -40,7 +40,11 @@ test('echo returns method, path, query, selected headers and the parsed JSON bod
 
 test('echo parses urlencoded and multipart bodies; invalid JSON is a 400', async () => {
     const urlencoded = await fetch(`${base}/echo`, {
-        body: new URLSearchParams([['size', 'M'], ['extra', 'leche'], ['extra', 'canela']]),
+        body: new URLSearchParams([
+            ['size', 'M'],
+            ['extra', 'leche'],
+            ['extra', 'canela'],
+        ]),
         method: 'POST',
     }).then((response) => response.json());
     assert.deepEqual(urlencoded.body, { size: 'M', extra: ['leche', 'canela'] });
@@ -73,7 +77,9 @@ test('cors=no omits CORS headers, cors=origin reflects the origin, expose=1 expo
     const closed = await fetch(`${base}/echo?cors=no`, { headers: { Origin: 'http://localhost:3001' } });
     assert.equal(closed.headers.get('access-control-allow-origin'), null);
 
-    const reflected = await fetch(`${base}/echo?cors=origin&expose=1`, { headers: { Origin: 'http://localhost:3001' } });
+    const reflected = await fetch(`${base}/echo?cors=origin&expose=1`, {
+        headers: { Origin: 'http://localhost:3001' },
+    });
     assert.equal(reflected.headers.get('access-control-allow-origin'), 'http://localhost:3001');
     assert.equal(reflected.headers.get('access-control-allow-credentials'), 'true');
     assert.equal(reflected.headers.get('access-control-expose-headers'), 'X-Demo-Server');
@@ -111,8 +117,14 @@ test('stream sends the body in chunks with a Content-Length unless length=no', a
     const ndjson = await fetch(`${base}/stream?chunks=2&interval=0&format=ndjson&length=no`);
     assert.equal(ndjson.headers.get('content-length'), null);
     assert.match(ndjson.headers.get('content-type')!, /application\/x-ndjson/);
-    const lines = (await ndjson.text()).trim().split('\n').map((line) => JSON.parse(line));
-    assert.deepEqual(lines, [{ n: 1, of: 2, text: 'Bloque 1 de 2' }, { n: 2, of: 2, text: 'Bloque 2 de 2' }]);
+    const lines = (await ndjson.text())
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+    assert.deepEqual(lines, [
+        { n: 1, of: 2, text: 'Bloque 1 de 2' },
+        { n: 2, of: 2, text: 'Bloque 2 de 2' },
+    ]);
 });
 
 test('unknown demo paths answer 404 with an HTML page', async () => {
@@ -121,5 +133,8 @@ test('unknown demo paths answer 404 with an HTML page', async () => {
     assert.equal(response.headers.get('access-control-allow-origin'), '*');
     const text = await response.text();
     assert.ok(text.startsWith('<!DOCTYPE html>'));
-    await assert.rejects(() => Promise.resolve().then(() => JSON.parse(text)), /Unexpected token '<', "<!DOCTYPE "\.\.\. is not valid JSON/);
+    await assert.rejects(
+        () => Promise.resolve().then(() => JSON.parse(text)),
+        /Unexpected token '<', "<!DOCTYPE "\.\.\. is not valid JSON/,
+    );
 });

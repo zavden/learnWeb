@@ -153,13 +153,13 @@ const JAVASCRIPT_COMPLETION_ENTRIES: readonly Completion[] = [
         detail: 'Function declaration',
         info: 'Insert a basic function scaffold.',
     }),
-    snippetCompletion('const ${element} = document.querySelector(\'${selector}\');', {
+    snippetCompletion("const ${element} = document.querySelector('${selector}');", {
         label: 'querySelector',
         type: 'snippet',
         detail: 'DOM query',
         info: 'Select the first matching element from the page.',
     }),
-    snippetCompletion('${target}.addEventListener(\'${click}\', (event) => {\n\t${}\n});', {
+    snippetCompletion("${target}.addEventListener('${click}', (event) => {\n\t${}\n});", {
         label: 'addEventListener',
         type: 'snippet',
         detail: 'Event listener',
@@ -189,7 +189,7 @@ const JAVASCRIPT_COMPLETION_ENTRIES: readonly Completion[] = [
         detail: 'Delayed callback',
         info: 'Run code after a delay in milliseconds.',
     }),
-    snippetCompletion('const response = await fetch(\'${/api/example}\');\nconst data = await response.json();\n${}', {
+    snippetCompletion("const response = await fetch('${/api/example}');\nconst data = await response.json();\n${}", {
         label: 'fetch',
         type: 'snippet',
         detail: 'Async request',

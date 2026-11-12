@@ -9,7 +9,12 @@
 
 import fs from 'fs';
 import path from 'path';
-import type { ExampleListState, ExampleReferenceEntry, FavoritesState, RawExampleListState } from '../types/material.ts';
+import type {
+    ExampleListState,
+    ExampleReferenceEntry,
+    FavoritesState,
+    RawExampleListState,
+} from '../types/material.ts';
 
 // Entries come from a hand-edited file, so they can be any JSON value.
 function normalizeFavoritePath(value: unknown = ''): string {
@@ -69,12 +74,12 @@ export function readJsonStateFile(filePath: string | null | undefined): JsonStat
 
     try {
         return { raw, status: 'ok', value: JSON.parse(text) };
-    } catch { /* try a lenient parse */ }
+    } catch {
+        /* try a lenient parse */
+    }
 
     try {
-        const lenient = text
-            .replace(/^\s*\/\/.*$/gm, '')
-            .replace(/,(\s*[\]}])/g, '$1');
+        const lenient = text.replace(/^\s*\/\/.*$/gm, '').replace(/,(\s*[\]}])/g, '$1');
         return { raw, status: 'recovered', value: JSON.parse(lenient) };
     } catch {
         return { raw, status: 'invalid', value: null };
@@ -92,9 +97,7 @@ export function backupUnreadableStateFile(filePath: string): string {
         return '';
     }
 
-    const backupPath = fs.existsSync(`${filePath}.bak`)
-        ? `${filePath}.bak-${Date.now()}`
-        : `${filePath}.bak`;
+    const backupPath = fs.existsSync(`${filePath}.bak`) ? `${filePath}.bak-${Date.now()}` : `${filePath}.bak`;
     fs.writeFileSync(backupPath, current.raw, 'utf-8');
     return backupPath;
 }
@@ -111,32 +114,34 @@ function getStateItems(fileState: JsonStateFile): unknown[] {
     }
 
     const parsed = fileState.value as RawExampleListState | null;
-    return Array.isArray(parsed)
-        ? parsed
-        : Array.isArray(parsed?.items)
-            ? parsed.items
-            : [];
+    return Array.isArray(parsed) ? parsed : Array.isArray(parsed?.items) ? parsed.items : [];
 }
 
 /** The favorites in `filePath`, cleaned: normalized paths, only example `.md` files, no duplicates. */
 export function readFavoritesState(filePath: string): FavoritesState {
     const inputItems = getStateItems(readJsonStateFile(filePath));
-    const items = Array.from(new Set(
-        inputItems
-            .map((entry) => normalizeFavoritePath(entry))
-            .filter((entry) => entry && isExampleMarkdownPath(entry))
-    ));
+    const items = Array.from(
+        new Set(
+            inputItems
+                .map((entry) => normalizeFavoritePath(entry))
+                .filter((entry) => entry && isExampleMarkdownPath(entry)),
+        ),
+    );
 
     return buildState(items);
 }
 
 /** Overwrites the favorites file with the cleaned `items` (backing up an unparseable file first). */
 export function writeFavoritesState(filePath: string, items: readonly string[] = []): FavoritesState {
-    const state = buildState(Array.from(new Set(
-        (Array.isArray(items) ? items : [])
-            .map((entry) => normalizeFavoritePath(entry))
-            .filter((entry) => entry && isExampleMarkdownPath(entry))
-    )));
+    const state = buildState(
+        Array.from(
+            new Set(
+                (Array.isArray(items) ? items : [])
+                    .map((entry) => normalizeFavoritePath(entry))
+                    .filter((entry) => entry && isExampleMarkdownPath(entry)),
+            ),
+        ),
+    );
 
     backupUnreadableStateFile(filePath);
     fs.writeFileSync(filePath, `${JSON.stringify(state, null, 2)}\n`, 'utf-8');

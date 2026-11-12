@@ -5,7 +5,7 @@ import { computeVueScriptEnter, isInsideVueScriptBlock } from '../src/editor/vue
 
 test('detects positions inside vue script setup blocks', () => {
     const source = `<template>\n  <div>{{ msg }}</div>\n</template>\n\n<script setup>\nconst msg = 'hello';\n</script>\n`;
-    const insidePosition = source.indexOf("const msg");
+    const insidePosition = source.indexOf('const msg');
     const outsidePosition = source.indexOf('<template>');
 
     assert.equal(isInsideVueScriptBlock(source, insidePosition), true);

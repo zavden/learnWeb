@@ -1,11 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-    buildExampleDocument,
-    createExampleDocumentFromPreset,
-    parseExampleDocument,
-} from '../src/utils/markdown.ts';
+import { buildExampleDocument, createExampleDocumentFromPreset, parseExampleDocument } from '../src/utils/markdown.ts';
 
 test('legacy HTML/CSS/JavaScript documents round-trip through Markdown serialization', () => {
     const originalDocument = createExampleDocumentFromPreset('html-css-javascript');
@@ -15,7 +11,7 @@ test('legacy HTML/CSS/JavaScript documents round-trip through Markdown serializa
     assert.equal(reparsedDocument.sourceFormat, 'legacy-blocks');
     assert.deepEqual(
         reparsedDocument.blocks.map((block) => block.type),
-        ['html', 'css', 'javascript']
+        ['html', 'css', 'javascript'],
     );
     assert.equal(buildExampleDocument(reparsedDocument), markdown);
 });
@@ -31,7 +27,7 @@ test('React multi-file documents preserve metadata, entry and file order after r
     assert.equal(reparsedDocument.metadata.entry, 'src/main.jsx');
     assert.deepEqual(
         reparsedDocument.files.map((file) => file.path),
-        originalDocument.files.map((file) => file.path)
+        originalDocument.files.map((file) => file.path),
     );
     assert.equal(buildExampleDocument(reparsedDocument), markdown);
 });
@@ -81,7 +77,7 @@ test('shader documents round-trip preserving renderer, resolution and block orde
     assert.equal(reparsedDocument.metadata.resolution, '960x540');
     assert.deepEqual(
         reparsedDocument.blocks.map((block) => block.type),
-        ['vertex', 'fragment']
+        ['vertex', 'fragment'],
     );
     assert.equal(buildExampleDocument(reparsedDocument), markdown);
 });

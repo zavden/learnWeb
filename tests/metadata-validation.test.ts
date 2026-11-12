@@ -111,11 +111,11 @@ test('compile cache keys stay stable for equal documents and change with content
 
     assert.equal(
         createCompileCacheKey({ document: firstDocument }),
-        createCompileCacheKey({ document: secondDocument })
+        createCompileCacheKey({ document: secondDocument }),
     );
     assert.notEqual(
         createCompileCacheKey({ document: firstDocument }),
-        createCompileCacheKey({ document: thirdDocument })
+        createCompileCacheKey({ document: thirdDocument }),
     );
 });
 
@@ -769,13 +769,16 @@ void main() {
     assert.equal(shaderDocument.rendererMode, 'shader');
     assert.equal(timeDocument.metadata.resolution, '960x540');
     assert.equal(mouseDocument.metadata.resolution, '800x800');
-    assert.equal(customUniformDocument.metadata.shader_uniforms, 'intensity:float=0.8|invert:bool=false|focus:vec2=0.5,0.5');
+    assert.equal(
+        customUniformDocument.metadata.shader_uniforms,
+        'intensity:float=0.8|invert:bool=false|focus:vec2=0.5,0.5',
+    );
     assert.equal(vectorUniformDocument.metadata.shader_uniforms, 'tint:vec3=0.15,0.75,1|mask:vec4=1,0.45,0.2,0.8');
     assert.equal(rangedUniformDocument.metadata.shader_uniforms, 'intensity:float=0.8[0,1.5,0.01]|bands:int=6[2,18,1]');
     assert.equal(textureDocument.metadata.shader_textures, 'u_checker=checker.svg|u_spot=spotlight.svg');
     assert.deepEqual(
         shaderDocument.blocks.map((block) => block.type),
-        ['vertex', 'fragment']
+        ['vertex', 'fragment'],
     );
     assert.deepEqual(getDocumentLanguageOptions(shaderDocument), []);
     assert.deepEqual(getDocumentLanguageOptions(fragmentOnlyDocument), ['vertex']);
@@ -862,9 +865,7 @@ void main() {
                 { name: 'intensity', type: 'float', value: 0.9 },
                 { name: 'invert', type: 'bool', value: true },
             ],
-            textures: [
-                { name: 'u_checker', assetPath: 'checker.svg' },
-            ],
+            textures: [{ name: 'u_checker', assetPath: 'checker.svg' }],
             paused: true,
         },
         topicPath: 'ch00-tests/sec02-shaders/top01-overview',
@@ -1169,7 +1170,7 @@ main { color: red; }
     assert.equal(comparison.available, true);
     assert.deepEqual(
         comparison.pairs.map((pair) => pair.attemptPath),
-        ['index.html', 'styles.css']
+        ['index.html', 'styles.css'],
     );
 });
 
@@ -1809,13 +1810,13 @@ test('preview renderer always injects runtime bridge regardless of console state
         { html: '<main>Hello</main>', js: 'console.log("hi");' },
         '',
         [],
-        { consoleEnabled: true, renderId: 7 }
+        { consoleEnabled: true, renderId: 7 },
     );
     const withoutConsole = renderCompiledExampleDocument(
         { html: '<main>Hello</main>', js: 'console.log("hi");' },
         '',
         [],
-        { consoleEnabled: false, renderId: 8 }
+        { consoleEnabled: false, renderId: 8 },
     );
 
     assert.match(withConsole, /learncode-preview/);
@@ -1834,7 +1835,7 @@ test('preview renderer suppresses non-blocking diagnostics markup when console i
         { html: '<main>Hello</main>', js: 'console.log("hi");' },
         '',
         [{ level: 'warning', message: 'Non blocking note', file: 'src/App.tsx', line: 4, column: 2 }] as Diagnostic[], // no `code`: partial on purpose
-        { consoleEnabled: true, renderId: 9 }
+        { consoleEnabled: true, renderId: 9 },
     );
 
     assert.doesNotMatch(rendered, /Compile diagnostics/);
@@ -1851,7 +1852,7 @@ test('framework previews do not reserve full-height app roots when blocking diag
         },
         '',
         [{ level: 'error', message: 'Unexpected token' }] as Diagnostic[], // no `code`: partial on purpose
-        { consoleEnabled: false, renderId: 10 }
+        { consoleEnabled: false, renderId: 10 },
     );
     const vueRendered = renderCompiledExampleDocument(
         {
@@ -1862,7 +1863,7 @@ test('framework previews do not reserve full-height app roots when blocking diag
         },
         '',
         [{ level: 'error', message: 'Unexpected token' }] as Diagnostic[], // no `code`: partial on purpose
-        { consoleEnabled: false, renderId: 11 }
+        { consoleEnabled: false, renderId: 11 },
     );
 
     assert.match(reactRendered, /Compile diagnostics/);
@@ -1881,7 +1882,7 @@ test('blocking compile diagnostics remain visible even when the console bridge i
         },
         '',
         [{ level: 'error', message: 'Broken build', file: 'src/App.tsx', line: 4, column: 2 }] as Diagnostic[], // no `code`: partial on purpose
-        { consoleEnabled: true, renderId: 12 }
+        { consoleEnabled: true, renderId: 12 },
     );
 
     assert.match(rendered, /Compile diagnostics/);
@@ -1995,7 +1996,10 @@ test('legacy block CRUD can add, duplicate and remove blocks', () => {
 
     const styleFile = duplicatedMarkup.files.find((file) => file.language === 'css')!;
     const withoutStyle = removeDocumentFile(duplicatedMarkup, styleFile.id);
-    assert.equal(withoutStyle.files.some((file) => file.language === 'css'), false);
+    assert.equal(
+        withoutStyle.files.some((file) => file.language === 'css'),
+        false,
+    );
 });
 
 test('virtual documents persist hidden file visibility metadata by file path', () => {

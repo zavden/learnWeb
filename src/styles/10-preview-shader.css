@@ -19,9 +19,7 @@
   padding: 10px 12px;
   border: 1px solid rgba(63, 185, 80, 0.16);
   border-radius: var(--radius-sm);
-  background:
-    linear-gradient(180deg, rgba(63, 185, 80, 0.08), rgba(63, 185, 80, 0.03)),
-    rgba(255, 255, 255, 0.02);
+  background: linear-gradient(180deg, rgba(63, 185, 80, 0.08), rgba(63, 185, 80, 0.03)), rgba(255, 255, 255, 0.02);
 }
 
 .preview-shader-metric-header {
@@ -177,9 +175,7 @@
   padding: 10px 12px;
   border: 1px solid rgba(63, 185, 80, 0.16);
   border-radius: var(--radius-sm);
-  background:
-    linear-gradient(180deg, rgba(63, 185, 80, 0.08), rgba(63, 185, 80, 0.03)),
-    rgba(255, 255, 255, 0.02);
+  background: linear-gradient(180deg, rgba(63, 185, 80, 0.08), rgba(63, 185, 80, 0.03)), rgba(255, 255, 255, 0.02);
 }
 
 .preview-shader-action {
@@ -429,11 +425,7 @@
   object-fit: contain;
   background:
     linear-gradient(45deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.92)),
-    repeating-linear-gradient(
-      45deg,
-      rgba(148, 163, 184, 0.08) 0 12px,
-      rgba(15, 23, 42, 0.08) 12px 24px
-    );
+    repeating-linear-gradient(45deg, rgba(148, 163, 184, 0.08) 0 12px, rgba(15, 23, 42, 0.08) 12px 24px);
   border: 1px solid rgba(148, 163, 184, 0.18);
 }
 

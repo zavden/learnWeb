@@ -39,9 +39,7 @@ export function createDirtyTracker(): DirtyTracker {
         },
 
         update(signature: string | null | undefined): boolean {
-            const nextDirty = savedSignature !== null
-                && typeof signature === 'string'
-                && signature !== savedSignature;
+            const nextDirty = savedSignature !== null && typeof signature === 'string' && signature !== savedSignature;
             const changed = nextDirty !== dirty;
             dirty = nextDirty;
             return changed;

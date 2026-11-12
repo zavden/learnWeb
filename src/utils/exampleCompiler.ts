@@ -19,7 +19,12 @@ import { compileVueSingleFileDocument, compileVueMultiFileDocument } from './com
 
 /** `false` or the text `false` (any case or spacing): how `loop_protect` and `typecheck` are turned off. */
 function isDisabledFlag(value: MetadataValue | undefined): boolean {
-    return value === false || String(value ?? '').trim().toLowerCase() === 'false';
+    return (
+        value === false ||
+        String(value ?? '')
+            .trim()
+            .toLowerCase() === 'false'
+    );
 }
 
 /**
@@ -27,7 +32,9 @@ function isDisabledFlag(value: MetadataValue | undefined): boolean {
  * output could still be produced) rather than thrown. A missing document compiles to an empty page; an
  * HTML-FULL document keeps only its markup (other blocks are compiled but their output is dropped).
  */
-export async function compileExampleDocument(sourceDocument: CompileSourceDocument | null | undefined): Promise<CompileResult> {
+export async function compileExampleDocument(
+    sourceDocument: CompileSourceDocument | null | undefined,
+): Promise<CompileResult> {
     if (sourceDocument?.metadata?.framework === 'react' && sourceDocument?.sourceFormat === 'virtual-files') {
         return compileReactMultiFileDocument(sourceDocument);
     }
@@ -66,9 +73,7 @@ export async function compileExampleDocument(sourceDocument: CompileSourceDocume
                 html: '',
                 js: '',
             },
-            compileDiagnostics: [
-                ...markupResult.diagnostics,
-            ],
+            compileDiagnostics: [...markupResult.diagnostics],
         };
     }
 
@@ -82,10 +87,6 @@ export async function compileExampleDocument(sourceDocument: CompileSourceDocume
             markupType: markupBlock?.type || '',
             runtimeScriptPath: scriptFile?.path || '',
         },
-        compileDiagnostics: [
-            ...markupResult.diagnostics,
-            ...styleResult.diagnostics,
-            ...scriptResult.diagnostics,
-        ],
+        compileDiagnostics: [...markupResult.diagnostics, ...styleResult.diagnostics, ...scriptResult.diagnostics],
     };
 }

@@ -82,7 +82,11 @@ function buildDecorations(doc: Text, posMap: ReadonlyMap<number, string>): Decor
     for (const [pos, colorId] of posMap) {
         items.push({ at: pos, order: 0, deco: Decoration.line({ class: `cm-highlight-${colorId}` }) });
         const line = doc.lineAt(pos);
-        items.push({ at: line.to, order: 1, deco: Decoration.widget({ widget: new RemoveHighlightWidget(pos), side: 1 }) });
+        items.push({
+            at: line.to,
+            order: 1,
+            deco: Decoration.widget({ widget: new RemoveHighlightWidget(pos), side: 1 }),
+        });
     }
 
     items.sort((a, b) => a.at - b.at || a.order - b.order);
@@ -110,9 +114,7 @@ export const lineHighlightField = StateField.define<LineHighlightState>({
             const changedLinePoses = new Set<number>();
             transaction.changes.iterChangedRanges((fromA, toA) => {
                 const startLineNum = transaction.startState.doc.lineAt(fromA).number;
-                const endLineNum = toA > fromA
-                    ? transaction.startState.doc.lineAt(toA - 1).number
-                    : startLineNum;
+                const endLineNum = toA > fromA ? transaction.startState.doc.lineAt(toA - 1).number : startLineNum;
                 for (let ln = startLineNum; ln <= endLineNum; ln++) {
                     changedLinePoses.add(transaction.startState.doc.line(ln).from);
                 }
@@ -178,9 +180,9 @@ export const lineHighlightField = StateField.define<LineHighlightState>({
 /** Colours of the `cm-highlight-<id>` line classes and the style of the remove button. */
 export const lineHighlightTheme = EditorView.baseTheme({
     '.cm-highlight-yellow': { backgroundColor: 'rgba(250, 204, 21, 0.18)' },
-    '.cm-highlight-green':  { backgroundColor: 'rgba(74, 222, 128, 0.18)' },
-    '.cm-highlight-blue':   { backgroundColor: 'rgba(96, 165, 250, 0.18)' },
-    '.cm-highlight-red':    { backgroundColor: 'rgba(248, 113, 113, 0.18)' },
+    '.cm-highlight-green': { backgroundColor: 'rgba(74, 222, 128, 0.18)' },
+    '.cm-highlight-blue': { backgroundColor: 'rgba(96, 165, 250, 0.18)' },
+    '.cm-highlight-red': { backgroundColor: 'rgba(248, 113, 113, 0.18)' },
     '.cm-highlight-purple': { backgroundColor: 'rgba(192, 132, 252, 0.18)' },
     '.cm-highlight-orange': { backgroundColor: 'rgba(251, 146, 60, 0.18)' },
     '.cm-highlight-remove-btn': {

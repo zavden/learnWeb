@@ -52,8 +52,8 @@ export function findDirectionalPanelTargetIndex(
     if (!currentPanel) return -1;
 
     const currentCenter = {
-        x: currentPanel.left + (currentPanel.width / 2),
-        y: currentPanel.top + (currentPanel.height / 2),
+        x: currentPanel.left + currentPanel.width / 2,
+        y: currentPanel.top + currentPanel.height / 2,
     };
 
     let bestIndex = -1;
@@ -63,8 +63,8 @@ export function findDirectionalPanelTargetIndex(
         if (!panel || panelIndex === normalizedIndex) return;
 
         const center = {
-            x: panel.left + (panel.width / 2),
-            y: panel.top + (panel.height / 2),
+            x: panel.left + panel.width / 2,
+            y: panel.top + panel.height / 2,
         };
         const deltaX = center.x - currentCenter.x;
         const deltaY = center.y - currentCenter.y;
@@ -89,7 +89,7 @@ export function findDirectionalPanelTargetIndex(
         if (primary == null) return;
 
         // `secondary` is assigned together with `primary`, which is known to be set here.
-        const score = primary + (secondary! * 0.25);
+        const score = primary + secondary! * 0.25;
         if (score < bestScore) {
             bestScore = score;
             bestIndex = panelIndex;

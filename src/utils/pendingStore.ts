@@ -36,32 +36,34 @@ function getStateItems(fileState: JsonStateFile): unknown[] {
     }
 
     const parsed = fileState.value as RawExampleListState | null;
-    return Array.isArray(parsed)
-        ? parsed
-        : Array.isArray(parsed?.items)
-            ? parsed.items
-            : [];
+    return Array.isArray(parsed) ? parsed : Array.isArray(parsed?.items) ? parsed.items : [];
 }
 
 /** The pending list in `filePath`, cleaned: normalized paths, only example `.md` files, no duplicates. */
 export function readPendingState(filePath: string): PendingState {
     const inputItems = getStateItems(readJsonStateFile(filePath));
-    const items = Array.from(new Set(
-        inputItems
-            .map((entry) => normalizePendingPath(entry))
-            .filter((entry) => entry && isExampleMarkdownPath(entry))
-    ));
+    const items = Array.from(
+        new Set(
+            inputItems
+                .map((entry) => normalizePendingPath(entry))
+                .filter((entry) => entry && isExampleMarkdownPath(entry)),
+        ),
+    );
 
     return buildState(items);
 }
 
 /** Overwrites the pending file with the cleaned `items` (backing up an unparseable file first). */
 export function writePendingState(filePath: string, items: readonly string[] = []): PendingState {
-    const state = buildState(Array.from(new Set(
-        (Array.isArray(items) ? items : [])
-            .map((entry) => normalizePendingPath(entry))
-            .filter((entry) => entry && isExampleMarkdownPath(entry))
-    )));
+    const state = buildState(
+        Array.from(
+            new Set(
+                (Array.isArray(items) ? items : [])
+                    .map((entry) => normalizePendingPath(entry))
+                    .filter((entry) => entry && isExampleMarkdownPath(entry)),
+            ),
+        ),
+    );
 
     backupUnreadableStateFile(filePath);
     fs.writeFileSync(filePath, `${JSON.stringify(state, null, 2)}\n`, 'utf-8');

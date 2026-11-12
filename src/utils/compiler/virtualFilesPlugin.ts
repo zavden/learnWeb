@@ -19,7 +19,10 @@ import {
 import type { InlineModule, VirtualModule } from './types.ts';
 
 /** Serves `files` (path → module) to a build whose entry point is `entryPath`; relative imports resolve between them. */
-export function createInlineModulesPlugin(files: ReadonlyMap<string, InlineModule> = new Map(), entryPath: string = 'entry.js'): Plugin {
+export function createInlineModulesPlugin(
+    files: ReadonlyMap<string, InlineModule> = new Map(),
+    entryPath: string = 'entry.js',
+): Plugin {
     return {
         name: 'learncode-inline-modules',
         setup(buildContext) {
@@ -70,7 +73,11 @@ export function createInlineModulesPlugin(files: ReadonlyMap<string, InlineModul
  * as a folder with an `index` file. Relative specifiers resolve from the importer's folder. `null` when
  * no project file matches.
  */
-export function resolveVirtualImport(specifier: string, importerPath: string, fileMap: ReadonlyMap<string, VirtualModule>): string | null {
+export function resolveVirtualImport(
+    specifier: string,
+    importerPath: string,
+    fileMap: ReadonlyMap<string, VirtualModule>,
+): string | null {
     const basePath = importerPath ? path.posix.dirname(importerPath) : '';
     const rawCandidate = specifier.startsWith('.')
         ? path.posix.normalize(path.posix.join(basePath, specifier))

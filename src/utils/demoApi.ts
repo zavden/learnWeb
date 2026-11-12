@@ -169,9 +169,10 @@ async function parseBody(req: ExpressRequest): Promise<ParsedBody> {
             }).formData();
             const fields: Array<[string, string | { name: string; size: number; type: string }]> = [];
             for (const [name, value] of formData) {
-                fields.push([name, typeof value === 'string'
-                    ? value
-                    : { name: value.name, size: value.size, type: value.type }]);
+                fields.push([
+                    name,
+                    typeof value === 'string' ? value : { name: value.name, size: value.size, type: value.type },
+                ]);
             }
             return { body: groupEntries(fields) };
         } catch {

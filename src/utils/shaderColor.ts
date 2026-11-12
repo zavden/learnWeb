@@ -29,7 +29,9 @@ export function shaderVecToHex(vector: readonly number[] = []): string {
 
 /** The 0..1 floats of a `#rrggbb` color (the `#` is optional); `[0, 0, 0]` for anything else. */
 export function shaderHexToVec(hex = ''): ShaderRgb {
-    const normalized = String(hex || '').trim().toLowerCase();
+    const normalized = String(hex || '')
+        .trim()
+        .toLowerCase();
     const match = normalized.match(/^#?([0-9a-f]{6})$/i);
     if (!match) {
         return [0, 0, 0];

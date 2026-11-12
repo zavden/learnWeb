@@ -55,10 +55,17 @@ export interface FileTypeChangeOptionsQuery {
 }
 
 /** Which rule set applies to the document: shader, React/Vue/plain virtual files, or React/Vue/plain legacy blocks. */
-function getDocumentFileTypeChangeContext(documentModel: ExampleDocumentInput | null | undefined, file: VirtualFile | null | undefined): FileTypeChangeContext {
+function getDocumentFileTypeChangeContext(
+    documentModel: ExampleDocumentInput | null | undefined,
+    file: VirtualFile | null | undefined,
+): FileTypeChangeContext {
     const document = synchronizeDocument(documentModel);
-    const framework = String(document.metadata?.framework || '').trim().toLowerCase();
-    const rendererMode = String(document.rendererMode || '').trim().toLowerCase();
+    const framework = String(document.metadata?.framework || '')
+        .trim()
+        .toLowerCase();
+    const rendererMode = String(document.rendererMode || '')
+        .trim()
+        .toLowerCase();
 
     if (rendererMode === 'shader') {
         return 'shader';
@@ -80,10 +87,17 @@ function getDocumentFileTypeChangeContext(documentModel: ExampleDocumentInput | 
  * first, then by its language family. `[]` when the file cannot change at all (React markup or asset roles,
  * Vue assets, a `.vue` file without an SFC role).
  */
-function getVirtualRoleConstrainedCandidateLanguages(documentModel: ExampleDocumentInput | null | undefined, file: VirtualFile | null | undefined): string[] {
+function getVirtualRoleConstrainedCandidateLanguages(
+    documentModel: ExampleDocumentInput | null | undefined,
+    file: VirtualFile | null | undefined,
+): string[] {
     const document = synchronizeDocument(documentModel);
-    const framework = String(document.metadata?.framework || '').trim().toLowerCase();
-    const role = String(file?.role || '').trim().toLowerCase();
+    const framework = String(document.metadata?.framework || '')
+        .trim()
+        .toLowerCase();
+    const role = String(file?.role || '')
+        .trim()
+        .toLowerCase();
     const currentType = normalizeBlockType(file?.blockType || file?.language || '');
     const virtualFamily = getVirtualLanguageFamily(currentType);
     const isEntry = isDocumentEntryFile(document, file);
@@ -119,7 +133,10 @@ function getVirtualRoleConstrainedCandidateLanguages(documentModel: ExampleDocum
 }
 
 /** The languages a file may switch to in its context, its current language included. */
-function getDocumentFileTypeChangeCandidates(documentModel: ExampleDocumentInput | null | undefined, file: VirtualFile | null | undefined): string[] {
+function getDocumentFileTypeChangeCandidates(
+    documentModel: ExampleDocumentInput | null | undefined,
+    file: VirtualFile | null | undefined,
+): string[] {
     const document = synchronizeDocument(documentModel);
     const context = getDocumentFileTypeChangeContext(document, file);
     const currentType = normalizeBlockType(file?.blockType || file?.language || '');
@@ -130,9 +147,7 @@ function getDocumentFileTypeChangeCandidates(documentModel: ExampleDocumentInput
     }
 
     if (context === 'react-legacy') {
-        return legacyFamily === 'style'
-            ? [...LEGACY_STYLE_LANGUAGE_OPTIONS]
-            : [...LEGACY_APP_LANGUAGE_OPTIONS];
+        return legacyFamily === 'style' ? [...LEGACY_STYLE_LANGUAGE_OPTIONS] : [...LEGACY_APP_LANGUAGE_OPTIONS];
     }
 
     if (context === 'vue-legacy') {
@@ -151,7 +166,11 @@ function getDocumentFileTypeChangeCandidates(documentModel: ExampleDocumentInput
     return getVirtualRoleConstrainedCandidateLanguages(document, file);
 }
 
-function buildBlockedFileTypeChangeResult(baseResult: FileTypeChangeEvaluation, code: string, reason: string): FileTypeChangeEvaluation {
+function buildBlockedFileTypeChangeResult(
+    baseResult: FileTypeChangeEvaluation,
+    code: string,
+    reason: string,
+): FileTypeChangeEvaluation {
     return {
         ...baseResult,
         allowed: false,
@@ -161,7 +180,11 @@ function buildBlockedFileTypeChangeResult(baseResult: FileTypeChangeEvaluation, 
 }
 
 /** Blocked with `incompatible-target-type`; the reason lists the labels of the languages that are possible. */
-function buildIncompatibleFileTypeChangeResult(document: ExampleDocument, file: VirtualFile, baseResult: FileTypeChangeEvaluation): FileTypeChangeEvaluation {
+function buildIncompatibleFileTypeChangeResult(
+    document: ExampleDocument,
+    file: VirtualFile,
+    baseResult: FileTypeChangeEvaluation,
+): FileTypeChangeEvaluation {
     const candidateLanguages = getDocumentFileTypeChangeCandidates(document, file);
     const candidateLabels = candidateLanguages.map((language) => getLanguageLabel(language)).join(', ');
 
@@ -170,12 +193,16 @@ function buildIncompatibleFileTypeChangeResult(document: ExampleDocument, file: 
         'incompatible-target-type',
         candidateLabels
             ? `This file can only switch between: ${candidateLabels}.`
-            : 'This file cannot change to that badge in the current document.'
+            : 'This file cannot change to that badge in the current document.',
     );
 }
 
 /** The checks every context ends with: the target must be a candidate, and a renamed virtual file must not take another file's path. */
-function finalizeDocumentFileTypeChangeResult(document: ExampleDocument, file: VirtualFile, baseResult: FileTypeChangeEvaluation): FileTypeChangeEvaluation {
+function finalizeDocumentFileTypeChangeResult(
+    document: ExampleDocument,
+    file: VirtualFile,
+    baseResult: FileTypeChangeEvaluation,
+): FileTypeChangeEvaluation {
     const candidateLanguages = getDocumentFileTypeChangeCandidates(document, file);
 
     if (!candidateLanguages.includes(baseResult.nextType)) {
@@ -183,15 +210,15 @@ function finalizeDocumentFileTypeChangeResult(document: ExampleDocument, file: V
     }
 
     if (file?.sourceKind === 'virtual' && baseResult.expectedPath) {
-        const collidingFile = (document.files || []).find((entry) => (
-            entry.id !== file.id && normalizeVirtualPath(entry.path) === baseResult.expectedPath
-        ));
+        const collidingFile = (document.files || []).find(
+            (entry) => entry.id !== file.id && normalizeVirtualPath(entry.path) === baseResult.expectedPath,
+        );
 
         if (collidingFile) {
             return buildBlockedFileTypeChangeResult(
                 baseResult,
                 'file-type-change-path-collision',
-                `Changing this file to ${getLanguageLabel(baseResult.nextType)} would rename it to "${baseResult.expectedPath}", but that path already exists.`
+                `Changing this file to ${getLanguageLabel(baseResult.nextType)} would rename it to "${baseResult.expectedPath}", but that path already exists.`,
             );
         }
     }
@@ -208,16 +235,19 @@ function finalizeDocumentFileTypeChangeResult(document: ExampleDocument, file: V
  * `code` and a user-facing `reason`. The exercise lock and the shader rule are checked before the
  * family rules.
  */
-export function evaluateDocumentFileTypeChange(documentModel: ExampleDocumentInput | null | undefined, fileId: string, nextType: string = ''): FileTypeChangeEvaluation {
+export function evaluateDocumentFileTypeChange(
+    documentModel: ExampleDocumentInput | null | undefined,
+    fileId: string,
+    nextType: string = '',
+): FileTypeChangeEvaluation {
     const document = synchronizeDocument(documentModel);
     const file = (document.files || []).find((entry) => entry.id === fileId);
     const normalizedNextType = normalizeBlockType(nextType);
     const currentType = normalizeBlockType(file?.blockType || file?.language || '');
     const context = getDocumentFileTypeChangeContext(document, file);
     const expectedExtensions = getExpectedExtensions(normalizedNextType);
-    const expectedPath = file?.sourceKind === 'virtual'
-        ? getExpectedPathForLanguage(file.path, normalizedNextType)
-        : '';
+    const expectedPath =
+        file?.sourceKind === 'virtual' ? getExpectedPathForLanguage(file.path, normalizedNextType) : '';
     const baseResult: FileTypeChangeEvaluation = {
         allowed: false,
         code: '',
@@ -235,7 +265,7 @@ export function evaluateDocumentFileTypeChange(documentModel: ExampleDocumentInp
         return buildBlockedFileTypeChangeResult(
             baseResult,
             'file-not-found',
-            'The selected file no longer exists in the current document.'
+            'The selected file no longer exists in the current document.',
         );
     }
 
@@ -243,7 +273,7 @@ export function evaluateDocumentFileTypeChange(documentModel: ExampleDocumentInp
         return buildBlockedFileTypeChangeResult(
             baseResult,
             'invalid-target-type',
-            'Choose a valid target badge before applying the change.'
+            'Choose a valid target badge before applying the change.',
         );
     }
 
@@ -253,7 +283,7 @@ export function evaluateDocumentFileTypeChange(documentModel: ExampleDocumentInp
         return buildBlockedFileTypeChangeResult(
             baseResult,
             'exercise-file-type-change-locked',
-            `The file "${normalizedFilePath}" is locked by the current exercise and its badge cannot be changed.`
+            `The file "${normalizedFilePath}" is locked by the current exercise and its badge cannot be changed.`,
         );
     }
 
@@ -268,7 +298,7 @@ export function evaluateDocumentFileTypeChange(documentModel: ExampleDocumentInp
         return buildBlockedFileTypeChangeResult(
             baseResult,
             'shader-block-change-not-supported',
-            'Shader blocks must keep exactly one Vertex and one Fragment block, so this badge cannot be changed here.'
+            'Shader blocks must keep exactly one Vertex and one Fragment block, so this badge cannot be changed here.',
         );
     }
 
@@ -279,7 +309,7 @@ export function evaluateDocumentFileTypeChange(documentModel: ExampleDocumentInp
             return buildBlockedFileTypeChangeResult(
                 baseResult,
                 'html-full-must-stand-alone',
-                'HTML-FULL must be the only block in the document. Remove the other blocks first.'
+                'HTML-FULL must be the only block in the document. Remove the other blocks first.',
             );
         }
 
@@ -290,47 +320,83 @@ export function evaluateDocumentFileTypeChange(documentModel: ExampleDocumentInp
         return finalizeDocumentFileTypeChangeResult(document, file, baseResult);
     }
 
-    const framework = String(document.metadata?.framework || '').trim().toLowerCase();
+    const framework = String(document.metadata?.framework || '')
+        .trim()
+        .toLowerCase();
     const isEntry = isDocumentEntryFile(document, file);
     const virtualFamily = getVirtualLanguageFamily(currentType);
-    const role = String(file?.role || '').trim().toLowerCase();
+    const role = String(file?.role || '')
+        .trim()
+        .toLowerCase();
 
     if (framework === 'react') {
         if (role === 'markup') {
-            return buildBlockedFileTypeChangeResult(baseResult, 'react-markup-role-not-supported', 'React multi-file examples do not support files with role `markup`. Change the role first or remove this file.');
+            return buildBlockedFileTypeChangeResult(
+                baseResult,
+                'react-markup-role-not-supported',
+                'React multi-file examples do not support files with role `markup`. Change the role first or remove this file.',
+            );
         }
 
         if (role === 'asset') {
-            return buildBlockedFileTypeChangeResult(baseResult, 'react-asset-role-not-supported', 'Virtual asset files are not supported for React multi-file examples. Keep binary assets in the topic-level assets/ folder.');
+            return buildBlockedFileTypeChangeResult(
+                baseResult,
+                'react-asset-role-not-supported',
+                'Virtual asset files are not supported for React multi-file examples. Keep binary assets in the topic-level assets/ folder.',
+            );
         }
 
         if (!REACT_MULTI_FILE_LANGUAGES.has(normalizedNextType)) {
-            return buildBlockedFileTypeChangeResult(baseResult, 'unsupported-react-target-language', `React multi-file examples do not support "${getLanguageLabel(normalizedNextType)}" files.`);
+            return buildBlockedFileTypeChangeResult(
+                baseResult,
+                'unsupported-react-target-language',
+                `React multi-file examples do not support "${getLanguageLabel(normalizedNextType)}" files.`,
+            );
         }
 
         if (isEntry && !REACT_MULTI_FILE_ENTRY_LANGUAGES.has(normalizedNextType)) {
-            return buildBlockedFileTypeChangeResult(baseResult, 'invalid-react-entry-target-language', 'React entry files can only use JSX, TSX, JavaScript or TypeScript.');
+            return buildBlockedFileTypeChangeResult(
+                baseResult,
+                'invalid-react-entry-target-language',
+                'React entry files can only use JSX, TSX, JavaScript or TypeScript.',
+            );
         }
 
         if (virtualFamily === 'style' && !LEGACY_STYLE_LANGUAGE_OPTIONS.includes(normalizedNextType)) {
-            return buildBlockedFileTypeChangeResult(baseResult, 'react-style-family-only', 'Style files can only switch between CSS, SCSS and SASS.');
+            return buildBlockedFileTypeChangeResult(
+                baseResult,
+                'react-style-family-only',
+                'Style files can only switch between CSS, SCSS and SASS.',
+            );
         }
 
         if (role === 'config' && normalizedNextType !== 'json') {
-            return buildBlockedFileTypeChangeResult(baseResult, 'react-config-role-json-only', 'Files with role `config` can only use JSON in React multi-file examples.');
+            return buildBlockedFileTypeChangeResult(
+                baseResult,
+                'react-config-role-json-only',
+                'Files with role `config` can only use JSON in React multi-file examples.',
+            );
         }
 
         if (virtualFamily === 'json' && normalizedNextType !== 'json') {
-            return buildBlockedFileTypeChangeResult(baseResult, 'react-json-family-only', 'JSON virtual files can only stay JSON.');
+            return buildBlockedFileTypeChangeResult(
+                baseResult,
+                'react-json-family-only',
+                'JSON virtual files can only stay JSON.',
+            );
         }
 
         if (
-            role !== 'config'
-            && virtualFamily !== 'style'
-            && virtualFamily !== 'json'
-            && !REACT_MULTI_FILE_CODE_LANGUAGE_OPTIONS.includes(normalizedNextType)
+            role !== 'config' &&
+            virtualFamily !== 'style' &&
+            virtualFamily !== 'json' &&
+            !REACT_MULTI_FILE_CODE_LANGUAGE_OPTIONS.includes(normalizedNextType)
         ) {
-            return buildBlockedFileTypeChangeResult(baseResult, 'react-code-family-only', 'React source files can only switch between JSX, TSX, JavaScript and TypeScript.');
+            return buildBlockedFileTypeChangeResult(
+                baseResult,
+                'react-code-family-only',
+                'React source files can only switch between JSX, TSX, JavaScript and TypeScript.',
+            );
         }
 
         return finalizeDocumentFileTypeChangeResult(document, file, baseResult);
@@ -338,56 +404,100 @@ export function evaluateDocumentFileTypeChange(documentModel: ExampleDocumentInp
 
     if (framework === 'vue') {
         if (role === 'asset') {
-            return buildBlockedFileTypeChangeResult(baseResult, 'vue-asset-role-not-supported', 'Virtual asset files are not supported for Vue multi-file examples. Keep binary assets in the topic-level assets/ folder.');
+            return buildBlockedFileTypeChangeResult(
+                baseResult,
+                'vue-asset-role-not-supported',
+                'Virtual asset files are not supported for Vue multi-file examples. Keep binary assets in the topic-level assets/ folder.',
+            );
         }
 
         if (!VUE_MULTI_FILE_LANGUAGES.has(normalizedNextType)) {
-            return buildBlockedFileTypeChangeResult(baseResult, 'unsupported-vue-target-language', `Vue multi-file examples do not support "${getLanguageLabel(normalizedNextType)}" files.`);
+            return buildBlockedFileTypeChangeResult(
+                baseResult,
+                'unsupported-vue-target-language',
+                `Vue multi-file examples do not support "${getLanguageLabel(normalizedNextType)}" files.`,
+            );
         }
 
         if (isEntry && !VUE_MULTI_FILE_ENTRY_LANGUAGES.has(normalizedNextType)) {
-            return buildBlockedFileTypeChangeResult(baseResult, 'invalid-vue-entry-target-language', 'Vue entry files can only use JavaScript or TypeScript.');
+            return buildBlockedFileTypeChangeResult(
+                baseResult,
+                'invalid-vue-entry-target-language',
+                'Vue entry files can only use JavaScript or TypeScript.',
+            );
         }
 
         if (currentType === 'vue' && normalizedNextType !== 'vue') {
-            return buildBlockedFileTypeChangeResult(baseResult, 'vue-sfc-conversion-not-supported', 'Vue SFC files can only stay .vue from this editor.');
+            return buildBlockedFileTypeChangeResult(
+                baseResult,
+                'vue-sfc-conversion-not-supported',
+                'Vue SFC files can only stay .vue from this editor.',
+            );
         }
 
         if (VUE_MULTI_FILE_SFC_ROLES.has(role) && currentType !== 'vue' && normalizedNextType === 'vue') {
-            return buildBlockedFileTypeChangeResult(baseResult, 'vue-sfc-upgrade-not-supported', 'Converting a JavaScript or TypeScript module directly into a Vue SFC is not supported yet. Create a new .vue file instead.');
+            return buildBlockedFileTypeChangeResult(
+                baseResult,
+                'vue-sfc-upgrade-not-supported',
+                'Converting a JavaScript or TypeScript module directly into a Vue SFC is not supported yet. Create a new .vue file instead.',
+            );
         }
 
         if (role === 'markup' && normalizedNextType !== 'html') {
-            return buildBlockedFileTypeChangeResult(baseResult, 'vue-markup-family-only', 'Vue render-template files must stay HTML.');
+            return buildBlockedFileTypeChangeResult(
+                baseResult,
+                'vue-markup-family-only',
+                'Vue render-template files must stay HTML.',
+            );
         }
 
         if (role === 'style' && !LEGACY_STYLE_LANGUAGE_OPTIONS.includes(normalizedNextType)) {
-            return buildBlockedFileTypeChangeResult(baseResult, 'vue-style-family-only', 'Style files can only switch between CSS, SCSS and SASS.');
+            return buildBlockedFileTypeChangeResult(
+                baseResult,
+                'vue-style-family-only',
+                'Style files can only switch between CSS, SCSS and SASS.',
+            );
         }
 
         if (role === 'config' && normalizedNextType !== 'json') {
-            return buildBlockedFileTypeChangeResult(baseResult, 'vue-config-role-json-only', 'Files with role `config` can only use JSON in Vue multi-file examples.');
+            return buildBlockedFileTypeChangeResult(
+                baseResult,
+                'vue-config-role-json-only',
+                'Files with role `config` can only use JSON in Vue multi-file examples.',
+            );
         }
 
         if (virtualFamily === 'json' && normalizedNextType !== 'json') {
-            return buildBlockedFileTypeChangeResult(baseResult, 'vue-json-family-only', 'JSON virtual files can only stay JSON.');
+            return buildBlockedFileTypeChangeResult(
+                baseResult,
+                'vue-json-family-only',
+                'JSON virtual files can only stay JSON.',
+            );
         }
 
         if (currentType === 'vue' && !VUE_MULTI_FILE_SFC_ROLES.has(role)) {
-            return buildBlockedFileTypeChangeResult(baseResult, 'vue-sfc-role-not-supported', 'Only app, component or page files can stay as Vue SFCs in this editor.');
+            return buildBlockedFileTypeChangeResult(
+                baseResult,
+                'vue-sfc-role-not-supported',
+                'Only app, component or page files can stay as Vue SFCs in this editor.',
+            );
         }
 
         if (
-            role !== 'config'
-            && role !== 'style'
-            && role !== 'markup'
-            && virtualFamily !== 'style'
-            && virtualFamily !== 'json'
-            && virtualFamily !== 'markup'
-            && currentType !== 'vue'
-            && !VUE_MULTI_FILE_CODE_LANGUAGE_OPTIONS.includes(normalizedNextType)
+            role !== 'config' &&
+            role !== 'style' &&
+            role !== 'markup' &&
+            virtualFamily !== 'style' &&
+            virtualFamily !== 'json' &&
+            virtualFamily !== 'markup' &&
+            currentType !== 'vue' &&
+            !VUE_MULTI_FILE_CODE_LANGUAGE_OPTIONS.includes(normalizedNextType)
         ) {
-            return buildBlockedFileTypeChangeResult(baseResult, 'vue-code-family-only', 'Vue source files can only switch between JavaScript and TypeScript.');
+            return buildBlockedFileTypeChangeResult(
+                baseResult,
+                'vue-code-family-only',
+                'Vue source files can only switch between JavaScript and TypeScript.',
+            );
         }
 
         return finalizeDocumentFileTypeChangeResult(document, file, baseResult);
@@ -401,15 +511,17 @@ export function evaluateDocumentFileTypeChange(documentModel: ExampleDocumentInp
  * blocked entries can be shown disabled with their reason. `[]` when the file does not exist or has no
  * candidate language.
  */
-export function getDocumentFileTypeChangeOptions(documentModel: ExampleDocumentInput | null | undefined, fileId: string, options: FileTypeChangeOptionsQuery = {}): FileTypeChangeOption[] {
+export function getDocumentFileTypeChangeOptions(
+    documentModel: ExampleDocumentInput | null | undefined,
+    fileId: string,
+    options: FileTypeChangeOptionsQuery = {},
+): FileTypeChangeOption[] {
     const document = synchronizeDocument(documentModel);
     const file = (document.files || []).find((entry) => entry.id === fileId);
     if (!file) return [];
 
     const includeCurrent = options.includeCurrent !== false;
-    const candidateLanguages = dedupeNormalizedLanguageOptions(
-        getDocumentFileTypeChangeCandidates(document, file)
-    );
+    const candidateLanguages = dedupeNormalizedLanguageOptions(getDocumentFileTypeChangeCandidates(document, file));
     const currentType = normalizeBlockType(file.blockType || file.language || '');
 
     return candidateLanguages

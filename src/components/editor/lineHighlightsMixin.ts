@@ -16,11 +16,7 @@
 
 import { HIGHLIGHT_COLORS } from '../../config/highlightColors.ts';
 import { parseHighlights, serializeHighlights } from '../../utils/highlights.ts';
-import {
-    addLineHighlightEffect,
-    getHighlightsByLine,
-    setAllHighlightsEffect,
-} from './lineHighlightExtension.ts';
+import { addLineHighlightEffect, getHighlightsByLine, setAllHighlightsEffect } from './lineHighlightExtension.ts';
 import type { EditorView } from '@codemirror/view';
 import type {
     DocumentHighlights,
@@ -104,10 +100,7 @@ export const lineHighlightsMixin = {
                 orderedHighlights.set(file.id, liveHighlights.get(file.id)!); // has() just checked
             }
         });
-        const highlightsStr = serializeHighlights(
-            orderedHighlights,
-            doc.files || []
-        );
+        const highlightsStr = serializeHighlights(orderedHighlights, doc.files || []);
         const metadata: ExampleMetadata = { ...(doc.metadata || {}) };
         if (highlightsStr) {
             metadata.highlights = highlightsStr;

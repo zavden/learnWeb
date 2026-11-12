@@ -15,7 +15,13 @@
 // versions its loads with `_exerciseEmbedRequestId` (also bumped when the dialog closes) so previews that
 // arrive late are dropped.
 
-import { getExampleEditorialMetadata, isShaderDocument, hasBlockingDiagnostics, parseExampleDocument, updateShaderResolution } from '../../utils/markdown.ts';
+import {
+    getExampleEditorialMetadata,
+    isShaderDocument,
+    hasBlockingDiagnostics,
+    parseExampleDocument,
+    updateShaderResolution,
+} from '../../utils/markdown.ts';
 import { getTheoryDocumentContent, isTheoryDocument } from '../../utils/theoryDocument.ts';
 import { modifyTopicMain, fetchExamples, fetchExample } from '../../utils/api.ts';
 import { compileExample } from '../../utils/compileClient.ts';
@@ -66,10 +72,10 @@ export const theoryEditorMixin = {
 
         const metadata = getExampleEditorialMetadata(this.currentDocument);
         if (
-            !String(metadata.description || '').trim()
-            && (!Array.isArray(metadata.tags) || metadata.tags.length === 0)
-            && !Number.isInteger(metadata.rating)
-            && !String(metadata.importance || '').trim()
+            !String(metadata.description || '').trim() &&
+            (!Array.isArray(metadata.tags) || metadata.tags.length === 0) &&
+            !Number.isInteger(metadata.rating) &&
+            !String(metadata.importance || '').trim()
         ) {
             return null;
         }
@@ -199,11 +205,14 @@ export const theoryEditorMixin = {
                 btnEmbed.title = `Copy [[exercise:${filename}]]`;
                 btnEmbed.addEventListener('click', () => {
                     const tag = `[[exercise:${filename}]]`;
-                    navigator.clipboard.writeText(tag).then(() => {
-                        this._showToast(`Copied: ${tag}`, 'success');
-                    }).catch(() => {
-                        this._showToast(`Tag: ${tag}`, 'success');
-                    });
+                    navigator.clipboard
+                        .writeText(tag)
+                        .then(() => {
+                            this._showToast(`Copied: ${tag}`, 'success');
+                        })
+                        .catch(() => {
+                            this._showToast(`Tag: ${tag}`, 'success');
+                        });
                     this.exerciseEmbedDialog!.close();
                 });
 
@@ -214,11 +223,14 @@ export const theoryEditorMixin = {
                 btnCode.title = `Copy [[exercise:${filename}-]]`;
                 btnCode.addEventListener('click', () => {
                     const tag = `[[exercise:${filename}-]]`;
-                    navigator.clipboard.writeText(tag).then(() => {
-                        this._showToast(`Copied: ${tag}`, 'success');
-                    }).catch(() => {
-                        this._showToast(`Tag: ${tag}`, 'success');
-                    });
+                    navigator.clipboard
+                        .writeText(tag)
+                        .then(() => {
+                            this._showToast(`Copied: ${tag}`, 'success');
+                        })
+                        .catch(() => {
+                            this._showToast(`Tag: ${tag}`, 'success');
+                        });
                     this.exerciseEmbedDialog!.close();
                 });
 

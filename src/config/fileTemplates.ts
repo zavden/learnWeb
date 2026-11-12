@@ -143,34 +143,34 @@ function makeUniquePath(path = '', takenPaths: ReadonlySet<string> = new Set()):
     const extension = extensionIndex === -1 ? '' : fileName.slice(extensionIndex);
 
     let counter = 2;
-    let candidate = directory
-        ? `${directory}/${stem}-${counter}${extension}`
-        : `${stem}-${counter}${extension}`;
+    let candidate = directory ? `${directory}/${stem}-${counter}${extension}` : `${stem}-${counter}${extension}`;
 
     while (takenPaths.has(candidate)) {
         counter += 1;
-        candidate = directory
-            ? `${directory}/${stem}-${counter}${extension}`
-            : `${stem}-${counter}${extension}`;
+        candidate = directory ? `${directory}/${stem}-${counter}${extension}` : `${stem}-${counter}${extension}`;
     }
 
     return candidate;
 }
 
 function toPascalCase(value = '') {
-    return String(value)
-        .split(/[^A-Za-z0-9]+/)
-        .filter(Boolean)
-        .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-        .join('') || 'NewFile';
+    return (
+        String(value)
+            .split(/[^A-Za-z0-9]+/)
+            .filter(Boolean)
+            .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+            .join('') || 'NewFile'
+    );
 }
 
 function toKebabCase(value = '') {
-    return String(value)
-        .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-        .replace(/[^A-Za-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .toLowerCase() || 'new-file';
+    return (
+        String(value)
+            .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+            .replace(/[^A-Za-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .toLowerCase() || 'new-file'
+    );
 }
 
 function toCamelCase(value = '') {
@@ -197,26 +197,32 @@ function getTemplateSymbolName(filePath = '', templateId = '', framework = '') {
 }
 
 function getDocumentFramework(documentModel: ExampleDocumentInput | null | undefined): string {
-    return String(documentModel?.metadata?.framework || '').trim().toLowerCase();
+    return String(documentModel?.metadata?.framework || '')
+        .trim()
+        .toLowerCase();
 }
 
 function inferPreferences(documentModel: ExampleDocumentInput | null | undefined): TemplatePreferences {
     const framework = getDocumentFramework(documentModel);
     const languages = (documentModel?.files || []).map((file) => file.language);
-    const hasTyped = framework === 'react'
-        ? languages.includes('tsx') || languages.includes('typescript')
-        : languages.includes('typescript');
+    const hasTyped =
+        framework === 'react'
+            ? languages.includes('tsx') || languages.includes('typescript')
+            : languages.includes('typescript');
     const usesVueSfc = framework === 'vue' && languages.includes('vue');
-    const styleLanguage = languages.includes('scss')
-        ? 'scss'
-        : languages.includes('sass')
-            ? 'sass'
-            : 'css';
+    const styleLanguage = languages.includes('scss') ? 'scss' : languages.includes('sass') ? 'sass' : 'css';
 
     return {
-        componentLanguage: framework === 'react'
-            ? (hasTyped ? 'tsx' : 'jsx')
-            : (usesVueSfc ? 'vue' : (hasTyped ? 'typescript' : 'javascript')),
+        componentLanguage:
+            framework === 'react'
+                ? hasTyped
+                    ? 'tsx'
+                    : 'jsx'
+                : usesVueSfc
+                  ? 'vue'
+                  : hasTyped
+                    ? 'typescript'
+                    : 'javascript',
         framework,
         moduleLanguage: hasTyped ? 'typescript' : 'javascript',
         styleLanguage,
@@ -229,26 +235,22 @@ function normalizeTemplateLanguage(templateId = '', requestedLanguage = '', pref
     const normalized = normalizeBlockType(requestedLanguage);
 
     if (templateId === 'style') {
-        return ['css', 'scss', 'sass'].includes(normalized)
-            ? normalized
-            : preferences.styleLanguage;
+        return ['css', 'scss', 'sass'].includes(normalized) ? normalized : preferences.styleLanguage;
     }
 
-    if (templateId === 'component' || templateId === 'page' || (templateId === 'state' && preferences.framework === 'react')) {
+    if (
+        templateId === 'component' ||
+        templateId === 'page' ||
+        (templateId === 'state' && preferences.framework === 'react')
+    ) {
         if (preferences.framework === 'react') {
-            return ['jsx', 'tsx'].includes(normalized)
-                ? normalized
-                : preferences.componentLanguage;
+            return ['jsx', 'tsx'].includes(normalized) ? normalized : preferences.componentLanguage;
         }
 
-        return ['vue', 'javascript', 'typescript'].includes(normalized)
-            ? normalized
-            : preferences.componentLanguage;
+        return ['vue', 'javascript', 'typescript'].includes(normalized) ? normalized : preferences.componentLanguage;
     }
 
-    return ['javascript', 'typescript'].includes(normalized)
-        ? normalized
-        : preferences.moduleLanguage;
+    return ['javascript', 'typescript'].includes(normalized) ? normalized : preferences.moduleLanguage;
 }
 
 function getTemplateRole(framework = '', templateId = '') {
@@ -469,28 +471,34 @@ function createVueTemplateMarkup(scriptFilePath = '', templateId = '') {
     return `<section class="${className}">\n  <p class="${className}__eyebrow">${eyebrow}</p>\n  <h2>{{ title }}</h2>\n  <p>Update this template to match your component.</p>\n</section>`;
 }
 
-function createVueSfcTemplateContents(templateId = '', scriptLanguage = 'javascript', styleLanguage = 'css', filePath = '') {
+function createVueSfcTemplateContents(
+    templateId = '',
+    scriptLanguage = 'javascript',
+    styleLanguage = 'css',
+    filePath = '',
+) {
     const componentName = getTemplateSymbolName(filePath, templateId, 'vue');
     const className = toKebabCase(componentName);
     const eyebrow = templateId === 'page' ? 'Page scaffold' : 'Vue SFC';
     const isTyped = scriptLanguage === 'typescript';
-    const scriptTag = isTyped
-        ? '<script setup lang="ts">'
-        : '<script setup>';
-    const styleTag = styleLanguage === 'css'
-        ? '<style scoped>'
-        : `<style scoped lang="${styleLanguage}">`;
+    const scriptTag = isTyped ? '<script setup lang="ts">' : '<script setup>';
+    const styleTag = styleLanguage === 'css' ? '<style scoped>' : `<style scoped lang="${styleLanguage}">`;
 
-    const styleSource = styleLanguage === 'scss'
-        ? `.${className} {\n  display: grid;\n  gap: 10px;\n  padding: 18px;\n  border-radius: 18px;\n  background: linear-gradient(180deg, #f8fafc, #dbeafe);\n  color: #1e3a8a;\n\n  &__eyebrow {\n    margin: 0;\n    font-size: 12px;\n    letter-spacing: 0.08em;\n    text-transform: uppercase;\n    color: #2563eb;\n  }\n}`
-        : styleLanguage === 'sass'
-            ? `.${className}\n  display: grid\n  gap: 10px\n  padding: 18px\n  border-radius: 18px\n  background: linear-gradient(180deg, #f8fafc, #dbeafe)\n  color: #1e3a8a\n\n  &__eyebrow\n    margin: 0\n    font-size: 12px\n    letter-spacing: 0.08em\n    text-transform: uppercase\n    color: #2563eb`
-            : `.${className} {\n  display: grid;\n  gap: 10px;\n  padding: 18px;\n  border-radius: 18px;\n  background: linear-gradient(180deg, #f8fafc, #dbeafe);\n  color: #1e3a8a;\n}\n\n.${className}__eyebrow {\n  margin: 0;\n  font-size: 12px;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n  color: #2563eb;\n}`;
+    const styleSource =
+        styleLanguage === 'scss'
+            ? `.${className} {\n  display: grid;\n  gap: 10px;\n  padding: 18px;\n  border-radius: 18px;\n  background: linear-gradient(180deg, #f8fafc, #dbeafe);\n  color: #1e3a8a;\n\n  &__eyebrow {\n    margin: 0;\n    font-size: 12px;\n    letter-spacing: 0.08em;\n    text-transform: uppercase;\n    color: #2563eb;\n  }\n}`
+            : styleLanguage === 'sass'
+              ? `.${className}\n  display: grid\n  gap: 10px\n  padding: 18px\n  border-radius: 18px\n  background: linear-gradient(180deg, #f8fafc, #dbeafe)\n  color: #1e3a8a\n\n  &__eyebrow\n    margin: 0\n    font-size: 12px\n    letter-spacing: 0.08em\n    text-transform: uppercase\n    color: #2563eb`
+              : `.${className} {\n  display: grid;\n  gap: 10px;\n  padding: 18px;\n  border-radius: 18px;\n  background: linear-gradient(180deg, #f8fafc, #dbeafe);\n  color: #1e3a8a;\n}\n\n.${className}__eyebrow {\n  margin: 0;\n  font-size: 12px;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n  color: #2563eb;\n}`;
 
     return `<template>\n  <section class="${className}">\n    <p class="${className}__eyebrow">${eyebrow}</p>\n    <h2>{{ title }}</h2>\n    <p>Update this component with your own reactive state.</p>\n  </section>\n</template>\n\n${scriptTag}\nimport { computed, ref } from 'vue';\n\nconst count = ref(0);\nconst title = computed(() => '${componentName} ' + count.value);\n</script>\n\n${styleTag}\n${styleSource}\n</style>`;
 }
 
-function buildReactTemplate(documentModel: ExampleDocumentInput, templateId: string, options: FileTemplateRequest = {}): FileTemplateScaffold {
+function buildReactTemplate(
+    documentModel: ExampleDocumentInput,
+    templateId: string,
+    options: FileTemplateRequest = {},
+): FileTemplateScaffold {
     const preferences = inferPreferences(documentModel);
     const language = normalizeTemplateLanguage(templateId, options.language, preferences);
     const role = options.role || getTemplateRole('react', templateId);
@@ -517,7 +525,11 @@ function buildReactTemplate(documentModel: ExampleDocumentInput, templateId: str
     };
 }
 
-function buildVueTemplate(documentModel: ExampleDocumentInput, templateId: string, options: FileTemplateRequest = {}): FileTemplateScaffold {
+function buildVueTemplate(
+    documentModel: ExampleDocumentInput,
+    templateId: string,
+    options: FileTemplateRequest = {},
+): FileTemplateScaffold {
     const preferences = inferPreferences(documentModel);
     const language = normalizeTemplateLanguage(templateId, options.language, preferences);
     const role = options.role || getTemplateRole('vue', templateId);
@@ -566,9 +578,7 @@ function buildVueTemplate(documentModel: ExampleDocumentInput, templateId: strin
 
     const templateCandidate = ensurePathExtension(primaryPath, 'html');
     const templateTakenPaths = new Set([...takenPaths, primaryPath]);
-    const templatePath = options.path
-        ? templateCandidate
-        : makeUniquePath(templateCandidate, templateTakenPaths);
+    const templatePath = options.path ? templateCandidate : makeUniquePath(templateCandidate, templateTakenPaths);
     const templateImportPath = `./${getFileName(templatePath)}`;
 
     return {
@@ -592,7 +602,9 @@ function buildVueTemplate(documentModel: ExampleDocumentInput, templateId: strin
 }
 
 /** The template menu of a React or Vue multi-file document; `[]` for anything else (the dialog then hides it). */
-export function getFrameworkFileTemplateOptions(documentModel: ExampleDocumentInput | null | undefined): FileTemplateOption[] {
+export function getFrameworkFileTemplateOptions(
+    documentModel: ExampleDocumentInput | null | undefined,
+): FileTemplateOption[] {
     const framework = getDocumentFramework(documentModel);
     if (documentModel?.sourceFormat !== 'virtual-files') return [];
     return TEMPLATE_OPTIONS[framework] ? [...TEMPLATE_OPTIONS[framework]] : [];
@@ -604,7 +616,11 @@ export function getFrameworkFileTemplateOptions(documentModel: ExampleDocumentIn
  * used as given (with the extension of the chosen language), so the caller checks it for collisions.
  * Unknown template ids fall back to a generic utility module.
  */
-export function buildFrameworkFileTemplate(documentModel: ExampleDocumentInput | null | undefined, templateId: string, options: FileTemplateRequest = {}): FileTemplateScaffold | null {
+export function buildFrameworkFileTemplate(
+    documentModel: ExampleDocumentInput | null | undefined,
+    templateId: string,
+    options: FileTemplateRequest = {},
+): FileTemplateScaffold | null {
     const framework = getDocumentFramework(documentModel);
     if (!templateId || templateId === 'custom') return null;
     if (documentModel?.sourceFormat !== 'virtual-files') return null;

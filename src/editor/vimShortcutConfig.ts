@@ -89,10 +89,22 @@ const SHORTCUT_SCHEMA = Object.freeze({
     }),
     panels: Object.freeze({
         shift: Object.freeze(['openFilePicker', 'movePanelDown', 'movePanelUp', 'toggleAutoRender'] as const),
-        leader: Object.freeze(['toggleActivePanelCollapse', 'toggleActivePanelMaximize', 'autoFitPanels', 'normalizePanels'] as const),
+        leader: Object.freeze([
+            'toggleActivePanelCollapse',
+            'toggleActivePanelMaximize',
+            'autoFitPanels',
+            'normalizePanels',
+        ] as const),
     }),
     shaders: Object.freeze({
-        leader2: Object.freeze(['toggleShaderPause', 'openShaderControls', 'openShaderUniforms', 'openShaderTextures', 'openShaderPanel', 'resetShaderRuntime'] as const),
+        leader2: Object.freeze([
+            'toggleShaderPause',
+            'openShaderControls',
+            'openShaderUniforms',
+            'openShaderTextures',
+            'openShaderPanel',
+            'resetShaderRuntime',
+        ] as const),
     }),
 });
 
@@ -109,10 +121,14 @@ export type VimShortcutBucket = { [C in VimShortcutContext]: keyof ShortcutSchem
 
 // The actions a context accepts in bucket(s) B (never when the context has no such bucket).
 type SchemaActions<C extends VimShortcutContext, B> = B extends keyof ShortcutSchema[C]
-    ? ShortcutSchema[C][B] extends readonly (infer A extends string)[] ? A : never
+    ? ShortcutSchema[C][B] extends readonly (infer A extends string)[]
+        ? A
+        : never
     : never;
 
-type ActionsInBuckets<B extends VimShortcutBucket> = { [C in VimShortcutContext]: SchemaActions<C, B> }[VimShortcutContext];
+type ActionsInBuckets<B extends VimShortcutBucket> = {
+    [C in VimShortcutContext]: SchemaActions<C, B>;
+}[VimShortcutContext];
 
 /** Every configurable action name. */
 export type VimShortcutAction = ActionsInBuckets<VimShortcutBucket>;
@@ -181,58 +197,59 @@ interface ShortcutSectionDefinition {
 }
 
 // The sections of the shortcut help dialog, in display order within each section.
-const SECTION_DEFINITIONS: Readonly<Record<'general' | 'tabs' | 'panels' | 'shaders', ShortcutSectionDefinition>> = Object.freeze({
-    general: Object.freeze({
-        title: 'General',
-        note: 'Always available while Vim is enabled.',
-        items: Object.freeze<readonly ShortcutRef[]>([
-            { context: 'global', bucket: 'shift', action: 'quickSave' },
-            { context: 'global', bucket: 'shift', action: 'toggleConsole' },
-            { context: 'global', bucket: 'shift', action: 'togglePreviewHeader' },
-            { context: 'global', bucket: 'leader', action: 'toggleSidebar' },
-            { context: 'global', bucket: 'leader', action: 'centerWorkspace' },
-            { context: 'global', bucket: 'leader', action: 'clearSearchHighlight' },
-            { context: 'global', bucket: 'leader2', action: 'openShortcutHelp' },
-            { context: 'global', bucket: 'leader2', action: 'toggleEditorLayout' },
-        ]),
-    }),
-    tabs: Object.freeze({
-        title: 'Tabs',
-        note: 'Current layout: Tabs.',
-        items: Object.freeze<readonly ShortcutRef[]>([
-            { context: 'tabs', bucket: 'shift', action: 'previousTab' },
-            { context: 'tabs', bucket: 'shift', action: 'nextTab' },
-            { context: 'tabs', bucket: 'shift', action: 'openFilePicker' },
-            { context: 'tabs', bucket: 'shift', action: 'toggleAutoRender' },
-        ]),
-    }),
-    panels: Object.freeze({
-        title: 'Panels',
-        note: 'Current layout: Panels / cascada.',
-        items: Object.freeze<readonly ShortcutRef[]>([
-            { context: 'panels', bucket: 'shift', action: 'openFilePicker' },
-            { context: 'panels', bucket: 'shift', action: 'movePanelDown' },
-            { context: 'panels', bucket: 'shift', action: 'movePanelUp' },
-            { context: 'panels', bucket: 'shift', action: 'toggleAutoRender' },
-            { context: 'panels', bucket: 'leader', action: 'toggleActivePanelCollapse' },
-            { context: 'panels', bucket: 'leader', action: 'toggleActivePanelMaximize' },
-            { context: 'panels', bucket: 'leader', action: 'autoFitPanels' },
-            { context: 'panels', bucket: 'leader', action: 'normalizePanels' },
-        ]),
-    }),
-    shaders: Object.freeze({
-        title: 'Shaders',
-        note: 'Available only for shader documents.',
-        items: Object.freeze<readonly ShortcutRef[]>([
-            { context: 'shaders', bucket: 'leader2', action: 'toggleShaderPause' },
-            { context: 'shaders', bucket: 'leader2', action: 'openShaderControls' },
-            { context: 'shaders', bucket: 'leader2', action: 'openShaderUniforms' },
-            { context: 'shaders', bucket: 'leader2', action: 'openShaderTextures' },
-            { context: 'shaders', bucket: 'leader2', action: 'openShaderPanel' },
-            { context: 'shaders', bucket: 'leader2', action: 'resetShaderRuntime' },
-        ]),
-    }),
-});
+const SECTION_DEFINITIONS: Readonly<Record<'general' | 'tabs' | 'panels' | 'shaders', ShortcutSectionDefinition>> =
+    Object.freeze({
+        general: Object.freeze({
+            title: 'General',
+            note: 'Always available while Vim is enabled.',
+            items: Object.freeze<readonly ShortcutRef[]>([
+                { context: 'global', bucket: 'shift', action: 'quickSave' },
+                { context: 'global', bucket: 'shift', action: 'toggleConsole' },
+                { context: 'global', bucket: 'shift', action: 'togglePreviewHeader' },
+                { context: 'global', bucket: 'leader', action: 'toggleSidebar' },
+                { context: 'global', bucket: 'leader', action: 'centerWorkspace' },
+                { context: 'global', bucket: 'leader', action: 'clearSearchHighlight' },
+                { context: 'global', bucket: 'leader2', action: 'openShortcutHelp' },
+                { context: 'global', bucket: 'leader2', action: 'toggleEditorLayout' },
+            ]),
+        }),
+        tabs: Object.freeze({
+            title: 'Tabs',
+            note: 'Current layout: Tabs.',
+            items: Object.freeze<readonly ShortcutRef[]>([
+                { context: 'tabs', bucket: 'shift', action: 'previousTab' },
+                { context: 'tabs', bucket: 'shift', action: 'nextTab' },
+                { context: 'tabs', bucket: 'shift', action: 'openFilePicker' },
+                { context: 'tabs', bucket: 'shift', action: 'toggleAutoRender' },
+            ]),
+        }),
+        panels: Object.freeze({
+            title: 'Panels',
+            note: 'Current layout: Panels / cascada.',
+            items: Object.freeze<readonly ShortcutRef[]>([
+                { context: 'panels', bucket: 'shift', action: 'openFilePicker' },
+                { context: 'panels', bucket: 'shift', action: 'movePanelDown' },
+                { context: 'panels', bucket: 'shift', action: 'movePanelUp' },
+                { context: 'panels', bucket: 'shift', action: 'toggleAutoRender' },
+                { context: 'panels', bucket: 'leader', action: 'toggleActivePanelCollapse' },
+                { context: 'panels', bucket: 'leader', action: 'toggleActivePanelMaximize' },
+                { context: 'panels', bucket: 'leader', action: 'autoFitPanels' },
+                { context: 'panels', bucket: 'leader', action: 'normalizePanels' },
+            ]),
+        }),
+        shaders: Object.freeze({
+            title: 'Shaders',
+            note: 'Available only for shader documents.',
+            items: Object.freeze<readonly ShortcutRef[]>([
+                { context: 'shaders', bucket: 'leader2', action: 'toggleShaderPause' },
+                { context: 'shaders', bucket: 'leader2', action: 'openShaderControls' },
+                { context: 'shaders', bucket: 'leader2', action: 'openShaderUniforms' },
+                { context: 'shaders', bucket: 'leader2', action: 'openShaderTextures' },
+                { context: 'shaders', bucket: 'leader2', action: 'openShaderPanel' },
+                { context: 'shaders', bucket: 'leader2', action: 'resetShaderRuntime' },
+            ]),
+        }),
+    });
 
 // A token is one character; `shift` tokens must be letters and are uppercased. Throws otherwise.
 function normalizeShortcutToken(value: unknown, bucket: string): string {
@@ -244,7 +261,9 @@ function normalizeShortcutToken(value: unknown, bucket: string): string {
     if (bucket === 'shift') {
         const upper = raw.toUpperCase();
         if (!/^[A-Z]$/.test(upper)) {
-            throw new Error(`Shift shortcut "${raw}" must be a letter (Shift+digit/symbol never reaches the editor as "${raw}")`);
+            throw new Error(
+                `Shift shortcut "${raw}" must be a letter (Shift+digit/symbol never reaches the editor as "${raw}")`,
+            );
         }
         return upper;
     }
@@ -266,7 +285,8 @@ function validateRawShape(rawConfig: unknown): asserts rawConfig is ShortcutOver
             throw new Error(`Context "${context}" must be a mapping`);
         }
         // `context` is a key of the schema (checked just above).
-        const contextSchema: Readonly<Record<string, readonly string[]>> = SHORTCUT_SCHEMA[context as VimShortcutContext];
+        const contextSchema: Readonly<Record<string, readonly string[]>> =
+            SHORTCUT_SCHEMA[context as VimShortcutContext];
 
         Object.entries(sectionValue).forEach(([bucket, bucketValue]: [string, unknown]) => {
             if (!Object.prototype.hasOwnProperty.call(contextSchema, bucket)) {
@@ -309,7 +329,9 @@ function ensureUniqueTokens(entries: { action: string; token: string }[], label:
     entries.forEach(({ token, action }) => {
         const normalizedToken = String(token);
         if (seen.has(normalizedToken)) {
-            throw new Error(`Duplicate shortcut "${normalizedToken}" in ${label}: ${seen.get(normalizedToken)} and ${action}`);
+            throw new Error(
+                `Duplicate shortcut "${normalizedToken}" in ${label}: ${seen.get(normalizedToken)} and ${action}`,
+            );
         }
         seen.set(normalizedToken, action);
     });
@@ -322,7 +344,7 @@ function validateEffectiveConfig(config: VimShortcutConfig): void {
             ...Object.entries(config.global.shift).map(([action, token]) => ({ action, token })),
             ...Object.entries(config.tabs.shift).map(([action, token]) => ({ action, token })),
         ],
-        'tabs.shift'
+        'tabs.shift',
     );
 
     ensureUniqueTokens(
@@ -330,7 +352,7 @@ function validateEffectiveConfig(config: VimShortcutConfig): void {
             ...Object.entries(config.global.shift).map(([action, token]) => ({ action, token })),
             ...Object.entries(config.panels.shift).map(([action, token]) => ({ action, token })),
         ],
-        'panels.shift'
+        'panels.shift',
     );
 
     ensureUniqueTokens(
@@ -338,12 +360,12 @@ function validateEffectiveConfig(config: VimShortcutConfig): void {
             ...Object.entries(config.global.leader).map(([action, token]) => ({ action, token })),
             ...Object.entries(config.panels.leader).map(([action, token]) => ({ action, token })),
         ],
-        'panels.leader'
+        'panels.leader',
     );
 
     ensureUniqueTokens(
         Object.entries(config.global.leader2).map(([action, token]) => ({ action, token })),
-        'global.leader2'
+        'global.leader2',
     );
 
     ensureUniqueTokens(
@@ -351,7 +373,7 @@ function validateEffectiveConfig(config: VimShortcutConfig): void {
             ...Object.entries(config.global.leader2).map(([action, token]) => ({ action, token })),
             ...Object.entries(config.shaders.leader2).map(([action, token]) => ({ action, token })),
         ],
-        'shaders.leader2'
+        'shaders.leader2',
     );
 }
 
@@ -416,10 +438,15 @@ export function getDefaultVimShortcutConfig(): VimShortcutConfig {
 }
 
 // The action whose token equals `key` (exact, case-sensitive), or null.
-function resolveActionFromActionMap<A extends string>(actionMap: { readonly [P in A]?: string } = {}, key: string = ''): A | null {
+function resolveActionFromActionMap<A extends string>(
+    actionMap: { readonly [P in A]?: string } = {},
+    key: string = '',
+): A | null {
     const normalizedKey = String(key || '');
     // Object.entries() types keys as string; they are the action names of the map.
-    const match = (Object.entries(actionMap) as [A, string | undefined][]).find(([, token]) => String(token) === normalizedKey);
+    const match = (Object.entries(actionMap) as [A, string | undefined][]).find(
+        ([, token]) => String(token) === normalizedKey,
+    );
     return match ? match[0] : null;
 }
 
@@ -480,9 +507,7 @@ export function resolveVimShiftAction({
     panelsLayout = false,
     config = DEFAULT_VIM_SHORTCUT_CONFIG,
 }: VimShiftActionQuery = {}): VimShiftAction | null {
-    const contextActions = panelsLayout
-        ? config.panels?.shift
-        : config.tabs?.shift;
+    const contextActions = panelsLayout ? config.panels?.shift : config.tabs?.shift;
 
     const contextAction = resolveActionFromActionMap(contextActions, key);
     if (contextAction) return contextAction;
@@ -500,10 +525,15 @@ function formatShortcutLabel(bucket: VimShortcutBucket, token: string | undefine
 }
 
 // String-keyed read view of a config, for lookups by (context, bucket, action) names.
-type ShortcutTokenLookup = Readonly<Record<string, Readonly<Record<string, Readonly<Record<string, string | undefined>> | undefined>> | undefined>>;
+type ShortcutTokenLookup = Readonly<
+    Record<string, Readonly<Record<string, Readonly<Record<string, string | undefined>> | undefined>> | undefined>
+>;
 
 // The help rows of one section; actions without a token are left out.
-function buildSectionItems(definition: ShortcutSectionDefinition, config: Readonly<VimShortcutConfig> | null | undefined): VimShortcutHelpItem[] {
+function buildSectionItems(
+    definition: ShortcutSectionDefinition,
+    config: Readonly<VimShortcutConfig> | null | undefined,
+): VimShortcutHelpItem[] {
     const lookup: ShortcutTokenLookup | null | undefined = config;
     return definition.items
         .map(({ context, bucket, action }) => {
@@ -559,9 +589,7 @@ export function getVimShortcutSections({
         });
     }
 
-    const layoutDefinition = layoutMode === 'panels'
-        ? SECTION_DEFINITIONS.panels
-        : SECTION_DEFINITIONS.tabs;
+    const layoutDefinition = layoutMode === 'panels' ? SECTION_DEFINITIONS.panels : SECTION_DEFINITIONS.tabs;
     const layoutItems = buildSectionItems(layoutDefinition, config);
     if (layoutItems.length > 0) {
         sections.push({

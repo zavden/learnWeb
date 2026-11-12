@@ -186,9 +186,13 @@ export const runtimeDiagnosticsMixin = {
             .map((frame: IncomingStackFrame | null | undefined) => ({
                 // `Number.isFinite()` is only true for a number (so `frame` is set), but it does not narrow; in
                 // the other branch `parseInt` stringifies whatever arrived.
-                column: Number.isFinite(frame?.column) ? frame!.column as number : Number.parseInt(frame?.column as string, 10) || null,
+                column: Number.isFinite(frame?.column)
+                    ? (frame!.column as number)
+                    : Number.parseInt(frame?.column as string, 10) || null,
                 functionName: typeof frame?.functionName === 'string' ? frame.functionName : '',
-                line: Number.isFinite(frame?.line) ? frame!.line as number : Number.parseInt(frame?.line as string, 10) || null,
+                line: Number.isFinite(frame?.line)
+                    ? (frame!.line as number)
+                    : Number.parseInt(frame?.line as string, 10) || null,
                 mapped: Boolean(frame?.mapped),
                 path: typeof frame?.path === 'string' ? frame.path : '',
                 raw: typeof frame?.raw === 'string' ? frame.raw : '',
@@ -206,7 +210,7 @@ export const runtimeDiagnosticsMixin = {
         const primaryFrame = Array.isArray(stackFrames) ? stackFrames[0] : null;
         const path = mapped?.path || primaryFrame?.path || data.path || '';
         const line = mapped?.line || primaryFrame?.line || data.line || null;
-        const column = mapped?.line ? (mapped.column || null) : (primaryFrame?.column || data.column || null);
+        const column = mapped?.line ? mapped.column || null : primaryFrame?.column || data.column || null;
 
         if (!path && !line) return '';
 

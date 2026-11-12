@@ -7,10 +7,7 @@ import {
     resolveTheoryAssetUrl,
     sanitizeTheoryRawHtml,
 } from '../src/utils/theoryRenderer.ts';
-import {
-    extractTheoryExerciseReferences,
-    injectTheoryExerciseEmbeds,
-} from '../src/utils/theoryExerciseEmbeds.ts';
+import { extractTheoryExerciseReferences, injectTheoryExerciseEmbeds } from '../src/utils/theoryExerciseEmbeds.ts';
 
 const F = '```';
 const TOPIC = 'ch01-html/sec01-basics/top01-intro';
@@ -58,7 +55,9 @@ test('block-level tags at line start become a paragraph with markdown still appl
 });
 
 test('allowlisted tags render with only class/title/open attributes', () => {
-    const inline = renderTheoryHtml('Press <kbd class="key" onclick="x()" style="color:red">Ctrl</kbd> + <mark>C</mark>, H<sub>2</sub>O, x<sup>2</sup>, <abbr title="HyperText">HTML</abbr>, <small>tiny</small>');
+    const inline = renderTheoryHtml(
+        'Press <kbd class="key" onclick="x()" style="color:red">Ctrl</kbd> + <mark>C</mark>, H<sub>2</sub>O, x<sup>2</sup>, <abbr title="HyperText">HTML</abbr>, <small>tiny</small>',
+    );
     assert.match(inline, /<kbd class="key">Ctrl<\/kbd>/);
     assert.match(inline, /<mark>C<\/mark>/);
     assert.match(inline, /<sub>2<\/sub>/);
@@ -107,18 +106,33 @@ test('embed shortcodes inside code fences stay literal and are not fetched', () 
 // ─── #9 asset URLs and links ────────────────────────────
 
 test('relative image and asset link URLs resolve to the topic assets folder', () => {
-    const html = renderTheoryHtml([
-        '![Box](box-model.png)',
-        '![Nested](./assets/img/flex.svg "Flex")',
-        '![Remote](https://example.com/a.png)',
-        '[Notes](notes.pdf) [MDN](https://developer.mozilla.org) [Top](#top) [Bad](javascript:alert(1)) [Page](other.md)',
-    ].join('\n\n'), { topicPath: TOPIC });
+    const html = renderTheoryHtml(
+        [
+            '![Box](box-model.png)',
+            '![Nested](./assets/img/flex.svg "Flex")',
+            '![Remote](https://example.com/a.png)',
+            '[Notes](notes.pdf) [MDN](https://developer.mozilla.org) [Top](#top) [Bad](javascript:alert(1)) [Page](other.md)',
+        ].join('\n\n'),
+        { topicPath: TOPIC },
+    );
 
-    assert.match(html, /<img src="\/api\/topic\/ch01-html\/sec01-basics\/top01-intro\/assets\/box-model\.png" alt="Box">/);
-    assert.match(html, /<img src="\/api\/topic\/ch01-html\/sec01-basics\/top01-intro\/assets\/img\/flex\.svg" alt="Nested" title="Flex">/);
+    assert.match(
+        html,
+        /<img src="\/api\/topic\/ch01-html\/sec01-basics\/top01-intro\/assets\/box-model\.png" alt="Box">/,
+    );
+    assert.match(
+        html,
+        /<img src="\/api\/topic\/ch01-html\/sec01-basics\/top01-intro\/assets\/img\/flex\.svg" alt="Nested" title="Flex">/,
+    );
     assert.match(html, /<img src="https:\/\/example\.com\/a\.png"/);
-    assert.match(html, /<a href="\/api\/topic\/ch01-html\/sec01-basics\/top01-intro\/assets\/notes\.pdf" target="_blank"/);
-    assert.match(html, /<a href="https:\/\/developer\.mozilla\.org" target="_blank" rel="noopener noreferrer">MDN<\/a>/);
+    assert.match(
+        html,
+        /<a href="\/api\/topic\/ch01-html\/sec01-basics\/top01-intro\/assets\/notes\.pdf" target="_blank"/,
+    );
+    assert.match(
+        html,
+        /<a href="https:\/\/developer\.mozilla\.org" target="_blank" rel="noopener noreferrer">MDN<\/a>/,
+    );
     assert.match(html, /<a href="#top">Top<\/a>/);
     // Links to examples of the topic open their preview (see theory-example-links.test.mjs).
     assert.match(html, /data-theory-exercise-preview="other\.md"[^>]*>Page<\/a>/);
@@ -126,7 +140,10 @@ test('relative image and asset link URLs resolve to the topic assets folder', ()
 });
 
 test('asset URL resolution encodes topic segments and leaves absolute URLs alone', () => {
-    assert.equal(resolveTheoryAssetUrl('diagram.png', 'ch01-diseño web/sec01-a/top01-b'), '/api/topic/ch01-dise%C3%B1o%20web/sec01-a/top01-b/assets/diagram.png');
+    assert.equal(
+        resolveTheoryAssetUrl('diagram.png', 'ch01-diseño web/sec01-a/top01-b'),
+        '/api/topic/ch01-dise%C3%B1o%20web/sec01-a/top01-b/assets/diagram.png',
+    );
     assert.equal(resolveTheoryAssetUrl('/api/topic/x/y/z/assets/a.png', TOPIC), '/api/topic/x/y/z/assets/a.png');
     assert.equal(resolveTheoryAssetUrl('data:image/png;base64,AAA', TOPIC), 'data:image/png;base64,AAA');
     assert.equal(resolveTheoryAssetUrl('../other/a.png', TOPIC), '../other/a.png');
@@ -147,7 +164,9 @@ function createFakeElement() {
         disabled: false,
         innerHTML: '',
         addEventListener() {},
-        querySelectorAll() { return []; },
+        querySelectorAll() {
+            return [];
+        },
     };
 }
 
@@ -164,12 +183,15 @@ test('a slow theory fetch never overwrites a newer topic', async () => {
             return elements.get(id);
         },
     } as unknown as Document;
-    globalThis.fetch = ((url: string) => new Promise<Response>((resolve) => {
-        pending.set(String(url), () => resolve({
-            ok: true,
-            json: async () => ({ content: String(url).includes('slow') ? '# Slow topic' : '# Fast topic' }),
-        } as unknown as Response));
-    })) as unknown as typeof fetch;
+    globalThis.fetch = ((url: string) =>
+        new Promise<Response>((resolve) => {
+            pending.set(String(url), () =>
+                resolve({
+                    ok: true,
+                    json: async () => ({ content: String(url).includes('slow') ? '# Slow topic' : '# Fast topic' }),
+                } as unknown as Response),
+            );
+        })) as unknown as typeof fetch;
 
     try {
         const { TheoryViewer } = await import('../src/components/TheoryViewer.ts');
