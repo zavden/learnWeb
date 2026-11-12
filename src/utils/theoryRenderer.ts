@@ -1,4 +1,24 @@
+// Theory pages: a topic's `main.md` -> HTML with `marked` and `highlight.js`, plus the two standalone documents
+// built around that HTML (the editor's preview page and the downloadable export).
+//
+// What `renderTheoryHtml()` adds to plain Markdown: syntax-highlighted code fences (`highlightCode`, also used
+// by the gallery, the assets dialog and the preview's compiled-style view); a raw-HTML policy (tags written in
+// prose show up as text, only a small allowlist renders, see `sanitizeTheoryRawHtml`); relative image and
+// link URLs resolved against the topic's `assets/` folder; links to `NN-name.md` that open the example's
+// preview; and the `[[exercise:...]]` embeds (theoryExerciseEmbeds.ts, which imports `highlightCode` back from
+// here: the two modules only call each other from functions, never at load time, so keep it that way).
+// Callers: src/components/TheoryViewer.ts, src/components/Preview.ts, scripts/snapshot-material.ts.
+//
+// The output is hashed byte for byte by the course snapshot. The CSS and the page script inside the two
+// document templates are data: do not reformat them. Loads under Node (tests, snapshot): no DOM at load.
+
 import { Marked } from 'marked';
+import type { Tokenizer } from 'marked';
+import type {
+    TheoryExportDocumentOptions,
+    TheoryHtmlOptions,
+    TheoryPreviewDocumentOptions,
+} from '../types/theory.ts';
 import { injectTheoryExerciseEmbeds } from './theoryExerciseEmbeds.ts';
 import hljs from 'highlight.js/lib/core';
 import hljsXml from 'highlight.js/lib/languages/xml';
@@ -37,10 +57,16 @@ hljs.registerLanguage('python', hljsPython);
 hljs.registerLanguage('py', hljsPython);
 hljs.registerLanguage('md', hljsMarkdown);
 
-let theoryMarked = null;
-let currentRenderContext = { topicPath: '' };
+/** The `marked` instance with the theory extensions; created on first use by `getTheoryMarked()`. */
+let theoryMarked: Marked | null = null;
+/**
+ * State the renderer callbacks cannot receive as arguments: the topic whose page is being rendered. Set by
+ * `renderTheoryHtml()` around the parse and restored afterwards.
+ */
+let currentRenderContext: { topicPath: string } = { topicPath: '' };
 
-function serializeInlineScriptValue(value) {
+/** JSON for a `<script>` body: also escapes what would end the script or open a comment, and U+2028/9. */
+function serializeInlineScriptValue(value: unknown): string {
     return JSON.stringify(value)
         .replace(/<\/script/gi, '<\\/script')
         .replace(/<!--/g, '<\\!--')
@@ -48,7 +74,7 @@ function serializeInlineScriptValue(value) {
         .replace(/\u2029/g, '\\u2029');
 }
 
-function escapeHtml(value = '') {
+function escapeHtml(value: unknown = ''): string {
     return String(value ?? '')
         .replaceAll('&', '&amp;')
         .replaceAll('<', '&lt;')
@@ -57,7 +83,7 @@ function escapeHtml(value = '') {
         .replaceAll("'", '&#39;');
 }
 
-const HIGHLIGHT_LANGUAGE_ALIASES = {
+const HIGHLIGHT_LANGUAGE_ALIASES: Record<string, string | undefined> = {
     'html-full': 'html',
     htmlfull: 'html',
     html_full: 'html',
@@ -70,7 +96,12 @@ const HIGHLIGHT_LANGUAGE_ALIASES = {
 
 const PLAIN_TEXT_LANGUAGES = new Set(['text', 'txt', 'plain', 'plaintext']);
 
-export function highlightCode(code, lang) {
+/**
+ * Syntax-highlights `code` as highlight.js HTML (`<span class="hljs-…">`), without the surrounding `<pre><code>`.
+ * `lang` is a fence or document language (`html-full`, `vue`, `mjs` and the registered names); plain-text
+ * names are only escaped, an unknown or empty language is auto-detected.
+ */
+export function highlightCode(code: string, lang: string | null | undefined): string {
     const requested = String(lang || '').trim().toLowerCase();
     const language = HIGHLIGHT_LANGUAGE_ALIASES[requested] || requested;
 
@@ -97,19 +128,19 @@ const THEORY_VOID_TAGS = new Set(['br']);
 const RAW_HTML_PIECE_PATTERN = /<!--[\s\S]*?-->|<(\/?)([A-Za-z][A-Za-z0-9-]*)((?:\s+[^\s"'<>\/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*)\s*(\/?)>/g;
 const RAW_HTML_ATTRIBUTE_PATTERN = /([^\s"'<>\/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
 
-function escapeRawHtmlText(text = '') {
+function escapeRawHtmlText(text: string = ''): string {
     return String(text)
         .replace(/&(?!(?:#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);)/gi, '&amp;')
         .replaceAll('<', '&lt;')
         .replaceAll('>', '&gt;');
 }
 
-function buildAllowedTag(isClosing, tagName, rawAttributes = '') {
+function buildAllowedTag(isClosing: boolean, tagName: string, rawAttributes: string = ''): string {
     if (isClosing) {
         return THEORY_VOID_TAGS.has(tagName) ? '' : `</${tagName}>`;
     }
 
-    const attributes = [];
+    const attributes: string[] = [];
     for (const match of String(rawAttributes).matchAll(RAW_HTML_ATTRIBUTE_PATTERN)) {
         const name = match[1].toLowerCase();
         if (!THEORY_ALLOWED_ATTRIBUTES.has(name)) continue;
@@ -120,7 +151,12 @@ function buildAllowedTag(isClosing, tagName, rawAttributes = '') {
     return `<${tagName}${attributes.join('')}>`;
 }
 
-export function sanitizeTheoryRawHtml(html = '') {
+/**
+ * The raw-HTML policy for theory prose: allowlisted tags (`details`, `summary`, `kbd`, `mark`, `sub`, `sup`, `br`,
+ * `small`, `abbr`) are kept with only `class`, `title` and `open` attributes; HTML comments are kept; every
+ * other `<` and `>` (and a bare `&`) is escaped so it shows as text.
+ */
+export function sanitizeTheoryRawHtml(html: string | null | undefined = ''): string {
     const source = String(html ?? '');
     let output = '';
     let lastIndex = 0;
@@ -144,7 +180,7 @@ export function sanitizeTheoryRawHtml(html = '') {
     return output;
 }
 
-function isRawHtmlFullyAllowed(html = '') {
+function isRawHtmlFullyAllowed(html: string | null | undefined = ''): boolean {
     const source = String(html ?? '');
 
     for (const match of source.matchAll(RAW_HTML_PIECE_PATTERN)) {
@@ -156,7 +192,7 @@ function isRawHtmlFullyAllowed(html = '') {
 }
 
 // Same encoding marked applies to link/image URLs (keeps the attribute quote-safe).
-function cleanUrl(href = '') {
+function cleanUrl(href: string = ''): string | null {
     try {
         return encodeURI(String(href)).replace(/%25/g, '%');
     } catch {
@@ -164,13 +200,13 @@ function cleanUrl(href = '') {
     }
 }
 
-function isCommentOnlyHtml(html = '') {
+function isCommentOnlyHtml(html: string | null | undefined = ''): boolean {
     return String(html ?? '').replace(/<!--[\s\S]*?-->/g, '').trim() === '';
 }
 
 // ─── Asset URLs ─────────────────────────────────────────
 
-function encodeTopicPath(topicPath = '') {
+function encodeTopicPath(topicPath: string | null | undefined = ''): string {
     return String(topicPath || '')
         .split('/')
         .filter(Boolean)
@@ -178,7 +214,7 @@ function encodeTopicPath(topicPath = '') {
         .join('/');
 }
 
-function isExternalOrAbsoluteUrl(href = '') {
+function isExternalOrAbsoluteUrl(href: string | null | undefined = ''): boolean {
     const value = String(href || '').trim();
     return value === ''
         || value.startsWith('#')
@@ -187,9 +223,12 @@ function isExternalOrAbsoluteUrl(href = '') {
         || /^[a-z][a-z0-9+.-]*:/i.test(value);
 }
 
-// Resolves a relative URL from main.md against the topic's assets/ folder.
-// "diagram.png", "./diagram.png", "assets/diagram.png" and "./assets/img/x.png" all work.
-export function resolveTheoryAssetUrl(href = '', topicPath = '') {
+/**
+ * Resolves a relative URL from main.md against the topic's assets/ folder (`/api/topic/<topic>/assets/<file>`).
+ * "diagram.png", "./diagram.png", "assets/diagram.png" and "./assets/img/x.png" all work. Absolute, external,
+ * `#`/`?` and `..` URLs, and any URL without a topic path, come back unchanged (trimmed).
+ */
+export function resolveTheoryAssetUrl(href: string | null | undefined = '', topicPath: string | null | undefined = ''): string {
     const value = String(href || '').trim();
     const encodedTopicPath = encodeTopicPath(topicPath);
 
@@ -208,7 +247,7 @@ export function resolveTheoryAssetUrl(href = '', topicPath = '') {
     return `/api/topic/${encodedTopicPath}/assets/${relativePath}`;
 }
 
-function looksLikeAssetLink(href = '') {
+function looksLikeAssetLink(href: string | null | undefined = ''): boolean {
     const value = String(href || '').trim().replace(/^(\.\/)+/, '');
     if (value.startsWith('assets/')) return true;
 
@@ -217,7 +256,8 @@ function looksLikeAssetLink(href = '') {
     return Boolean(extension) && !['md', 'html', 'htm'].includes(extension) && !pathPart.endsWith('/');
 }
 
-function getTheoryMarked() {
+/** The shared `marked` instance: GFM with line breaks, the raw-HTML policy and the code/image/link renderers. */
+function getTheoryMarked(): Marked {
     if (theoryMarked) return theoryMarked;
 
     const instance = new Marked();
@@ -232,7 +272,7 @@ function getTheoryMarked() {
             // Same as marked's inline tag tokenizer, but never switches into "raw block"
             // mode: tags are escaped by the renderer, so the text after an escaped
             // <script>/<pre>/<code>/<kbd> must stay escaped too.
-            tag(src) {
+            tag(this: Tokenizer, src: string) {
                 const cap = this.rules.inline.tag.exec(src);
                 if (!cap) return false;
 
@@ -308,11 +348,16 @@ function getTheoryMarked() {
     return instance;
 }
 
-export function renderTheoryExportDocument(content = '', options = {}) {
+/**
+ * The theory page as one self-contained HTML file (`TheoryViewer` downloads it): the rendered HTML, the page
+ * CSS, and a script that fills the exercise preview slots from an embedded payload. Starts with an
+ * "Exported from LearnWeb" comment carrying the topic path and the export time (so it is not deterministic).
+ */
+export function renderTheoryExportDocument(content: string | null | undefined = '', options: TheoryExportDocumentOptions = {}): string {
     const topicPath = String(options.topicPath || '').trim();
     const title = String(options.title || topicPath || 'Theory').trim();
-    const previewPayload = Object.fromEntries(
-        Object.entries(options.exerciseEmbeds || {}).map(([filename, embed]) => [
+    const previewPayload: Record<string, string> = Object.fromEntries(
+        Object.entries(options.exerciseEmbeds || {}).map(([filename, embed]): [string, string] => [
             filename,
             typeof embed?.previewSrcdoc === 'string' ? embed.previewSrcdoc : '',
         ])
@@ -746,14 +791,18 @@ export function renderTheoryExportDocument(content = '', options = {}) {
 </html>`;
 }
 
-export function renderTheoryHtml(content = '', options = {}) {
+/**
+ * Renders theory Markdown to an HTML fragment (no `<html>` wrapper), exercise embeds included. The fragment is
+ * meant for `innerHTML`: raw HTML in the source is sanitized (see `sanitizeTheoryRawHtml`).
+ */
+export function renderTheoryHtml(content: string | null | undefined = '', options: TheoryHtmlOptions = {}): string {
     const instance = getTheoryMarked();
     const source = (typeof content === 'string' ? content : String(content ?? '')).replace(/^\uFEFF/, '');
 
     // Replace exercise shortcodes with HTML-comment placeholders BEFORE marked runs,
     // then swap in the real embed HTML AFTER. This prevents marked from processing
     // backticks, pipes, and other Markdown-sensitive characters inside hljs output.
-    const embeds = [];
+    const embeds: string[] = [];
     const withPlaceholders = injectTheoryExerciseEmbeds(source, options.exerciseEmbeds || {}, (embedHtml) => {
         const index = embeds.length;
         embeds.push(embedHtml);
@@ -762,9 +811,10 @@ export function renderTheoryHtml(content = '', options = {}) {
 
     const previousContext = currentRenderContext;
     currentRenderContext = { topicPath: String(options.topicPath || '').trim() };
-    let html;
+    let html: string;
     try {
-        html = instance.parse(withPlaceholders);
+        // `parse` is synchronous here (the instance never sets `async`), but its type also allows a Promise.
+        html = instance.parse(withPlaceholders) as string;
     } finally {
         currentRenderContext = previousContext;
     }
@@ -776,11 +826,17 @@ export function renderTheoryHtml(content = '', options = {}) {
     return html;
 }
 
-export function renderTheoryPreviewDocument(content = '', options = {}) {
+/**
+ * The theory page as a standalone HTML document for the editor's preview iframe. Its script posts
+ * `TheoryPreviewMessage`s (`learncode-theory-preview`) to the parent when an exercise card, a code embed
+ * button or an example link is activated, and fills the exercise preview slots with sandboxed iframes from an
+ * embedded payload.
+ */
+export function renderTheoryPreviewDocument(content: string | null | undefined = '', options: TheoryPreviewDocumentOptions = {}): string {
     const assetBase = options.topicPath ? `/api/topic/${encodeTopicPath(options.topicPath)}/assets/` : '';
     const renderId = Number.isFinite(options.renderId) ? options.renderId : 0;
-    const previewPayload = Object.fromEntries(
-        Object.entries(options.exerciseEmbeds || {}).map(([filename, embed]) => [
+    const previewPayload: Record<string, string> = Object.fromEntries(
+        Object.entries(options.exerciseEmbeds || {}).map(([filename, embed]): [string, string] => [
             filename,
             typeof embed?.previewSrcdoc === 'string' ? embed.previewSrcdoc : '',
         ])

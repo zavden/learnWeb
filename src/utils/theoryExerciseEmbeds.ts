@@ -1,3 +1,23 @@
+// Exercise shortcodes of theory pages: `[[exercise:file.md]]` (a card with a live preview and Preview/Open
+// buttons) and `[[exercise:file.md-styles.css]]` / `[[exercise:file.md-(a.js|b.html)]]` (the example's code,
+// highlighted, with tabs when there are several files).
+//
+// The page flow has two steps. `loadTheoryExerciseEmbeds()` is async: it finds the referenced examples,
+// fetches each one, parses and compiles it and returns a `TheoryExerciseEmbed` per file name. Then
+// `injectTheoryExerciseEmbeds()` (called by `renderTheoryHtml()` in theoryRenderer.ts) replaces every
+// shortcode with its card/code markup. Callers: src/components/TheoryViewer.ts, src/components/Preview.ts,
+// scripts/snapshot-material.ts and scripts/check-material.ts. Shortcodes inside fenced code blocks stay
+// literal. This module and theoryRenderer.ts import each other (highlighting vs. injection): they only call
+// each other from functions, never at load time, so keep it that way. Loads under Node too (no DOM at load).
+
+import type { ExampleStage, HighlightColorId, LineHighlight } from '../types/document.ts';
+import type {
+    TheoryCodeFile,
+    TheoryExerciseEmbed,
+    TheoryExerciseEmbedInput,
+    TheoryExerciseEmbeds,
+    TheoryExerciseShortcode,
+} from '../types/theory.ts';
 import { fetchExample } from './api.ts';
 import { compileExample } from './compileClient.ts';
 import {
@@ -21,18 +41,21 @@ import {
 import { highlightCode } from './theoryRenderer.ts';
 import { parseHighlights } from './highlights.ts';
 
+/** A whole line holding one shortcode; capture 1 is what follows `exercise:`. Global: use it with `matchAll`/`replace`. */
 const THEORY_EXERCISE_SHORTCODE_PATTERN = /^[ \t]*\[\[exercise:([^\]\n]+)\]\][ \t]*$/gim;
 
-const EXAMPLE_STAGE_LABELS = {
+// Badge text per stage. Widened to a string lookup (embeds can carry any text); `satisfies` keeps the table in
+// step with the `ExampleStage` union.
+const EXAMPLE_STAGE_LABELS: Record<string, string | undefined> = {
     minimal: 'Minimal',
     intermediate: 'Intermediate',
     'common-error': 'Common Error',
     exercise: 'Exercise',
     'final-solution': 'Final Solution',
     professional: 'Professional',
-};
+} satisfies Record<ExampleStage, string>;
 
-function escapeHtml(value = '') {
+function escapeHtml(value: unknown = ''): string {
     return String(value ?? '')
         .replaceAll('&', '&amp;')
         .replaceAll('<', '&lt;')
@@ -41,11 +64,12 @@ function escapeHtml(value = '') {
         .replaceAll("'", '&#39;');
 }
 
-function normalizeFilename(value = '') {
+function normalizeFilename(value: string | null | undefined = ''): string {
     return String(value || '').trim();
 }
 
-function buildTheoryExerciseEmbedBody(embed = {}) {
+/** The inner markup of an exercise card: header, title, preview slot, badges and the two buttons. */
+function buildTheoryExerciseEmbedBody(embed: TheoryExerciseEmbedInput = {}): string {
     const filename = normalizeFilename(embed.filename);
     const description = String(embed.description || '').trim();
     const tags = Array.isArray(embed.tags)
@@ -67,7 +91,7 @@ function buildTheoryExerciseEmbedBody(embed = {}) {
         : '';
     const previewMarkup = `<div class="theory-exercise-embed-preview${embed.previewSrcdoc ? '' : ' is-empty'}" data-theory-exercise-preview-slot="${escapeHtml(filename)}"><span>${exists ? 'Loading preview...' : 'Exercise missing'}</span></div>`;
 
-    const metaBits = [];
+    const metaBits: string[] = [];
     if (stageLabel) {
         metaBits.push(`<span class="theory-exercise-embed-badge is-stage">${escapeHtml(stageLabel)}</span>`);
     }
@@ -97,7 +121,12 @@ function buildTheoryExerciseEmbedBody(embed = {}) {
     ].join('');
 }
 
-export function parseExerciseShortcode(raw = '') {
+/**
+ * Splits the text after `exercise:` into the example file and the optional code filter: `a.md` is a card,
+ * `a.md-b.css` a code embed of one file, `a.md-(b.css|c.js)` of several (matched by file name or path).
+ * A trailing `-` with nothing after it is still a code embed, showing every file.
+ */
+export function parseExerciseShortcode(raw: string | null | undefined = ''): TheoryExerciseShortcode {
     const normalized = String(raw || '').trim();
     const mdDashIndex = normalized.lastIndexOf('.md-');
 
@@ -108,7 +137,7 @@ export function parseExerciseShortcode(raw = '') {
     const filename = normalized.slice(0, mdDashIndex + 3); // includes '.md', excludes '-'
     const filterPart = normalized.slice(mdDashIndex + 4);  // after '.md-'
 
-    let codeFilter = null;
+    let codeFilter: string[] | null = null;
     if (filterPart) {
         if (filterPart.startsWith('(') && filterPart.endsWith(')')) {
             codeFilter = filterPart.slice(1, -1).split('|').map((s) => s.trim()).filter(Boolean);
@@ -120,15 +149,19 @@ export function parseExerciseShortcode(raw = '') {
     return { filename, codeEmbed: true, codeFilter };
 }
 
+/** Opening line of a fenced code block: capture 1 is the fence, capture 2 the info string. */
 const FENCE_OPENING_PATTERN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 
 // Applies `transform` only to the parts of the Markdown source that are outside fenced code
 // blocks, so shortcodes shown as code samples stay literal.
-function mapOutsideCodeFences(source = '', transform = (segment) => segment) {
+function mapOutsideCodeFences(
+    source: string | null | undefined = '',
+    transform: (segment: string) => string = (segment) => segment
+): string {
     const lines = String(source ?? '').split('\n');
-    const output = [];
-    let buffer = [];
-    let fence = null;
+    const output: string[] = [];
+    let buffer: string[] = [];
+    let fence: { char: string; length: number } | null = null;
 
     const flush = () => {
         if (buffer.length === 0) return;
@@ -161,10 +194,11 @@ function mapOutsideCodeFences(source = '', transform = (segment) => segment) {
     return output.join('\n');
 }
 
-export function extractTheoryExerciseReferences(content = '') {
+/** The distinct example file names a page references, in order of appearance (shortcodes in code fences ignored). */
+export function extractTheoryExerciseReferences(content: string | null | undefined = ''): string[] {
     const source = typeof content === 'string' ? content : String(content ?? '');
-    const filenames = [];
-    const seen = new Set();
+    const filenames: string[] = [];
+    const seen = new Set<string>();
 
     mapOutsideCodeFences(source, (segment) => {
         for (const match of segment.matchAll(THEORY_EXERCISE_SHORTCODE_PATTERN)) {
@@ -180,7 +214,8 @@ export function extractTheoryExerciseReferences(content = '') {
     return filenames;
 }
 
-export function renderTheoryExerciseEmbedMarkup(embed = {}) {
+/** The exercise card for an embed (`<div class="theory-exercise-embed" …>`); a missing example renders as a disabled card. */
+export function renderTheoryExerciseEmbedMarkup(embed: TheoryExerciseEmbedInput = {}): string {
     const filename = normalizeFilename(embed.filename);
     const exists = embed.exists !== false;
     const interactiveAttrs = exists
@@ -190,26 +225,28 @@ export function renderTheoryExerciseEmbedMarkup(embed = {}) {
     return `<div class="theory-exercise-embed${exists ? '' : ' is-missing'}" data-theory-exercise-file="${escapeHtml(filename)}" data-theory-exercise-exists="${exists ? '1' : '0'}"${interactiveAttrs}>${buildTheoryExerciseEmbedBody({ ...embed, filename })}</div>`;
 }
 
-function getHighlightLanguage(language) {
+function getHighlightLanguage(language: string | null | undefined): string {
     if (language === 'vue') return 'xml';
     return language || '';
 }
 
-const EMBED_HIGHLIGHT_BG = {
+// Line background per highlight color (the editor's translucent colors). Widened to a string lookup because
+// color ids come from author text; `satisfies` keeps the keys in step with `HighlightColorId`.
+const EMBED_HIGHLIGHT_BG: Record<string, string> = {
     yellow: 'rgba(250, 204, 21, 0.18)',
     green:  'rgba(74, 222, 128, 0.18)',
     blue:   'rgba(96, 165, 250, 0.18)',
     red:    'rgba(248, 113, 113, 0.18)',
     purple: 'rgba(192, 132, 252, 0.18)',
     orange: 'rgba(251, 146, 60, 0.18)',
-};
+} satisfies Record<HighlightColorId, string>;
 
 // Split hljs-highlighted HTML by lines, properly closing and reopening <span> tags at
 // each newline so every resulting segment is valid HTML on its own.
-function splitHighlightedLines(html) {
-    const lines = [];
+function splitHighlightedLines(html: string): string[] {
+    const lines: string[] = [];
     let current = '';
-    const openTags = [];
+    const openTags: string[] = [];
     let i = 0;
 
     while (i < html.length) {
@@ -235,11 +272,11 @@ function splitHighlightedLines(html) {
     return lines;
 }
 
-function buildHighlightedCodeHtml(content, lang, highlights) {
+function buildHighlightedCodeHtml(content: string, lang: string, highlights: LineHighlight[] | undefined): string {
     const highlighted = highlightCode(content, lang);
     if (!Array.isArray(highlights) || highlights.length === 0) return highlighted;
 
-    const hlMap = new Map(highlights.map(({ line, colorId }) => [line, colorId]));
+    const hlMap = new Map(highlights.map(({ line, colorId }): [number, string] => [line, colorId]));
     const lines = splitHighlightedLines(highlighted);
 
     return lines.map((lineHtml, i) => {
@@ -251,18 +288,18 @@ function buildHighlightedCodeHtml(content, lang, highlights) {
 }
 
 // Tabs added by the app (not part of the example file), e.g. the CSS a SCSS block compiles to.
-const GENERATED_FILE_TITLES = {
+const GENERATED_FILE_TITLES: Record<string, string> = {
     css: 'Generated by the Sass compiler (read-only)',
     text: 'Sass compiler messages: @debug, @warn and errors (read-only)',
 };
 
-function matchesCodeFilter(file, filter) {
+function matchesCodeFilter(file: TheoryCodeFile, filter: string[] | null): boolean {
     if (!Array.isArray(filter)) return true;
     return filter.some((name) => file.name === name || file.path === name || file.path?.endsWith(`/${name}`));
 }
 
 // Run/open buttons under a code embed, so console-driven examples can be executed from the theory.
-function buildTheoryCodeEmbedActions(embed = {}) {
+function buildTheoryCodeEmbedActions(embed: TheoryExerciseEmbedInput = {}): string {
     if (embed.exists === false) return '';
     const filename = escapeHtml(normalizeFilename(embed.filename));
     return [
@@ -274,13 +311,18 @@ function buildTheoryCodeEmbedActions(embed = {}) {
     ].join('');
 }
 
-export function renderTheoryCodeEmbedMarkup(embed = {}, codeFilter = null) {
+/**
+ * The code of an embed as highlighted `<pre>` blocks: one file plain, several as tabs. `codeFilter` picks files by
+ * name or path, in the order given (`null`: all); filter names that match nothing are skipped.
+ */
+export function renderTheoryCodeEmbedMarkup(embed: TheoryExerciseEmbedInput = {}, codeFilter: string[] | null = null): string {
     const filename = normalizeFilename(embed.filename);
     const allFiles = Array.isArray(embed.codeFiles) ? embed.codeFiles : [];
 
     const files = codeFilter === null
         ? allFiles
-        : codeFilter.map((name) => allFiles.find((f) => matchesCodeFilter(f, [name]))).filter(Boolean);
+        // `filter(Boolean)` drops the names that matched no file.
+        : codeFilter.map((name) => allFiles.find((f) => matchesCodeFilter(f, [name]))).filter(Boolean) as TheoryCodeFile[];
 
     if (files.length === 0) {
         return `<div class="theory-code-embed is-empty" data-theory-code-file="${escapeHtml(filename)}"><p>No files to display.</p></div>`;
@@ -328,7 +370,16 @@ export function renderTheoryCodeEmbedMarkup(embed = {}, codeFilter = null) {
     ].join('');
 }
 
-export function injectTheoryExerciseEmbeds(content = '', exerciseEmbeds = {}, wrapEmbed = null) {
+/**
+ * Replaces every shortcode line outside code fences with its embed markup. A file without an entry in
+ * `exerciseEmbeds` renders as a missing exercise. `wrapEmbed` post-processes each markup (the theory renderer swaps
+ * in a placeholder and restores the markup after Markdown parsing).
+ */
+export function injectTheoryExerciseEmbeds(
+    content: string | null | undefined = '',
+    exerciseEmbeds: Readonly<Record<string, TheoryExerciseEmbedInput>> | null | undefined = {},
+    wrapEmbed: ((html: string) => string) | null = null
+): string {
     const source = typeof content === 'string' ? content : String(content ?? '');
     const embedMap = exerciseEmbeds && typeof exerciseEmbeds === 'object'
         ? exerciseEmbeds
@@ -336,7 +387,7 @@ export function injectTheoryExerciseEmbeds(content = '', exerciseEmbeds = {}, wr
 
     return mapOutsideCodeFences(source, (segment) => segment.replace(THEORY_EXERCISE_SHORTCODE_PATTERN, (_match, rawContent) => {
         const parsed = parseExerciseShortcode(rawContent);
-        const embed = embedMap[parsed.filename] || {
+        const embed: TheoryExerciseEmbedInput = embedMap[parsed.filename] || {
             codeFiles: [],
             description: '',
             exists: false,
@@ -355,7 +406,17 @@ export function injectTheoryExerciseEmbeds(content = '', exerciseEmbeds = {}, wr
     }));
 }
 
-export async function loadTheoryExerciseEmbeds(topicPath, content = '') {
+/**
+ * Loads every example a page references and builds its embed: code files with highlights (plus the compiled CSS/JS
+ * tabs of Sass and TypeScript examples), editorial metadata and a static preview document (shader examples render
+ * paused). One failing example never fails the rest: a preview that cannot be built leaves `previewSrcdoc` empty,
+ * and an example that cannot be fetched or parsed becomes a `exists: false` embed. Resolves to `{}` without a topic
+ * path or references.
+ */
+export async function loadTheoryExerciseEmbeds(
+    topicPath: string | null | undefined,
+    content: string | null | undefined = ''
+): Promise<TheoryExerciseEmbeds> {
     const normalizedTopicPath = String(topicPath || '').trim();
     const filenames = extractTheoryExerciseReferences(content);
 
@@ -364,7 +425,7 @@ export async function loadTheoryExerciseEmbeds(topicPath, content = '') {
     }
 
     const entries = await Promise.all(
-        filenames.map(async (filename) => {
+        filenames.map(async (filename): Promise<[string, TheoryExerciseEmbed]> => {
             try {
                 const data = await fetchExample(normalizedTopicPath, filename);
                 const documentModel = parseExampleDocument(data?.content || '');
@@ -375,7 +436,7 @@ export async function loadTheoryExerciseEmbeds(topicPath, content = '') {
                     documentModel.files
                 );
 
-                const codeFiles = documentModel.files.map((file) => {
+                const codeFiles: TheoryCodeFile[] = documentModel.files.map((file) => {
                     const fileLineMap = highlightsMap.get(file.id);
                     return {
                         content: file.content,
@@ -391,8 +452,8 @@ export async function loadTheoryExerciseEmbeds(topicPath, content = '') {
                 });
 
                 let previewSrcdoc = '';
-                let generatedFiles = [];
-                let generatedScriptFiles = [];
+                let generatedFiles: TheoryCodeFile[] = [];
+                let generatedScriptFiles: TheoryCodeFile[] = [];
                 try {
                     if (isShaderDocument(documentModel)) {
                         previewSrcdoc = renderShaderExampleDocument(documentModel, {

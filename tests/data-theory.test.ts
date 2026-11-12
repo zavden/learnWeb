@@ -152,23 +152,24 @@ function createFakeElement() {
 }
 
 test('a slow theory fetch never overwrites a newer topic', async () => {
-    const elements = new Map();
+    const elements = new Map<string, ReturnType<typeof createFakeElement>>();
     const previousDocument = globalThis.document;
     const previousFetch = globalThis.fetch;
-    const pending = new Map();
+    const pending = new Map<string, () => void>();
 
+    // Partial fakes on purpose: only what TheoryViewer touches.
     globalThis.document = {
-        getElementById(id) {
+        getElementById(id: string) {
             if (!elements.has(id)) elements.set(id, createFakeElement());
             return elements.get(id);
         },
-    };
-    globalThis.fetch = (url) => new Promise((resolve) => {
+    } as unknown as Document;
+    globalThis.fetch = ((url: string) => new Promise<Response>((resolve) => {
         pending.set(String(url), () => resolve({
             ok: true,
             json: async () => ({ content: String(url).includes('slow') ? '# Slow topic' : '# Fast topic' }),
-        }));
-    });
+        } as unknown as Response));
+    })) as unknown as typeof fetch;
 
     try {
         const { TheoryViewer } = await import('../src/components/TheoryViewer.ts');
@@ -177,12 +178,12 @@ test('a slow theory fetch never overwrites a newer topic', async () => {
         const slowLoad = viewer.load('ch01-a/sec01-b/top01-slow');
         const fastLoad = viewer.load('ch01-a/sec01-b/top02-fast');
 
-        pending.get('/api/topic/ch01-a/sec01-b/top02-fast/main')();
+        pending.get('/api/topic/ch01-a/sec01-b/top02-fast/main')!();
         await fastLoad;
-        pending.get('/api/topic/ch01-a/sec01-b/top01-slow/main')();
+        pending.get('/api/topic/ch01-a/sec01-b/top01-slow/main')!();
         await slowLoad;
 
-        const container = elements.get('theory-content');
+        const container = elements.get('theory-content')!;
         assert.match(container.innerHTML, /Fast topic/);
         assert.doesNotMatch(container.innerHTML, /Slow topic/);
         assert.equal(viewer.currentContent, '# Fast topic');
