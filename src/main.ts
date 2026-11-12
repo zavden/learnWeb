@@ -1,10 +1,53 @@
 // ─── Learning App — Main Entry ──────────────────────────
+//
+// The application shell: the module `index.html` loads (`<script type="module" src="/src/main.ts">`).
+// On DOMContentLoaded it builds one `App`, which creates every UI component, wires them together through
+// the callbacks of their option objects, and owns everything that belongs to none of them.
+//
+// Who does what
+//   Sidebar          material tree (chapters / sections / topics), Favorites and Pending buttons, the
+//                    default-Vim / default-clipboard / preview-info switches.
+//   Gallery          cards of the examples of the open topic (it is also the start page listing pending examples).
+//   TheoryViewer     the rendered theory (`main.md`) of the open topic, shown as a panel over the editor.
+//   Editor           the CodeMirror panels/tabs of the open example, or of `main.md` while theory is edited;
+//                    save / rename / delete, dirty tracking, its own part of the saved session.
+//   ExercisePanel    the notes panel of exercise examples; the Editor decides what it shows.
+//   Preview          the iframe, console, runtime diagnostics and shader controls.
+//   FavoritesDialog, PendingDialog, TheoryExerciseDialog, AssetsDialog, CreateDialog: modal dialogs.
+//   App              the layout (sidebar and workspace resizers, console height, preview viewport width and
+//                    zoom), the two main views (gallery / editor), the unsaved-work guard, the favorites and
+//                    pending lists, and the session saved in localStorage.
+//
+// How a user action flows
+//   1. Pick a topic in the Sidebar: `selectTopic()` points the Editor, Preview, Gallery and TheoryViewer at it
+//      and shows the Gallery.
+//   2. Pick an example card (or open one from Favorites / Pending / a theory page): `loadExample()` shows the
+//      editor view and the Editor fetches, parses and displays the file.
+//   3. Every edit: the Editor calls `onCodeChange(document)`, which updates the ExercisePanel and Preview.
+//      The Preview compiles and renders, and reports compile / runtime diagnostics back to the Editor.
+//   4. Save / rename / delete in the Editor: `onExampleListChanged` reloads favorites and pending and refreshes
+//      the Gallery.
+//   5. "Edit theory" (`openTheoryEditor()`): `main.md` is loaded into the Editor as a pseudo-document and
+//      `theoryReturnState` remembers where to go back to (gallery, or a snapshot of the example being edited).
+//      The TheoryViewer re-renders from the editor text, debounced.
+//
+// Things to know before editing
+//   - Leaving a document goes through `_confirmDiscardUnsavedChanges()`; callers that have already asked
+//     pass `skipGuard: true`.
+//   - Session persistence (`learncode.session`) stays off until `_bootstrap()` has restored the saved session
+//     (`_sessionPersistenceReady`), otherwise start-up side effects would overwrite it. What is read back from
+//     localStorage is untrusted: every restore method re-checks its input.
+//   - The DOM elements are looked up once, in the constructor, from ids and classes of `index.html`.
+//     A field is `| null` when the code around it tolerates a missing element (`?.` or an early return);
+//     the few non-null assertions on such fields sit in callbacks created after that check, where
+//     TypeScript no longer sees it.
+//   - There are no automated tests for this module.
 
 import './style.css';
 import { Sidebar } from './components/Sidebar.ts';
 import { TheoryViewer } from './components/TheoryViewer.ts';
 import { Editor } from './components/Editor.ts';
-import { ExercisePanel } from './components/ExercisePanel.ts';
+import { ExercisePanel, type ExercisePresentation } from './components/ExercisePanel.ts';
 import { Preview } from './components/Preview.ts';
 import { CreateDialog } from './components/CreateDialog.ts';
 import { FavoritesDialog } from './components/FavoritesDialog.ts';
@@ -15,6 +58,8 @@ import { AssetsDialog } from './components/AssetsDialog.ts';
 import { formatExampleRatingStars, getExampleImportanceMeta } from './utils/exampleEditorial.ts';
 import { showToast } from './components/editor/toast.ts';
 import { buildDiscardChangesMessage } from './components/editor/dirtyTracker.ts';
+import { byId, queryRequired } from './utils/dom.ts';
+import { errorMessage } from './utils/errors.ts';
 import {
     addFavorite,
     addPending,
@@ -29,8 +74,197 @@ import {
     updateClipboardDefaultState,
     updateVimDefaultState,
 } from './utils/api.ts';
+import type { CreateItemType } from './types/api.ts';
+import type { Diagnostic } from './types/diagnostics.ts';
+import type { ExampleDocument } from './types/document.ts';
+import type { FavoriteEntry, MaterialTopic, PendingEntry } from './types/material.ts';
+import type { TheoryDocument } from './types/theory.ts';
 
+// TODO(ts-migration): import the named type of the editor snapshot (the result of
+// `Editor.captureWorkspaceSnapshot()`) from its owner once it is exported.
+/** Everything the Editor needs to come back to the example it was showing: document, editor states, dirty flag. */
+type WorkspaceSnapshot = ReturnType<Editor['captureWorkspaceSnapshot']>;
+
+/** The document that travels from the Editor to the Preview: an example, or `main.md` while theory is edited. */
+type EditorDocument = ExampleDocument | TheoryDocument;
+
+/** How the preview iframe is sized: filling its column ('full') or at a fixed width ('custom'). */
+type PreviewWidthMode = 'full' | 'custom';
+
+/** Axis of a drag: 'ew' for the vertical dividers (cursor east-west), 'ns' for the console divider. */
+type DragDirection = 'ew' | 'ns';
+
+/** Allowed range of a resizable dimension, in px. */
+interface Bounds {
+    min: number;
+    max: number;
+}
+
+/** Options of the layout setters: `persist` (default true) saves the session after the change. */
+interface PersistOptions {
+    persist?: boolean;
+}
+
+/** Options of `selectTopic()` and `loadExample()`. */
+interface NavigationOptions extends PersistOptions {
+    /** Skip the "discard unsaved changes?" confirm: the caller has asked already (or is restoring state). */
+    skipGuard?: boolean;
+}
+
+/**
+ * Where "Done editing theory" goes back to. `snapshot` is present only for `mode: 'editor'` and holds the
+ * example that was open in the Editor when theory editing started.
+ */
+interface TheoryReturnState {
+    mode: 'editor' | 'gallery';
+    snapshot?: WorkspaceSnapshot;
+}
+
+/**
+ * A change to a topic's list of examples, reported by the Editor (save as new, delete, rename) and by the
+ * Gallery (delete, with `source: 'gallery'`). Only the fields App reads are listed.
+ */
+interface ExampleListChange {
+    reason?: 'created' | 'deleted' | 'renamed' | '';
+    filename?: string | null;
+    topicPath?: string | null;
+    /** Who deleted: 'gallery' means the Editor was not the one that deleted the file. */
+    source?: 'editor' | 'gallery';
+}
+
+/** The preview-column part of the saved session, as `_captureSessionState()` writes it. */
+interface SessionPreviewState {
+    columnWidth: number;
+    consoleHeight: number;
+    /** Only set when `widthMode` is 'custom'. */
+    customWidth: number | null;
+    headerHidden: boolean;
+    zoom: number;
+    widthMode: PreviewWidthMode;
+}
+
+/** The editor part of the saved session: the fields of `Editor.getSessionState()` that App keeps. */
+interface SessionEditorState {
+    activeFileId: string;
+    collapsedFileIds: string[];
+    layoutMode: 'tabs' | 'panels';
+    maximizedFileId: string;
+}
+
+/** The session App saves in localStorage (`learncode.session`) and restores at start-up. */
+interface SessionState {
+    version: 1;
+    /** File open in the Editor ('main.md' while theory is edited, '' for none). */
+    documentFilename: string;
+    documentTarget: 'example' | 'theory';
+    topicPath: string;
+    /** Same as `documentFilename`; read as a fallback by sessions written before `documentFilename` existed. */
+    exampleFilename: string;
+    editor: SessionEditorState;
+    preview: SessionPreviewState;
+}
+
+/** `SessionPreviewState` as read back from storage: every field is whatever was stored. */
+type StoredPreviewState = { [K in keyof SessionPreviewState]?: unknown };
+
+/** `SessionState` as read back from storage: any part may be missing or hand-edited, so each is re-checked. */
+type StoredSessionState = Partial<Omit<SessionState, 'preview'>> & { preview?: StoredPreviewState | null };
+
+/** The application shell. One instance is created at DOMContentLoaded (see the end of this file). */
 class App {
+    // Topic and layout limits
+    currentTopicPath: string | null;
+    readonly sidebarMinWidth: number;
+    readonly sidebarMaxWidth: number;
+    readonly workspaceMinEditorWidth: number;
+    readonly previewMinWidth: number;
+    readonly previewFrameMinHeight: number;
+    readonly previewConsoleMinHeight: number;
+    readonly previewConsoleDefaultHeight: number;
+    // localStorage keys
+    readonly sessionStorageKey: string;
+    readonly sidebarWidthStorageKey: string;
+    readonly sidebarCollapsedStorageKey: string;
+    readonly previewEditorialSummaryVisibleStorageKey: string;
+    // Preview controls state
+    previewWidthMode: PreviewWidthMode;
+    /** Width (px) of the preview iframe in 'custom' mode. */
+    customPreviewWidth: number;
+    previewViewportSliderVisible: boolean;
+    previewZoomPercent: number;
+    previewZoomSliderVisible: boolean;
+    previewHeaderHidden: boolean;
+    previewEditorialSummaryVisible: boolean;
+    // Editor defaults, favorites and pending
+    clipboardDefaultEnabled: boolean;
+    vimDefaultEnabled: boolean;
+    theoryReturnState: TheoryReturnState | null;
+    /** Repository-relative paths of the favorite examples (`material/<topic>/examples/<file>`). */
+    favoritePaths: Set<string>;
+    favoriteEntries: FavoriteEntry[];
+    pendingPaths: Set<string>;
+    pendingEntries: PendingEntry[];
+    // Session persistence and the theory viewer's debounced render
+    _sessionPersistenceReady: boolean;
+    /** Handle of the pending `window.setTimeout` that re-renders the theory viewer; 0 when none. */
+    _theoryViewerRenderTimer: number;
+    /** The editor text changed since the theory viewer last rendered it. */
+    _theoryViewerStale: boolean;
+    readonly theoryViewerRenderDelayMs: number;
+
+    // UI elements for view switching and layout
+    readonly appShell: HTMLElement;
+    readonly sidebarElement: HTMLElement;
+    readonly sidebarToggle: HTMLButtonElement;
+    readonly sidebarResizer: HTMLElement;
+    readonly workspaceElement: HTMLElement | null;
+    readonly editorColumn: HTMLElement;
+    readonly workspaceResizer: HTMLElement | null;
+    readonly galleryView: HTMLElement;
+    readonly editorToolbar: HTMLElement;
+    readonly editorPanels: HTMLElement;
+    readonly btnResetLayout: HTMLButtonElement | null;
+    readonly previewColumn: HTMLElement | null;
+    readonly previewHeader: HTMLElement | null;
+    readonly previewEditorialSummary: HTMLElement | null;
+    readonly previewEditorialDescription: HTMLParagraphElement | null;
+    readonly previewEditorialMeta: HTMLElement | null;
+    readonly previewFrame: HTMLIFrameElement | null;
+    readonly previewFrameContainer: HTMLElement;
+    readonly btnViewportSliderToggle: HTMLButtonElement | null;
+    readonly btnViewportWidthInc: HTMLButtonElement | null;
+    readonly btnViewportWidthDec: HTMLButtonElement | null;
+    readonly previewViewportRail: HTMLElement | null;
+    readonly btnExitTheoryEditor: HTMLButtonElement | null;
+    readonly previewConsole: HTMLElement | null;
+    readonly previewConsoleResizer: HTMLElement | null;
+    /** Transparent layer shown over the iframe during a drag so the iframe cannot swallow mouse events. */
+    readonly dragShield: HTMLElement | null;
+    readonly btnPreviewZoomDec: HTMLButtonElement | null;
+    readonly btnPreviewZoomInc: HTMLButtonElement | null;
+    readonly btnPreviewZoomToggle: HTMLButtonElement | null;
+    readonly btnPreviewZoomReset: HTMLButtonElement | null;
+    readonly previewZoomControls: HTMLElement | null;
+    readonly previewZoomSlider: HTMLInputElement | null;
+    readonly previewZoomDisplay: HTMLSpanElement | null;
+    readonly viewportSelect: HTMLSelectElement | null;
+    readonly viewportSlider: HTMLInputElement | null;
+    readonly viewportWidthDisplay: HTMLSpanElement | null;
+
+    // Components
+    readonly preview: Preview;
+    readonly exercisePanel: ExercisePanel;
+    readonly editor: Editor;
+    readonly gallery: Gallery;
+    readonly favoritesDialog: FavoritesDialog;
+    readonly pendingDialog: PendingDialog;
+    readonly theoryExerciseDialog: TheoryExerciseDialog;
+    readonly assetsDialog: AssetsDialog;
+    readonly btnGalleryAssets: HTMLButtonElement | null;
+    readonly theoryViewer: TheoryViewer;
+    readonly sidebar: Sidebar;
+    readonly createDialog: CreateDialog;
+
     constructor() {
         this.currentTopicPath = null;
         this.sidebarMinWidth = 220;
@@ -66,58 +300,58 @@ class App {
         this.theoryViewerRenderDelayMs = 700;
 
         // UI Elements for View Switching
-        this.appShell = document.getElementById('app');
-        this.sidebarElement = document.getElementById('sidebar');
-        this.sidebarToggle = document.getElementById('btn-toggle-sidebar');
-        this.sidebarResizer = document.getElementById('sidebar-resizer');
+        this.appShell = byId('app');
+        this.sidebarElement = byId('sidebar');
+        this.sidebarToggle = byId<HTMLButtonElement>('btn-toggle-sidebar');
+        this.sidebarResizer = byId('sidebar-resizer');
         this.workspaceElement = document.getElementById('workspace');
-        this.editorColumn = document.getElementById('editor-column');
+        this.editorColumn = byId('editor-column');
         this.workspaceResizer = document.getElementById('workspace-resizer');
-        this.galleryView = document.getElementById('gallery-view');
-        this.editorToolbar = document.querySelector('.editor-toolbar');
-        this.editorPanels = document.querySelector('.editor-panels');
-        this.btnResetLayout = document.getElementById('btn-reset-layout');
+        this.galleryView = byId('gallery-view');
+        this.editorToolbar = queryRequired('.editor-toolbar');
+        this.editorPanels = queryRequired('.editor-panels');
+        this.btnResetLayout = document.getElementById('btn-reset-layout') as HTMLButtonElement | null;
         this.previewColumn = document.getElementById('preview-column');
-        this.previewHeader = document.querySelector('.preview-header');
+        this.previewHeader = document.querySelector<HTMLElement>('.preview-header');
         this.previewEditorialSummary = document.getElementById('preview-editorial-summary');
-        this.previewEditorialDescription = document.getElementById('preview-editorial-description');
+        this.previewEditorialDescription = document.getElementById('preview-editorial-description') as HTMLParagraphElement | null;
         this.previewEditorialMeta = document.getElementById('preview-editorial-meta');
-        this.previewFrame = document.getElementById('preview-frame');
-        this.previewFrameContainer = document.getElementById('preview-frame-container');
-        this.btnViewportSliderToggle = document.getElementById('btn-viewport-slider-toggle');
-        this.btnViewportWidthInc = document.getElementById('btn-viewport-width-inc');
-        this.btnViewportWidthDec = document.getElementById('btn-viewport-width-dec');
+        this.previewFrame = document.getElementById('preview-frame') as HTMLIFrameElement | null;
+        this.previewFrameContainer = byId('preview-frame-container');
+        this.btnViewportSliderToggle = document.getElementById('btn-viewport-slider-toggle') as HTMLButtonElement | null;
+        this.btnViewportWidthInc = document.getElementById('btn-viewport-width-inc') as HTMLButtonElement | null;
+        this.btnViewportWidthDec = document.getElementById('btn-viewport-width-dec') as HTMLButtonElement | null;
         this.previewViewportRail = document.getElementById('preview-viewport-rail');
-        this.btnExitTheoryEditor = document.getElementById('btn-exit-theory-editor');
+        this.btnExitTheoryEditor = document.getElementById('btn-exit-theory-editor') as HTMLButtonElement | null;
         this.previewConsole = document.getElementById('preview-console');
         this.previewConsoleResizer = document.getElementById('preview-console-resizer');
         this.dragShield = document.getElementById('drag-shield');
-        this.btnPreviewZoomDec = document.getElementById('btn-preview-zoom-dec');
-        this.btnPreviewZoomInc = document.getElementById('btn-preview-zoom-inc');
-        this.btnPreviewZoomToggle = document.getElementById('btn-preview-zoom-toggle');
-        this.btnPreviewZoomReset = document.getElementById('btn-preview-zoom-reset');
+        this.btnPreviewZoomDec = document.getElementById('btn-preview-zoom-dec') as HTMLButtonElement | null;
+        this.btnPreviewZoomInc = document.getElementById('btn-preview-zoom-inc') as HTMLButtonElement | null;
+        this.btnPreviewZoomToggle = document.getElementById('btn-preview-zoom-toggle') as HTMLButtonElement | null;
+        this.btnPreviewZoomReset = document.getElementById('btn-preview-zoom-reset') as HTMLButtonElement | null;
         this.previewZoomControls = document.getElementById('preview-zoom-controls');
-        this.previewZoomSlider = document.getElementById('preview-zoom-slider');
-        this.previewZoomDisplay = document.getElementById('preview-zoom-display');
-        this.viewportSelect = document.getElementById('viewport-select');
-        this.viewportSlider = document.getElementById('viewport-slider');
-        this.viewportWidthDisplay = document.getElementById('viewport-width-display');
+        this.previewZoomSlider = document.getElementById('preview-zoom-slider') as HTMLInputElement | null;
+        this.previewZoomDisplay = document.getElementById('preview-zoom-display') as HTMLSpanElement | null;
+        this.viewportSelect = document.getElementById('viewport-select') as HTMLSelectElement | null;
+        this.viewportSlider = document.getElementById('viewport-slider') as HTMLInputElement | null;
+        this.viewportWidthDisplay = document.getElementById('viewport-width-display') as HTMLSpanElement | null;
 
         // Initialize components
         this.preview = new Preview({
-            onCompileStateChange: (diagnostics) => {
+            onCompileStateChange: (diagnostics: Diagnostic[]) => {
                 this.editor?.setCompileDiagnostics(diagnostics);
             },
-            onRuntimeDiagnosticsChange: (diagnostics) => {
+            onRuntimeDiagnosticsChange: (diagnostics: Diagnostic[]) => {
                 this.editor?.setRuntimeDiagnostics(diagnostics);
             },
-            onRequestShaderUniformEdit: (uniformName) => {
+            onRequestShaderUniformEdit: (uniformName: string) => {
                 this.editor?.openShaderUniformDialog?.(uniformName);
             },
-            onTheoryExerciseOpenRequest: (topicPath, filename) => {
+            onTheoryExerciseOpenRequest: (topicPath: string | null, filename: string) => {
                 this._openTheoryExercise(topicPath, filename);
             },
-            onTheoryExercisePreviewRequest: (topicPath, filename) => {
+            onTheoryExercisePreviewRequest: (topicPath: string | null, filename: string) => {
                 this._openTheoryExercisePreview(topicPath, filename);
             },
         });
@@ -126,14 +360,14 @@ class App {
             onRevealHint: () => this.editor.revealNextExerciseHint(),
             onRevealReferences: () => this.editor.revealExerciseReferences(),
             onRevealSolution: () => this.editor.revealExerciseSolutions(),
-            onSelectComparisonPair: (pairId) => this.editor.selectExerciseComparisonPair(pairId),
+            onSelectComparisonPair: (pairId: string) => this.editor.selectExerciseComparisonPair(pairId),
             onToggleCollapse: () => this.editor.toggleExerciseNotesCollapsed(),
             onToggleComparison: () => this.editor.toggleExerciseComparison(),
         });
 
         this.editor = new Editor({
             getShaderPersistedState: () => this.preview.getShaderPersistedState(),
-            onCodeChange: (documentModel) => {
+            onCodeChange: (documentModel: EditorDocument) => {
                 this.exercisePanel.render(this.editor.getExercisePresentation());
                 if (this.editor.isEditingTheoryDocument()) {
                     this._scheduleTheoryViewerRender();
@@ -143,7 +377,7 @@ class App {
                     sessionKey: this._getPreviewSessionKey(documentModel),
                 });
             },
-            onExerciseStateChange: (presentation) => this.exercisePanel.render(presentation),
+            onExerciseStateChange: (presentation: ExercisePresentation) => this.exercisePanel.render(presentation),
             onSessionStateChange: () => {
                 this._syncTheoryEditorUi();
                 this._syncCurrentExampleFavoriteState();
@@ -186,13 +420,13 @@ class App {
                 this._setSidebarCollapsed(nextState);
             },
             onCenterWorkspace: () => this._centerWorkspaceSplit(),
-            onExampleListChanged: (change) => this._handleExampleListChanged(change),
+            onExampleListChanged: (change: ExampleListChange) => this._handleExampleListChanged(change),
         });
 
         this.gallery = new Gallery({
-            getTopicLabel: (topicPath) => this.sidebar?.describeTopic?.(topicPath) || '',
-            onExampleSelect: (filename) => this._openExampleFromGallery(filename),
-            onExampleDeleted: (topicPath, filename) => this._handleExampleListChanged({
+            getTopicLabel: (topicPath: string) => this.sidebar?.describeTopic?.(topicPath) || '',
+            onExampleSelect: (filename: string) => this._openExampleFromGallery(filename),
+            onExampleDeleted: (topicPath: string, filename: string) => this._handleExampleListChanged({
                 reason: 'deleted',
                 filename,
                 topicPath,
@@ -201,23 +435,23 @@ class App {
         });
 
         this.favoritesDialog = new FavoritesDialog({
-            getTopicLabel: (topicPath) => this.sidebar?.describeTopic?.(topicPath) || '',
-            onExampleSelect: (topicPath, filename) => this._openFavoriteExample(topicPath, filename),
-            onRemoveFavorite: (favoritePath) => this._removeFavoritePath(favoritePath),
+            getTopicLabel: (topicPath: string) => this.sidebar?.describeTopic?.(topicPath) || '',
+            onExampleSelect: (topicPath: string, filename: string) => this._openFavoriteExample(topicPath, filename),
+            onRemoveFavorite: (favoritePath: string) => this._removeFavoritePath(favoritePath),
         });
 
         this.pendingDialog = new PendingDialog({
-            getTopicLabel: (topicPath) => this.sidebar?.describeTopic?.(topicPath) || '',
-            onExampleSelect: (topicPath, filename) => this._openPendingExample(topicPath, filename),
-            onRemovePending: (pendingPath) => this._removePendingPath(pendingPath),
+            getTopicLabel: (topicPath: string) => this.sidebar?.describeTopic?.(topicPath) || '',
+            onExampleSelect: (topicPath: string, filename: string) => this._openPendingExample(topicPath, filename),
+            onRemovePending: (pendingPath: string) => this._removePendingPath(pendingPath),
         });
 
         this.theoryExerciseDialog = new TheoryExerciseDialog({
-            onOpenExample: (topicPath, filename) => this._openTheoryExercise(topicPath, filename),
+            onOpenExample: (topicPath: string, filename: string) => this._openTheoryExercise(topicPath, filename),
         });
 
         this.assetsDialog = new AssetsDialog();
-        this.btnGalleryAssets = document.getElementById('btn-gallery-assets');
+        this.btnGalleryAssets = document.getElementById('btn-gallery-assets') as HTMLButtonElement | null;
         this.btnGalleryAssets?.addEventListener('click', () => {
             if (!this.currentTopicPath) return;
             this.assetsDialog.open(this.currentTopicPath, {
@@ -227,18 +461,18 @@ class App {
 
         this.theoryViewer = new TheoryViewer({
             onEditRequest: () => this.openTheoryEditor(),
-            onExerciseOpenRequest: (topicPath, filename) => this._openTheoryExercise(topicPath, filename),
-            onExercisePreviewRequest: (topicPath, filename) => this._openTheoryExercisePreview(topicPath, filename),
+            onExerciseOpenRequest: (topicPath: string, filename: string) => this._openTheoryExercise(topicPath, filename),
+            onExercisePreviewRequest: (topicPath: string, filename: string) => this._openTheoryExercisePreview(topicPath, filename),
         });
 
         this.sidebar = new Sidebar({
-            onClipboardDefaultToggle: (enabled) => this._handleClipboardDefaultToggle(enabled),
+            onClipboardDefaultToggle: (enabled: boolean) => this._handleClipboardDefaultToggle(enabled),
             onFavoritesClick: () => this._openFavoritesDialog(),
             onPendingClick: () => this._openPendingDialog(),
-            onPreviewInfoToggle: (visible) => this._setPreviewEditorialSummaryVisible(visible),
-            onTopicSelect: (path, label) => this.selectTopic(path, label),
-            onCreateClick: (topicPath) => this.openCreateDialog(topicPath),
-            onVimDefaultToggle: (enabled) => this._handleVimDefaultToggle(enabled),
+            onPreviewInfoToggle: (visible: boolean) => this._setPreviewEditorialSummaryVisible(visible),
+            onTopicSelect: (path: string, label: string) => this.selectTopic(path, label),
+            onCreateClick: (topicPath?: string) => this.openCreateDialog(topicPath),
+            onVimDefaultToggle: (enabled: boolean) => this._handleVimDefaultToggle(enabled),
         });
         this.sidebar.setPreviewInfoVisible(this.previewEditorialSummaryVisible);
 
@@ -260,7 +494,7 @@ class App {
         }
 
         this.createDialog = new CreateDialog({
-            onCreated: ({ type, parentPath }) => {
+            onCreated: ({ type, parentPath }: { type: CreateItemType; parentPath: string }) => {
                 this.sidebar.load();
                 if (type === 'example' && parentPath === this.currentTopicPath) {
                     this.gallery.load(this.currentTopicPath);
@@ -280,18 +514,27 @@ class App {
         });
     }
 
-    _openShaderPreviewPanel() {
+    /**
+     * Toggles the shader panel of the preview console (the Editor's "shader panel" shortcut) and, when it
+     * opens, grows the console to the height the panel asks for.
+     */
+    _openShaderPreviewPanel(): void {
         const state = this.preview?.openShaderPanel?.();
         if (state !== 'expanded') return;
 
         window.requestAnimationFrame(() => {
-            const preferredHeight = this.preview?.getPreferredShaderPanelHeight?.();
+            // The non-null assertion is backed by the Number.isFinite check right below, which rejects null.
+            const preferredHeight = this.preview?.getPreferredShaderPanelHeight?.()!;
             if (!Number.isFinite(preferredHeight) || preferredHeight <= 0) return;
             this._setConsoleHeight(preferredHeight);
         });
     }
 
-    async _bootstrap() {
+    /**
+     * Start-up sequence: load the sidebar and the global state, then restore the saved session. The saved
+     * session is read first and persistence stays disabled until it has been applied.
+     */
+    async _bootstrap(): Promise<void> {
         // Read the saved session before anything below can persist a fresh one.
         const sessionState = this._readSessionState();
         this._sessionPersistenceReady = false;
@@ -312,7 +555,8 @@ class App {
         this._showPendingOnStartup();
     }
 
-    _showPendingOnStartup() {
+    /** With no topic restored, the start page is the Gallery listing the pending examples that still exist. */
+    _showPendingOnStartup(): void {
         if (this.currentTopicPath) return;
 
         const existingEntries = this.pendingEntries.filter((entry) => entry?.exists);
@@ -320,18 +564,20 @@ class App {
 
         this.showGallery();
         this.gallery.renderPendingEntries(existingEntries, {
-            onOpenEntry: (topicPath, filename) => this._openPendingExample(topicPath, filename),
+            onOpenEntry: (topicPath: string, filename: string) => this._openPendingExample(topicPath, filename),
         });
     }
 
     // ── Unsaved changes guard ──
 
-    _hasUnsavedWork() {
+    /** The Editor has unsaved edits, or the example parked behind a theory edit has. */
+    _hasUnsavedWork(): boolean {
         if (this.editor?.hasUnsavedChanges?.()) return true;
         return this.theoryReturnState?.snapshot?.dirty === true;
     }
 
-    _confirmDiscardUnsavedChanges(actionLabel = 'continue') {
+    /** Asks the user before work is thrown away; true when there is none or the user agrees. */
+    _confirmDiscardUnsavedChanges(actionLabel: string = 'continue'): boolean {
         if (!this._hasUnsavedWork()) return true;
 
         const label = this.editor?.hasUnsavedChanges?.()
@@ -340,13 +586,17 @@ class App {
         return window.confirm(buildDiscardChangesMessage(label, actionLabel));
     }
 
-    async _openExampleFromGallery(filename) {
+    async _openExampleFromGallery(filename: string): Promise<void> {
         if (!this._confirmDiscardUnsavedChanges(`open "${filename}"`)) return;
         this.theoryReturnState = null;
         await this.loadExample(filename, { skipGuard: true });
     }
 
-    async _handleExampleListChanged({ reason = '', filename = '', topicPath = '', source = 'editor' } = {}) {
+    /**
+     * Reacts to a created, renamed or deleted example: reloads favorites and pending (their entries may now
+     * point at a missing file), and refreshes the Gallery when the open topic is the one that changed.
+     */
+    async _handleExampleListChanged({ reason = '', filename = '', topicPath = '', source = 'editor' }: ExampleListChange = {}): Promise<void> {
         const affectsCurrentTopic = Boolean(topicPath) && topicPath === this.currentTopicPath;
 
         if (
@@ -367,7 +617,8 @@ class App {
                 // The deleted example was open in the editor: go back to the topic gallery.
                 this.showGallery();
             }
-            await this.gallery.load(this.currentTopicPath, { preserveScroll: true });
+            // affectsCurrentTopic implies this.currentTopicPath is set (topicPath is truthy and equal to it).
+            await this.gallery.load(this.currentTopicPath!, { preserveScroll: true });
         }
 
         this._syncCurrentExampleFavoriteState();
@@ -377,11 +628,15 @@ class App {
 
     // ── Theory viewer live render (debounced while editing main.md) ──
 
-    _isTheoryPanelVisible() {
+    _isTheoryPanelVisible(): boolean {
         return Boolean(this.theoryViewer?.panel) && !this.theoryViewer.panel.classList.contains('hidden');
     }
 
-    _scheduleTheoryViewerRender() {
+    /**
+     * Marks the theory viewer stale and, if it is visible and auto-render is on, re-renders it after
+     * `theoryViewerRenderDelayMs` of quiet. Otherwise the render waits for `_flushTheoryViewerRender`.
+     */
+    _scheduleTheoryViewerRender(): void {
         this._theoryViewerStale = true;
         window.clearTimeout(this._theoryViewerRenderTimer);
         this._theoryViewerRenderTimer = 0;
@@ -397,7 +652,8 @@ class App {
         }, this.theoryViewerRenderDelayMs);
     }
 
-    _flushTheoryViewerRender({ onlyIfStale = false } = {}) {
+    /** Renders the editor's `main.md` text into the theory viewer now (only if stale and visible with `onlyIfStale`). */
+    _flushTheoryViewerRender({ onlyIfStale = false }: { onlyIfStale?: boolean } = {}): void {
         if (onlyIfStale && !this._theoryViewerStale) return;
         if (onlyIfStale && !this._isTheoryPanelVisible()) return;
         if (!this.editor?.isEditingTheoryDocument?.()) {
@@ -411,7 +667,7 @@ class App {
         this.theoryViewer.renderContent(this.editor.getTheoryContent());
     }
 
-    async _loadVimShortcutConfig() {
+    async _loadVimShortcutConfig(): Promise<void> {
         try {
             const state = await fetchVimShortcutConfig();
             this.editor.setVimShortcutConfig(state?.config || null);
@@ -425,7 +681,7 @@ class App {
         }
     }
 
-    async _loadFavorites() {
+    async _loadFavorites(): Promise<void> {
         try {
             const state = await fetchFavorites();
             this.favoriteEntries = Array.isArray(state?.entries) ? state.entries : [];
@@ -436,7 +692,11 @@ class App {
         }
     }
 
-    async _openTheoryExercise(topicPath, filename) {
+    /**
+     * Opens an example linked from a theory page. When theory is being edited it is saved first (and the
+     * example parked behind it is dropped, after a confirm if it has unsaved edits).
+     */
+    async _openTheoryExercise(topicPath: string | null, filename: string): Promise<void> {
         const normalizedTopicPath = String(topicPath || '').trim();
         const normalizedFilename = String(filename || '').trim();
         if (!normalizedTopicPath || !normalizedFilename) return;
@@ -468,11 +728,12 @@ class App {
         await this.loadExample(normalizedFilename, { skipGuard: true });
     }
 
-    async _openTheoryExercisePreview(topicPath, filename) {
+    /** Shows an example from a theory page in the preview dialog, without leaving the theory. */
+    async _openTheoryExercisePreview(topicPath: string | null, filename: string): Promise<void> {
         await this.theoryExerciseDialog?.open?.({ topicPath, filename });
     }
 
-    async _loadClipboardDefaultState() {
+    async _loadClipboardDefaultState(): Promise<void> {
         try {
             const state = await fetchClipboardDefaultState();
             this.clipboardDefaultEnabled = state?.enabled !== false;
@@ -483,7 +744,7 @@ class App {
         }
     }
 
-    async _loadVimDefaultState({ persist = true } = {}) {
+    async _loadVimDefaultState({ persist = true }: PersistOptions = {}): Promise<void> {
         try {
             const state = await fetchVimDefaultState();
             this.vimDefaultEnabled = state?.enabled !== false;
@@ -497,7 +758,7 @@ class App {
         }
     }
 
-    async _handleVimDefaultToggle(enabled) {
+    async _handleVimDefaultToggle(enabled: boolean): Promise<void> {
         try {
             const state = await updateVimDefaultState(enabled);
             this.vimDefaultEnabled = state?.enabled !== false;
@@ -506,11 +767,11 @@ class App {
             this._persistSessionState();
         } catch (error) {
             console.error('Failed to update default Vim state.', error);
-            window.alert(`Could not update Vim default: ${error.message}`);
+            window.alert(`Could not update Vim default: ${errorMessage(error)}`);
         }
     }
 
-    async _handleClipboardDefaultToggle(enabled) {
+    async _handleClipboardDefaultToggle(enabled: boolean): Promise<void> {
         try {
             const state = await updateClipboardDefaultState(enabled);
             this.clipboardDefaultEnabled = state?.enabled !== false;
@@ -518,11 +779,15 @@ class App {
             this.editor.setGlobalSystemClipboardDefaultEnabled(this.clipboardDefaultEnabled, { showToast: true });
         } catch (error) {
             console.error('Failed to update clipboard default state.', error);
-            window.alert(`Could not update clipboard default: ${error.message}`);
+            window.alert(`Could not update clipboard default: ${errorMessage(error)}`);
         }
     }
 
-    async selectTopic(topicPath, label, { persist = true, skipGuard = false } = {}) {
+    /**
+     * Opens a topic: points every component at it and shows its Gallery. Returns false when the user
+     * declined to discard unsaved work, or when another topic was selected while the Gallery was loading.
+     */
+    async selectTopic(topicPath: string, label: string, { persist = true, skipGuard = false }: NavigationOptions = {}): Promise<boolean> {
         if (!skipGuard && !this._confirmDiscardUnsavedChanges('switch topic')) {
             // Keep the sidebar highlight on the topic that is still open.
             this.sidebar.setActive(this.currentTopicPath);
@@ -560,7 +825,8 @@ class App {
         return true;
     }
 
-    async loadExample(filename, { persist = true, skipGuard = false } = {}) {
+    /** Opens `filename` of the current topic in the Editor. Returns whether an example was actually loaded. */
+    async loadExample(filename: string, { persist = true, skipGuard = false }: NavigationOptions = {}): Promise<boolean> {
         if (!skipGuard && !this._confirmDiscardUnsavedChanges(`open "${filename}"`)) return false;
 
         this.showEditor();
@@ -569,7 +835,7 @@ class App {
             loaded = await this.editor.loadExample(filename);
         } catch (error) {
             console.error(`Failed to load example "${filename}".`, error);
-            showToast(`Could not open ${filename}: ${error.message}`, 'error');
+            showToast(`Could not open ${filename}: ${errorMessage(error)}`, 'error');
             if (this.currentTopicPath) {
                 this.showGallery();
             }
@@ -590,7 +856,11 @@ class App {
         return loaded;
     }
 
-    async openTheoryEditor({ persist = true } = {}) {
+    /**
+     * Loads the open topic's `main.md` into the Editor. If an example (or the Gallery) was showing, it is
+     * remembered in `theoryReturnState` so `closeTheoryEditor()` can go back to it.
+     */
+    async openTheoryEditor({ persist = true }: PersistOptions = {}): Promise<void> {
         if (!this.currentTopicPath) return;
 
         try {
@@ -617,11 +887,12 @@ class App {
             }
         } catch (error) {
             console.error('Failed to open theory editor.', error);
-            window.alert(`Could not open theory editor: ${error.message}`);
+            window.alert(`Could not open theory editor: ${errorMessage(error)}`);
         }
     }
 
-    async closeTheoryEditor({ persist = true } = {}) {
+    /** Saves `main.md` and goes back to where `openTheoryEditor()` came from. Stays in the theory editor if saving fails. */
+    async closeTheoryEditor({ persist = true }: PersistOptions = {}): Promise<void> {
         if (!this.editor.isEditingTheoryDocument()) return;
 
         const saved = await this.editor.saveTheoryDocument();
@@ -648,7 +919,8 @@ class App {
         }
     }
 
-    showGallery() {
+    /** Switches to the Gallery view and empties the editor-side panels (exercise notes, preview, summary). */
+    showGallery(): void {
         this.galleryView.classList.remove('hidden');
         this.gallery.setPreviewsSuspended(false);
         this.editorToolbar.classList.add('hidden');
@@ -661,7 +933,8 @@ class App {
         this._syncCurrentExamplePendingState();
     }
 
-    showEditor() {
+    /** Switches to the editor view (the Gallery's card previews are paused while it covers them). */
+    showEditor(): void {
         this.galleryView.classList.add('hidden');
         // Gallery card iframes stop running while the editor covers the gallery.
         this.gallery.setPreviewsSuspended(true);
@@ -673,7 +946,11 @@ class App {
         this._syncPreviewEditorialSummary();
     }
 
-    _getCurrentExampleFavoritePath() {
+    /**
+     * The key of the open example in the favorites and pending lists, or '' when none is open (or when
+     * theory is being edited). Favorites and pending use the same path format.
+     */
+    _getCurrentExampleFavoritePath(): string {
         const filename = String(this.editor?.currentFilename || '').trim();
         if (!this.currentTopicPath || !filename || this.editor?.isEditingTheoryDocument?.()) {
             return '';
@@ -682,12 +959,12 @@ class App {
         return `material/${this.currentTopicPath}/examples/${filename}`;
     }
 
-    _syncCurrentExampleFavoriteState() {
+    _syncCurrentExampleFavoriteState(): void {
         const favoritePath = this._getCurrentExampleFavoritePath();
         this.editor?.setCurrentExampleFavorite?.(favoritePath ? this.favoritePaths.has(favoritePath) : false);
     }
 
-    async _toggleCurrentExampleFavorite() {
+    async _toggleCurrentExampleFavorite(): Promise<void> {
         const favoritePath = this._getCurrentExampleFavoritePath();
         if (!favoritePath) return;
 
@@ -712,11 +989,11 @@ class App {
             );
         } catch (error) {
             console.error('Failed to toggle favorite.', error);
-            this.editor?._showToast?.(`Favorite update failed: ${error.message}`, 'error');
+            this.editor?._showToast?.(`Favorite update failed: ${errorMessage(error)}`, 'error');
         }
     }
 
-    async _removeFavoritePath(favoritePath) {
+    async _removeFavoritePath(favoritePath: string): Promise<void> {
         try {
             const state = await removeFavorite(favoritePath);
             this.favoriteEntries = Array.isArray(state?.entries) ? state.entries : [];
@@ -725,20 +1002,21 @@ class App {
             await this.favoritesDialog.render(this.favoriteEntries);
         } catch (error) {
             console.error('Failed to remove favorite.', error);
-            this.editor?._showToast?.(`Favorite remove failed: ${error.message}`, 'error');
+            this.editor?._showToast?.(`Favorite remove failed: ${errorMessage(error)}`, 'error');
         }
     }
 
-    async _openFavoritesDialog() {
+    async _openFavoritesDialog(): Promise<void> {
         await this._loadFavorites();
         this.favoritesDialog.open(this.favoriteEntries);
     }
 
-    async _openFavoriteExample(topicPath, filename) {
+    async _openFavoriteExample(topicPath: string, filename: string): Promise<void> {
         await this._openExampleFromTopic(topicPath, filename);
     }
 
-    async _openExampleFromTopic(topicPath, filename) {
+    /** Opens an example of any topic (used by Favorites and Pending): selects its topic first when needed. */
+    async _openExampleFromTopic(topicPath: string, filename: string): Promise<void> {
         const topic = this._findTopicByPath(topicPath);
         if (!topic) {
             showToast(`Topic not found: ${topicPath}`, 'error');
@@ -756,7 +1034,7 @@ class App {
         await this.loadExample(filename, { skipGuard: true });
     }
 
-    async _loadPending() {
+    async _loadPending(): Promise<void> {
         try {
             const state = await fetchPending();
             this.pendingEntries = Array.isArray(state?.entries) ? state.entries : [];
@@ -768,12 +1046,12 @@ class App {
         }
     }
 
-    _syncCurrentExamplePendingState() {
+    _syncCurrentExamplePendingState(): void {
         const pendingPath = this._getCurrentExampleFavoritePath();
         this.editor?.setCurrentExamplePending?.(pendingPath ? this.pendingPaths.has(pendingPath) : false);
     }
 
-    async _toggleCurrentExamplePending() {
+    async _toggleCurrentExamplePending(): Promise<void> {
         const pendingPath = this._getCurrentExampleFavoritePath();
         if (!pendingPath) return;
 
@@ -799,11 +1077,11 @@ class App {
             );
         } catch (error) {
             console.error('Failed to toggle pending.', error);
-            this.editor?._showToast?.(`Pending update failed: ${error.message}`, 'error');
+            this.editor?._showToast?.(`Pending update failed: ${errorMessage(error)}`, 'error');
         }
     }
 
-    async _removePendingPath(pendingPath) {
+    async _removePendingPath(pendingPath: string): Promise<void> {
         try {
             const state = await removePending(pendingPath);
             this.pendingEntries = Array.isArray(state?.entries) ? state.entries : [];
@@ -813,31 +1091,33 @@ class App {
             await this.pendingDialog.render(this.pendingEntries);
         } catch (error) {
             console.error('Failed to remove pending.', error);
-            this.editor?._showToast?.(`Pending remove failed: ${error.message}`, 'error');
+            this.editor?._showToast?.(`Pending remove failed: ${errorMessage(error)}`, 'error');
         }
     }
 
-    async _openPendingDialog() {
+    async _openPendingDialog(): Promise<void> {
         await this._loadPending();
         this.pendingDialog.open(this.pendingEntries);
     }
 
-    async _openPendingExample(topicPath, filename) {
+    async _openPendingExample(topicPath: string, filename: string): Promise<void> {
         await this._openExampleFromTopic(topicPath, filename);
     }
 
-    _initTheoryEditorControls() {
+    _initTheoryEditorControls(): void {
         this.btnExitTheoryEditor?.addEventListener('click', () => {
             this.closeTheoryEditor();
         });
     }
 
-    _syncTheoryEditorUi() {
+    /** Shows the "Done editing theory" button only while `main.md` is open in the Editor. */
+    _syncTheoryEditorUi(): void {
         const isEditingTheory = this.editor?.isEditingTheoryDocument?.() === true;
         this.btnExitTheoryEditor?.classList.toggle('hidden', !isEditingTheory);
     }
 
-    _getPreviewHeaderHeight() {
+    /** Height (px) the preview header takes, 0 when it is hidden. */
+    _getPreviewHeaderHeight(): number {
         if (!this.previewHeader || this.previewHeader.classList.contains('hidden')) {
             return 0;
         }
@@ -845,7 +1125,7 @@ class App {
         return this.previewHeader.getBoundingClientRect().height || 40;
     }
 
-    _setPreviewHeaderHidden(hidden, { persist = true } = {}) {
+    _setPreviewHeaderHidden(hidden: boolean, { persist = true }: PersistOptions = {}): void {
         this.previewHeaderHidden = Boolean(hidden);
         this.previewHeader?.classList.toggle('hidden', this.previewHeaderHidden);
         this._setConsoleHeight(
@@ -859,25 +1139,25 @@ class App {
         }
     }
 
-    _togglePreviewHeaderHidden() {
+    _togglePreviewHeaderHidden(): boolean {
         this._setPreviewHeaderHidden(!this.previewHeaderHidden);
         return this.previewHeaderHidden;
     }
 
-    _initViewportResizer() {
+    _initViewportResizer(): void {
         if (!this.viewportSelect || !this.viewportSlider || !this.viewportWidthDisplay || !this.previewFrame) return;
 
         this.viewportSelect.addEventListener('change', (event) => {
-            if (event.target.value === '100%') {
+            if ((event.target as HTMLSelectElement).value === '100%') {
                 this._applyFullPreviewWidth();
                 return;
             }
 
-            this._applyCustomPreviewWidth(event.target.value);
+            this._applyCustomPreviewWidth((event.target as HTMLSelectElement).value);
         });
 
         this.viewportSlider.addEventListener('input', (event) => {
-            this._applyCustomPreviewWidth(event.target.value);
+            this._applyCustomPreviewWidth((event.target as HTMLInputElement).value);
         });
 
         this.btnViewportSliderToggle?.addEventListener('click', () => {
@@ -895,7 +1175,7 @@ class App {
         this._setViewportSliderVisible(false);
     }
 
-    _initPreviewZoomControls() {
+    _initPreviewZoomControls(): void {
         if (!this.previewFrame || !this.previewZoomSlider || !this.previewZoomDisplay || !this.btnPreviewZoomToggle) {
             return;
         }
@@ -904,7 +1184,7 @@ class App {
         this._setPreviewZoomControlsVisible(false);
 
         this.previewZoomSlider.addEventListener('input', (event) => {
-            this._applyPreviewZoom(event.target.value);
+            this._applyPreviewZoom((event.target as HTMLInputElement).value);
         });
 
         this.btnPreviewZoomToggle.addEventListener('click', () => {
@@ -924,7 +1204,8 @@ class App {
         });
     }
 
-    _initSidebarControls() {
+    /** Restores the saved sidebar width / collapsed state and wires the toggle, the resizer and window resize. */
+    _initSidebarControls(): void {
         if (!this.appShell || !this.sidebarElement || !this.sidebarToggle || !this.sidebarResizer) return;
 
         const storedWidth = this._readStoredNumber(this.sidebarWidthStorageKey, 280);
@@ -949,12 +1230,13 @@ class App {
         });
     }
 
-    _readStoredNumber(key, fallback) {
+    /** An integer stored under `key` in localStorage, or `fallback` when it is missing or not a number. */
+    _readStoredNumber(key: string, fallback: number): number {
         const value = Number.parseInt(window.localStorage.getItem(key) || '', 10);
         return Number.isFinite(value) ? value : fallback;
     }
 
-    _getSidebarBounds() {
+    _getSidebarBounds(): Bounds {
         const maxWidth = Math.max(this.sidebarMinWidth, Math.min(this.sidebarMaxWidth, window.innerWidth - 280));
         return {
             min: this.sidebarMinWidth,
@@ -962,7 +1244,8 @@ class App {
         };
     }
 
-    _setSidebarWidth(width, { persist = true } = {}) {
+    /** Sets the sidebar width (clamped to `_getSidebarBounds()`) through the `--sidebar-width` CSS variable. */
+    _setSidebarWidth(width: number, { persist = true }: PersistOptions = {}): void {
         const { min, max } = this._getSidebarBounds();
         const nextWidth = Math.max(min, Math.min(max, Number(width) || min));
 
@@ -972,7 +1255,7 @@ class App {
         window.localStorage.setItem(this.sidebarWidthStorageKey, String(nextWidth));
     }
 
-    _setSidebarCollapsed(collapsed, { persist = true } = {}) {
+    _setSidebarCollapsed(collapsed: boolean, { persist = true }: PersistOptions = {}): void {
         this.appShell.classList.toggle('sidebar-collapsed', collapsed);
         this.sidebarElement.setAttribute('aria-hidden', String(collapsed));
 
@@ -985,7 +1268,8 @@ class App {
         window.localStorage.setItem(this.sidebarCollapsedStorageKey, collapsed ? '1' : '0');
     }
 
-    _centerWorkspaceSplit() {
+    /** Collapses the sidebar and gives the editor and the preview half of the workspace each. */
+    _centerWorkspaceSplit(): void {
         const applyHalfSplit = () => {
             const workspaceWidth = this.workspaceElement?.getBoundingClientRect().width || window.innerWidth;
             const dividerWidth = this.workspaceResizer?.getBoundingClientRect().width || 10;
@@ -1005,21 +1289,22 @@ class App {
         applyHalfSplit();
     }
 
-    _showDragShield(direction = 'ew') {
+    _showDragShield(direction: DragDirection = 'ew'): void {
         if (!this.dragShield) return;
 
         this.dragShield.classList.remove('hidden', 'is-ew-resize', 'is-ns-resize');
         this.dragShield.classList.add(direction === 'ns' ? 'is-ns-resize' : 'is-ew-resize');
     }
 
-    _hideDragShield() {
+    _hideDragShield(): void {
         if (!this.dragShield) return;
 
         this.dragShield.classList.add('hidden');
         this.dragShield.classList.remove('is-ew-resize', 'is-ns-resize');
     }
 
-    _startSidebarResize(event) {
+    /** Drag of the sidebar divider. Mouse events are listened to on the drag shield (or the document if missing). */
+    _startSidebarResize(event: MouseEvent): void {
         if (this.appShell.classList.contains('sidebar-collapsed')) return;
 
         event.preventDefault();
@@ -1033,8 +1318,8 @@ class App {
         this._showDragShield('ew');
         const dragTarget = this.dragShield || document;
 
-        const onMouseMove = (moveEvent) => {
-            nextWidth = startWidth + (moveEvent.clientX - startX);
+        const onMouseMove = (moveEvent: Event) => {
+            nextWidth = startWidth + ((moveEvent as MouseEvent).clientX - startX);
             this._setSidebarWidth(nextWidth, { persist: false });
         };
 
@@ -1051,7 +1336,7 @@ class App {
         dragTarget.addEventListener('mouseup', onMouseUp);
     }
 
-    _initWorkspaceResizer() {
+    _initWorkspaceResizer(): void {
         if (!this.workspaceElement || !this.workspaceResizer || !this.previewColumn) return;
 
         const initialWidth = Math.round(this.previewColumn.getBoundingClientRect().width || 640);
@@ -1069,15 +1354,16 @@ class App {
         });
     }
 
-    _initConsoleResizer() {
+    _initConsoleResizer(): void {
         if (!this.previewColumn || !this.previewConsoleResizer) return;
 
         this._setConsoleHeight(this.previewConsoleDefaultHeight, { persist: false });
         this.previewConsoleResizer.addEventListener('mousedown', (event) => this._startConsoleResize(event));
 
         window.addEventListener('resize', () => {
+            // Non-null: this listener is only registered after the check at the top of the method.
             const currentHeight = Number.parseInt(
-                this.previewColumn.style.getPropertyValue('--preview-console-height') || '',
+                this.previewColumn!.style.getPropertyValue('--preview-console-height') || '',
                 10,
             );
             this._setConsoleHeight(
@@ -1087,11 +1373,12 @@ class App {
         });
     }
 
-    _initLayoutResetControl() {
+    _initLayoutResetControl(): void {
         this.btnResetLayout?.addEventListener('click', () => this._resetLayoutState());
     }
 
-    _getWorkspaceBounds() {
+    /** Range of the preview column width: the editor keeps at least `workspaceMinEditorWidth`. */
+    _getWorkspaceBounds(): Bounds {
         const workspaceWidth = this.workspaceElement?.getBoundingClientRect().width || window.innerWidth;
         const dividerWidth = this.workspaceResizer?.getBoundingClientRect().width || 10;
         const maxWidth = Math.max(
@@ -1105,7 +1392,8 @@ class App {
         };
     }
 
-    _setPreviewColumnWidth(width, { persist = true } = {}) {
+    /** Sets the preview column width (clamped to `_getWorkspaceBounds()`) through `--preview-column-width`; returns the width applied. */
+    _setPreviewColumnWidth(width: number, { persist = true }: PersistOptions = {}): number {
         const { min, max } = this._getWorkspaceBounds();
         const nextWidth = Math.max(min, Math.min(max, Math.round(Number(width) || min)));
         this.appShell.style.setProperty('--preview-column-width', `${nextWidth}px`);
@@ -1117,7 +1405,8 @@ class App {
         return nextWidth;
     }
 
-    _getConsoleBounds() {
+    /** Range of the console height: the preview frame keeps at least `previewFrameMinHeight`. */
+    _getConsoleBounds(): Bounds {
         const previewColumnHeight = this.previewColumn?.getBoundingClientRect().height || window.innerHeight;
         const previewHeaderHeight = this._getPreviewHeaderHeight();
         const resizerHeight = this.previewConsoleResizer?.getBoundingClientRect().height || 10;
@@ -1132,7 +1421,8 @@ class App {
         };
     }
 
-    _setConsoleHeight(height, { persist = true } = {}) {
+    /** Sets the console height (clamped to `_getConsoleBounds()`) through `--preview-console-height`; returns the height applied. */
+    _setConsoleHeight(height: number, { persist = true }: PersistOptions = {}): number {
         if (!this.previewColumn) return this.previewConsoleDefaultHeight;
 
         const { min, max } = this._getConsoleBounds();
@@ -1146,28 +1436,29 @@ class App {
         return nextHeight;
     }
 
-    _getDefaultPreviewColumnWidth() {
+    _getDefaultPreviewColumnWidth(): number {
         const preferredWidth = Math.min(Math.round(window.innerWidth * 0.48), 640);
         const { min, max } = this._getWorkspaceBounds();
         return Math.max(min, Math.min(max, preferredWidth));
     }
 
-    _syncPreviewControls(width, mode = 'custom') {
+    /** Mirrors the preview width into the viewport select, slider and readout. */
+    _syncPreviewControls(width: number, mode: PreviewWidthMode = 'custom'): void {
         if (!this.viewportSlider || !this.viewportWidthDisplay || !this.viewportSelect) return;
 
         if (mode === 'full') {
             this.viewportWidthDisplay.textContent = 'Full';
-            this.viewportSlider.value = Math.min(Number(this.viewportSlider.max), width);
+            this.viewportSlider.value = String(Math.min(Number(this.viewportSlider.max), width));
             this.viewportSelect.value = '100%';
             return;
         }
 
         this.viewportWidthDisplay.textContent = `${width}px`;
-        this.viewportSlider.value = Math.min(Number(this.viewportSlider.max), width);
+        this.viewportSlider.value = String(Math.min(Number(this.viewportSlider.max), width));
         this.viewportSelect.value = 'custom';
     }
 
-    _setViewportSliderVisible(visible) {
+    _setViewportSliderVisible(visible: boolean): void {
         this.previewViewportSliderVisible = Boolean(visible);
         this.previewViewportRail?.classList.toggle('hidden', !this.previewViewportSliderVisible);
         this.previewViewportRail?.setAttribute('aria-hidden', String(!this.previewViewportSliderVisible));
@@ -1183,7 +1474,8 @@ class App {
         }
     }
 
-    _applyFullPreviewWidth({ persist = true } = {}) {
+    /** Makes the preview iframe fill its column (viewport select "100%"). */
+    _applyFullPreviewWidth({ persist = true }: PersistOptions = {}): void {
         if (!this.previewFrame) return;
 
         const columnWidth = Math.round(this.previewColumn?.getBoundingClientRect().width || this.previewMinWidth);
@@ -1196,10 +1488,12 @@ class App {
         }
     }
 
-    _applyCustomPreviewWidth(width, { persist = true } = {}) {
+    /** Fixes the preview iframe at `width` px (at least `previewMinWidth`); a numeric string is accepted. */
+    _applyCustomPreviewWidth(width: number | string, { persist = true }: PersistOptions = {}): void {
         if (!this.previewFrame) return;
 
-        const nextWidth = Math.max(this.previewMinWidth, Math.round(Number.parseInt(width, 10) || this.previewMinWidth));
+        // parseInt turns a number into its string first, so the cast is only for the type checker.
+        const nextWidth = Math.max(this.previewMinWidth, Math.round(Number.parseInt(width as string, 10) || this.previewMinWidth));
         this.previewWidthMode = 'custom';
         this.customPreviewWidth = nextWidth;
         this._syncPreviewControls(nextWidth, 'custom');
@@ -1210,7 +1504,8 @@ class App {
         }
     }
 
-    _adjustPreviewViewportWidth(delta = 0) {
+    /** Moves the preview width by `delta` px within the viewport slider's range (the +/- 1px buttons). */
+    _adjustPreviewViewportWidth(delta: number = 0): void {
         if (!this.previewFrame) return;
 
         const currentWidth = this.previewWidthMode === 'full'
@@ -1225,7 +1520,7 @@ class App {
         this._applyCustomPreviewWidth(nextWidth);
     }
 
-    _setPreviewZoomControlsVisible(visible) {
+    _setPreviewZoomControlsVisible(visible: boolean): void {
         this.previewZoomSliderVisible = Boolean(visible);
         this.previewZoomControls?.classList.toggle('hidden', !this.previewZoomSliderVisible);
         this.previewZoomControls?.setAttribute('aria-hidden', String(!this.previewZoomSliderVisible));
@@ -1239,18 +1534,23 @@ class App {
         }
     }
 
-    _syncPreviewRailOffsets() {
+    /** The zoom rail moves aside when the viewport rail is open too. */
+    _syncPreviewRailOffsets(): void {
         this.previewZoomControls?.classList.toggle(
             'is-shifted-for-viewport',
             this.previewZoomSliderVisible && this.previewViewportSliderVisible,
         );
     }
 
-    _adjustPreviewZoom(delta = 0) {
+    _adjustPreviewZoom(delta: number = 0): void {
         this._applyPreviewZoom(this.previewZoomPercent + delta);
     }
 
-    _applyPreviewZoom(percent, { persist = true } = {}) {
+    /**
+     * Zooms the preview iframe by CSS-scaling it (50-300%, steps of 5; `percent` may be a numeric string).
+     * The iframe is made `100 / scale` times larger first, so after the transform it still fills its column.
+     */
+    _applyPreviewZoom(percent: number | string, { persist = true }: PersistOptions = {}): void {
         if (!this.previewFrame || !this.previewZoomSlider || !this.previewZoomDisplay) return;
 
         const nextZoom = Math.max(50, Math.min(300, Math.round((Number(percent) || 100) / 5) * 5));
@@ -1287,7 +1587,8 @@ class App {
         }
     }
 
-    _resetLayoutState() {
+    /** The "Restore layout" button: resets the Editor's panels, the preview console and this class's layout. */
+    _resetLayoutState(): void {
         this.editor?.resetLayoutState?.();
         this.preview?.resetLayoutState?.();
         this._setPreviewColumnWidth(this._getDefaultPreviewColumnWidth(), { persist: false });
@@ -1298,7 +1599,8 @@ class App {
         this._persistSessionState();
     }
 
-    _startWorkspaceResize(event) {
+    /** Drag of the editor / preview divider; the preview column grows as the pointer moves left. */
+    _startWorkspaceResize(event: MouseEvent): void {
         if (!this.workspaceResizer || !this.previewColumn) return;
 
         event.preventDefault();
@@ -1312,8 +1614,8 @@ class App {
         this._showDragShield('ew');
         const dragTarget = this.dragShield || document;
 
-        const onMouseMove = (moveEvent) => {
-            nextWidth = startWidth - (moveEvent.clientX - startX);
+        const onMouseMove = (moveEvent: Event) => {
+            nextWidth = startWidth - ((moveEvent as MouseEvent).clientX - startX);
             this._setPreviewColumnWidth(nextWidth, { persist: false });
             if (this.previewWidthMode === 'full') {
                 this._applyFullPreviewWidth({ persist: false });
@@ -1323,7 +1625,8 @@ class App {
         const onMouseUp = () => {
             dragTarget.removeEventListener('mousemove', onMouseMove);
             dragTarget.removeEventListener('mouseup', onMouseUp);
-            this.workspaceResizer.classList.remove('resizing');
+            // Non-null: the method returned early above when the divider was missing.
+            this.workspaceResizer!.classList.remove('resizing');
             document.body.classList.remove('is-resizing-workspace');
             this._hideDragShield();
             this._setPreviewColumnWidth(nextWidth, { persist: false });
@@ -1337,7 +1640,8 @@ class App {
         dragTarget.addEventListener('mouseup', onMouseUp);
     }
 
-    _startConsoleResize(event) {
+    /** Drag of the preview / console divider; the console grows as the pointer moves up. */
+    _startConsoleResize(event: MouseEvent): void {
         if (!this.previewConsoleResizer || !this.previewConsole || this.previewConsoleResizer.classList.contains('hidden')) {
             return;
         }
@@ -1353,15 +1657,16 @@ class App {
         this._showDragShield('ns');
         const dragTarget = this.dragShield || document;
 
-        const onMouseMove = (moveEvent) => {
-            nextHeight = startHeight - (moveEvent.clientY - startY);
+        const onMouseMove = (moveEvent: Event) => {
+            nextHeight = startHeight - ((moveEvent as MouseEvent).clientY - startY);
             this._setConsoleHeight(nextHeight, { persist: false });
         };
 
         const onMouseUp = () => {
             dragTarget.removeEventListener('mousemove', onMouseMove);
             dragTarget.removeEventListener('mouseup', onMouseUp);
-            this.previewConsoleResizer.classList.remove('resizing');
+            // Non-null: the method returned early above when the divider was missing.
+            this.previewConsoleResizer!.classList.remove('resizing');
             document.body.classList.remove('is-resizing-console');
             this._hideDragShield();
             this._setConsoleHeight(nextHeight);
@@ -1371,19 +1676,24 @@ class App {
         dragTarget.addEventListener('mouseup', onMouseUp);
     }
 
-    _readSessionState() {
+    // ── Session persistence ──
+
+    /** The saved session, or null when there is none or it is not a JSON object. Nothing else is validated here. */
+    _readSessionState(): StoredSessionState | null {
         try {
             const raw = window.localStorage.getItem(this.sessionStorageKey);
             if (!raw) return null;
 
-            const parsed = JSON.parse(raw);
-            return parsed && typeof parsed === 'object' ? parsed : null;
+            const parsed: unknown = JSON.parse(raw);
+            // The stored object is untrusted: the restore methods re-check every field they use.
+            return parsed && typeof parsed === 'object' ? parsed as StoredSessionState : null;
         } catch {
             return null;
         }
     }
 
-    _captureSessionState() {
+    /** The current layout, topic and open document as the object saved by `_persistSessionState()`. */
+    _captureSessionState(): SessionState {
         const editorState = this.editor?.getSessionState?.() || {};
         const previewColumnWidth = Math.round(this.previewColumn?.getBoundingClientRect().width || 0);
 
@@ -1413,7 +1723,8 @@ class App {
         };
     }
 
-    _getPreviewSessionKey(documentModel) {
+    /** Key that tells the Preview which document it is rendering: the topic plus the file, or the draft's session id. */
+    _getPreviewSessionKey(documentModel: EditorDocument): string {
         const parts = [
             this.currentTopicPath || '',
             this.editor?.currentFilename || documentModel?.sessionId || 'draft',
@@ -1422,7 +1733,8 @@ class App {
         return parts.join('::');
     }
 
-    _persistSessionState() {
+    /** Saves the session; a no-op until the saved one has been restored, and silent when storage fails. */
+    _persistSessionState(): void {
         if (!this._sessionPersistenceReady) return;
 
         try {
@@ -1432,24 +1744,29 @@ class App {
         }
     }
 
-    _findTopicByPath(topicPath) {
+    _findTopicByPath(topicPath: string): MaterialTopic | null {
         // Includes topics inside hidden chapters (hidden only affects the sidebar view).
         return this.sidebar.findTopic(topicPath);
     }
 
-    _restorePreviewState(previewState = {}) {
+    /**
+     * Applies the preview part of a saved session. Each number may have been stored as a number or as a
+     * numeric string, so it is parsed when it is not already finite; the casts below are for the type
+     * checker only (`parseInt` stringifies whatever it gets).
+     */
+    _restorePreviewState(previewState: StoredPreviewState = {}): void {
         this._setPreviewHeaderHidden(previewState.headerHidden === true, { persist: false });
 
         const columnWidth = Number.isFinite(previewState.columnWidth)
-            ? previewState.columnWidth
-            : Number.parseInt(previewState.columnWidth, 10);
+            ? previewState.columnWidth as number
+            : Number.parseInt(previewState.columnWidth as string, 10);
         if (Number.isFinite(columnWidth) && columnWidth > 0) {
             this._setPreviewColumnWidth(columnWidth, { persist: false });
         }
 
         const consoleHeight = Number.isFinite(previewState.consoleHeight)
-            ? previewState.consoleHeight
-            : Number.parseInt(previewState.consoleHeight, 10);
+            ? previewState.consoleHeight as number
+            : Number.parseInt(previewState.consoleHeight as string, 10);
         this._setConsoleHeight(
             Number.isFinite(consoleHeight) && consoleHeight > 0
                 ? consoleHeight
@@ -1458,8 +1775,8 @@ class App {
         );
 
         const customWidth = Number.isFinite(previewState.customWidth)
-            ? previewState.customWidth
-            : Number.parseInt(previewState.customWidth, 10);
+            ? previewState.customWidth as number
+            : Number.parseInt(previewState.customWidth as string, 10);
 
         if (previewState.widthMode === 'custom' && Number.isFinite(customWidth) && customWidth > 0) {
             this._applyCustomPreviewWidth(customWidth, { persist: false });
@@ -1468,12 +1785,16 @@ class App {
         }
 
         const zoom = Number.isFinite(previewState.zoom)
-            ? previewState.zoom
-            : Number.parseInt(previewState.zoom, 10);
+            ? previewState.zoom as number
+            : Number.parseInt(previewState.zoom as string, 10);
         this._applyPreviewZoom(Number.isFinite(zoom) && zoom > 0 ? zoom : 100, { persist: false });
     }
 
-    async _restoreSessionState(sessionState = this._readSessionState()) {
+    /**
+     * Brings the saved session back: layout, then the topic, then the theory editor or the example that was
+     * open. Anything that no longer exists (topic, example) falls back to the Gallery or an empty editor.
+     */
+    async _restoreSessionState(sessionState: StoredSessionState | null = this._readSessionState()): Promise<void> {
         if (!sessionState) return;
 
         this._restorePreviewState(sessionState.preview || {});
@@ -1537,7 +1858,8 @@ class App {
         this._persistSessionState();
     }
 
-    openCreateDialog(preselectedTopicPath = null) {
+    /** Opens the "Create" dialog; with a topic path (the "+" on a topic row) it starts on "example" in that topic. */
+    openCreateDialog(preselectedTopicPath: string | null = null): void {
         // Offer hidden chapters too when the user is looking at them (or created
         // from a topic inside one), so the preselected parent always exists.
         const includeHidden = this.sidebar.showHiddenChapters || Boolean(preselectedTopicPath);
@@ -1545,14 +1867,14 @@ class App {
         this.createDialog.open(tree, preselectedTopicPath);
     }
 
-    _clearPreviewEditorialSummary() {
+    _clearPreviewEditorialSummary(): void {
         if (!this.previewEditorialSummary || !this.previewEditorialDescription || !this.previewEditorialMeta) return;
         this.previewEditorialSummary.classList.add('hidden');
         this.previewEditorialDescription.textContent = '';
         this.previewEditorialMeta.innerHTML = '';
     }
 
-    _setPreviewEditorialSummaryVisible(visible) {
+    _setPreviewEditorialSummaryVisible(visible: boolean): void {
         this.previewEditorialSummaryVisible = visible !== false;
         window.localStorage.setItem(
             this.previewEditorialSummaryVisibleStorageKey,
@@ -1562,7 +1884,12 @@ class App {
         this._syncPreviewEditorialSummary();
     }
 
-    _syncPreviewEditorialSummary() {
+    /**
+     * Fills the strip above the preview with the open example's description, importance, rating and first
+     * four tags; hidden in the Gallery, while theory is edited, when the user turned it off, or when the
+     * example has no editorial metadata.
+     */
+    _syncPreviewEditorialSummary(): void {
         if (!this.previewEditorialSummary || !this.previewEditorialDescription || !this.previewEditorialMeta) return;
 
         if (
@@ -1603,7 +1930,8 @@ class App {
             const tagPill = document.createElement('span');
             tagPill.className = 'preview-editorial-tag';
             tagPill.textContent = tag;
-            this.previewEditorialMeta.appendChild(tagPill);
+            // Non-null: checked at the top of the method.
+            this.previewEditorialMeta!.appendChild(tagPill);
         });
 
         this.previewEditorialSummary.classList.remove('hidden');
