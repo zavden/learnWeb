@@ -177,7 +177,7 @@ async function checkTopic(topicDir: string): Promise<void> {
         report('error', topicDir, 'missing main.md');
     } else {
         const theory = fs.readFileSync(mainFile, 'utf-8');
-        const firstLine = theory.replace(/^﻿/, '').split(/\r?\n/).find((line) => line.trim()) || '';
+        const firstLine = theory.replace(/^\uFEFF/, '').split(/\r?\n/).find((line) => line.trim()) || '';
         if (!/^# \S/.test(firstLine)) report('error', mainFile, 'first line must be "# Título" (it is the sidebar label)');
         const lines = theory.split(/\r?\n/).length;
         if (lines < 40) report('warning', mainFile, `theory is very short (${lines} lines)`);

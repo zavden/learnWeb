@@ -20,7 +20,6 @@ import { type CodeMirror, type CodeMirrorV, type vimState, Vim, getCM, vim } fro
 import {
     type VimShortcutConfig,
     getDefaultVimShortcutConfig,
-    getVimShortcutSections,
     resolveVimLeaderAction,
     resolveVimShiftAction,
 } from './vimShortcutConfig.ts';

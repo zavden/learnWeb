@@ -38,7 +38,6 @@ import {
 import {
     cloneShaderUniformControl,
     cloneShaderUniformValue,
-    parseEditorHiddenFilesMetadataValue,
     parseShaderResolutionValue,
     parseShaderTextureMetadataValue,
     parseShaderUniformMetadataValue,

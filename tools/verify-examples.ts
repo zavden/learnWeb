@@ -246,7 +246,7 @@ async function verifyExample(topicPath: string, file: string, ms: number, { logs
     current = state;
 
     let stage = '';
-    let problems: VerifyProblem[] = [];
+    const problems: VerifyProblem[] = [];
     let note = '';
 
     try {

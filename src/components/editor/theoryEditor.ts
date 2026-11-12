@@ -15,7 +15,7 @@
 // versions its loads with `_exerciseEmbedRequestId` (also bumped when the dialog closes) so previews that
 // arrive late are dropped.
 
-import { getExampleEditorialMetadata, buildExampleDocument, isShaderDocument, hasBlockingDiagnostics, parseExampleDocument, updateShaderResolution } from '../../utils/markdown.ts';
+import { getExampleEditorialMetadata, isShaderDocument, hasBlockingDiagnostics, parseExampleDocument, updateShaderResolution } from '../../utils/markdown.ts';
 import { getTheoryDocumentContent, isTheoryDocument } from '../../utils/theoryDocument.ts';
 import { modifyTopicMain, fetchExamples, fetchExample } from '../../utils/api.ts';
 import { compileExample } from '../../utils/compileClient.ts';

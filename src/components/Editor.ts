@@ -89,10 +89,8 @@ import {
     getDocumentEntryCandidates,
     getDocumentLanguageOptions,
     hasBlockingDiagnostics,
-    isShaderDocument,
     updateDocumentFileContent,
 } from '../utils/markdown.ts';
-import { isTheoryDocument } from '../utils/theoryDocument.ts';
 import { type ToastType, showToast } from './editor/toast.ts';
 import { type DirtyTracker, createDirtyTracker } from './editor/dirtyTracker.ts';
 
@@ -114,8 +112,8 @@ import { lineHighlightsMixin } from './editor/lineHighlightsMixin.ts';
 import { sessionManagerMixin } from './editor/sessionManager.ts';
 import { exercisePanelMixin } from './editor/exercisePanel.ts';
 import { theoryEditorMixin } from './editor/theoryEditor.ts';
-import { SHADER_UNIFORM_TYPE_OPTIONS, SHADER_BUILT_IN_UNIFORM_NAMES, shaderDialogsMixin } from './editor/shaderDialogs.ts';
-import { EXAMPLE_IMPORTANCE_OPTIONS, metadataDialogsMixin } from './editor/metadataDialogs.ts';
+import { shaderDialogsMixin } from './editor/shaderDialogs.ts';
+import { metadataDialogsMixin } from './editor/metadataDialogs.ts';
 import { fileOperationsMixin } from './editor/fileOperations.ts';
 
 // ─── Types ────────────────────────────────────────────────────────────────────

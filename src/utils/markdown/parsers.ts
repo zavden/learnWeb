@@ -24,7 +24,6 @@ import type {
 } from '../../types/document.ts';
 import {
     REACT_MULTI_FILE_LANGUAGES,
-    SUPPORTED_FRAMEWORKS,
     VUE_MULTI_FILE_LANGUAGES,
 } from './constants.ts';
 import {

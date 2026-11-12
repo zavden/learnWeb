@@ -2,7 +2,6 @@
 // construction, virtual path normalization, esbuild loader choice and block/file lookup by slot.
 // Runs under Node only (the compilers are never bundled for the browser).
 
-import path from 'path';
 import type { Loader } from 'esbuild';
 import type { CompileSourceDocument } from '../../types/compile.ts';
 import type { Diagnostic, DiagnosticDetails, DiagnosticLevel } from '../../types/diagnostics.ts';

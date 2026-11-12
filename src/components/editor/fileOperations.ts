@@ -18,10 +18,10 @@
 //   `_handleModifyTheory` (./theoryEditor.ts) before anything example-specific runs.
 
 import { buildFrameworkFileTemplate, getFrameworkFileTemplateOptions } from '../../config/fileTemplates.ts';
-import { getBlockDefinition, normalizeBlockType } from '../../config/exampleBlocks.ts';
+import { normalizeBlockType } from '../../config/exampleBlocks.ts';
 import { fetchExample, modifyExample, removeExample, renameExample, saveExample } from '../../utils/api.ts';
 import { errorMessage } from '../../utils/errors.ts';
-import { buildExampleDocument, cloneExampleDocument, createDocumentFile, createEmptyExampleDocument, duplicateDocumentFile, getDocumentEntryCandidates, getDocumentLanguageOptions, hasBlockingDiagnostics, isShaderDocument, parseExampleDocument, removeDocumentFile, setDocumentEntryPath, synchronizeDocument, updateDocumentFileDetails, updateDocumentFileContent, VIRTUAL_FILE_ROLE_OPTIONS } from '../../utils/markdown.ts';
+import { buildExampleDocument, cloneExampleDocument, createDocumentFile, createEmptyExampleDocument, duplicateDocumentFile, getDocumentEntryCandidates, getDocumentLanguageOptions, hasBlockingDiagnostics, isShaderDocument, parseExampleDocument, removeDocumentFile, setDocumentEntryPath, synchronizeDocument, updateDocumentFileDetails, VIRTUAL_FILE_ROLE_OPTIONS } from '../../utils/markdown.ts';
 import { createTheoryDocument } from '../../utils/theoryDocument.ts';
 import { parseHighlights, serializeHighlights } from '../../utils/highlights.ts';
 import type { FileLanguage, NewDocumentFile, VirtualFileRole } from '../../types/document.ts';

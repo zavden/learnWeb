@@ -1133,7 +1133,6 @@ export const shaderControlsMixin = {
         }
 
         const stats = this._shaderStats || this._createEmptyShaderStats();
-        const resolution = stats.resolution;
         this._renderShaderResolutionOptions();
         this._renderShaderCustomUniformControls();
         this._renderShaderTextureStatus();

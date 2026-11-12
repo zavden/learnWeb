@@ -513,8 +513,8 @@ class App {
         if (state !== 'expanded') return;
 
         window.requestAnimationFrame(() => {
-            // The non-null assertion is backed by the Number.isFinite check right below, which rejects null.
-            const preferredHeight = this.preview?.getPreferredShaderPanelHeight?.()!;
+            // Read as a number: the Number.isFinite check right below rejects null and undefined.
+            const preferredHeight = this.preview?.getPreferredShaderPanelHeight?.() as number;
             if (!Number.isFinite(preferredHeight) || preferredHeight <= 0) return;
             this._setConsoleHeight(preferredHeight);
         });

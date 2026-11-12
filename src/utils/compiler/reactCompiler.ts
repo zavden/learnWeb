@@ -252,7 +252,7 @@ function createVirtualReactFileMap(files: readonly VirtualFile[] = []): { diagno
     files.forEach((file) => {
         const virtualPath = normalizeVirtualPath(file.path);
         let contents = file.content || '';
-        let language = file.language || '';
+        const language = file.language || '';
 
         if (language === 'scss' || language === 'sass') {
             try {
