@@ -14,6 +14,7 @@ import {
 } from '../../config/exampleBlocks.ts';
 import type { Diagnostic } from '../../types/diagnostics.ts';
 import type {
+    DocumentFileInput,
     ExampleBlock,
     ExampleDocumentInput,
     ExampleMetadata,
@@ -564,9 +565,13 @@ ${buildFencedCode(file.language, file.content || '')}`;
     return [frontmatter, body].filter(Boolean).join('\n\n');
 }
 
-/** Shallow copies of the files. */
-export function cloneFiles(files: readonly VirtualFile[] = []): VirtualFile[] {
-    return files.map((file) => ({ ...file }));
+/**
+ * Shallow copies of the files. The theory pseudo-document's file is copied like any other and comes back
+ * unchanged (see `ExampleDocumentInput`): the result is typed as example files because that is what every
+ * other caller holds.
+ */
+export function cloneFiles(files: readonly DocumentFileInput[] = []): VirtualFile[] {
+    return files.map((file) => ({ ...file })) as VirtualFile[];
 }
 
 /** The legacy files of the blocks (sorted by slot first). */

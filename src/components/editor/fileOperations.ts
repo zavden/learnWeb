@@ -4,6 +4,7 @@ import { fetchExample, modifyExample, removeExample, renameExample, saveExample 
 import { buildExampleDocument, cloneExampleDocument, createDocumentFile, createEmptyExampleDocument, duplicateDocumentFile, getDocumentEntryCandidates, getDocumentLanguageOptions, hasBlockingDiagnostics, isShaderDocument, parseExampleDocument, removeDocumentFile, setDocumentEntryPath, synchronizeDocument, updateDocumentFileDetails, updateDocumentFileContent, VIRTUAL_FILE_ROLE_OPTIONS } from '../../utils/markdown.ts';
 import { createTheoryDocument } from '../../utils/theoryDocument.ts';
 import { parseHighlights, serializeHighlights } from '../../utils/highlights.ts';
+import type { Editor } from '../Editor.ts';
 
 export const fileOperationsMixin = {
     _getDocumentFramework() {
@@ -966,4 +967,4 @@ const title = ref('${componentName}');
         this.currentExamplePending = enabled === true;
         this._updateButtonStates();
     },
-};
+} satisfies ThisType<Editor>;

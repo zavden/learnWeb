@@ -188,7 +188,8 @@ export function getDocumentEntryCandidates(documentModel: ExampleDocumentInput |
 
     if (!entryLanguages) return [];
 
-    return (documentModel.files || []).filter((file) => entryLanguages.includes(file.language));
+    // Only React/Vue projects get here, so every file is an example file (the theory file is `markdown`).
+    return (documentModel.files || []).filter((file): file is VirtualFile => entryLanguages.includes(file.language));
 }
 
 /** A new document from a session preset (`SESSION_PRESETS`); unknown ids fall back to `html-css-javascript`. */

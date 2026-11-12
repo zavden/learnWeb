@@ -5,6 +5,7 @@ import {
     getHighlightsByLine,
     setAllHighlightsEffect,
 } from './lineHighlightExtension.ts';
+import type { Editor } from '../Editor.ts';
 
 export { parseHighlights, serializeHighlights };
 
@@ -177,4 +178,4 @@ export const lineHighlightsMixin = {
 
         document.addEventListener('click', closeHandler, true);
     },
-};
+} satisfies ThisType<Editor>;

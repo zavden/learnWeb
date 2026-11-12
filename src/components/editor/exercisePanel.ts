@@ -2,6 +2,7 @@ import { resolveExerciseComparison } from '../../utils/exerciseComparison.ts';
 import { buildQuickOpenMatches } from '../../utils/fileQuickOpen.ts';
 import { createEmptyExampleDocument, getDocumentFileVisibilityEntries, getExerciseConfig, parseExampleDocument } from '../../utils/markdown.ts';
 import { fetchExample } from '../../utils/api.ts';
+import type { Editor } from '../Editor.ts';
 
 export const exercisePanelMixin = {
     _createEmptyExerciseConfig() {
@@ -336,4 +337,4 @@ export const exercisePanelMixin = {
 
         this._emitExerciseStateChange();
     },
-};
+} satisfies ThisType<Editor>;

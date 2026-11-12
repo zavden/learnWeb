@@ -2,6 +2,7 @@ import { getBlockDefinition, normalizeBlockType } from '../../config/exampleBloc
 import { getVimShortcutSections, getDefaultVimShortcutConfig } from '../../editor/vimSupport.ts';
 import { evaluateDocumentFileTypeChange, getDocumentFileTypeChangeOptions, getDocumentFileVisibilityEntries, getDocumentLanguageOptions, getExampleEditorialMetadata, hasBlockingDiagnostics, isShaderDocument, updateDocumentFileType, updateExampleEditorialMetadata, updateDocumentHiddenFiles } from '../../utils/markdown.ts';
 import { findDirectionalPanelTargetIndex } from '../../utils/panelNavigation.ts';
+import type { Editor } from '../Editor.ts';
 
 export const EXAMPLE_IMPORTANCE_OPTIONS = [
     { value: '', label: 'Not set', accent: 'neutral' },
@@ -986,4 +987,4 @@ export const metadataDialogsMixin = {
         this._flushPendingNavigation();
         this._emitSessionStateChange();
     },
-};
+} satisfies ThisType<Editor>;

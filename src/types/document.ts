@@ -42,6 +42,7 @@ import type {
     SUPPORTED_RENDERERS,
 } from '../utils/markdown/constants.ts';
 import type { Diagnostic } from './diagnostics.ts';
+import type { TheoryDocumentFile } from './theory.ts';
 
 /** Element type of a runtime list or set (`LiteralSet`, `LiteralList`, readonly tuple). */
 type ElementOf<T> = T extends Iterable<infer E> ? E : never;
@@ -302,12 +303,23 @@ export interface ExampleDocument {
 }
 
 /**
+ * A file as the tolerant document API may receive it: a file of an example, or the single `main.md` file
+ * of the editor's theory pseudo-document (src/types/theory.ts), which has no block fields.
+ */
+export type DocumentFileInput = VirtualFile | TheoryDocumentFile;
+
+/**
  * A document-like object as the document API tolerates it: every field optional. Presets, tests and the
  * validators pass partial documents (`getExerciseConfig({ metadata })`), and missing arrays default to `[]`.
- * Functions that return a document always return a complete `ExampleDocument`, except that
- * `synchronizeDocument()` copies `diagnostics`, `unsupportedBlocks` and `sourceFormat` from its input as they are.
+ * The editor also sends its theory pseudo-document through these functions while theory is being edited
+ * (toolbar state, typing, cloning, dirty tracking), which is why `files` admits the theory file.
+ * Functions that return a document always return a complete `ExampleDocument`, with two caveats:
+ * `synchronizeDocument()` copies `diagnostics`, `unsupportedBlocks` and `sourceFormat` from its input as they
+ * are, and the functions that copy `files` (`cloneExampleDocument()`, `synchronizeDocument()`,
+ * `updateDocumentFileContent()`) hand a theory file back unchanged, so a theory document in gives a
+ * theory-shaped document out.
  */
-export type ExampleDocumentInput = Partial<ExampleDocument>;
+export type ExampleDocumentInput = Partial<Omit<ExampleDocument, 'files'>> & { files?: DocumentFileInput[] };
 
 // ─── Derived views (documentMeta.ts, documentApi.ts) ──────────────────────────
 

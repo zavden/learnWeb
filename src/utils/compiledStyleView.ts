@@ -43,7 +43,7 @@ export const SASS_OUTPUT_PATH = 'sass-output.txt';
 /** The SCSS/Sass file of a legacy example's style slot, or `null`. */
 export function getPreprocessedStyleFile(documentModel: ExampleDocumentInput | null | undefined): VirtualFile | null {
     const files = Array.isArray(documentModel?.files) ? documentModel.files : [];
-    return files.find((file) => file?.slot === 'style' && (file.language === 'scss' || file.language === 'sass')) || null;
+    return files.find((file): file is VirtualFile => file?.slot === 'style' && (file.language === 'scss' || file.language === 'sass')) || null;
 }
 
 /**
@@ -115,7 +115,7 @@ export function buildCompiledStyleFiles(documentModel: ExampleDocumentInput | nu
 /** The TypeScript file of a legacy example's script slot, or `null`. */
 export function getTypeScriptFile(documentModel: ExampleDocumentInput | null | undefined): VirtualFile | null {
     const files = Array.isArray(documentModel?.files) ? documentModel.files : [];
-    return files.find((file) => file?.slot === 'script' && file.language === 'typescript') || null;
+    return files.find((file): file is VirtualFile => file?.slot === 'script' && file.language === 'typescript') || null;
 }
 
 /**

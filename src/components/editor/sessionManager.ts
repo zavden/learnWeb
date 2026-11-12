@@ -1,6 +1,7 @@
 import { historyField } from '@codemirror/commands';
 import { buildExampleDocument, cloneExampleDocument, createEmptyExampleDocument } from '../../utils/markdown.ts';
 import { getTheoryDocumentContent, isTheoryDocument } from '../../utils/theoryDocument.ts';
+import type { Editor } from '../Editor.ts';
 
 const DIRTY_CHECK_DELAY_MS = 250;
 
@@ -298,4 +299,4 @@ export const sessionManagerMixin = {
             document.title = dirty ? `\u2022 ${this._baseDocumentTitle}` : this._baseDocumentTitle;
         }
     },
-};
+} satisfies ThisType<Editor>;

@@ -4,6 +4,7 @@ import { modifyTopicMain, fetchExamples, fetchExample } from '../../utils/api.ts
 import { compileExample } from '../../utils/compileClient.ts';
 import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../../utils/exampleRenderer.ts';
 import { loadSrcdocWhenLaidOut } from '../../utils/renderer/previewHost.ts';
+import type { Editor } from '../Editor.ts';
 
 export const theoryEditorMixin = {
     getDocumentTarget() {
@@ -227,4 +228,4 @@ export const theoryEditorMixin = {
             previewElement.innerHTML = '<span class="exercise-embed-card-loading">Preview unavailable</span>';
         }
     },
-};
+} satisfies ThisType<Editor>;

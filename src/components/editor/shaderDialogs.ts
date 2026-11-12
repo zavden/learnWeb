@@ -1,5 +1,6 @@
 import { getShaderConfig, updateShaderUniformDefinitions, updateShaderTextureDefinitions } from '../../utils/markdown.ts';
 import { fetchTopicAssets } from '../../utils/api.ts';
+import type { Editor } from '../Editor.ts';
 
 export const SHADER_UNIFORM_TYPE_OPTIONS = ['float', 'int', 'bool', 'vec2', 'vec3', 'vec4'];
 export const SHADER_BUILT_IN_UNIFORM_NAMES = ['u_time', 'u_delta', 'u_resolution', 'u_mouse', 'u_mouse_pressed', 'u_frame'];
@@ -727,4 +728,4 @@ export const shaderDialogsMixin = {
         this.shaderUniformDialog?.close();
         this._showToast('Shader uniforms updated.', 'success');
     },
-};
+} satisfies ThisType<Editor>;

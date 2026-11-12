@@ -16,39 +16,8 @@
 
 import { Decoration, type DecorationSet, EditorView, GutterMarker, gutterLineClass } from '@codemirror/view';
 import { type Text, RangeSet, RangeSetBuilder, StateEffect, StateField } from '@codemirror/state';
-import type { Editor } from '../Editor.ts';
-
-// TODO(ts-migration): use the diagnostic type from src/types/diagnostics.ts once it exists
-/** A structural, compile or runtime diagnostic, as far as the editor reads it. */
-interface EditorDiagnostic {
-    /** `error` is shown as an error; anything else as a warning. */
-    level: string;
-    message: string;
-    code?: string;
-    /** Ways a diagnostic can name its file; see `_findFileForDiagnostic`. */
-    file?: string;
-    path?: string;
-    entry?: string;
-    rolePath?: string;
-    files?: string[];
-    slot?: string;
-    type?: string;
-    /** 1-based; ignored unless finite. */
-    line?: number | null;
-    column?: number | null;
-}
-
-// TODO(ts-migration): use the example file type of the document model (src/types/) once it exists
-/** The fields of a document file that diagnostics are matched against. */
-interface DiagnosticTargetFile {
-    id: string;
-    path: string;
-    name?: string;
-    slot?: string;
-    role?: string;
-    language?: string;
-    blockType?: string;
-}
+import type { Diagnostic } from '../../types/diagnostics.ts';
+import type { Editor, EditorFile } from '../Editor.ts';
 
 /** The two diagnostic severities the editor paints. */
 export type DiagnosticSeverity = 'error' | 'warning';
@@ -74,9 +43,9 @@ export interface EditorDiagnosticSets {
 export interface DiagnosticTarget {
     /** 1-based, or null when the diagnostic has no finite column. */
     column: number | null;
-    diagnostic: EditorDiagnostic;
+    diagnostic: Diagnostic;
     /** null when no file of the document matches; the diagnostic is then not clickable. */
-    file: DiagnosticTargetFile | null;
+    file: EditorFile | null;
     /** 1-based, or null when the diagnostic has no finite line. */
     line: number | null;
 }
@@ -201,7 +170,7 @@ export const diagnosticsMixin = {
     _collectDiagnosticsForFile(fileId: string | null | undefined): EditorLineDiagnostic[] {
         if (!fileId) return [];
 
-        const diagnostics: EditorDiagnostic[] = [
+        const diagnostics: Diagnostic[] = [
             ...(this.currentDocument.diagnostics || []),
             ...(this.compileDiagnostics || []),
             ...(this.runtimeDiagnostics || []),
@@ -218,7 +187,7 @@ export const diagnosticsMixin = {
     },
 
     /** Sends the current diagnostics of `file` to its editor view (replacing what it showed). */
-    _applyDiagnosticsToView(view: EditorView | null | undefined, file: DiagnosticTargetFile | null | undefined): void {
+    _applyDiagnosticsToView(view: EditorView | null | undefined, file: EditorFile | null | undefined): void {
         if (!view || !file?.id) return;
 
         view.dispatch({
@@ -236,21 +205,21 @@ export const diagnosticsMixin = {
     },
 
     /** Replaces the compiler's diagnostics (called by the app after each compile). */
-    setCompileDiagnostics(diagnostics: EditorDiagnostic[] = []): void {
+    setCompileDiagnostics(diagnostics: Diagnostic[] = []): void {
         this.compileDiagnostics = diagnostics;
         this._updateStatus();
         this._syncAllEditorDiagnostics();
     },
 
     /** Replaces the preview's runtime diagnostics (uncaught errors with a location). */
-    setRuntimeDiagnostics(diagnostics: EditorDiagnostic[] = []): void {
+    setRuntimeDiagnostics(diagnostics: Diagnostic[] = []): void {
         this.runtimeDiagnostics = diagnostics;
         this._updateStatus();
         this._syncAllEditorDiagnostics();
     },
 
     /** A titled, counted list of diagnostics for the status panel. */
-    _buildDiagnosticSection(title: string, diagnostics: EditorDiagnostic[], category: DiagnosticCategory): HTMLElement {
+    _buildDiagnosticSection(title: string, diagnostics: Diagnostic[], category: DiagnosticCategory): HTMLElement {
         const section = document.createElement('section');
         section.className = `diagnostic-section ${category}`;
 
@@ -281,7 +250,7 @@ export const diagnosticsMixin = {
     },
 
     /** One diagnostic row: a button that navigates to its file when it resolves to one, a plain div otherwise. */
-    _buildDiagnosticItem(diagnostic: EditorDiagnostic, category: DiagnosticCategory): HTMLButtonElement | HTMLDivElement {
+    _buildDiagnosticItem(diagnostic: Diagnostic, category: DiagnosticCategory): HTMLButtonElement | HTMLDivElement {
         const target = this._resolveDiagnosticTarget(diagnostic);
         const actionable = Boolean(target?.file);
         const item = document.createElement(actionable ? 'button' : 'div');
@@ -311,7 +280,7 @@ export const diagnosticsMixin = {
     },
 
     /** The grey line under a diagnostic message: category • location • code. */
-    _formatDiagnosticMeta(diagnostic: EditorDiagnostic, target: DiagnosticTarget | null | undefined, category: DiagnosticCategory): string {
+    _formatDiagnosticMeta(diagnostic: Diagnostic, target: DiagnosticTarget | null | undefined, category: DiagnosticCategory): string {
         const parts = [category === 'structural' ? 'Structure' : category === 'runtime' ? 'Runtime' : 'Compile'];
 
         if (target?.file?.path) {
@@ -375,7 +344,7 @@ export const diagnosticsMixin = {
     },
 
     /** The diagnostic with its document file and its line/column clamped to at least 1. */
-    _resolveDiagnosticTarget(diagnostic: EditorDiagnostic): DiagnosticTarget {
+    _resolveDiagnosticTarget(diagnostic: Diagnostic): DiagnosticTarget {
         const file = this._findFileForDiagnostic(diagnostic);
 
         return {
@@ -390,12 +359,12 @@ export const diagnosticsMixin = {
      * The document file a diagnostic refers to, or null. Tries each named path in turn (exact path, then
      * path suffix, then file name), then the slot or role, then the file type when exactly one file has it.
      */
-    _findFileForDiagnostic(diagnostic: EditorDiagnostic): DiagnosticTargetFile | null {
+    _findFileForDiagnostic(diagnostic: Diagnostic): EditorFile | null {
         const files = this.currentDocument.files || [];
         if (files.length === 0) return null;
 
         const candidates: string[] = [];
-        const pushCandidate = (value: string | undefined): void => {
+        const pushCandidate = (value: string | null | undefined): void => {
             const normalized = this._normalizeDiagnosticPath(value);
             if (normalized) {
                 candidates.push(normalized);

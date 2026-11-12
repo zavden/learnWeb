@@ -46,7 +46,7 @@
 import './style.css';
 import { Sidebar } from './components/Sidebar.ts';
 import { TheoryViewer } from './components/TheoryViewer.ts';
-import { Editor } from './components/Editor.ts';
+import { Editor, type EditorDocument, type EditorWorkspaceSnapshot } from './components/Editor.ts';
 import { ExercisePanel, type ExercisePresentation } from './components/ExercisePanel.ts';
 import { Preview } from './components/Preview.ts';
 import { CreateDialog } from './components/CreateDialog.ts';
@@ -76,17 +76,7 @@ import {
 } from './utils/api.ts';
 import type { CreateItemType } from './types/api.ts';
 import type { Diagnostic } from './types/diagnostics.ts';
-import type { ExampleDocument } from './types/document.ts';
 import type { FavoriteEntry, MaterialTopic, PendingEntry } from './types/material.ts';
-import type { TheoryDocument } from './types/theory.ts';
-
-// TODO(ts-migration): import the named type of the editor snapshot (the result of
-// `Editor.captureWorkspaceSnapshot()`) from its owner once it is exported.
-/** Everything the Editor needs to come back to the example it was showing: document, editor states, dirty flag. */
-type WorkspaceSnapshot = ReturnType<Editor['captureWorkspaceSnapshot']>;
-
-/** The document that travels from the Editor to the Preview: an example, or `main.md` while theory is edited. */
-type EditorDocument = ExampleDocument | TheoryDocument;
 
 /** How the preview iframe is sized: filling its column ('full') or at a fixed width ('custom'). */
 type PreviewWidthMode = 'full' | 'custom';
@@ -117,7 +107,7 @@ interface NavigationOptions extends PersistOptions {
  */
 interface TheoryReturnState {
     mode: 'editor' | 'gallery';
-    snapshot?: WorkspaceSnapshot;
+    snapshot?: EditorWorkspaceSnapshot;
 }
 
 /**
