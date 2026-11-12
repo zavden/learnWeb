@@ -1,9 +1,43 @@
+// Bridge between Vim registers and the system clipboard, for the editor's "system clipboard" toggle.
+//
+// While enabled: every write to Vim's unnamed register (yank, delete, change…) is copied to the `+`
+// register and written to the system clipboard; reading a register with no (or an invalid) name returns
+// `+`, so a plain `p` pastes it; and `syncSystemClipboardRegister()` (called when the user turns the
+// toggle on) loads the system clipboard into `+` and the unnamed register. While disabled, Vim registers
+// stay in-app.
+//
+// How: `installRegisterControllerBridge()` monkey-patches methods of the single, global Vim register
+// controller of @replit/codemirror-vim (once per page). `installSystemClipboardBridge()` keeps references
+// to the native `navigator.clipboard.readText/writeText` but never replaces them, so copy buttons and
+// other app code keep using the real API. Clipboard failures (no permission, no focus) are swallowed and
+// the last known text is kept in `shadowText`.
+//
+// Called through src/editor/vimSupport.ts by src/components/Editor.ts. All state is module-level and
+// shared by every editor view.
+
 import { Vim } from '@replit/codemirror-vim';
+
+/** Vim's register controller (one per page, shared by every Vim editor). */
+type VimRegisterController = ReturnType<typeof Vim.getRegisterController>;
+
+/** One Vim register (named, unnamed or `+`). */
+type VimRegister = ReturnType<VimRegisterController['getRegister']>;
+
+interface ClipboardBridgeState {
+    /** The user's toggle; when false the bridge leaves the system clipboard alone. */
+    enabled: boolean;
+    originalReadText: (() => Promise<string>) | null;
+    originalWriteText: ((data: string) => Promise<void>) | null;
+    /** The clipboard object the originals were taken from (to detect a replaced `navigator.clipboard`). */
+    patchedClipboard: Clipboard | null;
+    /** Last text seen in or written to the clipboard by the bridge; used when the real clipboard fails. */
+    shadowText: string;
+}
 
 let clipboardBridgeInstalled = false;
 let registerControllerBridgeInstalled = false;
 
-const clipboardBridgeState = {
+const clipboardBridgeState: ClipboardBridgeState = {
     enabled: true,
     originalReadText: null,
     originalWriteText: null,
@@ -11,11 +45,13 @@ const clipboardBridgeState = {
     shadowText: '',
 };
 
-export function normalizeClipboardText(value) {
+/** Any value as clipboard text: strings unchanged, `null`/`undefined` as `''`, anything else through `String()`. */
+export function normalizeClipboardText(value: unknown): string {
     return typeof value === 'string' ? value : String(value ?? '');
 }
 
-function getClipboardObject() {
+// navigator.clipboard when it exists with both readText and writeText (secure contexts only), else null.
+function getClipboardObject(): Clipboard | null {
     if (typeof navigator === 'undefined' || !navigator?.clipboard) {
         return null;
     }
@@ -28,11 +64,12 @@ function getClipboardObject() {
     return clipboard;
 }
 
-export function isSystemClipboardApiAvailable() {
+/** Whether the async clipboard API can be used here (it needs a secure context such as localhost). */
+export function isSystemClipboardApiAvailable(): boolean {
     return Boolean(getClipboardObject());
 }
 
-async function writeSystemClipboard(text) {
+async function writeSystemClipboard(text: string): Promise<void> {
     clipboardBridgeState.shadowText = normalizeClipboardText(text);
 
     if (!clipboardBridgeState.enabled || typeof clipboardBridgeState.originalWriteText !== 'function') {
@@ -46,7 +83,8 @@ async function writeSystemClipboard(text) {
     }
 }
 
-async function readSystemClipboardSnapshot() {
+// The clipboard text; `ok: false` (with the shadow text) when disabled, not installed or the read failed.
+async function readSystemClipboardSnapshot(): Promise<{ ok: boolean; text: string }> {
     if (!clipboardBridgeState.enabled || typeof clipboardBridgeState.originalReadText !== 'function') {
         return {
             ok: false,
@@ -69,7 +107,8 @@ async function readSystemClipboardSnapshot() {
     }
 }
 
-function syncPlusRegister(controller, text, linewise = false, blockwise = false) {
+// Puts `text` into the `+` and unnamed registers (through their possibly patched setText).
+function syncPlusRegister(controller: VimRegisterController, text: string, linewise: boolean = false, blockwise: boolean = false): void {
     if (!controller || typeof controller.getRegister !== 'function') {
         return;
     }
@@ -87,7 +126,11 @@ function syncPlusRegister(controller, text, linewise = false, blockwise = false)
     clipboardBridgeState.shadowText = normalizedText;
 }
 
-export function installRegisterControllerBridge() {
+/**
+ * Patches the global Vim register controller (idempotent; a no-op if the Vim API is missing). Runs at
+ * every Vim extension creation and before any clipboard sync.
+ */
+export function installRegisterControllerBridge(): void {
     if (registerControllerBridgeInstalled || typeof Vim.getRegisterController !== 'function') {
         return;
     }
@@ -102,7 +145,7 @@ export function installRegisterControllerBridge() {
     const originalUnnamedSetText = controller.unnamedRegister?.setText?.bind(controller.unnamedRegister);
 
     if (typeof originalUnnamedSetText === 'function') {
-        controller.unnamedRegister.setText = function patchedUnnamedSetText(text, linewise, blockwise) {
+        controller.unnamedRegister.setText = function patchedUnnamedSetText(this: VimRegister, text?: string, linewise?: boolean, blockwise?: boolean): void {
             originalUnnamedSetText(text, linewise, blockwise);
 
             const normalizedText = normalizeClipboardText(text);
@@ -121,7 +164,7 @@ export function installRegisterControllerBridge() {
         };
     }
 
-    controller.pushText = function patchedPushText(registerName, operator, text, linewise, blockwise) {
+    controller.pushText = function patchedPushText(registerName: string | null | undefined, operator: string, text: string, linewise?: boolean, blockwise?: boolean): void {
         const result = originalPushText(registerName, operator, text, linewise, blockwise);
         const normalizedRegister = typeof registerName === 'string' ? registerName.toLowerCase() : '';
 
@@ -137,7 +180,7 @@ export function installRegisterControllerBridge() {
         return result;
     };
 
-    controller.getRegister = function patchedGetRegister(name) {
+    controller.getRegister = function patchedGetRegister(this: VimRegisterController, name?: string): VimRegister {
         if (clipboardBridgeState.enabled && !this.isValidRegister(name)) {
             return originalGetRegister('+');
         }
@@ -148,7 +191,11 @@ export function installRegisterControllerBridge() {
     registerControllerBridgeInstalled = true;
 }
 
-export function installSystemClipboardBridge() {
+/**
+ * Also installs the register bridge, then captures the native clipboard methods. Returns whether the
+ * clipboard API is available (and therefore whether the bridge can reach the system clipboard).
+ */
+export function installSystemClipboardBridge(): boolean {
     installRegisterControllerBridge();
 
     const clipboard = getClipboardObject();
@@ -171,11 +218,16 @@ export function installSystemClipboardBridge() {
     return true;
 }
 
-export function setSystemClipboardEnabled(enabled) {
+/** Turns the bridge on or off (the editor's toggle). Takes effect immediately for every editor. */
+export function setSystemClipboardEnabled(enabled: boolean): void {
     clipboardBridgeState.enabled = Boolean(enabled);
 }
 
-export async function syncSystemClipboardRegister() {
+/**
+ * Copies the system clipboard into Vim's `+` and unnamed registers so the next `p` pastes it. Resolves to
+ * false when disabled, unavailable or when reading failed (the registers are then left alone).
+ */
+export async function syncSystemClipboardRegister(): Promise<boolean> {
     installRegisterControllerBridge();
 
     if (!clipboardBridgeState.enabled || typeof Vim.getRegisterController !== 'function') {

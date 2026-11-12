@@ -1,5 +1,24 @@
-import { Vim, getCM, vim } from '@replit/codemirror-vim';
+// Vim mode for the editor, on top of @replit/codemirror-vim (6.3.0, see node_modules/@replit/codemirror-vim/package.json).
+//
+// - `createVimExtension()` is the CodeMirror extension (plus one-time setup: `:w` / `:update` ex commands
+//   and the clipboard register bridge).
+// - `bindVimView(view, bindings)` connects one editor view to the app: mode label updates, `:w`, and the
+//   configurable app shortcuts (Shift+letter, Space / Space Space leader sequences, see
+//   src/editor/vimShortcutConfig.ts). It listens to `keydown` on the view DOM in the CAPTURE phase so it
+//   runs before Vim's own key handling, and returns a cleanup function.
+// - Pure helpers (mode labels, pending-input detection, panel focus keys) are exported for tests.
+//
+// Used by src/components/Editor.ts (one `bindVimView` per editor view; `bindings` are its callbacks).
+// This module also re-exports the shortcut-config and clipboard helpers so the editor has one import.
+//
+// Gotcha: while Vim is collecting a multi-key command (`f`, `r`, an operator, a count…) the next key
+// belongs to Vim, so app shortcuts are skipped (`isVimAwaitingInput`).
+
+import type { EditorView } from '@codemirror/view';
+import type { EditorState, Extension } from '@codemirror/state';
+import { type CodeMirror, type CodeMirrorV, type vimState, Vim, getCM, vim } from '@replit/codemirror-vim';
 import {
+    type VimShortcutConfig,
     getDefaultVimShortcutConfig,
     getVimShortcutSections,
     resolveVimLeaderAction,
@@ -8,6 +27,16 @@ import {
 import {
     installRegisterControllerBridge,
 } from './vim/clipboardBridge.ts';
+
+export type {
+    LoadedVimShortcutConfig,
+    VimLeaderAction,
+    VimShiftAction,
+    VimShortcutConfig,
+    VimShortcutHelpItem,
+    VimShortcutHelpSection,
+    VimShortcutLayout,
+} from './vimShortcutConfig.ts';
 
 export {
     getDefaultVimShortcutConfig,
@@ -24,10 +53,42 @@ export {
     syncSystemClipboardRegister,
 } from './vim/clipboardBridge.ts';
 
-const vimWriteHandlers = new WeakMap();
+/** The mode name shown in the editor toolbar (and set as `data-vim-mode` on the editor element). */
+export type VimModeLabel = 'NORMAL' | 'INSERT' | 'REPLACE' | 'VISUAL' | 'VISUAL LINE' | 'VISUAL BLOCK';
+
+/** The fields of Vim's per-editor state that decide the mode label (all optional so tests can pass snapshots). */
+export type VimModeSnapshot = Partial<Pick<vimState, 'insertMode' | 'visualBlock' | 'visualLine' | 'visualMode' | 'mode'>>;
+
+/**
+ * The payload of the `vim-mode-change` event of @replit/codemirror-vim: `mode` is `normal`, `insert`,
+ * `replace` or `visual`; `subMode` (visual only) is `linewise`, `blockwise` or `''`.
+ */
+export interface VimModeChangeEvent {
+    mode?: string;
+    subMode?: string;
+}
+
+/**
+ * The fields of Vim's per-editor state that tell whether a multi-key command is in progress. `keyBuffer`
+ * also accepts a string because older versions of the library kept the pending keys as one.
+ */
+export interface VimInputSnapshot {
+    insertMode?: boolean;
+    inputState?: {
+        keyBuffer?: readonly string[] | string | null;
+        operator?: string | null;
+    } | null;
+}
+
+/** The direction of a panel-focus shortcut (Panels layout). */
+export type PanelFocusDirection = 'up' | 'down';
+
+// `:w` / `:update` handlers by Vim adapter (one per bound view).
+const vimWriteHandlers = new WeakMap<CodeMirror, () => void>();
 let exCommandsRegistered = false;
 
-function ensureVimExCommandsRegistered() {
+// Ex commands are global to the Vim library, so they are registered once and dispatch per editor.
+function ensureVimExCommandsRegistered(): void {
     if (exCommandsRegistered) return;
 
     Vim.defineEx('write', 'w', (cm) => {
@@ -47,7 +108,8 @@ function ensureVimExCommandsRegistered() {
     exCommandsRegistered = true;
 }
 
-export function getVimModeLabelFromState(vimState = null, overwrite = false) {
+/** The mode label for a Vim state snapshot; `overwrite` (CodeMirror's overwrite flag) turns INSERT into REPLACE. */
+export function getVimModeLabelFromState(vimState: VimModeSnapshot | null | undefined = null, overwrite: boolean = false): VimModeLabel {
     if (!vimState) return 'NORMAL';
     if (vimState.insertMode && overwrite) return 'REPLACE';
     if (vimState.insertMode) return 'INSERT';
@@ -68,7 +130,8 @@ export function getVimModeLabelFromState(vimState = null, overwrite = false) {
     }
 }
 
-export function getVimModeLabelFromEvent(event = {}) {
+/** The mode label for a `vim-mode-change` event. */
+export function getVimModeLabelFromEvent(event: VimModeChangeEvent | null | undefined = {}): VimModeLabel {
     const mode = String(event?.mode || 'normal').trim().toLowerCase();
     const subMode = String(event?.subMode || '').trim().toLowerCase();
 
@@ -83,10 +146,12 @@ export function getVimModeLabelFromEvent(event = {}) {
     return 'NORMAL';
 }
 
-// True while Vim is collecting a multi-key command (e.g. `f`, `r`, `t`, `m`,
-// a register prefix, a count, or an operator waiting for its motion). In that
-// state the next key belongs to Vim, so app shortcuts must not intercept it.
-export function isVimAwaitingInput(vimState = null) {
+/**
+ * True while Vim is collecting a multi-key command (e.g. `f`, `r`, `t`, `m`,
+ * a register prefix, a count, or an operator waiting for its motion). In that
+ * state the next key belongs to Vim, so app shortcuts must not intercept it.
+ */
+export function isVimAwaitingInput(vimState: VimInputSnapshot | null | undefined = null): boolean {
     if (!vimState || vimState.insertMode) return false;
 
     const inputState = vimState.inputState || null;
@@ -100,8 +165,9 @@ export function isVimAwaitingInput(vimState = null) {
     return hasBufferedKeys || Boolean(inputState.operator);
 }
 
-export function resolvePanelFocusDirection(key = '', config = null) {
-    const panelShift = config?.panels?.shift || {};
+/** `down` / `up` when `key` is the configured `panels.shift.movePanelDown` / `movePanelUp` token, else `''`. */
+export function resolvePanelFocusDirection(key: string = '', config: Readonly<VimShortcutConfig> | null | undefined = null): PanelFocusDirection | '' {
+    const panelShift: Partial<VimShortcutConfig['panels']['shift']> = config?.panels?.shift || {};
     const normalizedKey = String(key || '');
     if (!normalizedKey) return '';
     if (normalizedKey === String(panelShift.movePanelDown || '')) return 'down';
@@ -109,13 +175,65 @@ export function resolvePanelFocusDirection(key = '', config = null) {
     return '';
 }
 
-export function createVimExtension() {
+/** The Vim keymap extension for a new editor state (registers the ex commands and register bridge on first use). */
+export function createVimExtension(): Extension {
     ensureVimExCommandsRegistered();
     installRegisterControllerBridge();
     return vim();
 }
 
-export function bindVimView(view, {
+/**
+ * What `bindVimView` needs from the editor. Every member is optional; a missing callback means the
+ * shortcut does nothing and the key falls through to Vim (except leader sequences, which are always
+ * consumed once matched).
+ */
+export interface VimViewBindings {
+    /** Whether the editor shows the Panels layout (picks the `panels` shortcuts instead of `tabs`). */
+    isPanelsLayout?: () => boolean;
+    /** Whether the open document is a shader (enables the `shaders` shortcuts). */
+    isShaderDocument?: () => boolean;
+    /** The current shortcut config; a falsy result means the defaults. Read at every key press. */
+    getShortcutConfig?: () => Readonly<VimShortcutConfig> | null | undefined;
+    /** Called with the initial label at bind time and on every Vim mode change. */
+    onModeChange?: (modeLabel: VimModeLabel) => void;
+    /** The `quickSave` shortcut. Return `false` to let the key reach Vim; anything else consumes it. */
+    onQuickSave?: () => boolean | void;
+    /** The `:w` / `:update` ex commands of this view. */
+    onWrite?: () => void;
+    onToggleAutoRender?: () => void;
+    onPreviousTab?: () => void;
+    onNextTab?: () => void;
+    onOpenFilePicker?: () => void;
+    onToggleSidebar?: () => void;
+    onCenterWorkspace?: () => void;
+    onToggleActivePanelCollapse?: () => void;
+    onToggleActivePanelMaximize?: () => void;
+    onAutoFitPanels?: () => void;
+    onNormalizePanels?: () => void;
+    /** The `toggleConsole` shortcut. Return a truthy value when it acted; otherwise the key reaches Vim. */
+    onToggleConsole?: () => unknown;
+    onToggleShaderPause?: () => void;
+    onOpenShaderControls?: () => void;
+    onOpenShaderUniforms?: () => void;
+    onOpenShaderTextures?: () => void;
+    onOpenShaderPanel?: () => void;
+    onResetShaderRuntime?: () => void;
+    onOpenShortcutHelp?: () => void;
+    onToggleEditorLayout?: () => void;
+    onTogglePreviewHeader?: () => void;
+    /** Panels layout only: the configured `movePanelDown` / `movePanelUp` key was pressed (always consumed). */
+    onMovePanelFocus?: (direction: PanelFocusDirection) => void;
+}
+
+/** Removes everything `bindVimView` attached to its view. Call it before destroying the view. */
+export type VimViewCleanup = () => void;
+
+/**
+ * Connects an editor view that has the Vim extension to the app (see {@link VimViewBindings}). Returns a
+ * no-op cleanup when the view has no Vim adapter. In normal mode a plain Space never reaches Vim: it
+ * starts (or advances) a leader sequence, which times out after 900 ms.
+ */
+export function bindVimView(view: EditorView, {
     isPanelsLayout,
     isShaderDocument,
     getShortcutConfig,
@@ -143,7 +261,7 @@ export function bindVimView(view, {
     onToggleEditorLayout,
     onTogglePreviewHeader,
     onMovePanelFocus,
-} = {}) {
+}: VimViewBindings = {}): VimViewCleanup {
     ensureVimExCommandsRegistered();
 
     const cm = getCM(view);
@@ -151,10 +269,11 @@ export function bindVimView(view, {
         return () => {};
     }
 
+    // 0 = idle, 1 = after Space, 2 = after Space, Space.
     let leaderStage = 0;
-    let leaderTimeoutId = null;
+    let leaderTimeoutId: number | null = null;
 
-    const clearLeaderPending = () => {
+    const clearLeaderPending = (): void => {
         leaderStage = 0;
         if (leaderTimeoutId) {
             window.clearTimeout(leaderTimeoutId);
@@ -162,7 +281,7 @@ export function bindVimView(view, {
         }
     };
 
-    const armLeaderPending = (stage = 1) => {
+    const armLeaderPending = (stage: number = 1): void => {
         clearLeaderPending();
         leaderStage = stage;
         leaderTimeoutId = window.setTimeout(() => {
@@ -174,7 +293,7 @@ export function bindVimView(view, {
         vimWriteHandlers.set(cm, onWrite);
     }
 
-    const handleModeChange = (event) => {
+    const handleModeChange = (event: VimModeChangeEvent): void => {
         if (typeof onModeChange === 'function') {
             onModeChange(getVimModeLabelFromEvent(event));
         }
@@ -185,10 +304,13 @@ export function bindVimView(view, {
     }
 
     if (typeof onModeChange === 'function') {
-        onModeChange(getVimModeLabelFromState(cm.state?.vim, view.state.overwrite));
+        // EditorState has no `overwrite` property, so this is always undefined (the label starts as
+        // NORMAL/INSERT, never REPLACE); kept as it was. Vim's own flag is `cm.state.overwrite`.
+        onModeChange(getVimModeLabelFromState(cm.state?.vim, (view.state as EditorState & { overwrite?: boolean }).overwrite));
     }
 
-    const handleKeydown = (event) => {
+    // Shift+letter shortcuts (and panel focus keys).
+    const handleKeydown = (event: KeyboardEvent): void => {
         if (leaderStage !== 0) return;
         if (cm.state?.vim?.insertMode) return;
         if (isVimAwaitingInput(cm.state?.vim)) return;
@@ -284,7 +406,8 @@ export function bindVimView(view, {
         }
     };
 
-    const handleLeaderKeydown = (event) => {
+    // Space / Space, Space leader sequences.
+    const handleLeaderKeydown = (event: KeyboardEvent): void => {
         if (cm.state?.vim?.insertMode) {
             clearLeaderPending();
             return;
@@ -341,7 +464,8 @@ export function bindVimView(view, {
                 onToggleSidebar?.();
                 return;
             case 'clearSearchHighlight':
-                Vim.handleEx(cm, 'noh');
+                // getCM() found the Vim adapter, so the vim() extension is active and its state exists.
+                Vim.handleEx(cm as CodeMirrorV, 'noh');
                 return;
             case 'centerWorkspace':
                 onCenterWorkspace?.();

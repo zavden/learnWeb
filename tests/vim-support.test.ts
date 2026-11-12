@@ -140,13 +140,13 @@ shaders:
 
 test('clipboard bridge syncs Vim yanks without hijacking navigator.clipboard', async () => {
     const originalNavigator = globalThis.navigator;
-    const writes = [];
+    const writes: string[] = [];
     let currentClipboardText = 'system-value';
     const clipboard = {
         async readText() {
             return currentClipboardText;
         },
-        async writeText(value) {
+        async writeText(value: string) {
             writes.push(value);
             currentClipboardText = value;
         },

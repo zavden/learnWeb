@@ -1,12 +1,32 @@
+// The configurable app shortcuts of Vim mode, read from `vim-shortcuts.yaml` in the repository root.
+//
+// Shortcuts live in CONTEXTS (`global` always, `tabs` / `panels` for the editor layout, `shaders` for
+// shader documents) and BUCKETS: `shift` = Shift+letter in normal mode, `leader` = Space then a key,
+// `leader2` = Space, Space then a key. `SHORTCUT_SCHEMA` is the single list of which actions each
+// context/bucket accepts; every type below is derived from it.
+//
+// Flow: server.ts reads the YAML file and calls `loadVimShortcutConfig` (so this module runs under
+// plain Node and must not touch the DOM), `GET /api/editor/vim-shortcuts` sends the result, the editor
+// stores the config and src/editor/vimSupport.ts resolves key presses against it with
+// `resolveVimShiftAction` / `resolveVimLeaderAction`. The shortcut help dialog
+// (src/components/editor/metadataDialogs.ts) lists it with `getVimShortcutSections`.
+//
+// The file is user-edited: its parsed form (`YamlMapping`) is untrusted. `normalizeVimShortcutConfig`
+// checks every key against the schema, normalizes every token, merges the result over the defaults and
+// rejects duplicate keys; only then is it a `VimShortcutConfig`. Any error rejects the whole file.
+
 import { parseSimpleYamlObject } from './vim/yamlParser.ts';
+import { errorMessage } from '../utils/errors.ts';
 
 export { parseSimpleYamlObject } from './vim/yamlParser.ts';
 
-function deepClone(value) {
-    return JSON.parse(JSON.stringify(value));
+// JSON round trip: a config holds only plain objects and strings.
+function deepClone<T>(value: T): T {
+    return JSON.parse(JSON.stringify(value)) as T;
 }
 
-export const DEFAULT_VIM_SHORTCUT_CONFIG = Object.freeze({
+/** The built-in shortcuts, used when `vim-shortcuts.yaml` is missing, empty or invalid. Frozen at the top level only. */
+export const DEFAULT_VIM_SHORTCUT_CONFIG: Readonly<VimShortcutConfig> = Object.freeze({
     global: {
         shift: {
             quickSave: 'S',
@@ -57,25 +77,70 @@ export const DEFAULT_VIM_SHORTCUT_CONFIG = Object.freeze({
     },
 });
 
+// The actions each context/bucket accepts: the source of truth for every shortcut type in this module.
 const SHORTCUT_SCHEMA = Object.freeze({
     global: Object.freeze({
-        shift: Object.freeze(['quickSave', 'toggleConsole', 'togglePreviewHeader']),
-        leader: Object.freeze(['toggleSidebar', 'centerWorkspace', 'clearSearchHighlight']),
-        leader2: Object.freeze(['openShortcutHelp', 'toggleEditorLayout']),
+        shift: Object.freeze(['quickSave', 'toggleConsole', 'togglePreviewHeader'] as const),
+        leader: Object.freeze(['toggleSidebar', 'centerWorkspace', 'clearSearchHighlight'] as const),
+        leader2: Object.freeze(['openShortcutHelp', 'toggleEditorLayout'] as const),
     }),
     tabs: Object.freeze({
-        shift: Object.freeze(['previousTab', 'nextTab', 'openFilePicker', 'toggleAutoRender']),
+        shift: Object.freeze(['previousTab', 'nextTab', 'openFilePicker', 'toggleAutoRender'] as const),
     }),
     panels: Object.freeze({
-        shift: Object.freeze(['openFilePicker', 'movePanelDown', 'movePanelUp', 'toggleAutoRender']),
-        leader: Object.freeze(['toggleActivePanelCollapse', 'toggleActivePanelMaximize', 'autoFitPanels', 'normalizePanels']),
+        shift: Object.freeze(['openFilePicker', 'movePanelDown', 'movePanelUp', 'toggleAutoRender'] as const),
+        leader: Object.freeze(['toggleActivePanelCollapse', 'toggleActivePanelMaximize', 'autoFitPanels', 'normalizePanels'] as const),
     }),
     shaders: Object.freeze({
-        leader2: Object.freeze(['toggleShaderPause', 'openShaderControls', 'openShaderUniforms', 'openShaderTextures', 'openShaderPanel', 'resetShaderRuntime']),
+        leader2: Object.freeze(['toggleShaderPause', 'openShaderControls', 'openShaderUniforms', 'openShaderTextures', 'openShaderPanel', 'resetShaderRuntime'] as const),
     }),
 });
 
-const ACTION_DESCRIPTIONS = Object.freeze({
+type ShortcutSchema = typeof SHORTCUT_SCHEMA;
+
+/**
+ * Where a shortcut applies: `global` always, `tabs` / `panels` only in that editor layout, `shaders` only
+ * while a shader document is open.
+ */
+export type VimShortcutContext = keyof ShortcutSchema;
+
+/** How a shortcut is typed: `shift` = Shift+letter, `leader` = Space then the key, `leader2` = Space, Space then the key. */
+export type VimShortcutBucket = { [C in VimShortcutContext]: keyof ShortcutSchema[C] }[VimShortcutContext];
+
+// The actions a context accepts in bucket(s) B (never when the context has no such bucket).
+type SchemaActions<C extends VimShortcutContext, B> = B extends keyof ShortcutSchema[C]
+    ? ShortcutSchema[C][B] extends readonly (infer A extends string)[] ? A : never
+    : never;
+
+type ActionsInBuckets<B extends VimShortcutBucket> = { [C in VimShortcutContext]: SchemaActions<C, B> }[VimShortcutContext];
+
+/** Every configurable action name. */
+export type VimShortcutAction = ActionsInBuckets<VimShortcutBucket>;
+
+/** The actions bound to Shift+letter (in some context). */
+export type VimShiftAction = ActionsInBuckets<'shift'>;
+
+/** The actions bound after Space or Space, Space (in some context). */
+export type VimLeaderAction = ActionsInBuckets<'leader' | 'leader2'>;
+
+/**
+ * A complete, validated shortcut config: `config[context][bucket][action]` is the key token, for every
+ * action of the schema. `shift` tokens are one uppercase letter; the others are one character.
+ */
+export type VimShortcutConfig = {
+    -readonly [C in VimShortcutContext]: {
+        -readonly [B in keyof ShortcutSchema[C]]: { [A in SchemaActions<C, B>]: string };
+    };
+};
+
+/** The editor layout, which picks the `tabs` or `panels` context. */
+export type VimShortcutLayout = 'tabs' | 'panels';
+
+// The parsed YAML after `validateRawShape`: every key is a known context / bucket / action, but the
+// tokens are not normalized yet and any subset of actions may be present.
+type ShortcutOverrides = Record<string, Record<string, Record<string, unknown>>>;
+
+const ACTION_DESCRIPTIONS: Readonly<Record<VimShortcutAction, string>> = Object.freeze({
     quickSave: 'Save the current document.',
     toggleConsole: 'Toggle the preview console in web examples.',
     togglePreviewHeader: 'Show or hide the top preview toolbar.',
@@ -102,11 +167,25 @@ const ACTION_DESCRIPTIONS = Object.freeze({
     resetShaderRuntime: 'Reset the shader runtime.',
 });
 
-const SECTION_DEFINITIONS = Object.freeze({
+// One (context, bucket, action) triple of the schema.
+type ShortcutRef = {
+    [C in VimShortcutContext]: {
+        [B in keyof ShortcutSchema[C]]: { context: C; bucket: B; action: SchemaActions<C, B> };
+    }[keyof ShortcutSchema[C]];
+}[VimShortcutContext];
+
+interface ShortcutSectionDefinition {
+    title: string;
+    note: string;
+    items: readonly ShortcutRef[];
+}
+
+// The sections of the shortcut help dialog, in display order within each section.
+const SECTION_DEFINITIONS: Readonly<Record<'general' | 'tabs' | 'panels' | 'shaders', ShortcutSectionDefinition>> = Object.freeze({
     general: Object.freeze({
         title: 'General',
         note: 'Always available while Vim is enabled.',
-        items: Object.freeze([
+        items: Object.freeze<readonly ShortcutRef[]>([
             { context: 'global', bucket: 'shift', action: 'quickSave' },
             { context: 'global', bucket: 'shift', action: 'toggleConsole' },
             { context: 'global', bucket: 'shift', action: 'togglePreviewHeader' },
@@ -120,7 +199,7 @@ const SECTION_DEFINITIONS = Object.freeze({
     tabs: Object.freeze({
         title: 'Tabs',
         note: 'Current layout: Tabs.',
-        items: Object.freeze([
+        items: Object.freeze<readonly ShortcutRef[]>([
             { context: 'tabs', bucket: 'shift', action: 'previousTab' },
             { context: 'tabs', bucket: 'shift', action: 'nextTab' },
             { context: 'tabs', bucket: 'shift', action: 'openFilePicker' },
@@ -130,7 +209,7 @@ const SECTION_DEFINITIONS = Object.freeze({
     panels: Object.freeze({
         title: 'Panels',
         note: 'Current layout: Panels / cascada.',
-        items: Object.freeze([
+        items: Object.freeze<readonly ShortcutRef[]>([
             { context: 'panels', bucket: 'shift', action: 'openFilePicker' },
             { context: 'panels', bucket: 'shift', action: 'movePanelDown' },
             { context: 'panels', bucket: 'shift', action: 'movePanelUp' },
@@ -144,7 +223,7 @@ const SECTION_DEFINITIONS = Object.freeze({
     shaders: Object.freeze({
         title: 'Shaders',
         note: 'Available only for shader documents.',
-        items: Object.freeze([
+        items: Object.freeze<readonly ShortcutRef[]>([
             { context: 'shaders', bucket: 'leader2', action: 'toggleShaderPause' },
             { context: 'shaders', bucket: 'leader2', action: 'openShaderControls' },
             { context: 'shaders', bucket: 'leader2', action: 'openShaderUniforms' },
@@ -155,7 +234,8 @@ const SECTION_DEFINITIONS = Object.freeze({
     }),
 });
 
-function normalizeShortcutToken(value, bucket) {
+// A token is one character; `shift` tokens must be letters and are uppercased. Throws otherwise.
+function normalizeShortcutToken(value: unknown, bucket: string): string {
     const raw = String(value ?? '').trim();
     if (raw.length !== 1) {
         throw new Error(`Shortcut token "${raw}" must be a single character`);
@@ -172,29 +252,32 @@ function normalizeShortcutToken(value, bucket) {
     return raw;
 }
 
-function validateRawShape(rawConfig) {
+// Checks every key of the parsed file against the schema and every token's format. Throws on the first problem.
+function validateRawShape(rawConfig: unknown): asserts rawConfig is ShortcutOverrides {
     if (!rawConfig || typeof rawConfig !== 'object' || Array.isArray(rawConfig)) {
         throw new Error('Shortcut config must be a YAML mapping');
     }
 
-    Object.entries(rawConfig).forEach(([context, sectionValue]) => {
+    Object.entries(rawConfig).forEach(([context, sectionValue]: [string, unknown]) => {
         if (!Object.prototype.hasOwnProperty.call(SHORTCUT_SCHEMA, context)) {
             throw new Error(`Unknown shortcut context "${context}"`);
         }
         if (!sectionValue || typeof sectionValue !== 'object' || Array.isArray(sectionValue)) {
             throw new Error(`Context "${context}" must be a mapping`);
         }
+        // `context` is a key of the schema (checked just above).
+        const contextSchema: Readonly<Record<string, readonly string[]>> = SHORTCUT_SCHEMA[context as VimShortcutContext];
 
-        Object.entries(sectionValue).forEach(([bucket, bucketValue]) => {
-            if (!Object.prototype.hasOwnProperty.call(SHORTCUT_SCHEMA[context], bucket)) {
+        Object.entries(sectionValue).forEach(([bucket, bucketValue]: [string, unknown]) => {
+            if (!Object.prototype.hasOwnProperty.call(contextSchema, bucket)) {
                 throw new Error(`Context "${context}" does not support bucket "${bucket}"`);
             }
             if (!bucketValue || typeof bucketValue !== 'object' || Array.isArray(bucketValue)) {
                 throw new Error(`Bucket "${context}.${bucket}" must be a mapping`);
             }
 
-            Object.entries(bucketValue).forEach(([action, token]) => {
-                if (!SHORTCUT_SCHEMA[context][bucket].includes(action)) {
+            Object.entries(bucketValue).forEach(([action, token]: [string, unknown]) => {
+                if (!contextSchema[bucket].includes(action)) {
                     throw new Error(`Action "${action}" is not allowed in "${context}.${bucket}"`);
                 }
                 normalizeShortcutToken(token, bucket);
@@ -203,13 +286,16 @@ function validateRawShape(rawConfig) {
     });
 }
 
-function mergeShortcutConfig(baseConfig, rawConfig) {
-    const nextConfig = deepClone(baseConfig);
+// A copy of `baseConfig` with every override applied (tokens normalized).
+function mergeShortcutConfig(baseConfig: Readonly<VimShortcutConfig>, rawConfig: ShortcutOverrides): VimShortcutConfig {
+    const nextConfig = deepClone<VimShortcutConfig>(baseConfig);
+    // String-keyed view of the same object: the override keys were checked against the schema.
+    const target: Record<string, Record<string, Record<string, string>>> = nextConfig;
 
     Object.entries(rawConfig).forEach(([context, sectionValue]) => {
         Object.entries(sectionValue).forEach(([bucket, bucketValue]) => {
             Object.entries(bucketValue).forEach(([action, token]) => {
-                nextConfig[context][bucket][action] = normalizeShortcutToken(token, bucket);
+                target[context][bucket][action] = normalizeShortcutToken(token, bucket);
             });
         });
     });
@@ -217,8 +303,9 @@ function mergeShortcutConfig(baseConfig, rawConfig) {
     return nextConfig;
 }
 
-function ensureUniqueTokens(entries, label) {
-    const seen = new Map();
+// Throws when two actions that can fire in the same situation share a token.
+function ensureUniqueTokens(entries: { action: string; token: string }[], label: string): void {
+    const seen = new Map<string, string>();
     entries.forEach(({ token, action }) => {
         const normalizedToken = String(token);
         if (seen.has(normalizedToken)) {
@@ -228,7 +315,8 @@ function ensureUniqueTokens(entries, label) {
     });
 }
 
-function validateEffectiveConfig(config) {
+// The groups of buckets that are active at the same time must not reuse a token.
+function validateEffectiveConfig(config: VimShortcutConfig): void {
     ensureUniqueTokens(
         [
             ...Object.entries(config.global.shift).map(([action, token]) => ({ action, token })),
@@ -267,19 +355,37 @@ function validateEffectiveConfig(config) {
     );
 }
 
-export function normalizeVimShortcutConfig(rawConfig) {
+/**
+ * Validates a parsed shortcut file and merges it over the defaults. `rawConfig` is untrusted (any value);
+ * throws an `Error` with a user-facing message on the first problem (unknown key, bad token, duplicate).
+ */
+export function normalizeVimShortcutConfig(rawConfig: unknown): VimShortcutConfig {
     validateRawShape(rawConfig);
     const merged = mergeShortcutConfig(DEFAULT_VIM_SHORTCUT_CONFIG, rawConfig);
     validateEffectiveConfig(merged);
     return merged;
 }
 
-export function parseVimShortcutConfigYaml(source = '') {
+/** Parses and validates `vim-shortcuts.yaml` text; throws like {@link normalizeVimShortcutConfig}. */
+export function parseVimShortcutConfigYaml(source: string = ''): VimShortcutConfig {
     const rawConfig = parseSimpleYamlObject(source);
     return normalizeVimShortcutConfig(rawConfig);
 }
 
-export function loadVimShortcutConfig(source = '') {
+/** The outcome of {@link loadVimShortcutConfig}; the API route sends it to the browser as JSON. */
+export interface LoadedVimShortcutConfig {
+    config: VimShortcutConfig;
+    /** `file` when the YAML was used; `default` when it was blank or rejected. */
+    source: 'default' | 'file';
+    /** Why the file was rejected (one message); empty when it was used or blank. */
+    warnings: string[];
+}
+
+/**
+ * Never throws: blank text gives the defaults, invalid text gives the defaults plus the error message in
+ * `warnings`. The config is always a fresh copy.
+ */
+export function loadVimShortcutConfig(source: string = ''): LoadedVimShortcutConfig {
     const text = String(source || '');
     if (!text.trim()) {
         return {
@@ -299,28 +405,45 @@ export function loadVimShortcutConfig(source = '') {
         return {
             config: deepClone(DEFAULT_VIM_SHORTCUT_CONFIG),
             source: 'default',
-            warnings: [error.message],
+            warnings: [errorMessage(error)],
         };
     }
 }
 
-export function getDefaultVimShortcutConfig() {
+/** A fresh, mutable copy of {@link DEFAULT_VIM_SHORTCUT_CONFIG}. */
+export function getDefaultVimShortcutConfig(): VimShortcutConfig {
     return deepClone(DEFAULT_VIM_SHORTCUT_CONFIG);
 }
 
-function resolveActionFromActionMap(actionMap = {}, key = '') {
+// The action whose token equals `key` (exact, case-sensitive), or null.
+function resolveActionFromActionMap<A extends string>(actionMap: { readonly [P in A]?: string } = {}, key: string = ''): A | null {
     const normalizedKey = String(key || '');
-    const match = Object.entries(actionMap).find(([, token]) => String(token) === normalizedKey);
+    // Object.entries() types keys as string; they are the action names of the map.
+    const match = (Object.entries(actionMap) as [A, string | undefined][]).find(([, token]) => String(token) === normalizedKey);
     return match ? match[0] : null;
 }
 
+/** Input of {@link resolveVimLeaderAction}. */
+export interface VimLeaderActionQuery {
+    /** How many Space presses came before `key`: 1 looks in `leader`, 2 in `leader2`, anything else matches nothing. */
+    stage?: number;
+    /** `KeyboardEvent.key` of the key after the Space(s). */
+    key?: string;
+    /** `panels` adds the `panels.leader` actions at stage 1. */
+    layoutMode?: VimShortcutLayout;
+    /** Adds the `shaders.leader2` actions at stage 2. */
+    shaderDocument?: boolean;
+    config?: Readonly<VimShortcutConfig>;
+}
+
+/** The leader action for a key press, or null. `global` bindings win over layout and shader ones. */
 export function resolveVimLeaderAction({
     stage = 0,
     key = '',
     layoutMode = 'tabs',
     shaderDocument = false,
     config = DEFAULT_VIM_SHORTCUT_CONFIG,
-} = {}) {
+}: VimLeaderActionQuery = {}): VimLeaderAction | null {
     if (stage === 1) {
         const action = resolveActionFromActionMap(config.global?.leader, key);
         if (action) return action;
@@ -342,11 +465,21 @@ export function resolveVimLeaderAction({
     return null;
 }
 
+/** Input of {@link resolveVimShiftAction}. */
+export interface VimShiftActionQuery {
+    /** `KeyboardEvent.key` of the Shift+letter press (an uppercase letter). */
+    key?: string;
+    /** Looks in `panels.shift` instead of `tabs.shift`. */
+    panelsLayout?: boolean;
+    config?: Readonly<VimShortcutConfig>;
+}
+
+/** The Shift+letter action for a key press, or null. Layout bindings win over `global` ones. */
 export function resolveVimShiftAction({
     key = '',
     panelsLayout = false,
     config = DEFAULT_VIM_SHORTCUT_CONFIG,
-} = {}) {
+}: VimShiftActionQuery = {}): VimShiftAction | null {
     const contextActions = panelsLayout
         ? config.panels?.shift
         : config.tabs?.shift;
@@ -357,7 +490,8 @@ export function resolveVimShiftAction({
     return resolveActionFromActionMap(config.global?.shift, key);
 }
 
-function formatShortcutLabel(bucket, token) {
+// The key as the help dialog shows it, e.g. `Shift+S`, `Space, e`, `Space, Space, n`.
+function formatShortcutLabel(bucket: VimShortcutBucket, token: string | undefined): string {
     if (!token) return '';
     if (bucket === 'shift') return `Shift+${String(token).toUpperCase()}`;
     if (bucket === 'leader') return `Space, ${token}`;
@@ -365,25 +499,56 @@ function formatShortcutLabel(bucket, token) {
     return String(token);
 }
 
-function buildSectionItems(definition, config) {
+// String-keyed read view of a config, for lookups by (context, bucket, action) names.
+type ShortcutTokenLookup = Readonly<Record<string, Readonly<Record<string, Readonly<Record<string, string | undefined>> | undefined>> | undefined>>;
+
+// The help rows of one section; actions without a token are left out.
+function buildSectionItems(definition: ShortcutSectionDefinition, config: Readonly<VimShortcutConfig> | null | undefined): VimShortcutHelpItem[] {
+    const lookup: ShortcutTokenLookup | null | undefined = config;
     return definition.items
         .map(({ context, bucket, action }) => {
-            const token = config?.[context]?.[bucket]?.[action];
+            const token = lookup?.[context]?.[bucket]?.[action];
             if (!token) return null;
             return {
                 key: formatShortcutLabel(bucket, token),
                 description: ACTION_DESCRIPTIONS[action] || action,
             };
         })
-        .filter(Boolean);
+        .filter((item): item is VimShortcutHelpItem => Boolean(item));
 }
 
+/** One row of the shortcut help dialog. */
+export interface VimShortcutHelpItem {
+    /** The key as displayed, e.g. `Shift+S` or `Space, Space, n`. */
+    key: string;
+    description: string;
+}
+
+/** A titled group of rows in the shortcut help dialog. */
+export interface VimShortcutHelpSection {
+    title: string;
+    /** When the section applies, e.g. "Available only for shader documents." */
+    note: string;
+    items: VimShortcutHelpItem[];
+}
+
+/** Input of {@link getVimShortcutSections}. */
+export interface VimShortcutSectionsQuery {
+    layoutMode?: VimShortcutLayout;
+    shaderDocument?: boolean;
+    config?: Readonly<VimShortcutConfig> | null;
+}
+
+/**
+ * The shortcut help content for the current situation: General, then the current layout's section, then
+ * Shaders when `shaderDocument`. Empty sections are left out.
+ */
 export function getVimShortcutSections({
     layoutMode = 'tabs',
     shaderDocument = false,
     config = DEFAULT_VIM_SHORTCUT_CONFIG,
-} = {}) {
-    const sections = [];
+}: VimShortcutSectionsQuery = {}): VimShortcutHelpSection[] {
+    const sections: VimShortcutHelpSection[] = [];
 
     const generalItems = buildSectionItems(SECTION_DEFINITIONS.general, config);
     if (generalItems.length > 0) {

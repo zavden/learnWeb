@@ -1,9 +1,18 @@
-import { completeFromList, snippetCompletion } from '@codemirror/autocomplete';
+// Beginner-oriented snippet completions for HTML, CSS and JavaScript editors (a full HTML page, a flex
+// container, an event listener…). They are added next to the completions the CodeMirror language
+// packages already provide, through each language's `data` facet, so they only show where that
+// language is active.
+//
+// Used by src/components/Editor.ts (`_getLanguageExtensions`). The snippet templates use
+// @codemirror/autocomplete syntax: `${name}` is a tab stop with placeholder text, `${}` an empty one.
+
+import { type Completion, completeFromList, snippetCompletion } from '@codemirror/autocomplete';
 import { cssLanguage } from '@codemirror/lang-css';
 import { htmlLanguage } from '@codemirror/lang-html';
 import { javascriptLanguage } from '@codemirror/lang-javascript';
+import type { Extension } from '@codemirror/state';
 
-const HTML_COMPLETION_ENTRIES = [
+const HTML_COMPLETION_ENTRIES: readonly Completion[] = [
     snippetCompletion(
         [
             '<!DOCTYPE html>',
@@ -80,7 +89,7 @@ const HTML_COMPLETION_ENTRIES = [
     ),
 ];
 
-const CSS_COMPLETION_ENTRIES = [
+const CSS_COMPLETION_ENTRIES: readonly Completion[] = [
     snippetCompletion('display: flex;\njustify-content: center;\nalign-items: center;', {
         label: 'display:flex',
         type: 'snippet',
@@ -137,7 +146,7 @@ const CSS_COMPLETION_ENTRIES = [
     }),
 ];
 
-const JAVASCRIPT_COMPLETION_ENTRIES = [
+const JAVASCRIPT_COMPLETION_ENTRIES: readonly Completion[] = [
     snippetCompletion('function ${name}(${params}) {\n\t${}\n}', {
         label: 'function',
         type: 'snippet',
@@ -192,31 +201,37 @@ const htmlCompletionSource = completeFromList(HTML_COMPLETION_ENTRIES);
 const cssCompletionSource = completeFromList(CSS_COMPLETION_ENTRIES);
 const javascriptCompletionSource = completeFromList(JAVASCRIPT_COMPLETION_ENTRIES);
 
-export function getLearningHtmlCompletionEntries() {
+/** The HTML snippets (the shared module-level list, not a copy). */
+export function getLearningHtmlCompletionEntries(): readonly Completion[] {
     return HTML_COMPLETION_ENTRIES;
 }
 
-export function getLearningCssCompletionEntries() {
+/** The CSS snippets (the shared module-level list, not a copy). */
+export function getLearningCssCompletionEntries(): readonly Completion[] {
     return CSS_COMPLETION_ENTRIES;
 }
 
-export function getLearningJavaScriptCompletionEntries() {
+/** The JavaScript snippets (the shared module-level list, not a copy); TypeScript editors use them too. */
+export function getLearningJavaScriptCompletionEntries(): readonly Completion[] {
     return JAVASCRIPT_COMPLETION_ENTRIES;
 }
 
-export function htmlLearningSupport() {
+/** Adds the HTML snippets to the completions of the HTML language; pair it with `html()`. */
+export function htmlLearningSupport(): Extension {
     return htmlLanguage.data.of({
         autocomplete: htmlCompletionSource,
     });
 }
 
-export function cssLearningSupport() {
+/** Adds the CSS snippets to the completions of the CSS language; pair it with `css()`. */
+export function cssLearningSupport(): Extension {
     return cssLanguage.data.of({
         autocomplete: cssCompletionSource,
     });
 }
 
-export function javascriptLearningSupport() {
+/** Adds the JavaScript snippets to the completions of the JavaScript language; pair it with `javascript()`. */
+export function javascriptLearningSupport(): Extension {
     return javascriptLanguage.data.of({
         autocomplete: javascriptCompletionSource,
     });

@@ -1,4 +1,20 @@
-function parseScalar(rawValue) {
+// A minimal YAML reader for `vim-shortcuts.yaml`: nested `key: value` mappings indented with multiples of
+// two spaces, `#` comments (whole-line or after whitespace), optional quotes around scalars. No lists,
+// multi-line strings, anchors or flow syntax. Every scalar stays a string.
+//
+// Called by src/editor/vimShortcutConfig.ts, which validates the result. It also runs under plain Node
+// (server.ts serves the parsed config), so it must not touch the DOM.
+
+/** A parsed YAML mapping: each key maps to a string scalar or to a nested mapping. */
+export interface YamlMapping {
+    [key: string]: YamlValue;
+}
+
+/** A value inside a {@link YamlMapping}. */
+export type YamlValue = string | YamlMapping;
+
+// Trims the value and drops one pair of matching surrounding quotes (no escape processing).
+function parseScalar(rawValue: string | null | undefined): string {
     const value = String(rawValue ?? '').trim();
     if (!value) return '';
 
@@ -12,8 +28,8 @@ function parseScalar(rawValue) {
     return value;
 }
 
-// Removes a trailing `# comment` (preceded by whitespace) that is not inside quotes.
-export function stripYamlInlineComment(line = '') {
+/** Removes a trailing `# comment` (preceded by whitespace, or at the start of the line) that is not inside quotes. */
+export function stripYamlInlineComment(line: string = ''): string {
     const text = String(line ?? '');
     let quote = '';
 
@@ -38,9 +54,14 @@ export function stripYamlInlineComment(line = '') {
     return text;
 }
 
-export function parseSimpleYamlObject(source = '') {
-    const root = {};
-    const stack = [{ indent: -1, value: root }];
+/**
+ * Parses the YAML subset described above into nested plain objects. Throws an `Error` whose message
+ * starts with `Line N:` on tabs, odd indentation or a line without `key:`. The result is unvalidated:
+ * any key may appear at any depth.
+ */
+export function parseSimpleYamlObject(source: string = ''): YamlMapping {
+    const root: YamlMapping = {};
+    const stack: { indent: number; value: YamlMapping }[] = [{ indent: -1, value: root }];
     const lines = String(source || '').replace(/\r\n?/g, '\n').split('\n');
 
     lines.forEach((rawLine, index) => {
@@ -77,7 +98,7 @@ export function parseSimpleYamlObject(source = '') {
         }
 
         if (hasNestedValue) {
-            const nextValue = {};
+            const nextValue: YamlMapping = {};
             parent.value[key] = nextValue;
             stack.push({ indent, value: nextValue });
             return;

@@ -1,8 +1,28 @@
-function normalizeText(text = '') {
+// Enter key for `.vue` files: inside a `<script>` block, a new line keeps the current indentation, adds
+// one level after an opening `{`, `[` or `(` and drops one before a closing one. CodeMirror's HTML
+// language indents script lines as markup, which is what this command replaces there. Outside script
+// blocks the command declines (returns false) and the default Enter runs.
+//
+// Wired in src/components/Editor.ts as the first entry of the keymap of `vue` files. The pure helpers
+// (`isInsideVueScriptBlock`, `computeVueScriptEnter`) work on plain text so tests can run without a view.
+
+import type { EditorView } from '@codemirror/view';
+
+/** The single text change Enter makes: insert `insert` at `from` (`to` equals `from`, nothing is replaced). */
+export interface VueScriptEnterChange {
+    from: number;
+    to: number;
+    /** A newline followed by the indentation of the new line. */
+    insert: string;
+}
+
+function normalizeText(text: string = ''): string {
     return String(text || '');
 }
 
-function detectIndentUnit(text = '') {
+// The file's indent unit: a tab if any indented line starts with tabs, otherwise the smallest leading
+// run of spaces, otherwise two spaces.
+function detectIndentUnit(text: string = ''): string {
     const source = normalizeText(text);
     const lines = source.split('\n');
 
@@ -26,11 +46,15 @@ function detectIndentUnit(text = '') {
     return '  ';
 }
 
-function stripTrailingLineComment(text = '') {
+function stripTrailingLineComment(text: string = ''): string {
     return String(text || '').replace(/\/\/.*$/, '').trimEnd();
 }
 
-export function isInsideVueScriptBlock(text = '', position = 0) {
+/**
+ * Whether `position` (a character offset, clamped to the text) lies after the `>` of a `<script …>` tag
+ * that has no `</script>` before the position. Case-insensitive; it does not parse HTML.
+ */
+export function isInsideVueScriptBlock(text: string = '', position: number = 0): boolean {
     const source = normalizeText(text);
     const clampedPosition = Math.max(0, Math.min(Number(position) || 0, source.length));
     const lowerBefore = source.slice(0, clampedPosition).toLowerCase();
@@ -45,7 +69,11 @@ export function isInsideVueScriptBlock(text = '', position = 0) {
     return lastScriptClose < lastScriptOpen;
 }
 
-export function computeVueScriptEnter(text = '', position = 0) {
+/**
+ * The change Enter should make at `position`, or `null` when the position is not inside a script block.
+ * A trailing `//` comment is ignored when looking for an opening bracket before the cursor.
+ */
+export function computeVueScriptEnter(text: string = '', position: number = 0): VueScriptEnterChange | null {
     const source = normalizeText(text);
     const clampedPosition = Math.max(0, Math.min(Number(position) || 0, source.length));
 
@@ -78,7 +106,11 @@ export function computeVueScriptEnter(text = '', position = 0) {
     };
 }
 
-export function vueScriptEnterCommand(view) {
+/**
+ * CodeMirror command for Enter in Vue files. Handles only an empty main selection inside a script block
+ * and returns false otherwise, so the next Enter binding runs.
+ */
+export function vueScriptEnterCommand(view: EditorView): boolean {
     const selection = view.state.selection.main;
     if (!selection || !selection.empty) return false;
 

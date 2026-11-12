@@ -1,5 +1,15 @@
-import { completeFromList, snippetCompletion } from '@codemirror/autocomplete';
-import { StreamLanguage } from '@codemirror/language';
+// GLSL support for the vertex and fragment files of shader examples: a CodeMirror 5-style stream
+// tokenizer (highlighting, comment toggling, bracket closing) plus a completion list of GLSL keywords,
+// types, builtins, a few snippets and the uniforms the shader preview runtime provides.
+//
+// Used by src/components/Editor.ts (`_getLanguageExtensions` for the `vertex` and `fragment` languages).
+// The token names returned by the tokenizer are @lezer/highlight tag names, so the editor theme colours
+// them without a custom highlight style. Keep `GLSL_SHADER_RUNTIME_UNIFORMS` in sync with the uniforms
+// the shader runtime (src/utils/renderer/shaderRenderer.ts) actually sets.
+
+import { type Completion, completeFromList, snippetCompletion } from '@codemirror/autocomplete';
+import { type StreamParser, type StringStream, StreamLanguage } from '@codemirror/language';
+import type { Extension } from '@codemirror/state';
 
 const GLSL_KEYWORDS = new Set([
     'attribute',
@@ -138,7 +148,17 @@ const GLSL_SHADER_RUNTIME_UNIFORMS = [
     'u_frame',
 ];
 
-export function classifyGlslIdentifier(identifier = '') {
+/** The highlight tag names {@link classifyGlslIdentifier} can return. */
+export type GlslIdentifierTag =
+    | 'keyword'
+    | 'modifier'
+    | 'typeName'
+    | 'bool'
+    | 'variableName.standard'
+    | 'variableName';
+
+/** The highlight tag for a GLSL identifier: keyword, qualifier, type, boolean literal, builtin or plain name. */
+export function classifyGlslIdentifier(identifier: string = ''): GlslIdentifierTag {
     const value = String(identifier || '');
 
     if (GLSL_KEYWORDS.has(value)) return 'keyword';
@@ -149,7 +169,7 @@ export function classifyGlslIdentifier(identifier = '') {
     return 'variableName';
 }
 
-function buildKeywordCompletion(label) {
+function buildKeywordCompletion(label: string): Completion {
     return {
         label,
         type: 'keyword',
@@ -157,7 +177,7 @@ function buildKeywordCompletion(label) {
     };
 }
 
-function buildTypeCompletion(label) {
+function buildTypeCompletion(label: string): Completion {
     return {
         label,
         type: 'type',
@@ -165,7 +185,7 @@ function buildTypeCompletion(label) {
     };
 }
 
-function buildBuiltinCompletion(label, detail = 'GLSL builtin') {
+function buildBuiltinCompletion(label: string, detail: string = 'GLSL builtin'): Completion {
     return {
         label,
         type: 'function',
@@ -173,7 +193,7 @@ function buildBuiltinCompletion(label, detail = 'GLSL builtin') {
     };
 }
 
-function buildVariableCompletion(label, detail) {
+function buildVariableCompletion(label: string, detail: string): Completion {
     return {
         label,
         type: 'variable',
@@ -181,7 +201,7 @@ function buildVariableCompletion(label, detail) {
     };
 }
 
-const GLSL_SNIPPET_COMPLETIONS = [
+const GLSL_SNIPPET_COMPLETIONS: readonly Completion[] = [
     snippetCompletion(
         [
             'void main() {',
@@ -260,7 +280,8 @@ const GLSL_SNIPPET_COMPLETIONS = [
     ),
 ];
 
-export function getGlslCompletionEntries() {
+/** Every GLSL completion (snippets first), as a new array on each call. */
+export function getGlslCompletionEntries(): Completion[] {
     return [
         ...GLSL_SNIPPET_COMPLETIONS,
         ...Array.from(GLSL_KEYWORDS, buildKeywordCompletion),
@@ -273,7 +294,13 @@ export function getGlslCompletionEntries() {
     ];
 }
 
-function readBlockComment(stream, state) {
+/** Tokenizer state; it only has to remember an unterminated block comment across lines. */
+interface GlslStreamState {
+    inBlockComment: boolean;
+}
+
+// Consumes up to the closing `*/` (or the end of the line, leaving the comment open for the next line).
+function readBlockComment(stream: StringStream, state: GlslStreamState): string {
     while (!stream.eol()) {
         const ch = stream.next();
         if (ch === '*' && stream.eat('/')) {
@@ -285,7 +312,8 @@ function readBlockComment(stream, state) {
     return 'blockComment';
 }
 
-function readQuotedLiteral(stream, quote) {
+// Consumes up to the closing quote (backslash escapes allowed) or the end of the line.
+function readQuotedLiteral(stream: StringStream, quote: '"' | '\''): string {
     let escaped = false;
 
     while (!stream.eol()) {
@@ -308,14 +336,14 @@ function readQuotedLiteral(stream, quote) {
     return quote === '"' ? 'string' : 'character';
 }
 
-const glslStreamParser = {
-    startState() {
+const glslStreamParser: StreamParser<GlslStreamState> = {
+    startState(): GlslStreamState {
         return {
             inBlockComment: false,
         };
     },
 
-    token(stream, state) {
+    token(stream: StringStream, state: GlslStreamState): string | null {
         if (state.inBlockComment) {
             return readBlockComment(stream, state);
         }
@@ -362,7 +390,9 @@ const glslStreamParser = {
             return 'operator';
         }
 
-        const ch = stream.next();
+        // CodeMirror calls token() only before the end of the line, and eatSpace() above found no
+        // whitespace, so there is a character to read.
+        const ch = stream.next() as string;
 
         if ('+-*/%=!<>?:&|^~'.includes(ch)) {
             return 'operator';
@@ -397,7 +427,8 @@ const glslStreamParser = {
 const glslLanguageSupport = StreamLanguage.define(glslStreamParser);
 const glslCompletionSource = completeFromList(getGlslCompletionEntries());
 
-export function glslLanguage() {
+/** The GLSL language and its completion source, for the extensions of a `vertex` or `fragment` editor. */
+export function glslLanguage(): Extension[] {
     return [
         glslLanguageSupport,
         glslLanguageSupport.data.of({
