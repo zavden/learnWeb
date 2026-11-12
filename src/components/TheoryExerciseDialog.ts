@@ -1,9 +1,84 @@
+// The exercise preview dialog of the theory pages: when the learner activates an exercise card in a rendered
+// theory page, this modal runs the referenced example (a live iframe plus a small console under it) without
+// leaving the theory, with an "Open Exercise" button that hands the example to the editor.
+// Created once by src/main.ts, which calls `open()` when a theory page asks to preview an exercise
+// (`preview-exercise`) and passes `onOpenExample` for the button. Fetches the example (src/utils/api.ts), parses it,
+// compiles it through the compile client and renders it with the same renderers as the editor preview.
+//
+// Things to know before editing:
+// - The example runs like in the editor preview: published as a real page on the preview origin when
+//   possible (hosted), otherwise as a sandboxed `srcdoc` (also the fallback if the hosted page never boots).
+// - The console is fed by `learncode-preview` window messages from the dialog's iframe. Objects expand on
+//   click through methods BORROWED from the editor preview's `consoleManagerMixin` (see below): they read and
+//   write `iframe`, `_renderToken`, `_consoleInspectRequests` and `_consoleInspectSequence` on this object,
+//   which is why those fields exist here with those names.
+// - `open()` is guarded by `currentRequest`: a newer request makes the older one drop its result.
 import { fetchExample } from '../utils/api.ts';
 import { compileExample } from '../utils/compileClient.ts';
 import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../utils/exampleRenderer.ts';
 import { getExampleEditorialMetadata, isShaderDocument, parseExampleDocument } from '../utils/markdown.ts';
 import { HOSTED_PREVIEW_SANDBOX, markHostedPreviewUnavailable, publishPreviewDocument } from '../utils/renderer/previewHost.ts';
+import { errorMessage } from '../utils/errors.ts';
 import { consoleManagerMixin } from './preview/ConsoleManager.ts';
+import type { Diagnostic } from '../types/diagnostics.ts';
+import type {
+    ConsoleMessage,
+    ConsoleTable,
+    InspectResponse,
+    PreviewFrameMessage,
+    RuntimeErrorMessage,
+    UnhandledRejectionMessage,
+} from '../types/runtime.ts';
+
+/** What `main.ts` passes to the dialog. */
+export interface TheoryExerciseDialogOptions {
+    /** "Open Exercise" was pressed (the dialog has already closed): open that example in the editor. */
+    onOpenExample?: (topicPath: string, filename: string) => void | Promise<void>;
+}
+
+/** The exercise a theory page asks to preview. The dialog trims both parts. */
+export interface TheoryExerciseRequest {
+    /** `chapter/section/topic` that holds the example. Blank or missing: the dialog says the reference is incomplete. */
+    topicPath: string | null | undefined;
+    /** File name of the example inside the topic's `examples/` folder. Blank or missing: as above. */
+    filename: string | null | undefined;
+}
+
+/** Arguments of {@link TheoryExerciseDialog._renderPreview}. */
+interface PreviewViewOptions {
+    iframe: HTMLIFrameElement;
+    /** Dialog title. */
+    title: string;
+    /** Dialog subtitle; falls back to `path`. */
+    description: string;
+    path: string;
+    /** No markup to show: the stage gives all its space to the console. */
+    consoleOnly?: boolean;
+    renderId?: number;
+    /** TypeScript type errors to list above the console. */
+    typeErrors?: Diagnostic[];
+}
+
+/** An object-inspector request waiting for the iframe's answer (see `_requestConsoleInspect` in ConsoleManager). */
+// TODO(ts-migration): use the pending-inspect type from src/components/preview/ConsoleManager.ts once package P exports it.
+interface PendingConsoleInspect {
+    resolve: (response: InspectResponse) => void;
+    timer: ReturnType<typeof setTimeout>;
+}
+
+/**
+ * Error reports carry no console table; declared absent so `table` can be read on any message that becomes a
+ * console line.
+ */
+interface NoTableField {
+    table?: undefined;
+}
+
+/** The messages of the preview channel that become a line of the dialog console. */
+type ConsoleLineMessage =
+    | ConsoleMessage
+    | (RuntimeErrorMessage & NoTableField)
+    | (UnhandledRejectionMessage & NoTableField);
 
 // The dialog console reuses the main console's value rendering, so objects expand on click
 // (down to [[Prototype]]) by asking the dialog's iframe, exactly as in the editor preview.
@@ -16,14 +91,23 @@ const BORROWED_CONSOLE_METHODS = [
     '_requestConsoleInspect',
     '_resolveConsoleInspect',
     '_sanitizeConsoleStyle',
-];
+] as const;
 
-// Same safety net as the editor preview: a hosted page that never boots falls back to srcdoc.
+/** Name of a `consoleManagerMixin` method the dialog borrows. */
+type BorrowedConsoleMethod = (typeof BORROWED_CONSOLE_METHODS)[number];
+
+/** The borrowed methods, typed as the mixin declares them. */
+type BorrowedConsoleMethods = Pick<typeof consoleManagerMixin, BorrowedConsoleMethod>;
+
+/**
+ * Same safety net as the editor preview: a hosted page that never sends `runtime-ready` within this time is
+ * reloaded as a srcdoc copy.
+ */
 const HOSTED_READY_TIMEOUT_MS = 4000;
 
 // TypeScript type errors don't stop the example (the JavaScript still runs), so the dialog lists
 // them above the console, numbered by line of the TypeScript block, as the course texts quote them.
-function buildTypeErrorsStrip(typeErrors) {
+function buildTypeErrorsStrip(typeErrors: Diagnostic[]): HTMLElement {
     const strip = document.createElement('section');
     strip.className = 'theory-exercise-dialog-types';
     strip.setAttribute('aria-label', 'Errores de tipos');
@@ -40,7 +124,8 @@ function buildTypeErrorsStrip(typeErrors) {
     return strip;
 }
 
-function buildConsoleTable({ header, rows }) {
+/** A `console.table` result as a table; at most 200 rows are shown. */
+function buildConsoleTable({ header, rows }: Pick<ConsoleTable, 'header' | 'rows'>): HTMLTableElement {
     const table = document.createElement('table');
     table.className = 'theory-exercise-dialog-console-table';
     const headRow = table.createTHead().insertRow();
@@ -59,17 +144,62 @@ function buildConsoleTable({ header, rows }) {
     return table;
 }
 
+/**
+ * The modal that previews one exercise of a theory page (see the header of this file), bound to
+ * `#theory-exercise-dialog` in index.html. The members named in {@link BORROWED_CONSOLE_METHODS} are copied
+ * from `consoleManagerMixin` at the bottom of the file.
+ */
 export class TheoryExerciseDialog {
-    constructor({ onOpenExample } = {}) {
+    readonly onOpenExample: TheoryExerciseDialogOptions['onOpenExample'];
+    readonly dialog: HTMLDialogElement | null;
+    readonly title: HTMLHeadingElement | null;
+    readonly note: HTMLParagraphElement | null;
+    /** Holds the preview iframe, the type-error strip and the console while an exercise is shown. */
+    readonly stage: HTMLDivElement | null;
+    /** The loading / error message shown instead of the stage. */
+    readonly empty: HTMLParagraphElement | null;
+    readonly btnOpen: HTMLButtonElement | null;
+    readonly btnClose: HTMLButtonElement | null;
+    readonly btnCloseIcon: HTMLButtonElement | null;
+    /** `topic::file::timestamp` of the latest `open()`; `null` after the dialog closes. Stale requests compare against it. */
+    private currentRequest: string | null;
+    private currentTopicPath: string;
+    private currentFilename: string;
+    /** The preview iframe on screen; the only window whose messages are accepted. */
+    private currentFrame: HTMLIFrameElement | null;
+    /** The console `<ol>` under the preview; `null` when no exercise is shown. */
+    private consoleList: HTMLOListElement | null;
+    /** Entries in the console (output stops at 500). */
+    private consoleCount: number;
+    /** Number of previews rendered; becomes the `renderId` of the next document. */
+    private renderCount: number;
+    /**
+     * Timer of the hosted-preview safety net (`null` before the first one). `clearTimeout(null)` is a harmless
+     * no-op, but its typings only accept `undefined`, so the calls below assert non-null.
+     */
+    private hostedWatchdog: ReturnType<typeof setTimeout> | null;
+    // State used by the borrowed console methods (see BORROWED_CONSOLE_METHODS). Public on purpose: the
+    // mixin reads and writes them through `this`.
+    /** Same as `currentFrame`; the borrowed methods post their inspect requests to it. */
+    iframe: HTMLIFrameElement | null;
+    /** `renderId` of the document in `iframe`; the borrowed methods stamp their commands with it. */
+    _renderToken: number;
+    /** Inspect requests waiting for an answer from `iframe`, by `requestId`. */
+    _consoleInspectRequests: Map<number, PendingConsoleInspect>;
+    _consoleInspectSequence: number;
+    /** Whether the hosted page sent `runtime-ready`; `undefined` until a hosted load starts. */
+    private frameReady: boolean | undefined;
+
+    constructor({ onOpenExample }: TheoryExerciseDialogOptions = {}) {
         this.onOpenExample = onOpenExample;
-        this.dialog = document.getElementById('theory-exercise-dialog');
-        this.title = document.getElementById('theory-exercise-dialog-title');
-        this.note = document.getElementById('theory-exercise-dialog-note');
-        this.stage = document.getElementById('theory-exercise-dialog-stage');
-        this.empty = document.getElementById('theory-exercise-dialog-empty');
-        this.btnOpen = document.getElementById('theory-exercise-dialog-open');
-        this.btnClose = document.getElementById('theory-exercise-dialog-close');
-        this.btnCloseIcon = document.getElementById('theory-exercise-dialog-close-icon');
+        this.dialog = document.getElementById('theory-exercise-dialog') as HTMLDialogElement | null;
+        this.title = document.getElementById('theory-exercise-dialog-title') as HTMLHeadingElement | null;
+        this.note = document.getElementById('theory-exercise-dialog-note') as HTMLParagraphElement | null;
+        this.stage = document.getElementById('theory-exercise-dialog-stage') as HTMLDivElement | null;
+        this.empty = document.getElementById('theory-exercise-dialog-empty') as HTMLParagraphElement | null;
+        this.btnOpen = document.getElementById('theory-exercise-dialog-open') as HTMLButtonElement | null;
+        this.btnClose = document.getElementById('theory-exercise-dialog-close') as HTMLButtonElement | null;
+        this.btnCloseIcon = document.getElementById('theory-exercise-dialog-close-icon') as HTMLButtonElement | null;
         this.currentRequest = null;
         this.currentTopicPath = '';
         this.currentFilename = '';
@@ -91,7 +221,7 @@ export class TheoryExerciseDialog {
         this.btnCloseIcon?.addEventListener('click', () => this.dialog?.close());
         // Remove the live preview on close so it stops running in the background.
         this.dialog?.addEventListener('close', () => {
-            clearTimeout(this.hostedWatchdog);
+            clearTimeout(this.hostedWatchdog!);
             this._rejectPendingConsoleInspects();
             this.currentRequest = null;
             this.currentFrame = null;
@@ -108,7 +238,11 @@ export class TheoryExerciseDialog {
         });
     }
 
-    async open({ topicPath, filename }) {
+    /**
+     * Shows the dialog and loads the referenced example into it. Failures (incomplete reference, fetch or
+     * compile errors) are shown inside the dialog, not thrown.
+     */
+    async open({ topicPath, filename }: TheoryExerciseRequest): Promise<void> {
         this.currentTopicPath = String(topicPath || '').trim();
         this.currentFilename = String(filename || '').trim();
         this.currentRequest = `${this.currentTopicPath}::${this.currentFilename}::${Date.now()}`;
@@ -134,7 +268,7 @@ export class TheoryExerciseDialog {
             iframe.sandbox = 'allow-scripts';
             this.renderCount += 1;
             const renderId = this.renderCount;
-            let typeErrors = [];
+            let typeErrors: Diagnostic[] = [];
 
             if (isShaderDocument(documentModel)) {
                 iframe.srcdoc = renderShaderExampleDocument(documentModel, {
@@ -194,11 +328,11 @@ export class TheoryExerciseDialog {
         } catch (error) {
             if (requestId !== this.currentRequest) return;
             console.error('Failed to render theory exercise preview.', error);
-            this._renderMissing(`Preview unavailable: ${error.message}`);
+            this._renderMissing(`Preview unavailable: ${errorMessage(error)}`);
         }
     }
 
-    _renderLoading() {
+    private _renderLoading(): void {
         if (!this.stage || !this.empty || !this.title || !this.note || !this.btnOpen) return;
         this.stage.innerHTML = '';
         this.empty.classList.remove('hidden');
@@ -208,7 +342,7 @@ export class TheoryExerciseDialog {
         this.btnOpen.disabled = true;
     }
 
-    _renderMissing(message) {
+    private _renderMissing(message: string): void {
         if (!this.stage || !this.empty || !this.title || !this.note || !this.btnOpen) return;
         this.stage.innerHTML = '';
         this.empty.classList.remove('hidden');
@@ -218,14 +352,15 @@ export class TheoryExerciseDialog {
         this.btnOpen.disabled = true;
     }
 
-    _loadHosted(iframe, url, renderSrcdoc, requestId) {
+    /** Loads the example from the preview origin and arms the watchdog that falls back to `renderSrcdoc()`. */
+    private _loadHosted(iframe: HTMLIFrameElement, url: string, renderSrcdoc: () => string, requestId: string): void {
         iframe.sandbox = HOSTED_PREVIEW_SANDBOX;
         // The same permissions as the editor preview (fullscreen, clipboard, camera…).
         const allow = document.getElementById('preview-frame')?.getAttribute('allow');
         if (allow) iframe.setAttribute('allow', allow);
         iframe.src = url;
         this.frameReady = false;
-        clearTimeout(this.hostedWatchdog);
+        clearTimeout(this.hostedWatchdog!);
         this.hostedWatchdog = setTimeout(() => {
             if (requestId !== this.currentRequest || this.currentFrame !== iframe || this.frameReady) return;
             markHostedPreviewUnavailable();
@@ -236,7 +371,7 @@ export class TheoryExerciseDialog {
         }, HOSTED_READY_TIMEOUT_MS);
     }
 
-    _renderPreview({ iframe, title, description, path, consoleOnly = false, renderId = 0, typeErrors = [] }) {
+    private _renderPreview({ iframe, title, description, path, consoleOnly = false, renderId = 0, typeErrors = [] }: PreviewViewOptions): void {
         if (!this.stage || !this.empty || !this.title || !this.note || !this.btnOpen) return;
         this.stage.innerHTML = '';
         this.stage.classList.toggle('is-console-only', consoleOnly);
@@ -257,27 +392,34 @@ export class TheoryExerciseDialog {
         this.btnOpen.disabled = false;
     }
 
-    _handleFrameMessage(event) {
-        const data = event?.data;
-        if (!data || data.source !== 'learncode-preview' || !this.currentFrame || !this.consoleList) return;
+    /**
+     * Handles every window `message`; only those posted by the dialog's own iframe on the
+     * `learncode-preview` channel count. `event.data` is untrusted: the `source` and window checks below are
+     * what make it a {@link PreviewFrameMessage}.
+     */
+    private _handleFrameMessage(event: MessageEvent): void {
+        const message: PreviewFrameMessage | null | undefined = event?.data;
+        if (!message || message.source !== 'learncode-preview' || !this.currentFrame || !this.consoleList) return;
         if (event.source !== this.currentFrame.contentWindow) return;
 
-        if (data.kind === 'runtime-ready') {
+        if (message.kind === 'runtime-ready') {
             this.frameReady = true;
-            clearTimeout(this.hostedWatchdog);
+            clearTimeout(this.hostedWatchdog!);
             return;
         }
-        if (data.kind === 'inspect-result') {
-            this._resolveConsoleInspect(data);
+        if (message.kind === 'inspect-result') {
+            this._resolveConsoleInspect(message);
             return;
         }
-        if (data.kind === 'console-clear') {
+        if (message.kind === 'console-clear') {
             this.consoleList.replaceChildren();
             this.consoleCount = 0;
             this.consoleList.classList.add('hidden');
             return;
         }
-        if (!['console', 'runtime-error', 'unhandled-rejection'].includes(data.kind)) return;
+        if (!['console', 'runtime-error', 'unhandled-rejection'].includes(message.kind)) return;
+        // `includes` cannot narrow the type, the check above guarantees it.
+        const data = message as ConsoleLineMessage;
         if (this.consoleCount >= 500) return;
 
         const level = ['error', 'warn', 'info', 'debug'].includes(data.level) ? data.level : 'log';
@@ -307,6 +449,9 @@ export class TheoryExerciseDialog {
     }
 }
 
+// Declaration merging: the borrowed methods become part of the dialog's instance type.
+export interface TheoryExerciseDialog extends BorrowedConsoleMethods {}
+
 BORROWED_CONSOLE_METHODS.forEach((name) => {
-    TheoryExerciseDialog.prototype[name] = consoleManagerMixin[name];
+    (TheoryExerciseDialog.prototype as Record<BorrowedConsoleMethod, unknown>)[name] = consoleManagerMixin[name];
 });

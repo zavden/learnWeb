@@ -1,29 +1,72 @@
+// The pending dialog: a modal grid with a live preview card for every example marked as pending, from all
+// topics. Created once by src/main.ts, which hands it the entries (`PendingEntry`, resolved against the disk
+// by the API) through `open()` and re-renders it with `render()` whenever the list changes while it is open.
+// Each card previews the example in a sandboxed iframe (compile client + renderers, like the gallery) and
+// has Open and Remove buttons; a missing file shows a "Missing" card that can only be removed.
+//
+// Near-duplicate of src/components/FavoritesDialog.ts (same structure, different ids and texts): keep the two
+// in step when changing one.
 import { fetchExample } from '../utils/api.ts';
 import { compileExample } from '../utils/compileClient.ts';
 import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../utils/exampleRenderer.ts';
 import { loadSrcdocWhenLaidOut } from '../utils/renderer/previewHost.ts';
 import { getExampleStage, isShaderDocument, parseExampleDocument } from '../utils/markdown.ts';
+import type { ExampleStage } from '../types/document.ts';
+import type { PendingEntry } from '../types/material.ts';
 
-const EXAMPLE_STAGE_META = {
+/** What `main.ts` passes to the dialog. The callbacks are optional: the dialog calls them with `?.`. */
+export interface PendingDialogOptions {
+    /** Readable name of a topic, shown under each card's title; a falsy result falls back to the raw topic path. */
+    getTopicLabel?: (topicPath: string) => string;
+    /** The learner opened a pending example (the dialog has already closed): open it in the editor. */
+    onExampleSelect?: (topicPath: string, filename: string) => void | Promise<void>;
+    /** The Remove button was pressed: remove that pending item (`path` is the repository-relative example path). */
+    onRemovePending?: (pendingPath: string) => void | Promise<void>;
+}
+
+/** Badge data of an `example_stage` value; only its presence matters here (it sets `data-stage` on the card). */
+interface ExampleStageMeta {
+    label: string;
+    rank: number;
+    className: string;
+}
+
+// `satisfies` keeps the table in step with `ExampleStage`; the annotation lets it be indexed with any string.
+const EXAMPLE_STAGE_META: Readonly<Record<string, ExampleStageMeta | undefined>> = {
     minimal: { label: 'Minimal', rank: 0, className: 'stage-minimal' },
     intermediate: { label: 'Intermediate', rank: 1, className: 'stage-intermediate' },
     'common-error': { label: 'Common Error', rank: 2, className: 'stage-common-error' },
     exercise: { label: 'Exercise', rank: 3, className: 'stage-exercise' },
     'final-solution': { label: 'Final Solution', rank: 4, className: 'stage-final-solution' },
     professional: { label: 'Professional', rank: 5, className: 'stage-professional' },
-};
+} satisfies Record<ExampleStage, ExampleStageMeta>;
 
+/** The modal grid of pending examples (see the header of this file), bound to `#pending-dialog` in index.html. */
 export class PendingDialog {
-    constructor({ getTopicLabel, onExampleSelect, onRemovePending }) {
+    readonly onExampleSelect: PendingDialogOptions['onExampleSelect'];
+    readonly getTopicLabel: PendingDialogOptions['getTopicLabel'];
+    readonly onRemovePending: PendingDialogOptions['onRemovePending'];
+    /** The `<dialog>`; `main.ts` reads `dialog.open` to know whether the list must be re-rendered. */
+    readonly dialog: HTMLDialogElement | null;
+    readonly grid: HTMLDivElement | null;
+    /** The "No pending items yet." hint; lives inside the grid only while the list is empty. */
+    readonly empty: HTMLParagraphElement | null;
+    readonly note: HTMLParagraphElement | null;
+    readonly btnClose: HTMLButtonElement | null;
+    readonly btnCloseIcon: HTMLButtonElement | null;
+    /** Counts renders (and dialog closes): a render whose token is stale drops its result. */
+    private _renderToken: number;
+
+    constructor({ getTopicLabel, onExampleSelect, onRemovePending }: PendingDialogOptions) {
         this.onExampleSelect = onExampleSelect;
         this.getTopicLabel = getTopicLabel;
         this.onRemovePending = onRemovePending;
-        this.dialog = document.getElementById('pending-dialog');
-        this.grid = document.getElementById('pending-grid');
-        this.empty = document.getElementById('pending-empty');
-        this.note = document.getElementById('pending-dialog-note');
-        this.btnClose = document.getElementById('pending-dialog-close');
-        this.btnCloseIcon = document.getElementById('pending-dialog-close-icon');
+        this.dialog = document.getElementById('pending-dialog') as HTMLDialogElement | null;
+        this.grid = document.getElementById('pending-grid') as HTMLDivElement | null;
+        this.empty = document.getElementById('pending-empty') as HTMLParagraphElement | null;
+        this.note = document.getElementById('pending-dialog-note') as HTMLParagraphElement | null;
+        this.btnClose = document.getElementById('pending-dialog-close') as HTMLButtonElement | null;
+        this.btnCloseIcon = document.getElementById('pending-dialog-close-icon') as HTMLButtonElement | null;
 
         this._renderToken = 0;
 
@@ -33,17 +76,22 @@ export class PendingDialog {
         this.dialog?.addEventListener('close', () => this._releasePreviews());
     }
 
-    _releasePreviews() {
+    private _releasePreviews(): void {
         this._renderToken += 1;
         this.grid?.querySelectorAll('iframe').forEach((iframe) => iframe.remove());
     }
 
-    open(entries = []) {
+    /** Renders `entries` and shows the dialog as a modal. */
+    open(entries: PendingEntry[] = []): void {
         this.render(entries);
         this.dialog?.showModal();
     }
 
-    async render(entries = []) {
+    /**
+     * Rebuilds the grid from `entries` (also while the dialog is open, after a change). A render that is
+     * superseded by a newer one, or by closing the dialog, drops its result.
+     */
+    async render(entries: PendingEntry[] = []): Promise<void> {
         if (!this.grid || !this.empty || !this.note) return;
 
         const renderToken = ++this._renderToken;
@@ -63,10 +111,10 @@ export class PendingDialog {
         // A newer render (or closing the dialog) superseded this one.
         if (renderToken !== this._renderToken) return;
         this.grid.innerHTML = '';
-        cards.forEach((card) => this.grid.appendChild(card));
+        cards.forEach((card) => this.grid!.appendChild(card)); // checked at the top; narrowing does not reach the callback
     }
 
-    async _createCard(entry) {
+    private async _createCard(entry: PendingEntry): Promise<HTMLDivElement> {
         const div = document.createElement('div');
         div.className = `example-card favorite-card ${entry.exists ? '' : 'is-missing'}`;
         div.title = entry.path;
@@ -89,7 +137,7 @@ export class PendingDialog {
                     iframe.sandbox = 'allow-scripts';
                     iframe.loading = 'lazy';
 
-                    let srcdoc;
+                    let srcdoc: string;
                     if (isShaderDocument(documentModel)) {
                         srcdoc = renderShaderExampleDocument(documentModel, {
                             diagnostics: documentModel.diagnostics || [],

@@ -1,3 +1,17 @@
+// The gallery: the grid of example cards shown while no example is open. It lists the examples of the
+// selected topic (`load`) or, at startup, the pending examples of every topic (`renderPendingEntries`).
+// Every card holds a live preview (a sandboxed iframe), the editorial info overlay, a stage badge, a type
+// tag and a delete button; the type buttons in the header filter the grid.
+//
+// Created once by src/main.ts, which calls `load()` on topic selection and `setPreviewsSuspended()` when the
+// editor covers the gallery. Fetches examples through src/utils/api.ts, parses them with src/utils/markdown.ts
+// and builds each preview with the compile client and the renderers (src/utils/exampleRenderer.ts).
+//
+// Things to know before editing:
+// - Previews are lazy: a card's iframe only exists while the card is near the visible part of the grid and
+//   the gallery itself is visible (see "Lazy card previews"): hundreds of live frames would keep the CPU busy.
+// - `load`/`render` are guarded by a request gate: a newer call makes older ones drop their result.
+// - Examples that only run a script (no markup, not a shader) show their code instead of a live frame.
 import { fetchExamples, fetchExample, removeExample } from '../utils/api.ts';
 import { compileExample } from '../utils/compileClient.ts';
 import {
@@ -8,7 +22,7 @@ import {
 import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../utils/exampleRenderer.ts';
 import { loadSrcdocWhenLaidOut } from '../utils/renderer/previewHost.ts';
 import { highlightCode } from '../utils/theoryRenderer.ts';
-import { createRequestGate } from './editor/dirtyTracker.ts';
+import { createRequestGate, type RequestGate } from './editor/dirtyTracker.ts';
 import { showToast } from './editor/toast.ts';
 import {
     getExampleEditorialMetadata,
@@ -16,6 +30,47 @@ import {
     isShaderDocument,
     parseExampleDocument,
 } from '../utils/markdown.ts';
+import { byId } from '../utils/dom.ts';
+import { errorMessage } from '../utils/errors.ts';
+import type { ExamplesListResponse } from '../types/api.ts';
+import type { ExampleBlock, ExampleDocument, ExampleEditorialMetadata, ExampleStage } from '../types/document.ts';
+import type { PendingEntry } from '../types/material.ts';
+
+/** What `main.ts` passes to the gallery. The callbacks are optional: the gallery calls them with `?.`. */
+export interface GalleryOptions {
+    /** A card was clicked: open that example of the current topic. */
+    onExampleSelect?: (filename: string) => void | Promise<void>;
+    /** A card's delete button succeeded and the grid was reloaded: let the app refresh its own state. */
+    onExampleDeleted?: (topicPath: string, filename: string) => void | Promise<void>;
+    /** Readable name of a topic, shown on pending cards; a falsy result falls back to the raw topic path. */
+    getTopicLabel?: (topicPath: string) => string;
+}
+
+/** Options of {@link Gallery.load}. */
+export interface GalleryLoadOptions {
+    /** Reloading the same topic: keep the cards on screen and restore the scroll position afterwards. */
+    preserveScroll?: boolean;
+}
+
+/** Options of {@link Gallery.render}. */
+export interface GalleryRenderOptions {
+    /** Gate token of the request this render belongs to. When omitted a fresh one is taken, which supersedes any load in flight. */
+    token?: number;
+    /** Topic the examples belong to (default: the gallery's current topic). */
+    topicPath?: string | null;
+}
+
+/** Options of {@link Gallery.renderPendingEntries}. */
+export interface GalleryPendingOptions {
+    /** A pending card was clicked: open that example. */
+    onOpenEntry?: (topicPath: string, filename: string) => void | Promise<void>;
+}
+
+/** Label and CSS class of the type tag (and of the filter button) of one kind of example. */
+interface ExampleTypeMeta {
+    label: string;
+    className: string;
+}
 
 const EXAMPLE_TYPE_META = {
     html:    { label: 'HTML',    className: 'type-html' },
@@ -25,20 +80,71 @@ const EXAMPLE_TYPE_META = {
     react:   { label: 'REACT',   className: 'type-react' },
     svg:     { label: 'SVG',     className: 'type-svg' },
     shader:  { label: 'SHADER',  className: 'type-shader' },
-};
+} satisfies Record<string, ExampleTypeMeta>;
 
-const EXAMPLE_STAGE_META = {
+/** The kinds of example the gallery tells apart (the keys of {@link EXAMPLE_TYPE_META}). */
+export type GalleryExampleType = keyof typeof EXAMPLE_TYPE_META;
+
+/** Badge text, sort rank (lowest first) and CSS class of an `example_stage` value. */
+interface ExampleStageMeta {
+    label: string;
+    rank: number;
+    className: string;
+}
+
+// `satisfies` keeps the table in step with `ExampleStage`; the annotation lets it be indexed with any
+// string (a card without a stage looks up '').
+const EXAMPLE_STAGE_META: Readonly<Record<string, ExampleStageMeta | undefined>> = {
     minimal: { label: 'Minimal', rank: 0, className: 'stage-minimal' },
     intermediate: { label: 'Intermediate', rank: 1, className: 'stage-intermediate' },
     'common-error': { label: 'Common Error', rank: 2, className: 'stage-common-error' },
     exercise: { label: 'Exercise', rank: 3, className: 'stage-exercise' },
     'final-solution': { label: 'Final Solution', rank: 4, className: 'stage-final-solution' },
     professional: { label: 'Professional', rank: 5, className: 'stage-professional' },
-};
+} satisfies Record<ExampleStage, ExampleStageMeta>;
 
+/** Cards load their preview when they come within this distance of the visible part of the grid. */
 const PREVIEW_ROOT_MARGIN = '360px 0px';
 
-async function buildExamplePreviewSrcdoc(documentModel, topicPath) {
+/** Compiles and renders a card's example into the `srcdoc` of its preview; called when the card first becomes visible. */
+type PreviewBuilder = () => Promise<string>;
+
+/** A card as the gallery keeps it: its DOM plus what the lazy previewer and the sort need. */
+export interface GalleryCard {
+    element: HTMLDivElement;
+    /** The `.card-preview` box the iframe is inserted into. */
+    preview: HTMLDivElement;
+    /** `null` when the card shows code instead of a live frame, or when it could not be loaded. */
+    buildPreview: PreviewBuilder | null;
+    filename: string;
+    exampleType: GalleryExampleType;
+    isPending: boolean;
+    /** Rank of the example's stage; cards without a (known) stage sort last. */
+    stageRank: number;
+}
+
+/** The part of a card the pending list needs. */
+type PendingCard = Pick<GalleryCard, 'element' | 'preview' | 'buildPreview'>;
+
+/** Bookkeeping of one card's lazy preview, keyed by its `.card-preview` box. */
+interface PreviewRecord {
+    build: PreviewBuilder;
+    /** Building the `srcdoc` threw: the card shows "Preview unavailable" and is not retried. */
+    failed: boolean;
+    iframe: HTMLIFrameElement | null;
+    /** A build is in flight. */
+    loading: boolean;
+    /** The built `srcdoc`, kept so remounting after a scroll does not recompile. */
+    srcdoc: string | null;
+    /** The box intersects the observed area. */
+    visible: boolean;
+}
+
+/** Number of cards per example type, for the filter buttons. */
+type TypeCounts = Partial<Record<string, number>>;
+
+/** The `srcdoc` of a card's preview: a shader page frozen on its first frame, or the compiled example. */
+async function buildExamplePreviewSrcdoc(documentModel: ExampleDocument, topicPath: string | null): Promise<string> {
     if (isShaderDocument(documentModel)) {
         return renderShaderExampleDocument(documentModel, {
             diagnostics: documentModel.diagnostics || [],
@@ -59,10 +165,11 @@ async function buildExamplePreviewSrcdoc(documentModel, topicPath) {
     );
 }
 
+/** Longest code excerpt shown on a console-only card; the rest is summarized as "N more lines". */
 const CODE_PREVIEW_MAX_LINES = 18;
 
 // The script block of an example whose page would be empty (no markup, not a shader).
-function getScriptOnlyBlock(documentModel) {
+function getScriptOnlyBlock(documentModel: ExampleDocument): ExampleBlock | null {
     if (isShaderDocument(documentModel) || documentModel?.metadata?.framework) return null;
     const blocks = documentModel?.blocks || [];
     const hasMarkup = blocks.some((block) => block.slot === 'markup' && String(block.content || '').trim());
@@ -70,7 +177,8 @@ function getScriptOnlyBlock(documentModel) {
     return blocks.find((block) => block.slot === 'script' && String(block.content || '').trim()) || null;
 }
 
-function buildCodePreview(block) {
+/** The highlighted first lines of a script block, shown instead of a live frame. */
+function buildCodePreview(block: ExampleBlock): HTMLPreElement {
     const lines = String(block.content || '').split('\n');
     const visible = lines.slice(0, CODE_PREVIEW_MAX_LINES).join('\n');
     const pre = document.createElement('pre');
@@ -88,13 +196,40 @@ function buildCodePreview(block) {
     return pre;
 }
 
+/**
+ * The grid of example cards (see the header of this file). One instance, created by `main.ts`, bound to the
+ * `#gallery-view` markup of index.html.
+ */
 export class Gallery {
-    constructor({ onExampleSelect, onExampleDeleted, getTopicLabel }) {
-        this.view = document.getElementById('gallery-view');
-        this.grid = document.getElementById('gallery-grid');
-        this.btnMetaToggle = document.getElementById('btn-gallery-meta-toggle');
-        this.filtersContainer = document.getElementById('gallery-type-filters');
-        this.heading = this.view?.querySelector('.gallery-header h2') || null;
+    readonly view: HTMLElement;
+    readonly grid: HTMLDivElement;
+    readonly btnMetaToggle: HTMLButtonElement | null;
+    readonly filtersContainer: HTMLDivElement | null;
+    readonly heading: HTMLHeadingElement | null;
+    readonly onExampleSelect: GalleryOptions['onExampleSelect'];
+    readonly onExampleDeleted: GalleryOptions['onExampleDeleted'];
+    readonly getTopicLabel: GalleryOptions['getTopicLabel'];
+    /** Repository-relative paths (`material/<topic>/examples/<file>`) of the pending examples, to badge their cards. */
+    pendingPaths: Set<string>;
+    /** Topic whose examples the grid shows; `main.ts` also sets it directly when a topic is selected. `null`: none (pending list). */
+    currentTopicPath: string | null;
+    readonly metaOverlayHiddenStorageKey: string;
+    metaOverlayHidden: boolean;
+    /** Type filter currently applied to the grid (`null`: all cards). */
+    activeTypeFilter: GalleryExampleType | null;
+    private readonly _loadGate: RequestGate;
+    private _previewRecords: Map<Element, PreviewRecord>;
+    private _previewsSuspended: boolean;
+    private readonly _previewObserver: IntersectionObserver | null;
+    /** The cards of the last `render()`. Written, never read. */
+    private _cards: GalleryCard[] | undefined;
+
+    constructor({ onExampleSelect, onExampleDeleted, getTopicLabel }: GalleryOptions) {
+        this.view = byId('gallery-view');
+        this.grid = byId<HTMLDivElement>('gallery-grid');
+        this.btnMetaToggle = document.getElementById('btn-gallery-meta-toggle') as HTMLButtonElement | null;
+        this.filtersContainer = document.getElementById('gallery-type-filters') as HTMLDivElement | null;
+        this.heading = this.view?.querySelector<HTMLHeadingElement>('.gallery-header h2') || null;
         this.onExampleSelect = onExampleSelect;
         this.onExampleDeleted = onExampleDeleted;
         this.getTopicLabel = getTopicLabel;
@@ -120,28 +255,39 @@ export class Gallery {
         this._renderTypeFilters();
     }
 
-    show() {
+    /** Shows the gallery and resumes the card previews. (`main.ts` does the same inline in `showGallery()` and does not call this.) */
+    show(): void {
         this.view.classList.remove('hidden');
         this.setPreviewsSuspended(false);
     }
 
-    hide() {
+    /** Hides the gallery and stops the card previews. (`main.ts` does the same inline in `showEditor()` and does not call this.) */
+    hide(): void {
         this.view.classList.add('hidden');
         this.setPreviewsSuspended(true);
     }
 
-    setHeading(text = '') {
+    /** Sets the title above the grid (`Examples` when blank); the full text is also its tooltip. */
+    setHeading(text: string = ''): void {
         if (!this.heading) return;
         const label = String(text || '').trim();
         this.heading.textContent = label || 'Examples';
         this.heading.title = label;
     }
 
-    setPendingPaths(paths) {
+    /**
+     * Replaces the set of pending example paths used to badge cards. A `Set` is adopted as is (not copied), so
+     * the caller's later changes show up in cards created afterwards.
+     */
+    setPendingPaths(paths: Iterable<string> | null | undefined): void {
         this.pendingPaths = paths instanceof Set ? paths : new Set(paths || []);
     }
 
-    async load(topicPath, { preserveScroll = false } = {}) {
+    /**
+     * Fetches the examples of `topicPath` and renders them. Resolves to `false` when a newer load superseded
+     * this one or the load failed (the grid then shows an error); `true` once the cards are on screen.
+     */
+    async load(topicPath: string, { preserveScroll = false }: GalleryLoadOptions = {}): Promise<boolean> {
         const token = this._loadGate.next();
         const previousScrollTop = this.grid.scrollTop;
         const topicChanged = topicPath !== this.currentTopicPath;
@@ -171,7 +317,14 @@ export class Gallery {
         }
     }
 
-    async render(examples, { token = this._loadGate.next(), topicPath = this.currentTopicPath } = {}) {
+    /**
+     * Builds the cards for `examples` (file names) and replaces the grid's content. Resolves to `false` when
+     * the token went stale while the cards were being prepared; `true` otherwise (also for an empty list).
+     */
+    async render(
+        examples: ExamplesListResponse | null | undefined,
+        { token = this._loadGate.next(), topicPath = this.currentTopicPath }: GalleryRenderOptions = {},
+    ): Promise<boolean> {
         const list = Array.isArray(examples) ? examples : [];
         const cards = await Promise.all(list.map((filename) => this.createCard(filename, topicPath)));
         // A newer load/render started while previews were being prepared: drop this one.
@@ -205,7 +358,7 @@ export class Gallery {
                 this._registerPreview(card.preview, card.buildPreview);
             });
 
-        const typeCounts = {};
+        const typeCounts: TypeCounts = {};
         for (const card of cards) {
             typeCounts[card.exampleType] = (typeCounts[card.exampleType] || 0) + 1;
         }
@@ -218,18 +371,23 @@ export class Gallery {
         return true;
     }
 
-    async createCard(filename, topicPath = this.currentTopicPath) {
+    /**
+     * Builds the card of one example: fetches and parses it, and prepares (without running it) the builder of
+     * its preview. A file that fails to load still gets a card, with "Preview unavailable".
+     */
+    async createCard(filename: string, topicPath: string | null = this.currentTopicPath): Promise<GalleryCard> {
         const div = document.createElement('div');
         div.className = 'example-card';
         div.title = filename;
 
         const preview = document.createElement('div');
         preview.className = 'card-preview';
-        let exampleType = 'html';
-        let buildPreview = null;
+        let exampleType: GalleryExampleType = 'html';
+        let buildPreview: PreviewBuilder | null = null;
 
         try {
-            const data = await fetchExample(topicPath, filename);
+            // A topic is always selected when cards are created (load() takes one, render() defaults to it).
+            const data = await fetchExample(topicPath!, filename);
             if (data?.content) {
                 const documentModel = parseExampleDocument(data.content);
                 const editorialMetadata = getExampleEditorialMetadata(documentModel);
@@ -324,7 +482,15 @@ export class Gallery {
         };
     }
 
-    async renderPendingEntries(entries, { onOpenEntry }) {
+    /**
+     * Replaces the grid with the cards of the pending examples (from every topic) that still exist; used at
+     * startup and when no topic is selected. Resolves to `false` when there is nothing to show or a newer
+     * load superseded this one.
+     */
+    async renderPendingEntries(
+        entries: PendingEntry[] | null | undefined,
+        { onOpenEntry }: GalleryPendingOptions,
+    ): Promise<boolean> {
         const token = this._loadGate.next();
         this.currentTopicPath = null;
         this.setHeading('Pending examples');
@@ -350,14 +516,15 @@ export class Gallery {
         return true;
     }
 
-    async _createPendingCard(entry, onOpenEntry) {
+    /** Card of a pending entry: like `createCard`, but it names the example's topic and opens through `onOpenEntry`. */
+    private async _createPendingCard(entry: PendingEntry, onOpenEntry: GalleryPendingOptions['onOpenEntry']): Promise<PendingCard> {
         const div = document.createElement('div');
         div.className = 'example-card';
         div.title = entry.path;
 
         const preview = document.createElement('div');
         preview.className = 'card-preview';
-        let buildPreview = null;
+        let buildPreview: PreviewBuilder | null = null;
 
         if (entry.topicPath && entry.filename) {
             try {
@@ -412,7 +579,11 @@ export class Gallery {
     // gallery and the gallery itself is visible. This keeps CPU/heat low with
     // many examples and while the editor covers the gallery.
 
-    setPreviewsSuspended(suspended) {
+    /**
+     * Suspends (`true`) or resumes (`false`) every card preview: suspending removes all iframes so nothing runs
+     * while the editor covers the gallery; resuming remounts the cards that are near the viewport.
+     */
+    setPreviewsSuspended(suspended: boolean): void {
         const nextSuspended = Boolean(suspended);
         if (this._previewsSuspended === nextSuspended) return;
         this._previewsSuspended = nextSuspended;
@@ -426,10 +597,10 @@ export class Gallery {
         });
     }
 
-    _registerPreview(preview, buildPreview) {
+    private _registerPreview(preview: Element | null | undefined, buildPreview: PreviewBuilder | null | undefined): void {
         if (!preview || typeof buildPreview !== 'function') return;
 
-        const record = {
+        const record: PreviewRecord = {
             build: buildPreview,
             failed: false,
             iframe: null,
@@ -447,7 +618,7 @@ export class Gallery {
         }
     }
 
-    _handlePreviewIntersections(entries) {
+    private _handlePreviewIntersections(entries: IntersectionObserverEntry[]): void {
         entries.forEach((entry) => {
             const record = this._previewRecords.get(entry.target);
             if (!record) return;
@@ -461,7 +632,8 @@ export class Gallery {
         });
     }
 
-    async _mountPreview(preview, record) {
+    /** Builds the preview's `srcdoc` (once) and inserts its iframe, unless the card was hidden or replaced meanwhile. */
+    private async _mountPreview(preview: Element, record: PreviewRecord): Promise<void> {
         if (record.iframe || record.failed) return;
 
         if (record.srcdoc === null) {
@@ -497,19 +669,20 @@ export class Gallery {
         loadSrcdocWhenLaidOut(iframe, record.srcdoc, () => record.iframe === iframe);
     }
 
-    _unmountPreview(record) {
+    private _unmountPreview(record: PreviewRecord | null | undefined): void {
         if (!record?.iframe) return;
         record.iframe.remove();
         record.iframe = null;
     }
 
-    _resetPreviews() {
+    /** Forgets every card preview (removing their iframes); called before the grid's content is replaced. */
+    private _resetPreviews(): void {
         this._previewObserver?.disconnect();
         this._previewRecords.forEach((record) => this._unmountPreview(record));
         this._previewRecords = new Map();
     }
 
-    _renderPreviewUnavailable(preview) {
+    private _renderPreviewUnavailable(preview: Element | null | undefined): void {
         if (!preview) return;
         const message = document.createElement('div');
         message.className = 'card-preview-unavailable';
@@ -518,7 +691,8 @@ export class Gallery {
         preview.insertBefore(message, preview.firstChild);
     }
 
-    _getExampleType(documentModel) {
+    /** Which type tag and filter an example belongs to: shader, framework, SVG, script-only (JS/TS) or plain HTML. */
+    private _getExampleType(documentModel: ExampleDocument): GalleryExampleType {
         if (isShaderDocument(documentModel)) return 'shader';
         const framework = String(documentModel?.metadata?.framework || '').trim().toLowerCase();
         if (framework === 'vue') return 'vue';
@@ -531,11 +705,11 @@ export class Gallery {
         return 'html';
     }
 
-    _renderTypeFilters() {
+    private _renderTypeFilters(): void {
         if (!this.filtersContainer) return;
         this.filtersContainer.innerHTML = '';
 
-        for (const [type, meta] of Object.entries(EXAMPLE_TYPE_META)) {
+        for (const [type, meta] of Object.entries(EXAMPLE_TYPE_META) as [GalleryExampleType, ExampleTypeMeta][]) {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = `gallery-filter-btn ${meta.className}`;
@@ -546,29 +720,32 @@ export class Gallery {
         }
     }
 
-    _updateTypeFilterCounts(typeCounts) {
+    /** Dims the filter buttons of types with no card (the active one stays enabled so it can be turned off). */
+    private _updateTypeFilterCounts(typeCounts: TypeCounts): void {
         if (!this.filtersContainer) return;
-        this.filtersContainer.querySelectorAll('.gallery-filter-btn').forEach((btn) => {
-            const type = btn.dataset.filterType;
+        this.filtersContainer.querySelectorAll<HTMLButtonElement>('.gallery-filter-btn').forEach((btn) => {
+            const type = btn.dataset.filterType as string; // set by _renderTypeFilters
             const count = typeCounts[type] || 0;
             btn.classList.toggle('is-empty', count === 0);
             btn.disabled = count === 0 && this.activeTypeFilter !== type;
         });
     }
 
-    _setTypeFilter(type) {
+    /** Clicking the active type's button clears the filter. */
+    private _setTypeFilter(type: GalleryExampleType): void {
         this.activeTypeFilter = this.activeTypeFilter === type ? null : type;
         this._applyTypeFilter();
     }
 
-    _applyTypeFilter() {
+    /** Marks the active filter button and hides the cards of other types (`is-filtered-out`). */
+    private _applyTypeFilter(): void {
         if (!this.filtersContainer) return;
 
-        this.filtersContainer.querySelectorAll('.gallery-filter-btn').forEach((btn) => {
+        this.filtersContainer.querySelectorAll<HTMLButtonElement>('.gallery-filter-btn').forEach((btn) => {
             btn.classList.toggle('is-active', btn.dataset.filterType === this.activeTypeFilter);
         });
 
-        this.grid?.querySelectorAll('.example-card').forEach((card) => {
+        this.grid?.querySelectorAll<HTMLElement>('.example-card').forEach((card) => {
             if (!this.activeTypeFilter) {
                 card.classList.remove('is-filtered-out');
             } else {
@@ -577,7 +754,8 @@ export class Gallery {
         });
     }
 
-    async _deleteExample(filename, topicPath = this.currentTopicPath) {
+    /** Deletes an example after a confirm, reloads the grid when it is still the current topic and notifies `onExampleDeleted`. */
+    private async _deleteExample(filename: string, topicPath: string | null = this.currentTopicPath): Promise<void> {
         if (!topicPath) return;
         if (!window.confirm(`Delete "${filename}"?`)) return;
 
@@ -589,11 +767,12 @@ export class Gallery {
             this.onExampleDeleted?.(topicPath, filename);
         } catch (err) {
             console.error('Failed to delete example:', err);
-            showToast(`Delete failed: ${err.message}`, 'error');
+            showToast(`Delete failed: ${errorMessage(err)}`, 'error');
         }
     }
 
-    setMetaOverlayHidden(hidden) {
+    /** Shows or hides the info overlays of all cards; the choice is remembered in localStorage. */
+    setMetaOverlayHidden(hidden: boolean): void {
         this.metaOverlayHidden = hidden === true;
         window.localStorage.setItem(this.metaOverlayHiddenStorageKey, this.metaOverlayHidden ? '1' : '0');
         this._syncMetaToggle();
@@ -603,7 +782,7 @@ export class Gallery {
         });
     }
 
-    _syncMetaToggle() {
+    private _syncMetaToggle(): void {
         if (!this.btnMetaToggle) return;
         this.btnMetaToggle.textContent = this.metaOverlayHidden ? 'Show Info' : 'Hide Info';
         this.btnMetaToggle.setAttribute('aria-pressed', String(!this.metaOverlayHidden));
@@ -612,7 +791,8 @@ export class Gallery {
             : 'Hide example info overlay';
     }
 
-    _createEditorialOverlay(metadata) {
+    /** The card's info overlay (description, tags, rating, importance); an empty one when there is nothing to show. */
+    private _createEditorialOverlay(metadata: ExampleEditorialMetadata): HTMLDivElement {
         const overlay = document.createElement('div');
         overlay.className = 'card-meta-overlay';
         if (this.metaOverlayHidden) {
