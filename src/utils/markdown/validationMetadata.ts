@@ -1,3 +1,15 @@
+// Validators of the frontmatter and of the shape of one virtual file: they append diagnostics, never
+// throw and never change the document. Called by `parseExampleDocument()` (documentApi.ts) right after
+// parsing, before the document validators of validationDocuments.ts (which also calls
+// `validateVirtualFileShape()` for every `## @file`). Uses the value parsers of core.ts and shader.ts.
+//
+// The metadata is already normalized (`normalizeMetadata()`: trimmed, lower-cased where it applies) but
+// not validated: every unsupported value is kept and reported here. Most problems are warnings; the
+// errors (unsupported framework/renderer/mode, an invalid entry path or shader resolution, keys that
+// conflict with each other or with the format) make the document blocking (`hasBlockingDiagnostics()`).
+
+import type { Diagnostic } from '../../types/diagnostics.ts';
+import type { ExampleMetadata, SourceFormat, VirtualFile } from '../../types/document.ts';
 import {
     ALLOWED_VIRTUAL_FILE_ROLES,
     EXAMPLE_IMPORTANCE_VALUES,
@@ -23,7 +35,13 @@ import {
     parseShaderUniformMetadataValue,
 } from './shader.ts';
 
-export function validateMetadata(metadata, diagnostics, sourceFormat) {
+/**
+ * Checks the frontmatter keys one by one and their combinations with the document format
+ * (`mode`/`entry`/`renderer` against legacy blocks or virtual files) and appends what it finds to
+ * `diagnostics`. Includes the warnings of the `shader_uniforms`, `shader_textures`, `editor_hidden_files`
+ * and `example_tags` parsers.
+ */
+export function validateMetadata(metadata: ExampleMetadata, diagnostics: Diagnostic[], sourceFormat: SourceFormat): void {
     const framework = metadata.framework || '';
     const renderer = metadata.renderer || '';
     const mode = metadata.mode || '';
@@ -152,7 +170,11 @@ export function validateMetadata(metadata, diagnostics, sourceFormat) {
     }
 }
 
-export function validateVirtualFileShape(file, diagnostics) {
+/**
+ * Checks one virtual file on its own: a non-empty path without `.`/`..` segments (error), a known
+ * `@role` (warning), and an extension that matches its language (warning).
+ */
+export function validateVirtualFileShape(file: VirtualFile, diagnostics: Diagnostic[]): void {
     const pathIssue = getVirtualPathIssue(file.path);
     const expectedExtensions = getExpectedExtensions(file.language);
     const extension = getFileExtension(file.path);

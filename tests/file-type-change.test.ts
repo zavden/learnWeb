@@ -22,7 +22,7 @@ test('legacy markup blocks only offer markup-family badge changes', () => {
 \`\`\`css
 main { color: red; }
 \`\`\``);
-    const htmlFile = documentModel.files.find((file) => file.language === 'html');
+    const htmlFile = documentModel.files.find((file) => file.language === 'html')!;
     const options = getDocumentFileTypeChangeOptions(documentModel, htmlFile.id);
     const htmlFullResult = evaluateDocumentFileTypeChange(documentModel, htmlFile.id, 'html-full');
     const pugResult = evaluateDocumentFileTypeChange(documentModel, htmlFile.id, 'pug');
@@ -52,7 +52,7 @@ function App() {
 \`\`\`css
 main { color: red; }
 \`\`\``);
-    const appFile = documentModel.files.find((file) => file.language === 'jsx');
+    const appFile = documentModel.files.find((file) => file.language === 'jsx')!;
     const options = getDocumentFileTypeChangeOptions(documentModel, appFile.id);
     const tsxResult = evaluateDocumentFileTypeChange(documentModel, appFile.id, 'tsx');
     const cssResult = evaluateDocumentFileTypeChange(documentModel, appFile.id, 'css');
@@ -88,7 +88,7 @@ export function App() {
   return <main>Hello</main>;
 }
 \`\`\``);
-    const entryFile = documentModel.files.find((file) => file.role === 'entry');
+    const entryFile = documentModel.files.find((file) => file.role === 'entry')!;
     const options = getDocumentFileTypeChangeOptions(documentModel, entryFile.id);
     const tsxResult = evaluateDocumentFileTypeChange(documentModel, entryFile.id, 'tsx');
     const cssResult = evaluateDocumentFileTypeChange(documentModel, entryFile.id, 'css');
@@ -123,7 +123,7 @@ export {};
 \`\`\`css
 body { margin: 0; }
 \`\`\``);
-    const styleFile = documentModel.files.find((file) => file.role === 'style');
+    const styleFile = documentModel.files.find((file) => file.role === 'style')!;
     const styleOptions = getDocumentFileTypeChangeOptions(documentModel, styleFile.id);
     const scssResult = evaluateDocumentFileTypeChange(documentModel, styleFile.id, 'scss');
 
@@ -155,7 +155,7 @@ export {};
 \`\`\`vue
 <template><main>Hello</main></template>
 \`\`\``);
-    const entryFile = documentModel.files.find((file) => file.role === 'entry');
+    const entryFile = documentModel.files.find((file) => file.role === 'entry')!;
     const nextDocument = updateDocumentFileType(documentModel, entryFile.id, 'typescript');
 
     assert.equal(nextDocument.metadata.entry, 'src/main.ts');
@@ -185,11 +185,11 @@ export {};
 \`\`\`css
 body { margin: 0; }
 \`\`\``);
-    const entryFile = documentModel.files.find((file) => file.role === 'entry');
+    const entryFile = documentModel.files.find((file) => file.role === 'entry')!;
     const styleFile = documentModel.files.find((file) => file.role === 'style');
 
     const withTsxEntry = updateDocumentFileType(documentModel, entryFile.id, 'tsx');
-    const withScssStyle = updateDocumentFileType(withTsxEntry, withTsxEntry.files.find((file) => file.role === 'style').id, 'scss');
+    const withScssStyle = updateDocumentFileType(withTsxEntry, withTsxEntry.files.find((file) => file.role === 'style')!.id, 'scss');
 
     assert.equal(withTsxEntry.metadata.entry, 'src/main.tsx');
     assert.ok(withTsxEntry.files.some((file) => file.path === 'src/main.tsx' && file.language === 'tsx'));
@@ -232,7 +232,7 @@ export function AppAlt() {
   return <main>Alt</main>;
 }
 \`\`\``);
-    const appFile = documentModel.files.find((file) => file.path === 'src/App.jsx');
+    const appFile = documentModel.files.find((file) => file.path === 'src/App.jsx')!;
     const evaluation = evaluateDocumentFileTypeChange(documentModel, appFile.id, 'tsx');
     const nextDocument = updateDocumentFileType(documentModel, appFile.id, 'tsx');
 
@@ -288,8 +288,8 @@ export {};
 \`\`\`html
 <main>Hello</main>
 \`\`\``);
-    const configFile = configDocument.files.find((file) => file.role === 'config');
-    const markupFile = markupDocument.files.find((file) => file.role === 'markup');
+    const configFile = configDocument.files.find((file) => file.role === 'config')!;
+    const markupFile = markupDocument.files.find((file) => file.role === 'markup')!;
     const configResult = evaluateDocumentFileTypeChange(configDocument, configFile.id, 'typescript');
     const markupOptions = getDocumentFileTypeChangeOptions(markupDocument, markupFile.id);
     const markupResult = evaluateDocumentFileTypeChange(markupDocument, markupFile.id, 'html');
@@ -332,8 +332,8 @@ export {};
 \`\`\`vue
 <template><main>Hello</main></template>
 \`\`\``);
-    const markupFile = documentModel.files.find((file) => file.path === 'src/App.html');
-    const sfcFile = documentModel.files.find((file) => file.path === 'src/App.vue');
+    const markupFile = documentModel.files.find((file) => file.path === 'src/App.html')!;
+    const sfcFile = documentModel.files.find((file) => file.path === 'src/App.vue')!;
     const markupToTs = evaluateDocumentFileTypeChange(documentModel, markupFile.id, 'typescript');
     const sfcToTs = evaluateDocumentFileTypeChange(documentModel, sfcFile.id, 'typescript');
 
@@ -373,8 +373,8 @@ export default {};
 \`\`\`json
 { "title": "Demo" }
 \`\`\``);
-    const appFile = documentModel.files.find((file) => file.role === 'app');
-    const configFile = documentModel.files.find((file) => file.role === 'config');
+    const appFile = documentModel.files.find((file) => file.role === 'app')!;
+    const configFile = documentModel.files.find((file) => file.role === 'config')!;
     const appResult = evaluateDocumentFileTypeChange(documentModel, appFile.id, 'vue');
     const configResult = evaluateDocumentFileTypeChange(documentModel, configFile.id, 'javascript');
 
@@ -410,7 +410,7 @@ void main() {
   gl_FragColor = vec4(1.0);
 }
 \`\`\``);
-    const vertexFile = documentModel.files.find((file) => file.language === 'vertex');
+    const vertexFile = documentModel.files.find((file) => file.language === 'vertex')!;
     const options = getDocumentFileTypeChangeOptions(documentModel, vertexFile.id);
     const result = evaluateDocumentFileTypeChange(documentModel, vertexFile.id, 'fragment');
 
@@ -445,7 +445,7 @@ export function App() {
   return <main>Hello</main>;
 }
 \`\`\``);
-    const appFile = documentModel.files.find((file) => file.path === 'src/App.jsx');
+    const appFile = documentModel.files.find((file) => file.path === 'src/App.jsx')!;
     const evaluation = evaluateDocumentFileTypeChange(documentModel, appFile.id, 'tsx');
     const nextDocument = updateDocumentFileType(documentModel, appFile.id, 'tsx');
 
@@ -482,7 +482,7 @@ export function App() {
   return <main>Hello</main>;
 }
 \`\`\``);
-    const appFile = documentModel.files.find((file) => file.path === 'src/App.jsx');
+    const appFile = documentModel.files.find((file) => file.path === 'src/App.jsx')!;
     const options = getDocumentFileTypeChangeOptions(documentModel, appFile.id);
 
     assert.deepEqual(options.map((option) => option.value), ['jsx', 'tsx', 'javascript', 'typescript']);
@@ -512,7 +512,7 @@ export {};
 \`\`\`css
 body { margin: 0; }
 \`\`\``);
-    const styleFile = documentModel.files.find((file) => file.path === 'src/styles.css');
+    const styleFile = documentModel.files.find((file) => file.path === 'src/styles.css')!;
     const hiddenDocument = updateDocumentHiddenFiles(documentModel, ['file:src/styles.css']);
     const nextDocument = updateDocumentFileType(hiddenDocument, styleFile.id, 'scss');
 
@@ -532,8 +532,8 @@ test('legacy badge changes rewrite the block type while preserving content', () 
 \`\`\`css
 main { color: red; }
 \`\`\``);
-    const htmlFile = documentModel.files.find((file) => file.language === 'html');
-    const cssFile = documentModel.files.find((file) => file.language === 'css');
+    const htmlFile = documentModel.files.find((file) => file.language === 'html')!;
+    const cssFile = documentModel.files.find((file) => file.language === 'css')!;
 
     const pugDocument = updateDocumentFileType(documentModel, htmlFile.id, 'pug');
     const scssDocument = updateDocumentFileType(pugDocument, cssFile.id, 'scss');
@@ -567,7 +567,7 @@ function App() {
   return <main>Hello</main>;
 }
 \`\`\``);
-    const appFile = documentModel.files.find((file) => file.language === 'jsx');
+    const appFile = documentModel.files.find((file) => file.language === 'jsx')!;
     const nextDocument = updateDocumentFileType(documentModel, appFile.id, 'tsx');
 
     assert.equal(nextDocument.metadata.framework, 'react');
@@ -588,7 +588,7 @@ test('blocked legacy badge changes leave the document untouched', () => {
 \`\`\`css
 main { color: red; }
 \`\`\``);
-    const htmlFile = documentModel.files.find((file) => file.language === 'html');
+    const htmlFile = documentModel.files.find((file) => file.language === 'html')!;
     const nextDocument = updateDocumentFileType(documentModel, htmlFile.id, 'html-full');
 
     assert.deepEqual(

@@ -28,8 +28,10 @@ import { compileExampleDocument } from '../src/utils/exampleCompiler.ts';
 import { resolveExerciseComparison } from '../src/utils/exerciseComparison.ts';
 import { renderCompiledExampleDocument, renderShaderExampleDocument } from '../src/utils/exampleRenderer.ts';
 import { parseShaderCompilerLog } from '../src/utils/shaderPreviewDiagnostics.ts';
+import type { Diagnostic } from '../src/types/diagnostics.ts';
+import type { ExampleDocument } from '../src/types/document.ts';
 
-function getDiagnosticCodes(documentModel) {
+function getDiagnosticCodes(documentModel: ExampleDocument): string[] {
     return (documentModel.diagnostics || []).map((diagnostic) => diagnostic.code);
 }
 
@@ -1224,7 +1226,7 @@ test('HTML-FULL compiles and renders as a complete standalone document', async (
 
     assert.equal(documentModel.blocks[0].type, 'html-full');
     assert.equal(presetDocument.blocks[0].type, 'html-full');
-    assert.equal(result.compiledDocument.fullDocumentHtml.includes('<title>Standalone</title>'), true);
+    assert.equal(result.compiledDocument.fullDocumentHtml!.includes('<title>Standalone</title>'), true);
     assert.match(rendered, /^<!DOCTYPE html>/i);
     assert.equal((rendered.match(/<!DOCTYPE html>/gi) || []).length, 1);
     assert.match(rendered, /<title>Standalone<\/title>/);
@@ -1256,7 +1258,7 @@ main { color: red; }
 test('React multi-file templates prefer typed scaffolds when the project already uses TSX', () => {
     const documentModel = createExampleDocumentFromPreset('react-project-tsx');
     const templateOptions = getFrameworkFileTemplateOptions(documentModel);
-    const scaffold = buildFrameworkFileTemplate(documentModel, 'state');
+    const scaffold = buildFrameworkFileTemplate(documentModel, 'state')!;
 
     assert.ok(templateOptions.some((template) => template.id === 'state' && template.label === 'Context'));
     assert.equal(scaffold.files.length, 1);
@@ -1269,7 +1271,7 @@ test('React multi-file templates prefer typed scaffolds when the project already
 test('Vue multi-file templates can scaffold a component with a paired HTML template', () => {
     const documentModel = createExampleDocumentFromPreset('vue-project-typescript');
     const templateOptions = getFrameworkFileTemplateOptions(documentModel);
-    const scaffold = buildFrameworkFileTemplate(documentModel, 'component');
+    const scaffold = buildFrameworkFileTemplate(documentModel, 'component')!;
 
     assert.ok(templateOptions.some((template) => template.id === 'hook' && template.label === 'Composable'));
     assert.equal(scaffold.files.length, 2);
@@ -1283,7 +1285,7 @@ test('Vue multi-file templates can scaffold a component with a paired HTML templ
 
 test('Vue SFC projects scaffold single-file components when the project already uses .vue files', () => {
     const documentModel = createExampleDocumentFromPreset('vue-project-sfc-typescript');
-    const scaffold = buildFrameworkFileTemplate(documentModel, 'component');
+    const scaffold = buildFrameworkFileTemplate(documentModel, 'component')!;
 
     assert.equal(scaffold.files.length, 1);
     assert.equal(scaffold.files[0].language, 'vue');
@@ -1831,7 +1833,7 @@ test('preview renderer suppresses non-blocking diagnostics markup when console i
     const rendered = renderCompiledExampleDocument(
         { html: '<main>Hello</main>', js: 'console.log("hi");' },
         '',
-        [{ level: 'warning', message: 'Non blocking note', file: 'src/App.tsx', line: 4, column: 2 }],
+        [{ level: 'warning', message: 'Non blocking note', file: 'src/App.tsx', line: 4, column: 2 }] as Diagnostic[], // no `code`: partial on purpose
         { consoleEnabled: true, renderId: 9 }
     );
 
@@ -1848,7 +1850,7 @@ test('framework previews do not reserve full-height app roots when blocking diag
             js: '',
         },
         '',
-        [{ level: 'error', message: 'Unexpected token' }],
+        [{ level: 'error', message: 'Unexpected token' }] as Diagnostic[], // no `code`: partial on purpose
         { consoleEnabled: false, renderId: 10 }
     );
     const vueRendered = renderCompiledExampleDocument(
@@ -1859,7 +1861,7 @@ test('framework previews do not reserve full-height app roots when blocking diag
             js: '',
         },
         '',
-        [{ level: 'error', message: 'Unexpected token' }],
+        [{ level: 'error', message: 'Unexpected token' }] as Diagnostic[], // no `code`: partial on purpose
         { consoleEnabled: false, renderId: 11 }
     );
 
@@ -1878,7 +1880,7 @@ test('blocking compile diagnostics remain visible even when the console bridge i
             js: '',
         },
         '',
-        [{ level: 'error', message: 'Broken build', file: 'src/App.tsx', line: 4, column: 2 }],
+        [{ level: 'error', message: 'Broken build', file: 'src/App.tsx', line: 4, column: 2 }] as Diagnostic[], // no `code`: partial on purpose
         { consoleEnabled: true, renderId: 12 }
     );
 
@@ -1956,7 +1958,7 @@ export function App() {
     const duplicated = duplicateDocumentFile(withUtility, utilityFile.id);
     assert.ok(duplicated.files.some((file) => file.path === 'src/utils/math-copy.ts'));
 
-    const entryFile = duplicated.files.find((file) => file.path === 'src/main.jsx');
+    const entryFile = duplicated.files.find((file) => file.path === 'src/main.jsx')!;
     const renamedEntry = updateDocumentFileDetails(duplicated, entryFile.id, {
         language: 'jsx',
         path: 'src/bootstrap.jsx',
@@ -1969,7 +1971,7 @@ export function App() {
 
     const removedEntry = removeDocumentFile(
         switchedEntry,
-        switchedEntry.files.find((file) => file.path === 'src/App.jsx').id,
+        switchedEntry.files.find((file) => file.path === 'src/App.jsx')!.id,
     );
     assert.equal(removedEntry.metadata.entry, 'src/bootstrap.jsx');
 });
@@ -1987,11 +1989,11 @@ test('legacy block CRUD can add, duplicate and remove blocks', () => {
     });
     assert.ok(withStyle.files.some((file) => file.language === 'css'));
 
-    const htmlFile = withStyle.files.find((file) => file.language === 'html');
+    const htmlFile = withStyle.files.find((file) => file.language === 'html')!;
     const duplicatedMarkup = duplicateDocumentFile(withStyle, htmlFile.id);
     assert.equal(duplicatedMarkup.files.filter((file) => file.language === 'html').length, 2);
 
-    const styleFile = duplicatedMarkup.files.find((file) => file.language === 'css');
+    const styleFile = duplicatedMarkup.files.find((file) => file.language === 'css')!;
     const withoutStyle = removeDocumentFile(duplicatedMarkup, styleFile.id);
     assert.equal(withoutStyle.files.some((file) => file.language === 'css'), false);
 });
@@ -2023,13 +2025,13 @@ export function AppShell() {
 }
 \`\`\``);
     const visibilityEntries = getDocumentFileVisibilityEntries(documentModel);
-    const appEntry = visibilityEntries.find((entry) => entry.file.path === 'src/App.jsx');
+    const appEntry = visibilityEntries.find((entry) => entry.file.path === 'src/App.jsx')!;
     assert.equal(appEntry.key, 'file:src/App.jsx');
     assert.equal(appEntry.hidden, false);
 
     const hiddenDocument = updateDocumentHiddenFiles(documentModel, [appEntry.key]);
     const hiddenEntries = getDocumentFileVisibilityEntries(hiddenDocument);
-    const hiddenAppEntry = hiddenEntries.find((entry) => entry.file.path === 'src/App.jsx');
+    const hiddenAppEntry = hiddenEntries.find((entry) => entry.file.path === 'src/App.jsx')!;
 
     assert.equal(hiddenDocument.metadata.editor_hidden_files, 'file:src/App.jsx');
     assert.equal(hiddenAppEntry.hidden, true);
@@ -2054,12 +2056,12 @@ main { color: red; }
 console.log('hi');
 \`\`\``);
     const visibilityEntries = getDocumentFileVisibilityEntries(documentModel);
-    const cssEntry = visibilityEntries.find((entry) => entry.file.language === 'css');
+    const cssEntry = visibilityEntries.find((entry) => entry.file.language === 'css')!;
     assert.equal(cssEntry.key, 'block:css:1');
 
     const hiddenDocument = updateDocumentHiddenFiles(documentModel, ['block:css:1']);
     const hiddenEntries = getDocumentFileVisibilityEntries(hiddenDocument);
 
     assert.equal(hiddenDocument.metadata.editor_hidden_files, 'block:css:1');
-    assert.equal(hiddenEntries.find((entry) => entry.key === 'block:css:1').hidden, true);
+    assert.equal(hiddenEntries.find((entry) => entry.key === 'block:css:1')!.hidden, true);
 });

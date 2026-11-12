@@ -1,6 +1,63 @@
+// Scaffolds for new files in React and Vue multi-file examples: the "template" menu of the editor's
+// new-file dialog (component, hook, page, state, reducer, style, util) and the files each entry creates,
+// with starter code named after the file. Used by src/components/editor/fileOperations.ts, which adds
+// the files with `createDocumentFile()` (src/utils/markdown/mutations.ts).
+//
+// The language follows the project: TypeScript when it already has typed files, SCSS/SASS when it
+// already uses them, `.vue` components when it already has SFCs. A Vue component or page that is not an
+// SFC gets two files: a script module and an HTML render template that it imports. Pure functions. The
+// path helpers below resemble those of src/utils/markdown/core.ts but are not identical (dotfiles,
+// trailing slashes): don't swap one for the other without checking.
+
+import type { ExampleDocumentInput, FileLanguage, Framework, NewDocumentFile } from '../types/document.ts';
 import { normalizeBlockType } from './exampleBlocks.ts';
 
-const TEMPLATE_OPTIONS = {
+/** One entry of the template menu. */
+export interface FileTemplateOption {
+    /** Template id passed back to `buildFrameworkFileTemplate()` (`component`, `hook`, `state`…). */
+    id: string;
+    /** Menu label; the same id has a framework-specific label (`state` is "Context" or "Store"). */
+    label: string;
+}
+
+/** What the user already typed in the dialog; empty values mean "use the template's default". */
+export interface FileTemplateRequest {
+    /** Wanted language; ignored when the template does not support it (the project's preference wins). */
+    language?: string;
+    /** Wanted path; its extension is replaced to match the language. Without it, a free default path is chosen. */
+    path?: string;
+    /** Wanted role; the template's role otherwise. */
+    role?: string;
+}
+
+/** A file of a scaffold: everything `createDocumentFile()` needs. */
+export type FileTemplateFile = Required<NewDocumentFile>;
+
+/** `buildFrameworkFileTemplate()`: the files to create and the dialog text. */
+export interface FileTemplateScaffold {
+    /** The primary file first (a non-SFC Vue component or page also gets its HTML render template). */
+    files: FileTemplateFile[];
+    /** Status text for the dialog (`Scaffold ready: src/components/NewPanel.js + src/components/NewPanel.html`). */
+    hint: string;
+    /** Path of the primary file, which the editor selects after creating the files. */
+    primaryPath: string;
+}
+
+/** What a new file should look like, inferred from the files the project already has. */
+interface TemplatePreferences {
+    /** Language of components and pages: `tsx`/`jsx` for React; `vue`, `typescript` or `javascript` for Vue. */
+    componentLanguage: string;
+    framework: string;
+    /** `typescript` when the project already has typed files, else `javascript`. */
+    moduleLanguage: string;
+    /** `scss` or `sass` when the project already has such a file, else `css`. */
+    styleLanguage: string;
+    usesVueSfc: boolean;
+}
+
+// Looked up by the document's framework text: a string-indexed type (like a plain object lookup, an
+// inherited key such as `constructor` is not filtered out). `satisfies` keeps one entry per framework.
+const TEMPLATE_OPTIONS: Readonly<Record<string, readonly FileTemplateOption[] | undefined>> = {
     react: [
         { id: 'component', label: 'Component' },
         { id: 'hook', label: 'Hook' },
@@ -19,9 +76,10 @@ const TEMPLATE_OPTIONS = {
         { id: 'style', label: 'Style' },
         { id: 'util', label: 'Util' },
     ],
-};
+} satisfies Record<Framework, FileTemplateOption[]>;
 
-const LANGUAGE_EXTENSIONS = {
+/** Extension of a scaffolded file per language (the preferred one of `LANGUAGE_FILE_EXTENSIONS`). */
+const LANGUAGE_EXTENSIONS: Readonly<Record<string, string | undefined>> = {
     css: '.css',
     html: '.html',
     javascript: '.js',
@@ -32,7 +90,7 @@ const LANGUAGE_EXTENSIONS = {
     typescript: '.ts',
     tsx: '.tsx',
     vue: '.vue',
-};
+} satisfies Partial<Record<FileLanguage, string>>;
 
 function normalizeVirtualPath(value = '') {
     return String(value)
@@ -73,7 +131,8 @@ function ensurePathExtension(path = '', language = '') {
     return directory ? `${directory}/${nextFileName}` : nextFileName;
 }
 
-function makeUniquePath(path = '', takenPaths = new Set()) {
+/** `path`, or the first free `stem-2.ext`, `stem-3.ext`… when it is taken. */
+function makeUniquePath(path = '', takenPaths: ReadonlySet<string> = new Set()): string {
     if (!path) return path;
     if (!takenPaths.has(path)) return path;
 
@@ -137,11 +196,11 @@ function getTemplateSymbolName(filePath = '', templateId = '', framework = '') {
     return toPascalCase(stem);
 }
 
-function getDocumentFramework(documentModel) {
+function getDocumentFramework(documentModel: ExampleDocumentInput | null | undefined): string {
     return String(documentModel?.metadata?.framework || '').trim().toLowerCase();
 }
 
-function inferPreferences(documentModel) {
+function inferPreferences(documentModel: ExampleDocumentInput | null | undefined): TemplatePreferences {
     const framework = getDocumentFramework(documentModel);
     const languages = (documentModel?.files || []).map((file) => file.language);
     const hasTyped = framework === 'react'
@@ -165,7 +224,8 @@ function inferPreferences(documentModel) {
     };
 }
 
-function normalizeTemplateLanguage(templateId = '', requestedLanguage = '', preferences) {
+/** The requested language when the template supports it, otherwise the project's preference for that kind of file. */
+function normalizeTemplateLanguage(templateId = '', requestedLanguage = '', preferences: TemplatePreferences): string {
     const normalized = normalizeBlockType(requestedLanguage);
 
     if (templateId === 'style') {
@@ -430,7 +490,7 @@ function createVueSfcTemplateContents(templateId = '', scriptLanguage = 'javascr
     return `<template>\n  <section class="${className}">\n    <p class="${className}__eyebrow">${eyebrow}</p>\n    <h2>{{ title }}</h2>\n    <p>Update this component with your own reactive state.</p>\n  </section>\n</template>\n\n${scriptTag}\nimport { computed, ref } from 'vue';\n\nconst count = ref(0);\nconst title = computed(() => '${componentName} ' + count.value);\n</script>\n\n${styleTag}\n${styleSource}\n</style>`;
 }
 
-function buildReactTemplate(documentModel, templateId, options = {}) {
+function buildReactTemplate(documentModel: ExampleDocumentInput, templateId: string, options: FileTemplateRequest = {}): FileTemplateScaffold {
     const preferences = inferPreferences(documentModel);
     const language = normalizeTemplateLanguage(templateId, options.language, preferences);
     const role = options.role || getTemplateRole('react', templateId);
@@ -457,7 +517,7 @@ function buildReactTemplate(documentModel, templateId, options = {}) {
     };
 }
 
-function buildVueTemplate(documentModel, templateId, options = {}) {
+function buildVueTemplate(documentModel: ExampleDocumentInput, templateId: string, options: FileTemplateRequest = {}): FileTemplateScaffold {
     const preferences = inferPreferences(documentModel);
     const language = normalizeTemplateLanguage(templateId, options.language, preferences);
     const role = options.role || getTemplateRole('vue', templateId);
@@ -531,13 +591,20 @@ function buildVueTemplate(documentModel, templateId, options = {}) {
     };
 }
 
-export function getFrameworkFileTemplateOptions(documentModel) {
+/** The template menu of a React or Vue multi-file document; `[]` for anything else (the dialog then hides it). */
+export function getFrameworkFileTemplateOptions(documentModel: ExampleDocumentInput | null | undefined): FileTemplateOption[] {
     const framework = getDocumentFramework(documentModel);
     if (documentModel?.sourceFormat !== 'virtual-files') return [];
     return TEMPLATE_OPTIONS[framework] ? [...TEMPLATE_OPTIONS[framework]] : [];
 }
 
-export function buildFrameworkFileTemplate(documentModel, templateId, options = {}) {
+/**
+ * The files a template creates in a React or Vue multi-file document; `null` for `custom`, an empty id or
+ * another kind of document. A default path is made unique among the existing files; a requested path is
+ * used as given (with the extension of the chosen language), so the caller checks it for collisions.
+ * Unknown template ids fall back to a generic utility module.
+ */
+export function buildFrameworkFileTemplate(documentModel: ExampleDocumentInput | null | undefined, templateId: string, options: FileTemplateRequest = {}): FileTemplateScaffold | null {
     const framework = getDocumentFramework(documentModel);
     if (!templateId || templateId === 'custom') return null;
     if (documentModel?.sourceFormat !== 'virtual-files') return null;

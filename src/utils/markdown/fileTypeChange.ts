@@ -1,3 +1,23 @@
+// File-type ("badge") changes: which languages a file of a document may switch to, and whether a given
+// switch is allowed, with the reason shown to the user when it is not. Used by the editor's "change
+// badge" dialog (src/components/editor/metadataDialogs.ts) and by `updateDocumentFileType()`
+// (mutations.ts), which applies an allowed change. Reads the language tables of constants.ts and the
+// language/path helpers of core.ts.
+//
+// The rules depend on the context (`FileTypeChangeContext`): a file only moves inside its family (markup,
+// style, script, app, JSON, Vue SFC) and inside the languages its framework, role and entry status allow.
+// Shader blocks never change, a locked exercise file never changes, and a virtual file whose new
+// extension would collide with another file's path is blocked. Every check is pure: nothing here edits
+// the document.
+
+import type {
+    ExampleDocument,
+    ExampleDocumentInput,
+    FileTypeChangeContext,
+    FileTypeChangeEvaluation,
+    FileTypeChangeOption,
+    VirtualFile,
+} from '../../types/document.ts';
 import {
     LEGACY_APP_LANGUAGE_OPTIONS,
     LEGACY_MARKUP_LANGUAGE_OPTIONS,
@@ -29,7 +49,14 @@ import {
 import { synchronizeDocument } from './documentApi.ts';
 import { getExerciseConfig } from './documentMeta.ts';
 
-function getDocumentFileTypeChangeContext(documentModel, file) {
+/** Options of `getDocumentFileTypeChangeOptions()`. */
+export interface FileTypeChangeOptionsQuery {
+    /** List the file's current language too (default `true`). */
+    includeCurrent?: boolean;
+}
+
+/** Which rule set applies to the document: shader, React/Vue/plain virtual files, or React/Vue/plain legacy blocks. */
+function getDocumentFileTypeChangeContext(documentModel: ExampleDocumentInput | null | undefined, file: VirtualFile | null | undefined): FileTypeChangeContext {
     const document = synchronizeDocument(documentModel);
     const framework = String(document.metadata?.framework || '').trim().toLowerCase();
     const rendererMode = String(document.rendererMode || '').trim().toLowerCase();
@@ -49,7 +76,12 @@ function getDocumentFileTypeChangeContext(documentModel, file) {
     return 'legacy';
 }
 
-function getVirtualRoleConstrainedCandidateLanguages(documentModel, file) {
+/**
+ * Candidate languages of a virtual file: decided by the framework and the file's role and entry status
+ * first, then by its language family. `[]` when the file cannot change at all (React markup or asset roles,
+ * Vue assets, a `.vue` file without an SFC role).
+ */
+function getVirtualRoleConstrainedCandidateLanguages(documentModel: ExampleDocumentInput | null | undefined, file: VirtualFile | null | undefined): string[] {
     const document = synchronizeDocument(documentModel);
     const framework = String(document.metadata?.framework || '').trim().toLowerCase();
     const role = String(file?.role || '').trim().toLowerCase();
@@ -87,7 +119,8 @@ function getVirtualRoleConstrainedCandidateLanguages(documentModel, file) {
     return [...REACT_MULTI_FILE_CODE_LANGUAGE_OPTIONS];
 }
 
-function getDocumentFileTypeChangeCandidates(documentModel, file) {
+/** The languages a file may switch to in its context, its current language included. */
+function getDocumentFileTypeChangeCandidates(documentModel: ExampleDocumentInput | null | undefined, file: VirtualFile | null | undefined): string[] {
     const document = synchronizeDocument(documentModel);
     const context = getDocumentFileTypeChangeContext(document, file);
     const currentType = normalizeBlockType(file?.blockType || file?.language || '');
@@ -119,7 +152,7 @@ function getDocumentFileTypeChangeCandidates(documentModel, file) {
     return getVirtualRoleConstrainedCandidateLanguages(document, file);
 }
 
-function buildBlockedFileTypeChangeResult(baseResult, code, reason) {
+function buildBlockedFileTypeChangeResult(baseResult: FileTypeChangeEvaluation, code: string, reason: string): FileTypeChangeEvaluation {
     return {
         ...baseResult,
         allowed: false,
@@ -128,7 +161,8 @@ function buildBlockedFileTypeChangeResult(baseResult, code, reason) {
     };
 }
 
-function buildIncompatibleFileTypeChangeResult(document, file, baseResult) {
+/** Blocked with `incompatible-target-type`; the reason lists the labels of the languages that are possible. */
+function buildIncompatibleFileTypeChangeResult(document: ExampleDocument, file: VirtualFile, baseResult: FileTypeChangeEvaluation): FileTypeChangeEvaluation {
     const candidateLanguages = getDocumentFileTypeChangeCandidates(document, file);
     const candidateLabels = candidateLanguages.map((language) => getLanguageLabel(language)).join(', ');
 
@@ -141,7 +175,8 @@ function buildIncompatibleFileTypeChangeResult(document, file, baseResult) {
     );
 }
 
-function finalizeDocumentFileTypeChangeResult(document, file, baseResult) {
+/** The checks every context ends with: the target must be a candidate, and a renamed virtual file must not take another file's path. */
+function finalizeDocumentFileTypeChangeResult(document: ExampleDocument, file: VirtualFile, baseResult: FileTypeChangeEvaluation): FileTypeChangeEvaluation {
     const candidateLanguages = getDocumentFileTypeChangeCandidates(document, file);
 
     if (!candidateLanguages.includes(baseResult.nextType)) {
@@ -168,7 +203,13 @@ function finalizeDocumentFileTypeChangeResult(document, file, baseResult) {
     };
 }
 
-export function evaluateDocumentFileTypeChange(documentModel, fileId, nextType = '') {
+/**
+ * Whether the file `fileId` may switch to `nextType` (any alias), and what would change: the normalized
+ * types, the expected extensions and, for virtual files, the new path. A blocked change carries a stable
+ * `code` and a user-facing `reason`. The exercise lock and the shader rule are checked before the
+ * family rules.
+ */
+export function evaluateDocumentFileTypeChange(documentModel: ExampleDocumentInput | null | undefined, fileId: string, nextType: string = ''): FileTypeChangeEvaluation {
     const document = synchronizeDocument(documentModel);
     const file = (document.files || []).find((entry) => entry.id === fileId);
     const normalizedNextType = normalizeBlockType(nextType);
@@ -178,7 +219,7 @@ export function evaluateDocumentFileTypeChange(documentModel, fileId, nextType =
     const expectedPath = file?.sourceKind === 'virtual'
         ? getExpectedPathForLanguage(file.path, normalizedNextType)
         : '';
-    const baseResult = {
+    const baseResult: FileTypeChangeEvaluation = {
         allowed: false,
         code: '',
         context,
@@ -356,7 +397,12 @@ export function evaluateDocumentFileTypeChange(documentModel, fileId, nextType =
     return finalizeDocumentFileTypeChangeResult(document, file, baseResult);
 }
 
-export function getDocumentFileTypeChangeOptions(documentModel, fileId, options = {}) {
+/**
+ * The entries of the "change badge" menu of a file: every candidate language with its evaluation, so
+ * blocked entries can be shown disabled with their reason. `[]` when the file does not exist or has no
+ * candidate language.
+ */
+export function getDocumentFileTypeChangeOptions(documentModel: ExampleDocumentInput | null | undefined, fileId: string, options: FileTypeChangeOptionsQuery = {}): FileTypeChangeOption[] {
     const document = synchronizeDocument(documentModel);
     const file = (document.files || []).find((entry) => entry.id === fileId);
     if (!file) return [];

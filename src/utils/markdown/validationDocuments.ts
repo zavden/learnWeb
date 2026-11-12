@@ -1,3 +1,13 @@
+// Validators of a parsed document as a whole: the block combinations of a legacy example (web, React,
+// Vue, HTML-FULL, shader), the files and entry of a React/Vue multi-file project, and the cross-checks
+// of `editor_hidden_files` and the `exercise_*` keys against the files that exist. They append
+// diagnostics, never throw and never change the document.
+// Called by `parseExampleDocument()` (documentApi.ts) after `validateMetadata()` (validationMetadata.ts),
+// with the same normalized metadata. Where both could report the same problem, the check here looks for
+// the earlier diagnostic first (`invalid-shader-resolution`).
+
+import type { Diagnostic } from '../../types/diagnostics.ts';
+import type { ExampleBlock, ExampleMetadata, ExerciseMetadataKey, VirtualFile } from '../../types/document.ts';
 import {
     REACT_APP_BLOCK_TYPES,
     REACT_MULTI_FILE_ENTRY_LANGUAGES,
@@ -11,7 +21,11 @@ import { getDocumentFileVisibilityKey, getExerciseConfig, hasExerciseMetadata, i
 import { parseEditorHiddenFilesMetadataValue, parseShaderResolutionValue } from './shader.ts';
 import { validateVirtualFileShape } from './validationMetadata.ts';
 
-export function validateShaderLegacyDocument(blocks, metadata, diagnostics) {
+/**
+ * Rules of a shader example: exactly one Vertex and one Fragment block, no other block, a valid
+ * `resolution`, and no `renderer: web`.
+ */
+export function validateShaderLegacyDocument(blocks: ExampleBlock[], metadata: ExampleMetadata, diagnostics: Diagnostic[]): void {
     const vertexBlocks = blocks.filter((block) => block.type === 'vertex');
     const fragmentBlocks = blocks.filter((block) => block.type === 'fragment');
     const extraBlocks = blocks.filter((block) => !SHADER_BLOCK_TYPES.has(block.type));
@@ -40,7 +54,12 @@ export function validateShaderLegacyDocument(blocks, metadata, diagnostics) {
     }
 }
 
-export function validateLegacyDocument(blocks, metadata, diagnostics) {
+/**
+ * Block combinations of a legacy-blocks document (shader documents are delegated to
+ * `validateShaderLegacyDocument()`): one app block for React, one HTML template for Vue, at most one
+ * block per slot, HTML-FULL alone, and hints about full-document tags.
+ */
+export function validateLegacyDocument(blocks: ExampleBlock[], metadata: ExampleMetadata, diagnostics: Diagnostic[]): void {
     if (inferRendererMode({ blocks, metadata, sourceFormat: 'legacy-blocks' }) === 'shader') {
         validateShaderLegacyDocument(blocks, metadata, diagnostics);
         return;
@@ -92,7 +111,13 @@ export function validateLegacyDocument(blocks, metadata, diagnostics) {
     if (scriptBlocks.length > 1) diagnostics.push(createDiagnostic('error', 'multiple-script', 'Example cannot contain more than one script block.'));
 }
 
-export function validateVirtualDocument(files, metadata, diagnostics) {
+/**
+ * A virtual-files document: React or Vue only, `mode: multi-file`, every file's shape, unique paths,
+ * languages the framework supports, at most one `@role entry`, and an `entry` that exists with an entry
+ * language. Then the hidden-file and exercise cross-checks. (Legacy documents get those two from
+ * `parseExampleDocument()` directly.)
+ */
+export function validateVirtualDocument(files: VirtualFile[], metadata: ExampleMetadata, diagnostics: Diagnostic[]): void {
     const framework = metadata.framework || '';
     const mode = metadata.mode || '';
 
@@ -100,8 +125,8 @@ export function validateVirtualDocument(files, metadata, diagnostics) {
     if (framework === 'react' && mode && mode !== 'multi-file') diagnostics.push(createDiagnostic('error', 'react-virtual-mode-mismatch', 'React virtual-file examples must declare `mode: multi-file`.', { mode }));
     if (framework === 'vue' && mode && mode !== 'multi-file') diagnostics.push(createDiagnostic('error', 'vue-virtual-mode-mismatch', 'Vue virtual-file examples must declare `mode: multi-file`.', { mode }));
 
-    const seenPaths = new Set();
-    const entryRoleFiles = [];
+    const seenPaths = new Set<string>();
+    const entryRoleFiles: VirtualFile[] = [];
 
     files.forEach((file) => {
         validateVirtualFileShape(file, diagnostics);
@@ -145,7 +170,12 @@ export function validateVirtualDocument(files, metadata, diagnostics) {
     validateExerciseDocument(files, metadata, diagnostics);
 }
 
-export function validateExerciseDocument(files, metadata, diagnostics) {
+/**
+ * Exercise metadata against the document: leftover `exercise_*` keys without `exercise: true`, paths in
+ * the exercise lists or compare pairs that match no file (a missing solution file is fine when the
+ * solution lives in another example), and an entry file hidden by the exercise.
+ */
+export function validateExerciseDocument(files: VirtualFile[] | null | undefined, metadata: ExampleMetadata, diagnostics: Diagnostic[]): void {
     const exercise = getExerciseConfig({ metadata });
     if (!exercise.enabled) {
         if (hasExerciseMetadata(metadata)) {
@@ -155,7 +185,7 @@ export function validateExerciseDocument(files, metadata, diagnostics) {
     }
 
     const knownPaths = new Set((files || []).map((file) => file.path));
-    const trackedLists = [
+    const trackedLists: [ExerciseMetadataKey, string[]][] = [
         ['exercise_locked_files', exercise.lockedFiles],
         ['exercise_reference_files', exercise.referenceFiles],
         ['exercise_solution_files', exercise.solutionFiles],
@@ -179,7 +209,8 @@ export function validateExerciseDocument(files, metadata, diagnostics) {
     }
 }
 
-export function validateEditorHiddenFiles(files, metadata, diagnostics) {
+/** Warns about `editor_hidden_files` keys that match no file of the document (they are kept, not removed). */
+export function validateEditorHiddenFiles(files: VirtualFile[], metadata: ExampleMetadata, diagnostics: Diagnostic[]): void {
     const parsedHiddenFiles = parseEditorHiddenFilesMetadataValue(metadata.editor_hidden_files);
     if (parsedHiddenFiles.keys.length === 0) return;
 

@@ -1,4 +1,27 @@
+// The edits the editor makes to an example document: file content, type (badge), path/language/role,
+// add/duplicate/remove a file, the entry file, the shader uniforms/textures/resolution, the editorial
+// metadata and the hidden files. Called by src/components/Editor.ts and its mixins
+// (editor/fileOperations.ts, metadataDialogs.ts, shaderDialogs.ts, theoryEditor.ts); re-exported by
+// src/utils/markdown.ts.
+//
+// Every function takes a document and returns a new one; the input is never modified (each starts from
+// `cloneExampleDocument()`). Apart from `updateDocumentFileContent()`, which only resynchronizes, an
+// applied edit rebuilds the Markdown and parses it again (`reparseDocument()`), so the result has fresh
+// diagnostics, canonical metadata and file ids, and ids of other files may change (find files by path
+// afterwards). An edit that cannot apply (unknown file id, wrong document format, empty path or
+// language) returns the clone unchanged, without reparsing.
+
 import { getBlockDefinition } from '../../config/exampleBlocks.ts';
+import type {
+    DocumentFileDetailsUpdate,
+    ExampleDocument,
+    ExampleDocumentInput,
+    ExampleEditorialUpdate,
+    NewDocumentFile,
+    ShaderResolutionInput,
+    ShaderTextureDraft,
+    ShaderUniformDraft,
+} from '../../types/document.ts';
 import { SHADER_BLOCK_TYPES } from './constants.ts';
 import {
     buildBlock,
@@ -30,11 +53,16 @@ import {
 } from './shader.ts';
 import { evaluateDocumentFileTypeChange } from './fileTypeChange.ts';
 
-function reparseDocument(documentModel) {
+/** Serializes the document to Markdown and parses it back: normalizes it and recomputes its diagnostics. */
+function reparseDocument(documentModel: ExampleDocument): ExampleDocument {
     return parseExampleDocument(buildExampleDocument(synchronizeDocument(documentModel)));
 }
 
-export function updateDocumentFileContent(documentModel, fileId, content) {
+/**
+ * Replaces the content of one file (legacy files write through to their block). The cheap path used on
+ * every keystroke: it resynchronizes but does not reparse, so `diagnostics` are the previous ones.
+ */
+export function updateDocumentFileContent(documentModel: ExampleDocumentInput | null | undefined, fileId: string, content: string): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
     const file = nextDocument.files.find((entry) => entry.id === fileId);
     if (!file) return nextDocument;
@@ -43,7 +71,13 @@ export function updateDocumentFileContent(documentModel, fileId, content) {
     return synchronizeDocument(nextDocument);
 }
 
-export function updateDocumentFileType(documentModel, fileId, nextType) {
+/**
+ * Switches a file to another language when `evaluateDocumentFileTypeChange()` allows it: a virtual file
+ * gets the new language and the path with the matching extension (entry metadata and hidden-file keys
+ * follow it); a legacy block is rebuilt with the new type and its canonical heading, keeping its content.
+ * A blocked change returns the document resynchronized but otherwise unchanged.
+ */
+export function updateDocumentFileType(documentModel: ExampleDocumentInput | null | undefined, fileId: string, nextType: string): ExampleDocument {
     const evaluation = evaluateDocumentFileTypeChange(documentModel, fileId, nextType);
     if (!evaluation.allowed) {
         return synchronizeDocument(documentModel);
@@ -89,7 +123,14 @@ export function updateDocumentFileType(documentModel, fileId, nextType) {
     return reparseDocument(nextDocument);
 }
 
-export function createDocumentFile(documentModel, options = {}) {
+/**
+ * Adds a file. Virtual files are appended with `options.path` (role `entry` takes over `metadata.entry`
+ * and removes the role from the previous entry file). Legacy documents get a new block of
+ * `options.language`; a shader block also sets `renderer: shader` (and `resolution: 800x600` when
+ * missing), a JSX/TSX block sets `framework: react` when no framework is declared. Paths are not checked
+ * for duplicates here: callers check first, and the reparse reports what slips through.
+ */
+export function createDocumentFile(documentModel: ExampleDocumentInput | null | undefined, options: NewDocumentFile = {}): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
     const language = normalizeBlockType(options.language || '');
 
@@ -162,7 +203,13 @@ export function createDocumentFile(documentModel, options = {}) {
     return reparseDocument(nextDocument);
 }
 
-export function updateDocumentFileDetails(documentModel, fileId, updates = {}) {
+/**
+ * Changes the path, language and/or role of a virtual file (no-op for legacy documents). `metadata.entry`
+ * follows a renamed entry file, role `entry` moves the entry to this file, and the file's
+ * `editor_hidden_files` key is renamed with it. The language is not checked against the path: use
+ * `updateDocumentFileType()` for a validated badge change.
+ */
+export function updateDocumentFileDetails(documentModel: ExampleDocumentInput | null | undefined, fileId: string, updates: DocumentFileDetailsUpdate = {}): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
     if (nextDocument.sourceFormat !== 'virtual-files') return nextDocument;
 
@@ -215,7 +262,11 @@ export function updateDocumentFileDetails(documentModel, fileId, updates = {}) {
     return reparseDocument(nextDocument);
 }
 
-export function duplicateDocumentFile(documentModel, fileId) {
+/**
+ * Inserts a copy right after the file: a virtual file gets a free `-copy` path (and loses role `entry`),
+ * a legacy block is copied with its heading. Duplicate blocks of one slot are then reported by validation.
+ */
+export function duplicateDocumentFile(documentModel: ExampleDocumentInput | null | undefined, fileId: string): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
 
     if (nextDocument.sourceFormat === 'virtual-files') {
@@ -257,7 +308,11 @@ export function duplicateDocumentFile(documentModel, fileId) {
     return reparseDocument(nextDocument);
 }
 
-export function removeDocumentFile(documentModel, fileId) {
+/**
+ * Removes a file (a legacy file removes its block). Removing the entry file of a virtual project moves
+ * `metadata.entry` to the first remaining entry candidate, or deletes it when there is none.
+ */
+export function removeDocumentFile(documentModel: ExampleDocumentInput | null | undefined, fileId: string): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
 
     if (nextDocument.sourceFormat === 'virtual-files') {
@@ -291,7 +346,8 @@ export function removeDocumentFile(documentModel, fileId) {
     return reparseDocument(nextDocument);
 }
 
-export function setDocumentEntryPath(documentModel, entryPath = '') {
+/** Sets `metadata.entry` of a virtual-files document (an empty path deletes it); no-op for legacy documents. The path need not exist. */
+export function setDocumentEntryPath(documentModel: ExampleDocumentInput | null | undefined, entryPath: string = ''): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
     if (nextDocument.sourceFormat !== 'virtual-files') return nextDocument;
 
@@ -309,7 +365,11 @@ export function setDocumentEntryPath(documentModel, entryPath = '') {
     return reparseDocument(nextDocument);
 }
 
-export function updateShaderUniformDefinitions(documentModel, uniforms = []) {
+/**
+ * Replaces `shader_uniforms` with the dialog's list (drafts without a name or a known type are skipped;
+ * an empty list deletes the key). Does not check that the document is a shader document.
+ */
+export function updateShaderUniformDefinitions(documentModel: ExampleDocumentInput | null | undefined, uniforms: ShaderUniformDraft[] = []): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
     const declarations = Array.isArray(uniforms)
         ? uniforms.map((uniform) => serializeShaderUniformDeclaration(uniform)).filter(Boolean)
@@ -328,7 +388,11 @@ export function updateShaderUniformDefinitions(documentModel, uniforms = []) {
     return reparseDocument(nextDocument);
 }
 
-export function updateShaderTextureDefinitions(documentModel, textures = []) {
+/**
+ * Replaces `shader_textures` with the dialog's list (invalid drafts are skipped; an empty list deletes the
+ * key). Does not check that the document is a shader document.
+ */
+export function updateShaderTextureDefinitions(documentModel: ExampleDocumentInput | null | undefined, textures: ShaderTextureDraft[] = []): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
     const declarations = Array.isArray(textures)
         ? textures.map((texture) => serializeShaderTextureDeclaration(texture)).filter(Boolean)
@@ -347,16 +411,22 @@ export function updateShaderTextureDefinitions(documentModel, textures = []) {
     return reparseDocument(nextDocument);
 }
 
-export function updateShaderResolution(documentModel, resolution = null) {
+/**
+ * Sets the `resolution` of a shader document from the preview's size controls (values rounded). Returns
+ * the clone unchanged for a non-shader document or a missing, non-numeric or non-positive size.
+ */
+export function updateShaderResolution(documentModel: ExampleDocumentInput | null | undefined, resolution: ShaderResolutionInput | null = null): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
     if (!isShaderDocument(nextDocument)) return nextDocument;
 
+    // `Number.isFinite()` is only true for a number, so `resolution` is set in the first branch; in the
+    // second, `parseInt` stringifies whatever it gets (`undefined` and other non-text give NaN).
     const width = Number.isFinite(resolution?.width)
-        ? resolution.width
-        : Number.parseInt(resolution?.width, 10);
+        ? resolution!.width as number
+        : Number.parseInt(resolution?.width as string, 10);
     const height = Number.isFinite(resolution?.height)
-        ? resolution.height
-        : Number.parseInt(resolution?.height, 10);
+        ? resolution!.height as number
+        : Number.parseInt(resolution?.height as string, 10);
 
     if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
         return nextDocument;
@@ -370,7 +440,11 @@ export function updateShaderResolution(documentModel, resolution = null) {
     return reparseDocument(nextDocument);
 }
 
-export function updateExampleEditorialMetadata(documentModel, updates = {}) {
+/**
+ * Applies the example metadata dialog: only the keys present in `updates` change; each value is
+ * normalized like the parser does, and an empty or invalid value deletes its key.
+ */
+export function updateExampleEditorialMetadata(documentModel: ExampleDocumentInput | null | undefined, updates: ExampleEditorialUpdate = {}): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
     const metadata = {
         ...(nextDocument.metadata || {}),
@@ -404,7 +478,11 @@ export function updateExampleEditorialMetadata(documentModel, updates = {}) {
     return reparseDocument(nextDocument);
 }
 
-export function updateDocumentHiddenFiles(documentModel, hiddenKeys = []) {
+/**
+ * Replaces `editor_hidden_files` with the given visibility keys, normalized and de-duplicated; keys that
+ * match no file of the document are dropped, and an empty result deletes the key.
+ */
+export function updateDocumentHiddenFiles(documentModel: ExampleDocumentInput | null | undefined, hiddenKeys: string[] = []): ExampleDocument {
     const nextDocument = cloneExampleDocument(documentModel);
     const visibilityEntries = getDocumentFileVisibilityEntries(nextDocument);
     const validKeys = new Set(visibilityEntries.map((entry) => entry.key).filter(Boolean));
@@ -428,4 +506,5 @@ export function updateDocumentHiddenFiles(documentModel, hiddenKeys = []) {
     return reparseDocument(nextDocument);
 }
 
+// Duplicate of documentApi.ts's export (src/utils/markdown.ts re-exports that one); nothing imports it from here.
 export { createEmptyExampleDocument };

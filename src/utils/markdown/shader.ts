@@ -1,6 +1,32 @@
+// Shader metadata of an example — the frontmatter keys `resolution`, `shader_uniforms` and
+// `shader_textures` — and the `editor_hidden_files` list (not shader-specific, but parsed the same way):
+// parsing into structured values, canonical serialization, and the warnings for invalid declarations.
+// Called by documentMeta.ts (`getShaderConfig()`), documentApi.ts (file visibility), the validators
+// (validationMetadata.ts, validationDocuments.ts) and mutations.ts (the editor's shader and visibility
+// dialogs write back through the `serialize*` helpers). Calls core.ts for paths and diagnostics.
+//
+// The parsers never throw: an invalid declaration is dropped with a `warning` diagnostic and the valid
+// ones are kept in order. Only `validateMetadata()` adds these diagnostics to a document; the other
+// callers parse again and use the values alone. Uniform and control types are read from author text, so
+// the `type` parameters below are plain strings (anything outside the uniform types falls through to the
+// numeric case).
+
 import {
     normalizeBlockType,
 } from '../../config/exampleBlocks.ts';
+import type { Diagnostic } from '../../types/diagnostics.ts';
+import type {
+    FileVisibilityKey,
+    MetadataValue,
+    ShaderResolution,
+    ShaderTexture,
+    ShaderTextureDraft,
+    ShaderUniform,
+    ShaderUniformControl,
+    ShaderUniformDraft,
+    ShaderUniformType,
+    ShaderUniformValue,
+} from '../../types/document.ts';
 import {
     SHADER_BUILTIN_UNIFORMS,
     SHADER_CUSTOM_UNIFORM_TYPES,
@@ -14,7 +40,48 @@ import {
     normalizeVirtualPath,
 } from './core.ts';
 
-export function parseShaderResolutionValue(value = '') {
+/** A valid `resolution` value (`parseShaderResolutionValue()`). */
+export interface ParsedShaderResolution extends ShaderResolution {
+    /** Canonical text, `${width}x${height}`. */
+    value: string;
+}
+
+/** `parseShaderUniformControlValue()`: the range hint of one uniform and the warnings it produced. */
+export interface ParsedShaderUniformControl {
+    /** `null` when there was no hint or it was invalid (the uniform itself is still kept). */
+    control: ShaderUniformControl | null;
+    diagnostics: Diagnostic[];
+}
+
+/** `parseShaderUniformMetadataValue()`: the valid uniforms of `shader_uniforms` and the warnings. */
+export interface ParsedShaderUniforms {
+    /** The valid declarations re-serialized canonically and joined with `|`; `''` when none is valid. */
+    normalizedValue: string;
+    uniforms: ShaderUniform[];
+    diagnostics: Diagnostic[];
+}
+
+/** `parseShaderTextureMetadataValue()`: the valid textures of `shader_textures` and the warnings. */
+export interface ParsedShaderTextures {
+    /** The valid declarations (`name=asset`) joined with `|`; `''` when none is valid. */
+    normalizedValue: string;
+    textures: ShaderTexture[];
+    diagnostics: Diagnostic[];
+}
+
+/** `parseEditorHiddenFilesMetadataValue()`: the normalized keys of `editor_hidden_files` and the warnings. */
+export interface ParsedEditorHiddenFiles {
+    diagnostics: Diagnostic[];
+    /** Normalized, without duplicates, in the order written; never `''`. Not checked against the document's files. */
+    keys: FileVisibilityKey[];
+    normalizedValue: string;
+}
+
+/**
+ * Parses `WIDTHxHEIGHT` (case-insensitive `x`, spaces around it allowed) into positive integers;
+ * `null` for anything else.
+ */
+export function parseShaderResolutionValue(value: MetadataValue | null = ''): ParsedShaderResolution | null {
     const text = String(value ?? '').trim();
     if (!text) return null;
 
@@ -35,12 +102,14 @@ export function parseShaderResolutionValue(value = '') {
     };
 }
 
-export function normalizeResolutionMetadataValue(value = '') {
+/** The canonical `resolution` text (`800 X 600` → `800x600`), or the trimmed input when it is not valid. */
+export function normalizeResolutionMetadataValue(value: MetadataValue | null = ''): string {
     const parsed = parseShaderResolutionValue(value);
     return parsed ? parsed.value : String(value ?? '').trim();
 }
 
-export function cloneShaderUniformValue(value) {
+/** A copy of a uniform value (vector components are coerced to numbers). */
+export function cloneShaderUniformValue(value: ShaderUniformValue): ShaderUniformValue {
     if (Array.isArray(value)) {
         return value.map((entry) => Number(entry));
     }
@@ -52,13 +121,18 @@ export function cloneShaderUniformValue(value) {
     return Number(value);
 }
 
-export function cloneShaderUniformControl(control = null) {
+/** A copy of a range control, or `null` when there is none. */
+export function cloneShaderUniformControl(control: ShaderUniformControl | null = null): ShaderUniformControl | null {
     return control && typeof control === 'object'
         ? { ...control }
         : null;
 }
 
-export function serializeShaderUniformValue(type, value) {
+/**
+ * The value part of a declaration: `true`/`false` for `bool`, comma-separated components for `vecN`
+ * (a missing vector becomes N zeros; extra components are cut), `String(Number(value))` otherwise.
+ */
+export function serializeShaderUniformValue(type: string, value: ShaderUniformValue | null | undefined): string {
     if (type === 'bool') {
         return value ? 'true' : 'false';
     }
@@ -72,12 +146,18 @@ export function serializeShaderUniformValue(type, value) {
     return String(Number(value));
 }
 
-export function serializeShaderUniformControl(control = null) {
+/** The `[min,max,step]` suffix of a declaration; `''` without a range control. */
+export function serializeShaderUniformControl(control: ShaderUniformControl | null = null): string {
     if (!control || control.kind !== 'range') return '';
     return `[${control.min},${control.max},${control.step}]`;
 }
 
-export function parseShaderUniformDefaultValue(type, rawValue) {
+/**
+ * Parses the default value of a declaration for its type: a boolean word (`true`, `off`, `1`…) for
+ * `bool`, exactly N numbers for `vecN`, a number for `float`/`int`. `null` when it does not fit.
+ * `int` values are read with `parseInt`, so a fraction is truncated (`1.5` → `1`) rather than rejected.
+ */
+export function parseShaderUniformDefaultValue(type: string, rawValue: string | undefined): ShaderUniformValue | null {
     const value = String(rawValue || '').trim();
 
     if (type === 'bool') {
@@ -109,7 +189,19 @@ export function parseShaderUniformDefaultValue(type, rawValue) {
     return numericValue;
 }
 
-export function parseShaderUniformControlValue(type, rawValue, defaultValue, declaration, name) {
+/**
+ * Parses the `[min,max,step]` hint of a declaration (`rawValue` is the text between the brackets,
+ * `undefined` when there are none). Only `float`/`int` uniforms accept one; it needs three numbers with
+ * `max > min`, `step > 0` and a numeric default inside the range. Any problem gives a warning and a
+ * `null` control (the uniform is kept). `int` hints are read with `parseInt` (fractions are truncated).
+ */
+export function parseShaderUniformControlValue(
+    type: string,
+    rawValue: string | undefined,
+    defaultValue: ShaderUniformValue | null,
+    declaration: string,
+    name: string,
+): ParsedShaderUniformControl {
     const text = String(rawValue || '').trim();
     if (!text) {
         return {
@@ -118,7 +210,7 @@ export function parseShaderUniformControlValue(type, rawValue, defaultValue, dec
         };
     }
 
-    const diagnostics = [];
+    const diagnostics: Diagnostic[] = [];
     if (!['float', 'int'].includes(type)) {
         diagnostics.push(createDiagnostic(
             'warning',
@@ -214,7 +306,13 @@ export function parseShaderUniformControlValue(type, rawValue, defaultValue, dec
     };
 }
 
-export function parseShaderUniformMetadataValue(value = '') {
+/**
+ * Parses `shader_uniforms`: `|`-separated `name:type=value[min,max,step]` declarations (the hint is
+ * optional). A declaration is dropped, with a warning, when it does not match that shape, its name is a
+ * built-in uniform (`u_time`…), the name was already declared, or the default does not fit the type.
+ * Warnings about the control hint are emitted first, even for a declaration that is then dropped.
+ */
+export function parseShaderUniformMetadataValue(value: MetadataValue | null = ''): ParsedShaderUniforms {
     const text = String(value || '').trim();
     if (!text) {
         return {
@@ -224,10 +322,10 @@ export function parseShaderUniformMetadataValue(value = '') {
         };
     }
 
-    const uniforms = [];
-    const diagnostics = [];
+    const uniforms: ShaderUniform[] = [];
+    const diagnostics: Diagnostic[] = [];
     const entries = text.split('|').map((entry) => entry.trim()).filter(Boolean);
-    const seenNames = new Set();
+    const seenNames = new Set<string>();
 
     entries.forEach((entry) => {
         const match = entry.match(/^([A-Za-z_][\w]*)\s*:\s*(float|int|bool|vec2|vec3|vec4)\s*=\s*(.+?)(?:\[([^\]]+)\])?$/i);
@@ -247,6 +345,7 @@ export function parseShaderUniformMetadataValue(value = '') {
         const parsedControl = parseShaderUniformControlValue(type, match[4], defaultValue, entry, name);
         diagnostics.push(...parsedControl.diagnostics);
 
+        // Unreachable in practice (the pattern above only accepts these types), kept as a safety net.
         if (!SHADER_CUSTOM_UNIFORM_TYPES.has(type)) {
             diagnostics.push(createDiagnostic(
                 'warning',
@@ -290,7 +389,7 @@ export function parseShaderUniformMetadataValue(value = '') {
         seenNames.add(name);
         uniforms.push({
             name,
-            type,
+            type: type as ShaderUniformType,
             control: cloneShaderUniformControl(parsedControl.control),
             defaultValue: cloneShaderUniformValue(defaultValue),
             value: cloneShaderUniformValue(defaultValue),
@@ -306,7 +405,12 @@ export function parseShaderUniformMetadataValue(value = '') {
     };
 }
 
-export function serializeShaderUniformDeclaration(uniform = {}) {
+/**
+ * One `shader_uniforms` declaration from a dialog draft (`name:type=value[min,max,step]`); `''` when the
+ * draft has no name or an unknown type. The value is not validated here: the document is reparsed after
+ * the update, which reports and drops what is invalid.
+ */
+export function serializeShaderUniformDeclaration(uniform: ShaderUniformDraft | null = {}): string {
     const name = String(uniform?.name || '').trim();
     const type = String(uniform?.type || '').trim().toLowerCase();
 
@@ -314,10 +418,17 @@ export function serializeShaderUniformDeclaration(uniform = {}) {
         return '';
     }
 
-    return `${name}:${type}=${serializeShaderUniformValue(type, uniform.defaultValue)}${serializeShaderUniformControl(uniform.control)}`;
+    // `uniform` is set here: without one, `name` is empty and the function returned above.
+    return `${name}:${type}=${serializeShaderUniformValue(type, uniform!.defaultValue)}${serializeShaderUniformControl(uniform!.control)}`;
 }
 
-export function parseShaderTextureMetadataValue(value = '') {
+/**
+ * Parses `shader_textures`: `|`-separated `uniformName=asset-file` declarations. The asset must be a
+ * top-level file of the topic's `assets/` folder with an image extension (`SHADER_TEXTURE_EXTENSIONS`);
+ * invalid, nested or duplicate declarations are dropped with a warning. Whether the asset exists is not
+ * checked here.
+ */
+export function parseShaderTextureMetadataValue(value: MetadataValue | null = ''): ParsedShaderTextures {
     const text = String(value || '').trim();
     if (!text) {
         return {
@@ -327,10 +438,10 @@ export function parseShaderTextureMetadataValue(value = '') {
         };
     }
 
-    const textures = [];
-    const diagnostics = [];
+    const textures: ShaderTexture[] = [];
+    const diagnostics: Diagnostic[] = [];
     const entries = text.split('|').map((entry) => entry.trim()).filter(Boolean);
-    const seenNames = new Set();
+    const seenNames = new Set<string>();
 
     entries.forEach((entry) => {
         const match = entry.match(/^([A-Za-z_][\w]*)\s*=\s*(.+)$/);
@@ -403,7 +514,11 @@ export function parseShaderTextureMetadataValue(value = '') {
     };
 }
 
-export function serializeShaderTextureDeclaration(texture = {}) {
+/**
+ * One `shader_textures` declaration from a dialog draft (`name=assetPath`); `''` when the name is not
+ * a GLSL identifier or the path is empty. Other path rules are checked when the document is reparsed.
+ */
+export function serializeShaderTextureDeclaration(texture: ShaderTextureDraft | null = {}): string {
     const name = String(texture?.name || '').trim();
     const assetPath = normalizeVirtualPath(texture?.assetPath || '');
 
@@ -414,7 +529,11 @@ export function serializeShaderTextureDeclaration(texture = {}) {
     return `${name}=${assetPath}`;
 }
 
-export function normalizeEditorHiddenFileKey(value = '') {
+/**
+ * Normalizes one `editor_hidden_files` entry: `file:<path>` (path normalized) or `block:<type>:<n>`
+ * (type lower-cased with aliases resolved, n ≥ 1). `''` when the entry has neither shape.
+ */
+export function normalizeEditorHiddenFileKey(value: string = ''): FileVisibilityKey {
     const text = String(value || '').trim();
     if (!text) return '';
 
@@ -436,7 +555,11 @@ export function normalizeEditorHiddenFileKey(value = '') {
     return `block:${type}:${occurrence}`;
 }
 
-export function parseEditorHiddenFilesMetadataValue(value = '') {
+/**
+ * Parses `editor_hidden_files` (`|`-separated keys, see `FileVisibilityKey`). Invalid and repeated
+ * entries are dropped with a warning; keys that match no file are reported by `validateEditorHiddenFiles()`.
+ */
+export function parseEditorHiddenFilesMetadataValue(value: MetadataValue | null = ''): ParsedEditorHiddenFiles {
     const text = String(value || '').trim();
     if (!text) {
         return {
@@ -446,9 +569,9 @@ export function parseEditorHiddenFilesMetadataValue(value = '') {
         };
     }
 
-    const diagnostics = [];
-    const seenKeys = new Set();
-    const keys = [];
+    const diagnostics: Diagnostic[] = [];
+    const seenKeys = new Set<string>();
+    const keys: FileVisibilityKey[] = [];
     const entries = text
         .split('|')
         .map((entry) => entry.trim())
