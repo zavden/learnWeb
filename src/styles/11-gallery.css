@@ -55,7 +55,9 @@
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast);
   display: flex;
   flex-direction: column;
   height: 320px;
@@ -258,13 +260,41 @@
   border: 1px solid;
 }
 
-.card-type-tag.type-html    { background: rgba(59, 130, 246, 0.10); border-color: rgba(59, 130, 246, 0.30); color: #3b82f6; }
-.card-type-tag.type-vue     { background: rgba(52, 211, 153, 0.10); border-color: rgba(52, 211, 153, 0.30); color: #10b981; }
-.card-type-tag.type-react   { background: rgba(96, 165, 250, 0.10); border-color: rgba(96, 165, 250, 0.30); color: #60a5fa; }
-.card-type-tag.type-js      { background: rgba(234, 179, 8, 0.12); border-color: rgba(234, 179, 8, 0.35); color: #a16207; }
-.card-type-tag.type-ts      { background: rgba(37, 99, 235, 0.12); border-color: rgba(37, 99, 235, 0.35); color: #1d4ed8; }
-.card-type-tag.type-svg     { background: rgba(251, 191, 36, 0.10); border-color: rgba(251, 191, 36, 0.30); color: #d97706; }
-.card-type-tag.type-shader  { background: rgba(168, 85, 247, 0.10); border-color: rgba(168, 85, 247, 0.30); color: #8b5cf6; }
+.card-type-tag.type-html {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #3b82f6;
+}
+.card-type-tag.type-vue {
+  background: rgba(52, 211, 153, 0.1);
+  border-color: rgba(52, 211, 153, 0.3);
+  color: #10b981;
+}
+.card-type-tag.type-react {
+  background: rgba(96, 165, 250, 0.1);
+  border-color: rgba(96, 165, 250, 0.3);
+  color: #60a5fa;
+}
+.card-type-tag.type-js {
+  background: rgba(234, 179, 8, 0.12);
+  border-color: rgba(234, 179, 8, 0.35);
+  color: #a16207;
+}
+.card-type-tag.type-ts {
+  background: rgba(37, 99, 235, 0.12);
+  border-color: rgba(37, 99, 235, 0.35);
+  color: #1d4ed8;
+}
+.card-type-tag.type-svg {
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.3);
+  color: #d97706;
+}
+.card-type-tag.type-shader {
+  background: rgba(168, 85, 247, 0.1);
+  border-color: rgba(168, 85, 247, 0.3);
+  color: #8b5cf6;
+}
 
 .card-delete-btn {
   flex-shrink: 0;
@@ -279,7 +309,10 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    background var(--transition-fast);
 }
 
 .card-delete-btn:hover {
@@ -308,7 +341,10 @@
   letter-spacing: 0.04em;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
 .gallery-filter-btn:hover:not(:disabled) {
@@ -399,8 +435,7 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: rgba(255, 123, 114, 0.88);
-  background:
-    linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(12, 18, 32, 0.94));
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(12, 18, 32, 0.94));
 }
 
 .favorite-card-footer {
@@ -445,7 +480,10 @@
   overflow: hidden;
   background: #0f172a;
   color: #e2e8f0;
-  font: 12px/1.55 "JetBrains Mono", ui-monospace, monospace;
+  font:
+    12px/1.55 'JetBrains Mono',
+    ui-monospace,
+    monospace;
   white-space: pre;
   pointer-events: none;
 }
@@ -458,11 +496,38 @@
 }
 
 /* highlight.js tokens in code previews (Atom One Dark, same as the theory viewer) */
-.card-code-preview .hljs-comment, .card-code-preview .hljs-quote { color: #5c6370; font-style: italic; }
-.card-code-preview .hljs-keyword, .card-code-preview .hljs-doctag { color: #c678dd; }
-.card-code-preview .hljs-literal { color: #56b6c2; }
-.card-code-preview .hljs-string, .card-code-preview .hljs-regexp { color: #98c379; }
-.card-code-preview .hljs-number, .card-code-preview .hljs-attr, .card-code-preview .hljs-variable, .card-code-preview .hljs-type { color: #d19a66; }
-.card-code-preview .hljs-title, .card-code-preview .hljs-symbol, .card-code-preview .hljs-meta { color: #61aeee; }
-.card-code-preview .hljs-built_in, .card-code-preview .hljs-title.class_ { color: #e6c07b; }
-.card-code-preview .hljs-subst, .card-code-preview .hljs-name { color: #e06c75; }
+.card-code-preview .hljs-comment,
+.card-code-preview .hljs-quote {
+  color: #5c6370;
+  font-style: italic;
+}
+.card-code-preview .hljs-keyword,
+.card-code-preview .hljs-doctag {
+  color: #c678dd;
+}
+.card-code-preview .hljs-literal {
+  color: #56b6c2;
+}
+.card-code-preview .hljs-string,
+.card-code-preview .hljs-regexp {
+  color: #98c379;
+}
+.card-code-preview .hljs-number,
+.card-code-preview .hljs-attr,
+.card-code-preview .hljs-variable,
+.card-code-preview .hljs-type {
+  color: #d19a66;
+}
+.card-code-preview .hljs-title,
+.card-code-preview .hljs-symbol,
+.card-code-preview .hljs-meta {
+  color: #61aeee;
+}
+.card-code-preview .hljs-built_in,
+.card-code-preview .hljs-title.class_ {
+  color: #e6c07b;
+}
+.card-code-preview .hljs-subst,
+.card-code-preview .hljs-name {
+  color: #e06c75;
+}

@@ -247,8 +247,7 @@ body.is-resizing-console {
   gap: 10px;
   padding: 12px;
   border-top: 1px solid var(--border-muted);
-  background:
-    linear-gradient(180deg, rgba(12, 18, 32, 0.96), rgba(16, 24, 42, 0.92));
+  background: linear-gradient(180deg, rgba(12, 18, 32, 0.96), rgba(16, 24, 42, 0.92));
 }
 
 .sidebar-example-actions-grid {
@@ -337,7 +336,10 @@ body.is-resizing-console {
 
 .tree-item .btn-add-example {
   opacity: 0;
-  transition: opacity var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+  transition:
+    opacity var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast);
   padding: 2px;
   border-radius: 4px;
   color: var(--text-muted);
@@ -354,7 +356,10 @@ body.is-resizing-console {
 
 .tree-item .btn-hide-chapter {
   opacity: 0;
-  transition: opacity var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+  transition:
+    opacity var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast);
   padding: 2px;
   border-radius: 4px;
   color: var(--text-muted);

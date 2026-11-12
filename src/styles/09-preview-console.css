@@ -192,7 +192,10 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.03);
   color: inherit;
-  transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .editor-file-type-option:hover,
@@ -387,18 +390,35 @@
   white-space: pre-wrap;
 }
 
-.console-string { color: #f0a46c; }
+.console-string {
+  color: #f0a46c;
+}
 .console-number,
-.console-bigint { color: #9fb8ff; }
+.console-bigint {
+  color: #9fb8ff;
+}
 .console-boolean,
 .console-null,
-.console-undefined { color: #c39bff; }
-.console-symbol { color: #7ee0d1; }
+.console-undefined {
+  color: #c39bff;
+}
+.console-symbol {
+  color: #7ee0d1;
+}
 .console-function,
-.console-class { color: #e8d48b; font-style: italic; }
-.console-error { color: #ffb4ad; }
-.console-node { color: #8fd3ff; }
-.console-exception { color: #ff9b94; }
+.console-class {
+  color: #e8d48b;
+  font-style: italic;
+}
+.console-error {
+  color: #ffb4ad;
+}
+.console-node {
+  color: #8fd3ff;
+}
+.console-exception {
+  color: #ff9b94;
+}
 
 .console-key {
   color: #c49cf2;

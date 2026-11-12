@@ -131,7 +131,7 @@ console: true                     # whenever the example prints to the console
 - Keep the preview neutral: a small base style is fine, but in CSS lessons don't hide the behavior being
   taught (the preview no longer injects default styles: browser defaults are real).
 - Accessible by default: `lang`, labels, alt text, focus styles, sufficient contrast, semantic elements.
-  Check text/background pairs with `node scripts/contrast.mjs "<color>" "<color>" …` (hex, rgb, hsl, oklch;
+  Check text/background pairs with `node scripts/contrast.ts "<color>" "<color>" …` (hex, rgb, hsl, oklch;
   ≥ 4.5:1 for body text, ≥ 3:1 for large text and UI borders).
 - No external network dependencies except when the lesson is about it (`import()` from esm.sh, fonts).
   Data files go in the topic's `assets/` and are fetched with relative URLs (`fetch('data.json')`; asset
@@ -259,7 +259,7 @@ and **no** `exercise*` keys.
 
 ## Verification (mandatory before finishing a module)
 
-1. `node scripts/check-material.mjs material/chNN-…/secNN-…` — parses, compiles and lints every file
+1. `node scripts/check-material.ts material/chNN-…/secNN-…` — parses, compiles and lints every file
    of the module (structure, frontmatter, embeds, labels, compile errors). Fix everything it reports.
 2. Re-read each `main.md` top to bottom as the learner would.
 3. List the examples that need a visual/runtime check in the browser (animations, layout, WebGL/WebGPU)

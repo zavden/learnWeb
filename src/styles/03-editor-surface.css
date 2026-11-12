@@ -156,8 +156,7 @@
   flex: 0 0 auto;
   flex-direction: column;
   border-top: 1px solid var(--border-default);
-  background:
-    linear-gradient(180deg, rgba(8, 13, 24, 0.98), rgba(14, 22, 38, 0.98));
+  background: linear-gradient(180deg, rgba(8, 13, 24, 0.98), rgba(14, 22, 38, 0.98));
 }
 
 .shader-editor-controls-header {
@@ -279,7 +278,10 @@
   background: var(--bg-elevated);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .editor-tab:hover {
@@ -577,7 +579,10 @@
 
 .editor-preview-filename-display.is-actionable {
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
 .editor-preview-filename-display.is-actionable:hover,
@@ -705,13 +710,18 @@
 
 .lang-badge.is-clickable {
   cursor: pointer;
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast), filter var(--transition-fast);
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    filter var(--transition-fast);
 }
 
 .lang-badge.is-clickable:hover,
 .lang-badge.is-clickable:focus-visible {
   transform: translateY(-1px);
-  box-shadow: 0 0 0 1px rgba(88, 166, 255, 0.26), 0 6px 16px rgba(0, 0, 0, 0.22);
+  box-shadow:
+    0 0 0 1px rgba(88, 166, 255, 0.26),
+    0 6px 16px rgba(0, 0, 0, 0.22);
   filter: saturate(1.12);
   outline: none;
 }

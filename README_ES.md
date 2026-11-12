@@ -4,8 +4,8 @@ Aplicacion local para estudiar tecnologias web a partir de material organizado e
 
 La app combina:
 
-- un frontend con Vite y JavaScript vanilla
-- un backend con Express
+- un frontend con Vite escrito en TypeScript, sin framework de UI
+- un backend con Express (`server.ts`), que Node ejecuta directamente desde su codigo TypeScript
 - edicion de codigo con CodeMirror 6
 - renderizado de teoria en Markdown
 - previsualizacion en vivo en un `iframe`
@@ -27,6 +27,7 @@ La idea central del proyecto es simple: el contenido no vive en una base de dato
 - [Instalacion](#instalacion)
 - [Ejecucion en desarrollo](#ejecucion-en-desarrollo)
 - [Comandos disponibles](#comandos-disponibles)
+- [Desarrollo](#desarrollo)
 - [Licencia](#licencia)
 - [API del backend](#api-del-backend)
 - [Estructura del proyecto](#estructura-del-proyecto)
@@ -79,22 +80,23 @@ Regla practica:
 
 - para entender el repo: `AGENTS.md` -> `skills/learnweb-repo-editing/SKILL.md` -> `hotspots.md`
 - para editar contenido: despues salta a `material/**`
-- para editar app code: despues salta a `src/**`, `index.html`, `server.js` o `tests/**` segun el hotspot
+- para editar app code: despues salta a `src/**`, `index.html`, `server.ts` o `tests/**` segun el hotspot
 
 Validacion recomendada para una IA:
 
 - cambios de contenido puro: validacion dirigida
 - cambios de parser, editor, preview, backend o metadata: `npm test`
 - cambios de UI o runtime: `npm run build`
+- cualquier cambio de app code: `npm run typecheck` (o `npm run check` para tipos, lint, formato y tests)
 
 ## Tecnologias
 
 ### Frontend
 
 - Vite
-- JavaScript vanilla con modulos ES
+- TypeScript (strict) con modulos ES, compilado por Vite; sin framework de UI
 - CodeMirror 6
-- `marked` para renderizar Markdown
+- `marked` para renderizar Markdown y `highlight.js` para el codigo de la teoria
 - WebGL para preview shader
 - React y ReactDOM para modos React
 - Vue runtime y compiladores de Vue para modos Vue
@@ -102,13 +104,14 @@ Validacion recomendada para una IA:
 
 ### Backend
 
-- Node.js
+- Node.js, que ejecuta `server.ts` y los scripts directamente quitando sus tipos (sin paso de build)
 - Express
 - CORS
 - `fs` y `path` del runtime de Node para operar sobre el filesystem
+- `worker_threads` para compilar en un worker aislado con limites de tiempo y memoria
 - `pug` para compilar ejemplos `Pug`
 - `sass` para compilar `SCSS` y `SASS`
-- `typescript` para transpilar `TypeScript`
+- `typescript` para transpilar y verificar tipos de ejemplos `TypeScript`
 - `esbuild` para compilar `JSX`, `TSX` y bundles multi-file
 - `@vue/compiler-dom` y `@vue/compiler-sfc` para templates y SFC de Vue
 
@@ -134,7 +137,7 @@ Responsabilidades:
 
 ### 2. Backend
 
-Se levanta con Express en `http://localhost:3001`.
+Se levanta con Express en `127.0.0.1:3001` (solo loopback).
 
 Responsabilidades:
 
@@ -144,12 +147,14 @@ Responsabilidades:
 - crear carpetas y archivos nuevos
 - modificar, renombrar y borrar ejemplos
 - servir assets locales de cada topic
-- compilar ejemplos antes de enviarlos al preview
+- compilar ejemplos antes de enviarlos al preview, en un worker thread con limites de tiempo y memoria
 - cachear resultados de compilacion repetidos
+- alojar los documentos de preview renderizados en su propio origen (`/preview/...`)
+- guardar favoritos, pendientes, capitulos ocultos y preferencias del editor en dotfiles de la raiz del repo
 
 ### Comunicacion entre ambos
 
-Durante desarrollo, Vite hace proxy de las rutas `/api` hacia `http://localhost:3001`.
+Durante desarrollo, Vite hace proxy de las rutas `/api` hacia `http://127.0.0.1:3001`.
 
 Eso significa que el frontend hace peticiones como:
 
@@ -159,6 +164,10 @@ Eso significa que el frontend hace peticiones como:
 ```
 
 y Vite las redirige al backend.
+
+El `iframe` del preview es la excepcion: carga el ejemplo renderizado desde el propio origen del backend
+(`http://localhost:3001/preview/...`), asi el codigo del alumno corre en un origen distinto al de la app. Los detalles, y
+los flujos principales de la app, estan en [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Como se organiza el contenido
 
@@ -193,7 +202,7 @@ Ejemplos validos:
 - `sec01-selectors`
 - `top01-class-selector`
 
-El numero se usa para ordenar y para mostrar la numeracion logica. El resto del nombre se usa como etiqueta visible en la UI, reemplazando guiones por espacios.
+El numero se usa para ordenar y para mostrar la numeracion logica. La etiqueta visible sale de un `label.txt` opcional en la carpeta del capitulo o de la seccion (su primera linea) y del primer encabezado `# ` del `main.md` de cada topic; sin ellos se usa el resto del nombre de la carpeta, reemplazando guiones por espacios.
 
 ## Formato de los archivos
 
@@ -228,6 +237,8 @@ Tambien se puede editar desde la UI:
 ```
 
 Ese shortcode genera una card inline con preview pequeno, un popup grande y un boton para abrir el ejercicio real.
+
+Variantes del mismo shortcode muestran codigo en lugar de una card: `[[exercise:ex01.md-]]` muestra todos los archivos del ejemplo en tabs, y `[[exercise:ex01.md-styles.css]]` o `[[exercise:ex01.md-(index.html|styles.css)]]` solo los archivos nombrados. Un enlace Markdown a un ejemplo del topic, como `[verlo](ex01.md)`, abre el mismo popup de preview.
 
 ### 2. Ejemplos: archivos `.md` dentro de `examples/`
 
@@ -363,11 +374,16 @@ Claves soportadas mas importantes:
 - `exercise_solution_files`
 - `exercise_compare_pairs`
 - `exercise_solution_example`
-- `example_stage: minimal | intermediate | common-error | exercise | final-solution`
+- `example_stage: minimal | intermediate | common-error | exercise | final-solution | professional`
 - `example_description: texto corto`
 - `example_tags: html|css|svg`
 - `example_rating: 1..5`
 - `example_importance: trivial | useful | important | critical`
+- `editor_hidden_files: file:src/data.json|block:css:1` (archivos ocultos en el editor)
+- `highlights` (resaltados de lineas, los escribe el editor)
+- `lang: en` (idioma de la pagina del preview; `es` por defecto)
+- `loop_protect: false` (desactiva las guardas contra bucles infinitos)
+- `typecheck: false` (omite la verificacion de tipos de TypeScript)
 
 #### Metadata editorial de ejemplos
 
@@ -510,7 +526,7 @@ Esa carpeta sirve para guardar recursos locales del topic, por ejemplo:
 - fuentes
 - archivos auxiliares
 
-El preview principal inyecta una etiqueta `<base>` para que el HTML del ejemplo pueda referenciar esos archivos usando rutas relativas.
+El HTML del ejemplo puede referenciar esos archivos usando rutas relativas, incluidas subcarpetas de `assets/`.
 
 Ejemplo:
 
@@ -518,10 +534,10 @@ Ejemplo:
 <img src="diagram.png" alt="Diagrama" />
 ```
 
-Si `diagram.png` existe en `assets/`, el preview principal puede resolverlo desde:
+El preview principal se sirve desde `/preview/:ch/:sec/:top/<id>/index.html` en el backend, y el backend asocia cualquier otro archivo junto a ese documento con `assets/` del topic, asi que `diagram.png` se resuelve como `assets/diagram.png`. Las copias renderizadas como `srcdoc` (cards de la galeria, cards de la teoria y el fallback cuando el hosting falla) inyectan una etiqueta `<base>` que apunta a:
 
 ```txt
-/api/topic/:ch/:sec/:top/assets/diagram.png
+/api/topic/:ch/:sec/:top/assets/
 ```
 
 Para proyectos `React` y `Vue` multi-file, la politica actual es:
@@ -584,8 +600,8 @@ Cada vez que cambias codigo:
 - el editor dispara un callback
 - el preview espera 300 ms
 - un cliente de compilacion con `Web Worker` reutiliza cache y, si hace falta, llama al backend
-- se reconstruye un documento HTML completo dentro del `iframe`
-- se inyecta el resultado compilado actual
+- se construye un documento HTML completo alrededor del resultado compilado
+- el documento se sube al backend y el `iframe` del preview lo carga desde el origen del backend; si eso falla, el mismo documento se carga como `srcdoc`
 
 La zona superior del preview tambien puede mostrar un resumen editorial del ejemplo activo:
 
@@ -757,7 +773,7 @@ Actualmente el dialogo incluye presets para:
 
 ### Requisitos
 
-- Node.js 18 o superior recomendado
+- Node.js 22.18 o superior (`engines` en `package.json`; Node ejecuta directamente el codigo TypeScript del backend, los scripts y los tests)
 - npm
 
 ### 1. Clonar el repositorio
@@ -792,7 +808,9 @@ npm run dev
 Ese comando arranca al mismo tiempo:
 
 - Vite en `http://localhost:5174`
-- Express en `http://localhost:3001`
+- Express (`node server.ts`) en `http://127.0.0.1:3001`
+
+El backend no se recarga cuando cambia su codigo: reinicia `npm run dev` despues de editar `server.ts` o los modulos que usa.
 
 Luego abres:
 
@@ -815,13 +833,39 @@ Importante:
 - este comando no empaqueta ni despliega el backend
 - el proyecto no trae una estrategia de produccion completa lista
 
+Vite quita los tipos de TypeScript sin verificarlos; para eso esta `npm run typecheck`.
+
 ### `npm test`
 
-Ejecuta la suite automatica completa con `node --test`.
+Ejecuta la suite automatica completa (`tests/**/*.test.ts`, 255 tests) con `node --test`.
 
 ### `npm run test:watch`
 
 Ejecuta la suite en modo watch.
+
+### `npm run typecheck`
+
+Verifica los tipos de todo el repositorio (`tsc --noEmit`, un unico `tsconfig.json` para app, backend, scripts, tools y tests).
+
+### `npm run lint`
+
+Ejecuta ESLint (solo reglas de correccion).
+
+### `npm run format` y `npm run format:check`
+
+Formatea el codigo con Prettier, o solo lo comprueba.
+
+### `npm run check`
+
+Ejecuta `typecheck`, `lint`, `format:check` y `test` seguidos.
+
+### `npm run check:material`
+
+Ejecuta `node scripts/check-material.ts`: revisa estructura, embeds de teoria, frontmatter y diagnosticos de compilacion del contenido del curso. Ejemplo: `npm run check:material -- material/ch03-css/sec04-flexbox --quiet`.
+
+### `npm run snapshot:material`
+
+Ejecuta `node scripts/snapshot-material.ts`: calcula hashes de todo lo que la app deriva de `material/` (`--out before.json`), para que un `--compare before.json` posterior muestre si un cambio en la app altero algun resultado parseado, compilado o renderizado.
 
 ### `npm run preview`
 
@@ -829,9 +873,16 @@ Levanta el preview estatico del frontend generado por Vite.
 
 Importante:
 
-- no arranca `server.js`
+- no arranca `server.ts`
 - no reemplaza el flujo completo de desarrollo
 - para usar la app normalmente necesitas tambien el backend
+
+## Desarrollo
+
+El codigo es TypeScript en todas partes. Vite compila el codigo del navegador; Node ejecuta `server.ts`, los scripts y los tests directamente desde sus fuentes `.ts` quitando los tipos, asi que no hay paso de build para ellos y solo se usa sintaxis de TypeScript borrable (sin `enum`, sin `namespace`, `import type` explicito, imports con extension `.ts`).
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): las piezas de la app, el modelo de datos (`src/types/`), los flujos principales de punta a punta, el modelo de seguridad de los previews y un mapa de modulos.
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md): requisitos, scripts, como se usa TypeScript, convenciones de codigo, testing (tests unitarios, checker del curso, snapshot del material, harness del navegador) y recetas para las extensiones mas comunes.
 
 ## Licencia
 
@@ -851,9 +902,19 @@ Importante:
 
 ## API del backend
 
+Todas las rutas viven en `server.ts`; los tipos de peticiones y respuestas estan en `src/types/api.ts`, y el navegador las llama a traves de `src/utils/api.ts`. Las peticiones fallidas responden `{ "error": "..." }` con un estado 4xx o 5xx. Las peticiones con una cabecera `Origin` que no sea local (`localhost`, `127.0.0.1`, `[::1]`) se rechazan con 403, salvo las de solo lectura de assets de un topic y `/api/demo/*`.
+
 ### `GET /api/tree`
 
-Devuelve el arbol completo de navegacion.
+Devuelve el arbol completo de navegacion. `?includeHidden=1` devuelve tambien los capitulos listados en `.hiddens` (marcados con `hidden: true`).
+
+### `GET /api/tree/hidden-state`
+
+Devuelve los capitulos ocultos guardados en `.hiddens`.
+
+### `PATCH /api/tree/chapters/:chapterId/hidden`
+
+Oculta un capitulo (o lo vuelve a mostrar con `{ "hidden": false }`) y devuelve el nuevo estado y el arbol.
 
 ### `GET /api/topic/:ch/:sec/:top/main`
 
@@ -953,9 +1014,30 @@ Es la ruta que usa el preview para soportar:
 
 Tambien devuelve `compileMeta` con informacion de cache cuando aplica.
 
-### `GET /api/topic/:ch/:sec/:top/assets/:file`
+### `GET /api/topic/:ch/:sec/:top/assets`
 
-Sirve un archivo dentro de la carpeta `assets/` del topic actual.
+Lista todos los archivos bajo la carpeta `assets/` del topic (incluidas subcarpetas, sin dotfiles) con una URL lista para usar.
+
+### `GET /api/topic/:ch/:sec/:top/assets/*`
+
+Sirve un archivo dentro de la carpeta `assets/` del topic actual (se permiten subcarpetas).
+
+### `POST /api/preview-documents`
+
+Guarda en memoria un documento de preview renderizado (los ultimos 24) y devuelve su URL, `/preview/:ch/:sec/:top/:id/index.html`.
+
+Body:
+
+```json
+{
+  "html": "<!DOCTYPE html>...",
+  "topicPath": "chNN-capitulo/secNN-seccion/topNN-topic"
+}
+```
+
+### `GET /preview/:ch/:sec/:top/:id/*`
+
+Sirve un documento de preview alojado (`index.html`) y, para cualquier otra ruta, el archivo correspondiente de `assets/` del topic. Un documento expirado responde 410.
 
 ### `GET /api/favorites`
 
@@ -988,132 +1070,170 @@ Body:
 }
 ```
 
+### `GET`, `POST` y `DELETE /api/pending`
+
+Igual que las rutas de favoritos, para la lista de pendientes en [`.pending`](./.pending).
+
 ### `GET /api/editor/vim-shortcuts`
 
 Devuelve la configuracion efectiva de [vim-shortcuts.yaml](./vim-shortcuts.yaml), incluyendo fallback al mapa por defecto si el archivo falta o es invalido.
+
+### `GET` y `PATCH /api/editor/vim-default`, `GET` y `PATCH /api/editor/clipboard-default`
+
+Leen o cambian los valores globales por defecto de Vim y del portapapeles del sistema, guardados en `.vim_enable` y `.clipboard_default`. Body de las rutas `PATCH`: `{ "enabled": false }`.
+
+### `/api/demo/*`
+
+Una pequena API de eco y streaming que usan las lecciones de red del curso (`src/utils/demoApi.ts`). No lee nada del disco y esta abierta a cualquier origen.
 
 ## Estructura del proyecto
 
 ```txt
 learnWeb/
-  index.html
-  .favorites
+  index.html                 shell de la app (todos los paneles y dialogos)
+  server.ts                  backend (Express)
+  vite.config.ts
+  tsconfig.json              un unico programa TypeScript para todo el repositorio
+  eslint.config.js
+  .prettierrc.json
   package.json
-  package-lock.json
-  vite.config.js
-  server.js
-  material/
+  vim-shortcuts.yaml
+  .favorites  .pending  .hiddens  .vim_enable  .clipboard_default
+  docs/
+    ARCHITECTURE.md
+    DEVELOPMENT.md
+  material/                  contenido (capitulos, secciones, topics)
   src/
-    main.js
-    style.css
+    main.ts                  punto de entrada de la app
+    style.css                importa src/styles/*.css
+    types/                   tipos compartidos: api, compile, diagnostics, document, material, runtime, theory
     config/
-      exampleBlocks.js
-      fileTemplates.js
+      exampleBlocks.ts
+      fileTemplates.ts
+      highlightColors.ts
     components/
-      Sidebar.js
-      TheoryViewer.js
-      Editor.js
-      ExercisePanel.js
-      Preview.js
-      Gallery.js
-      CreateDialog.js
+      Sidebar.ts
+      TheoryViewer.ts
+      TheoryExerciseDialog.ts
+      Editor.ts
+      editor/                mixins del Editor (operaciones de archivo, dialogos, sesion, ejercicio...)
+      ExercisePanel.ts
+      Preview.ts
+      preview/               mixins del Preview (consola, diagnosticos runtime, controles shader)
+      Gallery.ts
+      CreateDialog.ts
+      FavoritesDialog.ts
+      PendingDialog.ts
+      AssetsDialog.ts
+    editor/                  extensiones de CodeMirror (Vim, GLSL, completions)
     utils/
-      api.js
-      compileCache.js
-      compileClient.js
-      exerciseComparison.js
-      exampleEditorial.js
-      markdown.js
-      exampleCompiler.js
-      exampleRenderer.js
-      theoryExerciseEmbeds.js
+      api.ts
+      compileCache.ts
+      compileClient.ts
+      exerciseComparison.ts
+      exampleEditorial.ts
+      markdown.ts            fachada de markdown/
+      markdown/
+      exampleCompiler.ts
+      compiler/
+      exampleRenderer.ts     fachada de renderer/
+      renderer/
+      theoryRenderer.ts
+      theoryExerciseEmbeds.ts
+      ...
     workers/
-      compileWorker.js
+      compileWorker.ts
+  scripts/
+    check-material.ts
+    snapshot-material.ts
+    contrast.ts
+  tools/
+    verify-examples.html     harness del navegador para ejemplos del curso
   tests/
-    metadata-validation.test.mjs
-    document-roundtrip.test.mjs
-    framework-compilation.test.mjs
-    example-editorial.test.mjs
-    favorites-store.test.mjs
-    theory-document.test.mjs
-    theory-exercise-embeds.test.mjs
+    *.test.ts
 ```
+
+El mapa modulo por modulo esta en [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#6-module-map).
 
 ### Descripcion de archivos importantes
 
-#### `server.js`
+#### `server.ts`
 
-Backend Express. Lee y escribe el filesystem, construye el arbol, crea contenido, compila documentos y sirve assets.
+Backend Express. Lee y escribe el filesystem, construye el arbol, crea contenido, compila documentos en un worker thread aislado, aloja documentos de preview y sirve assets.
 
-#### `src/main.js`
+#### `src/main.ts`
 
 Punto de entrada del frontend. Instancia y coordina todos los componentes.
 
-#### `src/components/Sidebar.js`
+#### `src/types/`
+
+Tipos compartidos por toda la app: el modelo de documento de los ejemplos, diagnosticos, resultados de compilacion, los mensajes del runtime del preview, los payloads de la API, el arbol de material y las paginas de teoria.
+
+#### `src/components/Sidebar.ts`
 
 Construye el arbol lateral con capitulos, secciones y topics.
 
-#### `src/components/TheoryViewer.js`
+#### `src/components/TheoryViewer.ts`
 
 Pide `main.md`, lo renderiza como HTML a partir de Markdown y resuelve embeds inline de ejercicios.
 
-#### `src/components/Editor.js`
+#### `src/components/Editor.ts`
 
-Configura paneles dinamicos de CodeMirror, soporta layout `Panels/Tabs`, ejercicio, archivos virtuales, resaltado GLSL para `vertex` y `fragment`, y maneja guardar, cargar, modificar, renombrar y eliminar.
+Configura paneles dinamicos de CodeMirror, soporta layout `Panels/Tabs`, ejercicio, archivos virtuales, resaltado GLSL para `vertex` y `fragment`, y maneja guardar, cargar, modificar, renombrar y eliminar (metodos repartidos en los mixins de `src/components/editor/`).
 
-#### `src/components/ExercisePanel.js`
+#### `src/components/ExercisePanel.ts`
 
 Panel superior del modo ejercicio: instrucciones, pistas, comparacion y controles de revelado.
 
-#### `src/components/Preview.js`
+#### `src/components/Preview.ts`
 
-Coordina la compilacion, la consola runtime, el panel shader y construye el documento final que se inyecta en el `iframe` de preview.
+Coordina la compilacion, la consola runtime, el panel shader y carga el documento final en el `iframe` de preview (metodos repartidos en los mixins de `src/components/preview/`).
 
-#### `src/components/Gallery.js`
+#### `src/components/Gallery.ts`
 
 Muestra tarjetas con mini previews de los ejemplos de un topic, overlays editoriales y estados de progresion.
 
-#### `src/components/CreateDialog.js`
+#### `src/components/CreateDialog.ts`
 
 Maneja el dialogo para crear nuevos nodos de contenido.
 
-#### `src/utils/api.js`
+#### `src/utils/api.ts`
 
 Capa de acceso a la API del backend.
 
-#### `src/utils/exampleEditorial.js`
+#### `src/utils/exampleEditorial.ts`
 
 Helpers de formato para descripcion, rating e importance de la metadata editorial.
 
-#### `src/utils/compileClient.js`
+#### `src/utils/compileClient.ts`
 
 Cliente de compilacion del frontend. Usa `Web Worker` y fallback directo al backend.
 
-#### `src/utils/compileCache.js`
+#### `src/utils/compileCache.ts`
 
 Helpers para claves estables y clonacion serializable de resultados de compilacion.
 
-#### `src/utils/exerciseComparison.js`
+#### `src/utils/exerciseComparison.ts`
 
 Resuelve pares intento/solucion y genera comparaciones por linea para el modo ejercicio.
 
-#### `src/utils/markdown.js`
+#### `src/utils/markdown.ts`
 
 Parser y generador del formato Markdown usado para los ejemplos, incluyendo metadata simple.
 
-#### `src/utils/exampleCompiler.js`
+#### `src/utils/exampleCompiler.ts`
 
 Pipeline de compilacion para `Pug`, `SCSS`, `SASS`, `TypeScript`, React y Vue.
 
-#### `src/utils/exampleRenderer.js`
+#### `src/utils/exampleRenderer.ts`
 
-Convierte el documento compilado en el `srcdoc` final del `iframe`.
+Convierte el documento compilado en el documento HTML final del `iframe` (alojado o `srcdoc`).
 
-#### `src/utils/theoryExerciseEmbeds.js`
+#### `src/utils/theoryExerciseEmbeds.ts`
 
 Extrae `[[exercise:...]]`, genera embeds inline y prepara previews pequenos para Theory.
 
-#### `src/workers/compileWorker.js`
+#### `src/workers/compileWorker.ts`
 
 Worker del frontend para cachear y deduplicar compilaciones repetidas.
 
@@ -1269,13 +1389,15 @@ La galeria tambien soporta `example_stage` para ordenar y etiquetar ejemplos com
 
 ### Consola runtime
 
-La consola no aparece siempre. Solo se activa si el ejemplo define:
+La consola no aparece siempre. Se activa si el ejemplo define:
 
 ```md
 ---
 console: true
 ---
 ```
+
+Tambien se activa sola en ejemplos que tienen script pero no markup (ejemplos solo de consola), y se puede abrir a mano en cualquier ejemplo web con el boton `Open Console` del preview o con `Shift+C` en modo Vim.
 
 Capacidades actuales:
 
@@ -1343,14 +1465,14 @@ El proyecto ya cubre dos niveles pedagogicos:
 
 Ejemplos listos para probar:
 
-- [react-jsx.md](material/ch00-tests/sec00-test/top00-test/examples/react-jsx.md)
-- [react-jsx-css.md](material/ch00-tests/sec00-test/top00-test/examples/react-jsx-css.md)
-- [react-tsx.md](material/ch00-tests/sec00-test/top00-test/examples/react-tsx.md)
-- [react-tsx-css.md](material/ch00-tests/sec00-test/top00-test/examples/react-tsx-css.md)
+- [React JSX](material/ch01-templates/sec02-react/top02-single-file-jsx/examples/ex01.md)
+- [React JSX + CSS](material/ch01-templates/sec02-react/top03-single-file-jsx-css/examples/ex01.md)
+- [React TSX](material/ch01-templates/sec02-react/top04-single-file-tsx/examples/ex01.md)
+- [React TSX + CSS](material/ch01-templates/sec02-react/top05-single-file-tsx-css/examples/ex01.md)
 - [vue-javascript.md](material/ch00-tests/sec00-test/top00-test/examples/vue-javascript.md)
 - [vue-typescript.md](material/ch00-tests/sec00-test/top00-test/examples/vue-typescript.md)
-- [react-project-jsx.md](material/ch00-tests/sec00-test/top00-test/examples/react-project-jsx.md)
-- [react-project-tsx.md](material/ch00-tests/sec00-test/top00-test/examples/react-project-tsx.md)
+- [React proyecto JSX](material/ch01-templates/sec02-react/top06-project-jsx/examples/ex01.md)
+- [React proyecto TSX + SCSS](material/ch01-templates/sec02-react/top07-project-tsx-scss/examples/ex01.md)
 - [vue-project-javascript.md](material/ch00-tests/sec00-test/top00-test/examples/vue-project-javascript.md)
 - [vue-project-sfc-typescript.md](material/ch00-tests/sec00-test/top00-test/examples/vue-project-sfc-typescript.md)
 
@@ -1401,7 +1523,6 @@ Limitaciones tecnicas actuales:
 - cambiar la etiqueta de un archivo no migra semanticamente el codigo; solo cambia el tipo declarado de forma segura
 - para imagenes y recursos locales debes usar la carpeta `assets/` del topic
 - el bundle de preview para React es grande porque empaqueta runtime en cada ejemplo
-- algunas rutas de API codifican nombres de archivo y otras no, asi que nombres exoticos pueden generar problemas
 - la compilacion sigue ocurriendo realmente en el backend; el `Web Worker` actual orquesta cache y deduplicacion, no reemplaza todavia el compilador de servidor
 
 ## Solucion de problemas
@@ -1482,18 +1603,14 @@ Luego recarga la app para que el backend vuelva a leer el arbol.
 
 ## Estado actual del repositorio
 
-Actualmente el repositorio ya trae contenido de ejemplo dentro de `material/`, incluyendo topics como:
+Actualmente el repositorio ya trae contenido listo para usar dentro de `material/`, sobre todo material de prueba (`ch00-tests`) y plantillas (`ch01-templates`), asi que puedes abrir la app y probar el flujo sin tener que crear contenido desde cero.
 
-- tests / test / test
-- CSS / selectors
-- SVG basics / coordinates
-- JavaScript / basics
-
-Eso permite abrir la app y probar el flujo sin tener que crear contenido desde cero.
-
-La suite automatica actual cubre:
+La suite automatica actual (255 tests, `npm test`) cubre:
 
 - parser y metadata
 - round-trip de serializacion
 - compilacion representativa de modos legacy, React y Vue
 - ejercicios, consola y rendering basico
+- el runtime del preview (formato de consola, mapeo de errores), el renderizado y saneado de la teoria, los stores de estado, la API demo y los helpers de Vim y del editor
+
+La organizacion de los tests y los demas controles (checker del curso, snapshot del material, harness del navegador) se describen en [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#testing).

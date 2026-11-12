@@ -4,8 +4,8 @@ Local application for studying web technologies from material organized in folde
 
 The app combines:
 
-- a Vite frontend with vanilla JavaScript
-- an Express backend
+- a Vite frontend written in TypeScript, without a UI framework
+- an Express backend (`server.ts`), run by Node directly from its TypeScript source
 - code editing with CodeMirror 6
 - Markdown theory rendering
 - live preview inside an `iframe`
@@ -27,6 +27,7 @@ The core idea is simple: content does not live in a database. It lives on disk i
 - [Installation](#installation)
 - [Development Run](#development-run)
 - [Available Commands](#available-commands)
+- [Development](#development)
 - [License](#license)
 - [Backend API](#backend-api)
 - [Project Structure](#project-structure)
@@ -79,22 +80,23 @@ Practical rule:
 
 - to understand the repo: `AGENTS.md` -> `skills/learnweb-repo-editing/SKILL.md` -> `hotspots.md`
 - to edit content: then jump to `material/**`
-- to edit app code: then jump to `src/**`, `index.html`, `server.js`, or `tests/**` depending on the hotspot
+- to edit app code: then jump to `src/**`, `index.html`, `server.ts`, or `tests/**` depending on the hotspot
 
 Recommended validation for an AI:
 
 - content-only changes: targeted validation
 - parser, editor, preview, backend, or metadata changes: `npm test`
 - UI or runtime changes: `npm run build`
+- any app code change: `npm run typecheck` (or `npm run check` for types, lint, formatting and tests)
 
 ## Technologies
 
 ### Frontend
 
 - Vite
-- vanilla JavaScript with ES modules
+- TypeScript (strict) with ES modules, compiled by Vite; no UI framework
 - CodeMirror 6
-- `marked` for Markdown rendering
+- `marked` for Markdown rendering and `highlight.js` for code in theory
 - WebGL for shader preview
 - React and ReactDOM for React modes
 - Vue runtime and Vue compilers for Vue modes
@@ -102,13 +104,14 @@ Recommended validation for an AI:
 
 ### Backend
 
-- Node.js
+- Node.js, which runs `server.ts` and the scripts directly by stripping their types (no build step)
 - Express
 - CORS
 - Node runtime `fs` and `path` to operate on the filesystem
+- `worker_threads` to compile in an isolated worker with time and memory limits
 - `pug` to compile `Pug` examples
 - `sass` to compile `SCSS` and `SASS`
-- `typescript` to transpile `TypeScript`
+- `typescript` to transpile and type-check `TypeScript` examples
 - `esbuild` to compile `JSX`, `TSX`, and multi-file bundles
 - `@vue/compiler-dom` and `@vue/compiler-sfc` for Vue templates and SFC support
 
@@ -134,7 +137,7 @@ Responsibilities:
 
 ### 2. Backend
 
-Served by Express at `http://localhost:3001`.
+Served by Express on `127.0.0.1:3001` (loopback only).
 
 Responsibilities:
 
@@ -144,12 +147,14 @@ Responsibilities:
 - create new folders and files
 - modify, rename, and delete examples
 - serve local topic assets
-- compile examples before sending them to the preview
+- compile examples before sending them to the preview, in a worker thread with time and memory limits
 - cache repeated compilation results
+- host the rendered preview documents on its own origin (`/preview/...`)
+- keep favorites, pending items, hidden chapters and editor defaults in dotfiles at the repository root
 
 ### Communication Between Both
 
-During development, Vite proxies `/api` routes to `http://localhost:3001`.
+During development, Vite proxies `/api` routes to `http://127.0.0.1:3001`.
 
 That means the frontend makes requests like:
 
@@ -159,6 +164,10 @@ That means the frontend makes requests like:
 ```
 
 and Vite forwards them to the backend.
+
+The preview iframe is the exception: it loads the rendered example from the backend's own origin
+(`http://localhost:3001/preview/...`), so learner code runs on a different origin than the app. The details, and
+the main flows of the app, are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## How Content Is Organized
 
@@ -193,7 +202,7 @@ Valid examples:
 - `sec01-selectors`
 - `top01-class-selector`
 
-The number is used for ordering and logical numbering. The rest of the name becomes the visible label in the UI, with dashes converted to spaces.
+The number is used for ordering and logical numbering. The visible label comes from an optional `label.txt` in a chapter or section folder (its first line) and from the first `# ` heading of a topic's `main.md`; without them, the rest of the folder name is used, with dashes converted to spaces.
 
 ## File Format
 
@@ -228,6 +237,8 @@ It can also be edited from the UI:
 ```
 
 That shortcode generates an inline card with a small preview, a larger popup, and a button that opens the real exercise.
+
+Variants of the same shortcode show code instead of a card: `[[exercise:ex01.md-]]` shows every file of the example in tabs, and `[[exercise:ex01.md-styles.css]]` or `[[exercise:ex01.md-(index.html|styles.css)]]` only the named files. A Markdown link to an example of the topic, such as `[see it](ex01.md)`, opens the same preview popup.
 
 ### 2. Examples: `.md` files inside `examples/`
 
@@ -363,11 +374,16 @@ Most important supported keys:
 - `exercise_solution_files`
 - `exercise_compare_pairs`
 - `exercise_solution_example`
-- `example_stage: minimal | intermediate | common-error | exercise | final-solution`
+- `example_stage: minimal | intermediate | common-error | exercise | final-solution | professional`
 - `example_description: short text`
 - `example_tags: html|css|svg`
 - `example_rating: 1..5`
 - `example_importance: trivial | useful | important | critical`
+- `editor_hidden_files: file:src/data.json|block:css:1` (files hidden in the editor)
+- `highlights` (line highlights, written by the editor)
+- `lang: en` (page language of the preview; `es` by default)
+- `loop_protect: false` (disables the infinite-loop guards)
+- `typecheck: false` (skips TypeScript type checking)
 
 #### Editorial Metadata for Examples
 
@@ -510,7 +526,7 @@ That folder is used to store local topic resources, for example:
 - fonts
 - helper files
 
-The main preview injects a `<base>` tag so example HTML can reference those files using relative paths.
+Example HTML can reference those files using relative paths, including subfolders of `assets/`.
 
 Example:
 
@@ -518,10 +534,10 @@ Example:
 <img src="diagram.png" alt="Diagram" />
 ```
 
-If `diagram.png` exists in `assets/`, the main preview can resolve it from:
+The main preview is served from `/preview/:ch/:sec/:top/<id>/index.html` on the backend, and the backend maps any other file next to that document to the topic `assets/`, so `diagram.png` resolves to `assets/diagram.png`. Copies rendered as `srcdoc` (gallery cards, theory cards, and the fallback when hosting fails) inject a `<base>` tag that points to:
 
 ```txt
-/api/topic/:ch/:sec/:top/assets/diagram.png
+/api/topic/:ch/:sec/:top/assets/
 ```
 
 For multi-file `React` and `Vue` projects, the current policy is:
@@ -584,8 +600,8 @@ Every time you change code:
 - the editor triggers a callback
 - the preview waits 300 ms
 - a compilation client with `Web Worker` cache reuse calls the backend if needed
-- a full HTML document is rebuilt inside the preview `iframe`
-- the compiled output is injected
+- a full HTML document is built around the compiled output
+- the document is uploaded to the backend and loaded in the preview `iframe` from the backend's origin; if that fails, the same document is loaded as `srcdoc`
 
 The top area of the preview can also show a compact editorial summary for the active example:
 
@@ -757,7 +773,7 @@ Current presets include:
 
 ### Requirements
 
-- Node.js 18 or newer recommended
+- Node.js 22.18 or newer (`engines` in `package.json`; Node runs the TypeScript sources of the backend, scripts and tests directly)
 - npm
 
 ### 1. Clone the Repository
@@ -792,7 +808,9 @@ npm run dev
 That command starts, at the same time:
 
 - Vite at `http://localhost:5174`
-- Express at `http://localhost:3001`
+- Express (`node server.ts`) at `http://127.0.0.1:3001`
+
+The backend does not reload when its code changes: restart `npm run dev` after editing `server.ts` or the modules it uses.
 
 Then open:
 
@@ -815,13 +833,39 @@ Important:
 - this command does not package or deploy the backend
 - the project does not include a full production deployment strategy out of the box
 
+Vite strips the TypeScript types without checking them; use `npm run typecheck` for that.
+
 ### `npm test`
 
-Runs the full automated suite with `node --test`.
+Runs the full automated suite (`tests/**/*.test.ts`, 255 tests) with `node --test`.
 
 ### `npm run test:watch`
 
 Runs the suite in watch mode.
+
+### `npm run typecheck`
+
+Type-checks the whole repository (`tsc --noEmit`, one `tsconfig.json` for the app, backend, scripts, tools and tests).
+
+### `npm run lint`
+
+Runs ESLint (correctness rules only).
+
+### `npm run format` and `npm run format:check`
+
+Formats the code with Prettier, or only checks it.
+
+### `npm run check`
+
+Runs `typecheck`, `lint`, `format:check` and `test` in a row.
+
+### `npm run check:material`
+
+Runs `node scripts/check-material.ts`: checks the structure, theory embeds, frontmatter and compile diagnostics of course content. Example: `npm run check:material -- material/ch03-css/sec04-flexbox --quiet`.
+
+### `npm run snapshot:material`
+
+Runs `node scripts/snapshot-material.ts`: hashes everything the app derives from `material/` (`--out before.json`), so a later `--compare before.json` shows whether an app change altered any parsed, compiled or rendered output.
 
 ### `npm run preview`
 
@@ -829,9 +873,16 @@ Runs the static preview of the frontend generated by Vite.
 
 Important:
 
-- it does not start `server.js`
+- it does not start `server.ts`
 - it does not replace the full development workflow
 - to use the app normally, you still need the backend
+
+## Development
+
+The code is TypeScript everywhere. Vite compiles the browser code; Node runs `server.ts`, the scripts and the tests directly from their `.ts` sources by stripping the types, so there is no build step for them and only erasable TypeScript syntax is used (no `enum`, no `namespace`, explicit `import type`, `.ts` import specifiers).
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the pieces of the app, the data model (`src/types/`), the main flows end to end, the security model of the previews and a module map.
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md): requirements, scripts, how TypeScript is used, code conventions, testing (unit tests, course checker, material snapshot, browser harness) and recipes for common extensions.
 
 ## License
 
@@ -851,9 +902,19 @@ Important:
 
 ## Backend API
 
+Every route lives in `server.ts`; the request and response types are in `src/types/api.ts`, and the browser calls them through `src/utils/api.ts`. Failed requests answer `{ "error": "..." }` with a 4xx or 5xx status. Requests that carry an `Origin` header other than a local one (`localhost`, `127.0.0.1`, `[::1]`) are refused with 403, except read-only topic asset requests and `/api/demo/*`.
+
 ### `GET /api/tree`
 
-Returns the full navigation tree.
+Returns the full navigation tree. `?includeHidden=1` also returns the chapters listed in `.hiddens` (flagged `hidden: true`).
+
+### `GET /api/tree/hidden-state`
+
+Returns the hidden chapters stored in `.hiddens`.
+
+### `PATCH /api/tree/chapters/:chapterId/hidden`
+
+Hides a chapter (or shows it again with `{ "hidden": false }`) and returns the new state and tree.
 
 ### `GET /api/topic/:ch/:sec/:top/main`
 
@@ -953,9 +1014,30 @@ This is the route used by the preview to support:
 
 It also returns `compileMeta` with cache information when applicable.
 
-### `GET /api/topic/:ch/:sec/:top/assets/:file`
+### `GET /api/topic/:ch/:sec/:top/assets`
 
-Serves a file inside the current topic `assets/` folder.
+Lists every file below the topic `assets/` folder (subfolders included, dotfiles skipped) with a ready-to-use URL.
+
+### `GET /api/topic/:ch/:sec/:top/assets/*`
+
+Serves a file inside the current topic `assets/` folder (subfolders allowed).
+
+### `POST /api/preview-documents`
+
+Stores a rendered preview document in memory (the last 24) and returns its URL, `/preview/:ch/:sec/:top/:id/index.html`.
+
+Body:
+
+```json
+{
+  "html": "<!DOCTYPE html>...",
+  "topicPath": "chNN-chapter/secNN-section/topNN-topic"
+}
+```
+
+### `GET /preview/:ch/:sec/:top/:id/*`
+
+Serves a hosted preview document (`index.html`) and, for any other path, the matching file of the topic `assets/`. An expired document answers 410.
 
 ### `GET /api/favorites`
 
@@ -988,132 +1070,170 @@ Body:
 }
 ```
 
+### `GET`, `POST` and `DELETE /api/pending`
+
+The same as the favorites routes, for the pending list in [`.pending`](./.pending).
+
 ### `GET /api/editor/vim-shortcuts`
 
 Returns the effective configuration of [vim-shortcuts.yaml](./vim-shortcuts.yaml), including fallback to the default map when the file is missing or invalid.
+
+### `GET` and `PATCH /api/editor/vim-default`, `GET` and `PATCH /api/editor/clipboard-default`
+
+Read or change the global Vim and system clipboard defaults stored in `.vim_enable` and `.clipboard_default`. Body of the `PATCH` routes: `{ "enabled": false }`.
+
+### `/api/demo/*`
+
+A small echo and streaming API used by the network lessons of the course (`src/utils/demoApi.ts`). It reads nothing from disk and is open to any origin.
 
 ## Project Structure
 
 ```txt
 learnWeb/
-  index.html
-  .favorites
+  index.html                 app shell (all panels and dialogs)
+  server.ts                  backend (Express)
+  vite.config.ts
+  tsconfig.json              one TypeScript program for the whole repository
+  eslint.config.js
+  .prettierrc.json
   package.json
-  package-lock.json
-  vite.config.js
-  server.js
-  material/
+  vim-shortcuts.yaml
+  .favorites  .pending  .hiddens  .vim_enable  .clipboard_default
+  docs/
+    ARCHITECTURE.md
+    DEVELOPMENT.md
+  material/                  content (chapters, sections, topics)
   src/
-    main.js
-    style.css
+    main.ts                  app entry point
+    style.css                imports src/styles/*.css
+    types/                   shared types: api, compile, diagnostics, document, material, runtime, theory
     config/
-      exampleBlocks.js
-      fileTemplates.js
+      exampleBlocks.ts
+      fileTemplates.ts
+      highlightColors.ts
     components/
-      Sidebar.js
-      TheoryViewer.js
-      Editor.js
-      ExercisePanel.js
-      Preview.js
-      Gallery.js
-      CreateDialog.js
+      Sidebar.ts
+      TheoryViewer.ts
+      TheoryExerciseDialog.ts
+      Editor.ts
+      editor/                Editor mixins (file operations, dialogs, session, exercise...)
+      ExercisePanel.ts
+      Preview.ts
+      preview/               Preview mixins (console, runtime diagnostics, shader controls)
+      Gallery.ts
+      CreateDialog.ts
+      FavoritesDialog.ts
+      PendingDialog.ts
+      AssetsDialog.ts
+    editor/                  CodeMirror extensions (Vim, GLSL, completions)
     utils/
-      api.js
-      compileCache.js
-      compileClient.js
-      exerciseComparison.js
-      exampleEditorial.js
-      markdown.js
-      exampleCompiler.js
-      exampleRenderer.js
-      theoryExerciseEmbeds.js
+      api.ts
+      compileCache.ts
+      compileClient.ts
+      exerciseComparison.ts
+      exampleEditorial.ts
+      markdown.ts            facade of markdown/
+      markdown/
+      exampleCompiler.ts
+      compiler/
+      exampleRenderer.ts     facade of renderer/
+      renderer/
+      theoryRenderer.ts
+      theoryExerciseEmbeds.ts
+      ...
     workers/
-      compileWorker.js
+      compileWorker.ts
+  scripts/
+    check-material.ts
+    snapshot-material.ts
+    contrast.ts
+  tools/
+    verify-examples.html     browser harness for course examples
   tests/
-    metadata-validation.test.mjs
-    document-roundtrip.test.mjs
-    framework-compilation.test.mjs
-    example-editorial.test.mjs
-    favorites-store.test.mjs
-    theory-document.test.mjs
-    theory-exercise-embeds.test.mjs
+    *.test.ts
 ```
+
+The module-by-module map is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#6-module-map).
 
 ### Important File Descriptions
 
-#### `server.js`
+#### `server.ts`
 
-Express backend. Reads and writes the filesystem, builds the tree, creates content, compiles documents, and serves assets.
+Express backend. Reads and writes the filesystem, builds the tree, creates content, compiles documents in an isolated worker thread, hosts preview documents, and serves assets.
 
-#### `src/main.js`
+#### `src/main.ts`
 
 Frontend entry point. Instantiates and coordinates all components.
 
-#### `src/components/Sidebar.js`
+#### `src/types/`
+
+Types shared across the app: the example document model, diagnostics, compile results, the preview runtime messages, API payloads, the material tree and the theory pages.
+
+#### `src/components/Sidebar.ts`
 
 Builds the side tree with chapters, sections, and topics.
 
-#### `src/components/TheoryViewer.js`
+#### `src/components/TheoryViewer.ts`
 
 Fetches `main.md`, renders it as HTML from Markdown, and resolves inline exercise embeds.
 
-#### `src/components/Editor.js`
+#### `src/components/Editor.ts`
 
-Configures dynamic CodeMirror panels, supports `Panels/Tabs` layout, exercise mode, virtual files, GLSL highlighting for `vertex` and `fragment`, and handles save, load, modify, rename, and delete.
+Configures dynamic CodeMirror panels, supports `Panels/Tabs` layout, exercise mode, virtual files, GLSL highlighting for `vertex` and `fragment`, and handles save, load, modify, rename, and delete (methods split into the mixins of `src/components/editor/`).
 
-#### `src/components/ExercisePanel.js`
+#### `src/components/ExercisePanel.ts`
 
 Top panel for exercise mode: instructions, hints, comparison, and reveal controls.
 
-#### `src/components/Preview.js`
+#### `src/components/Preview.ts`
 
-Coordinates compilation, the runtime console, the shader panel, and builds the final document injected into the preview `iframe`.
+Coordinates compilation, the runtime console, the shader panel, and loads the final document into the preview `iframe` (methods split into the mixins of `src/components/preview/`).
 
-#### `src/components/Gallery.js`
+#### `src/components/Gallery.ts`
 
 Shows cards with mini previews for topic examples, editorial overlays, and progression states.
 
-#### `src/components/CreateDialog.js`
+#### `src/components/CreateDialog.ts`
 
 Handles the dialog to create new content nodes.
 
-#### `src/utils/api.js`
+#### `src/utils/api.ts`
 
 Client-side access layer for the backend API.
 
-#### `src/utils/exampleEditorial.js`
+#### `src/utils/exampleEditorial.ts`
 
 Formatting helpers for description, rating, and importance in editorial metadata.
 
-#### `src/utils/compileClient.js`
+#### `src/utils/compileClient.ts`
 
 Frontend compilation client. Uses `Web Worker` plus direct backend fallback.
 
-#### `src/utils/compileCache.js`
+#### `src/utils/compileCache.ts`
 
 Helpers for stable keys and serializable cloning of compilation results.
 
-#### `src/utils/exerciseComparison.js`
+#### `src/utils/exerciseComparison.ts`
 
 Resolves attempt/solution pairs and generates line-level comparisons for exercise mode.
 
-#### `src/utils/markdown.js`
+#### `src/utils/markdown.ts`
 
 Parser and generator for the Markdown format used by examples, including simple metadata.
 
-#### `src/utils/exampleCompiler.js`
+#### `src/utils/exampleCompiler.ts`
 
 Compilation pipeline for `Pug`, `SCSS`, `SASS`, `TypeScript`, React, and Vue.
 
-#### `src/utils/exampleRenderer.js`
+#### `src/utils/exampleRenderer.ts`
 
-Converts a compiled document into the final `srcdoc` for the preview `iframe`.
+Converts a compiled document into the final HTML document for the preview `iframe` (hosted or `srcdoc`).
 
-#### `src/utils/theoryExerciseEmbeds.js`
+#### `src/utils/theoryExerciseEmbeds.ts`
 
 Extracts `[[exercise:...]]`, generates inline embeds, and prepares small previews for Theory.
 
-#### `src/workers/compileWorker.js`
+#### `src/workers/compileWorker.ts`
 
 Frontend worker used to cache and deduplicate repeated compilations.
 
@@ -1269,13 +1389,15 @@ The gallery also supports `example_stage` to order and label examples as didacti
 
 ### Runtime Console
 
-The console does not always appear. It only activates if the example defines:
+The console does not always appear. It activates if the example defines:
 
 ```md
 ---
 console: true
 ---
 ```
+
+It also activates on its own for examples that have a script but no markup (console-only examples), and it can be opened by hand for any web example with the `Open Console` button of the preview or `Shift+C` in Vim mode.
 
 Current capabilities:
 
@@ -1343,14 +1465,14 @@ The project already covers two pedagogical levels:
 
 Ready-to-test examples:
 
-- [react-jsx.md](material/ch00-tests/sec00-test/top00-test/examples/react-jsx.md)
-- [react-jsx-css.md](material/ch00-tests/sec00-test/top00-test/examples/react-jsx-css.md)
-- [react-tsx.md](material/ch00-tests/sec00-test/top00-test/examples/react-tsx.md)
-- [react-tsx-css.md](material/ch00-tests/sec00-test/top00-test/examples/react-tsx-css.md)
+- [React JSX](material/ch01-templates/sec02-react/top02-single-file-jsx/examples/ex01.md)
+- [React JSX + CSS](material/ch01-templates/sec02-react/top03-single-file-jsx-css/examples/ex01.md)
+- [React TSX](material/ch01-templates/sec02-react/top04-single-file-tsx/examples/ex01.md)
+- [React TSX + CSS](material/ch01-templates/sec02-react/top05-single-file-tsx-css/examples/ex01.md)
 - [vue-javascript.md](material/ch00-tests/sec00-test/top00-test/examples/vue-javascript.md)
 - [vue-typescript.md](material/ch00-tests/sec00-test/top00-test/examples/vue-typescript.md)
-- [react-project-jsx.md](material/ch00-tests/sec00-test/top00-test/examples/react-project-jsx.md)
-- [react-project-tsx.md](material/ch00-tests/sec00-test/top00-test/examples/react-project-tsx.md)
+- [React project JSX](material/ch01-templates/sec02-react/top06-project-jsx/examples/ex01.md)
+- [React project TSX + SCSS](material/ch01-templates/sec02-react/top07-project-tsx-scss/examples/ex01.md)
 - [vue-project-javascript.md](material/ch00-tests/sec00-test/top00-test/examples/vue-project-javascript.md)
 - [vue-project-sfc-typescript.md](material/ch00-tests/sec00-test/top00-test/examples/vue-project-sfc-typescript.md)
 
@@ -1401,7 +1523,6 @@ Current technical limitations:
 - changing a file badge does not migrate the code semantically; it only changes the declared type safely
 - for images and local resources, you must use the topic `assets/` folder
 - the React preview bundle is large because it packages runtime code into each example
-- some API routes encode filenames and some do not, so exotic names can still cause issues
 - compilation still really happens in the backend; the current `Web Worker` orchestrates cache and deduplication, but does not replace the server compiler yet
 
 ## Troubleshooting
@@ -1484,9 +1605,12 @@ Then reload the app so the backend reads the tree again.
 
 The repository already includes ready-to-use content under `material/`, especially test material and templates, so you can open the app and exercise the workflow without creating everything from scratch.
 
-The current automated suite covers:
+The current automated suite (255 tests, `npm test`) covers:
 
 - parser and metadata
 - serialization round-trip
 - representative compilation for legacy, React, and Vue modes
 - exercises, console, and basic rendering
+- the preview runtime (console formatting, error mapping), theory rendering and sanitizing, the state stores, the demo API, and the Vim and editor helpers
+
+The test layout and the other checks (course checker, material snapshot, browser harness) are described in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#testing).

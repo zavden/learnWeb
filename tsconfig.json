@@ -1,0 +1,29 @@
+{
+  // One program for the whole repository: the browser app (src/, tools/), the API server
+  // (server.ts), the scripts and the tests. Nothing is emitted: Vite compiles the browser code and
+  // Node runs the rest directly by stripping the types, which is why only erasable syntax is
+  // allowed (no enums, namespaces or constructor parameter properties) and why imports spell the
+  // real ".ts" extension.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "erasableSyntaxOnly": true,
+    "useDefineForClassFields": true,
+
+    "strict": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  },
+  "include": ["src", "tests", "tools", "scripts", "server.ts", "vite.config.ts"]
+}

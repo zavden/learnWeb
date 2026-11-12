@@ -33,8 +33,8 @@ Dependiendo de lo que necesites hacer, lee UNO de estos archivos:
 | Crear o editar un ejemplo | `skills/learnweb-example-authoring/SKILL.md` |
 | Escribir o editar teoria | `skills/learnweb-theory-authoring/SKILL.md` |
 | Crear o editar un shader | `skills/learnweb-shader-authoring/SKILL.md` |
-| Modificar la app (editor, preview, etc.) | `AGENTS.md` y luego `skills/learnweb-repo-editing/references/hotspots.md` |
-| Entender la arquitectura general | `AGENTS.md` |
+| Modificar la app (editor, preview, etc.) | `AGENTS.md`, `skills/learnweb-repo-editing/references/hotspots.md` y `docs/DEVELOPMENT.md` |
+| Entender la arquitectura general | `docs/ARCHITECTURE.md` |
 
 No necesitas leerlos todos. Elige el que corresponde a tu tarea.
 
@@ -219,7 +219,7 @@ body { margin: 0; padding: 16px; font-family: system-ui; }
 |-------------|--------------|
 | Solo contenido (material/) | Revisa que el Markdown esta bien formado |
 | Contenido que usa formatos complejos | `npm test` |
-| Cambios en la app | `npm test` y luego `npm run build` |
+| Cambios en la app | `npm run typecheck`, `npm test` y luego `npm run build` (o `npm run check` + `npm run build`) |
 
 ## Resumen rapido de formatos
 
@@ -303,17 +303,20 @@ example_stage: exercise
 | `skills/learnweb-shader-authoring/SKILL.md` | Como escribir shaders |
 | `skills/learnweb-repo-editing/SKILL.md` | Orientacion general del repo |
 | `skills/learnweb-repo-editing/references/hotspots.md` | Mapa de todos los archivos del proyecto |
-| `server.js` | API backend (Express) |
-| `src/main.js` | Punto de entrada frontend |
-| `package.json` | Dependencias y scripts (`npm test`, `npm run dev`, `npm run build`) |
+| `docs/ARCHITECTURE.md` | Piezas de la app, modelo de datos, flujos y mapa de modulos |
+| `docs/DEVELOPMENT.md` | Scripts, uso de TypeScript, convenciones, testing y recetas |
+| `server.ts` | API backend (Express) |
+| `src/main.ts` | Punto de entrada frontend |
+| `src/types/` | Tipos compartidos (documento, diagnosticos, compilacion, runtime, API, material, teoria) |
+| `package.json` | Dependencias y scripts (`npm test`, `npm run dev`, `npm run build`, `npm run typecheck`, `npm run check`) |
 
 ## Sistema de Pending
 
 La app tiene un sistema de "pending" (items pendientes) que funciona exactamente igual que favoritos:
 
 - `.pending` — archivo JSON en la raiz del proyecto
-- `src/utils/pendingStore.js` — store del backend
-- `src/components/PendingDialog.js` — dialogo para ver/gestionar pendientes
+- `src/utils/pendingStore.ts` — store del backend
+- `src/components/PendingDialog.ts` — dialogo para ver/gestionar pendientes
 - API: `GET/POST/DELETE /api/pending`
 - Los items pending aparecen con badge ambar en la galeria y se ordenan primero
 - Al iniciar la app sin topic seleccionado, se muestran los pending automaticamente
