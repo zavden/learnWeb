@@ -58,8 +58,12 @@ export interface Diagnostic {
     line?: number | null;
     /** 1-based column (`null` when unknown). */
     column?: number | null;
-    /** Slot of the block the problem belongs to; lets the editor find the file of single-file examples. */
-    slot?: BlockSlot;
+    /**
+     * Slot of the block the problem belongs to; lets the editor find the file of single-file examples.
+     * `'program'` is not a block slot: the shader preview uses it for a link error, which belongs to the
+     * vertex and fragment shaders together.
+     */
+    slot?: BlockSlot | 'program';
     /** Block type or file language involved (`pug`, `scss`, `typescript`, `html-full`, `vertex`…). */
     type?: string;
     /** Entry path involved (`entry` metadata); `null` when there was none. */

@@ -1,6 +1,33 @@
+// Shader compile diagnostics for the preview: compiles the example's vertex and fragment shaders in a
+// hidden WebGL context and turns the driver's info logs into `Diagnostic`s (src/types/diagnostics.ts), so
+// the editor can list them and mark the lines before the shader page even runs.
+//
+// Called by src/components/Preview.ts (shader renders), tools/verify-examples.ts and
+// scripts/snapshot-material.ts; the diagnostics are passed on to renderShaderExampleDocument()
+// (src/utils/renderer/shaderRenderer.ts), whose page compiles the same sources again to draw.
+//
+// Without a DOM (Node: tests, scripts) validation is skipped and returns `[]`. One WebGL context is shared
+// by every validation (see `getValidationContext`).
+
+import type { ExampleDocumentInput, ShaderBlockType } from '../types/document.ts';
+import type { Diagnostic, DiagnosticDetails, DiagnosticLevel } from '../types/diagnostics.ts';
 import { getShaderConfig } from './markdown.ts';
 
-function createShaderDiagnostic(level, code, message, details = {}) {
+/** Options of `parseShaderCompilerLog()`. */
+export interface ShaderCompilerLogOptions {
+    /** Document path of the shader file, reported as the diagnostics' `file` (`null` when empty). */
+    file?: string;
+    /** Stage that produced the log; picks the diagnostic code and becomes `slot` and `type`. Default 'fragment'. */
+    stage?: ShaderBlockType;
+}
+
+/** A compiled stage: the shader, or `null` and the diagnostics of its compile log. */
+interface ShaderStageResult {
+    diagnostics: Diagnostic[];
+    shader: WebGLShader | null;
+}
+
+function createShaderDiagnostic(level: DiagnosticLevel, code: string, message: string, details: DiagnosticDetails = {}): Diagnostic {
     return {
         level,
         code,
@@ -9,7 +36,8 @@ function createShaderDiagnostic(level, code, message, details = {}) {
     };
 }
 
-function getShaderFilePath(documentModel, type) {
+/** Path of the document file of a stage (`shader.vert` / `shader.frag` when none matches). */
+function getShaderFilePath(documentModel: ExampleDocumentInput, type: ShaderBlockType): string {
     const files = Array.isArray(documentModel?.files) ? documentModel.files : [];
     const match = files.find((file) => (
         file?.language === type
@@ -24,7 +52,13 @@ function getShaderFilePath(documentModel, type) {
     return type === 'vertex' ? 'shader.vert' : 'shader.frag';
 }
 
-export function parseShaderCompilerLog(log = '', { file = '', stage = 'fragment' } = {}) {
+/**
+ * Turn a WebGL shader info log into diagnostics, one per non-empty line: `ERROR: 0:7: msg`,
+ * `WARNING: 0:7: msg` (level 'warning') and the bare `0:7: msg` form give a `line`; any other line becomes
+ * an error without one.
+ * An empty log gives one generic "<Stage> shader compilation failed." error.
+ */
+export function parseShaderCompilerLog(log: string | null = '', { file = '', stage = 'fragment' }: ShaderCompilerLogOptions = {}): Diagnostic[] {
     const source = String(log || '').replace(/\r\n/g, '\n');
     const lines = source
         .split('\n')
@@ -96,8 +130,10 @@ export function parseShaderCompilerLog(log = '', { file = '', stage = 'fragment'
         ];
 }
 
-function compileShaderStage(gl, type, source, { file = '', stage = 'fragment' } = {}) {
-    const shader = gl.createShader(type);
+/** Compile one stage; on failure the shader is deleted and its log parsed. `type` is `gl.VERTEX_SHADER` or `gl.FRAGMENT_SHADER`. */
+function compileShaderStage(gl: WebGLRenderingContext, type: number, source: string, { file = '', stage = 'fragment' }: ShaderCompilerLogOptions = {}): ShaderStageResult {
+    // `!`: createShader() only returns null when the context is lost.
+    const shader = gl.createShader(type)!;
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
 
@@ -120,10 +156,11 @@ function compileShaderStage(gl, type, source, { file = '', stage = 'fragment' } 
 
 // One shared, never-displayed WebGL context is reused for every validation. Creating a fresh context
 // per render leaked GPU contexts until GC (Chrome caps them at ~16 and then kills the oldest one).
-let validationCanvas = null;
-let validationContext = null;
+let validationCanvas: HTMLCanvasElement | null = null;
+let validationContext: WebGLRenderingContext | null = null;
 
-function getValidationContext() {
+/** The shared validation context, created (again) when there is none or it was lost; `null` without WebGL. */
+function getValidationContext(): WebGLRenderingContext | null {
     if (validationContext && !validationContext.isContextLost()) {
         return validationContext;
     }
@@ -147,12 +184,18 @@ function getValidationContext() {
         depth: false,
         preserveDrawingBuffer: false,
         stencil: false,
-    }) || validationCanvas.getContext('experimental-webgl');
+    }) || validationCanvas.getContext('experimental-webgl') as WebGLRenderingContext | null;
 
     return validationContext;
 }
 
-export function validateShaderPreviewDocument(documentModel) {
+/**
+ * Compile and link the document's shaders and report what fails (`[]` when they are fine). Returns `[]`
+ * without checking when the document is not a shader example, already has structural errors, lacks a
+ * vertex or fragment block, or there is no DOM; one error when WebGL is unavailable. Also reports a
+ * vertex shader without the `a_position` attribute the preview's fullscreen quad needs.
+ */
+export function validateShaderPreviewDocument(documentModel: ExampleDocumentInput): Diagnostic[] {
     const shaderConfig = getShaderConfig(documentModel);
     if (!shaderConfig.enabled) return [];
 
@@ -183,10 +226,10 @@ export function validateShaderPreviewDocument(documentModel) {
 
     const vertexFile = getShaderFilePath(documentModel, 'vertex');
     const fragmentFile = getShaderFilePath(documentModel, 'fragment');
-    let vertexShader = null;
-    let fragmentShader = null;
-    let program = null;
-    const diagnostics = [];
+    let vertexShader: WebGLShader | null = null;
+    let fragmentShader: WebGLShader | null = null;
+    let program: WebGLProgram | null = null;
+    const diagnostics: Diagnostic[] = [];
 
     try {
         const vertexResult = compileShaderStage(gl, gl.VERTEX_SHADER, vertexBlock.content || '', {
@@ -207,7 +250,8 @@ export function validateShaderPreviewDocument(documentModel) {
             return diagnostics;
         }
 
-        program = gl.createProgram();
+        // `!`: createProgram() only returns null when the context is lost.
+        program = gl.createProgram()!;
         gl.attachShader(program, vertexShader);
         gl.attachShader(program, fragmentShader);
         gl.linkProgram(program);

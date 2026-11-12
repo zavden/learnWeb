@@ -1,4 +1,13 @@
-export function escapeHtml(value = '') {
+// The "Compile diagnostics" box that preview documents show inside the page when an example cannot run
+// (or when the console is closed), plus the HTML escaping the renderers share.
+//
+// Used by documentRenderer.ts and shaderRenderer.ts. The markup is part of the rendered document, so its
+// text and inline styles must stay byte-identical (the course snapshot hashes every rendered document).
+
+import type { Diagnostic } from '../../types/diagnostics.ts';
+
+/** Escape text for use in HTML content and double- or single-quoted attribute values. */
+export function escapeHtml(value: string = ''): string {
     return String(value)
         .replaceAll('&', '&amp;')
         .replaceAll('<', '&lt;')
@@ -7,7 +16,11 @@ export function escapeHtml(value = '') {
         .replaceAll("'", '&#39;');
 }
 
-export function formatDiagnosticLocation(diagnostic = {}) {
+/**
+ * `file:line:column` of a diagnostic (`runtime` stands in for a missing file when there is a line), or
+ * `''` when it has neither a file nor a line.
+ */
+export function formatDiagnosticLocation(diagnostic: Pick<Diagnostic, 'file' | 'line' | 'column'> | null = {}): string {
     if (!diagnostic?.file && !diagnostic?.line) return '';
 
     let value = diagnostic.file || 'runtime';
@@ -21,7 +34,12 @@ export function formatDiagnosticLocation(diagnostic = {}) {
     return value;
 }
 
-export function buildDiagnosticsMarkup(diagnostics = []) {
+/**
+ * The diagnostics box (an `<aside>` with one list item per diagnostic), or `''` when there are none.
+ * The markup starts with a newline and spans several lines; HTML-FULL documents flatten it to one line.
+ * Every diagnostic is listed whatever its level: callers filter first.
+ */
+export function buildDiagnosticsMarkup(diagnostics: Diagnostic[] = []): string {
     if (!Array.isArray(diagnostics) || !diagnostics.length) return '';
 
     const items = diagnostics

@@ -1,9 +1,100 @@
+// Builds the preview document of a shader example (`renderer: shader`): a page with a <canvas> and a
+// script that compiles the example's vertex and fragment shaders with WebGL and draws them on a fullscreen
+// quad (in an animation loop unless paused), feeding the built-in uniforms (u_time, u_resolution, u_mouse…),
+// the custom uniforms of `shader_uniforms` and the textures of `shader_textures` (loaded from the topic's
+// assets/).
+//
+// Callers: src/components/Preview.ts (the editor preview, with the shader panel's state as `shaderControls`),
+// the gallery/favorites/pending cards, the theory exercise dialog and embeds, the theory editor,
+// tools/verify-examples.ts and scripts/snapshot-material.ts (through src/utils/exampleRenderer.ts).
+// Compile errors are found beforehand by src/utils/shaderPreviewDiagnostics.ts and passed in `diagnostics`.
+//
+// The page and the app talk through postMessage (types in src/types/runtime.ts): the page posts
+// `ShaderStatsMessage` and `ShaderResizeRequestMessage` on the 'learncode-preview' channel and obeys
+// `ShaderControlMessage`s ('learncode-shader-control', sent by src/components/preview/ShaderControls.ts).
+// The runtime bridge (console) is only installed when `consoleEnabled` is set.
+//
+// Gotchas:
+// - The page script is a template string: it is DATA, not code of this module. It cannot import anything,
+//   repeats the message strings by hand, and receives its inputs only through the serialized `payload`
+//   (`ShaderPagePayload`). Don't reformat it: the course snapshot hashes every rendered page.
+// - Diagnostics with level 'error' stop the page from running any WebGL: it shows them instead.
+
+import type { Diagnostic } from '../../types/diagnostics.ts';
+import type { ExampleDocumentInput, ShaderResolution, ShaderTexture } from '../../types/document.ts';
+import type { ShaderCustomUniformValue } from '../../types/runtime.ts';
 import { getShaderConfig } from '../markdown.ts';
 import { escapeHtml, buildDiagnosticsMarkup } from './diagnosticsMarkup.ts';
 import { getTopicAssetBase } from './paths.ts';
 import { buildRuntimeBridgeMarkup, serializeForInlineScript } from './runtimeBridge.ts';
 
-function buildShaderStatusMarkup(title = '', message = '') {
+/**
+ * Live state of the editor's shader panel that a render starts from (src/components/preview/ShaderControls.ts
+ * keeps it across renders; cards pass `{ paused: true, stillFrame: true }`). Every field is optional.
+ */
+export interface ShaderPreviewControls {
+    /** Canvas size to use instead of the document's `resolution` (only when both sides are finite numbers). */
+    currentResolution?: ShaderResolution | null;
+    /** Current custom uniform values; when an array, it replaces the document's `shader_uniforms`. */
+    customUniforms?: ShaderCustomUniformValue[];
+    /** Start paused (time and frame count frozen). Default `true`. */
+    paused?: boolean;
+    /**
+     * Never run the animation loop, even when not paused: frames are only drawn at start and on input or
+     * control messages (still cards). Default `false`.
+     */
+    stillFrame?: boolean;
+    /** Textures to bind; when a non-empty array, it replaces the document's `shader_textures`. */
+    textures?: ShaderTexture[];
+}
+
+/** Options of `renderShaderExampleDocument()`. Every field is optional. */
+export interface RenderShaderExampleOptions {
+    /**
+     * Install the runtime bridge (console output and errors reach the app) and leave the diagnostics box
+     * out of the page. Default `false`.
+     */
+    consoleEnabled?: boolean;
+    /**
+     * Structural and shader compile diagnostics. Any 'error' replaces the shader with an error message
+     * (no WebGL runs); without a console every diagnostic is also listed below the canvas.
+     */
+    diagnostics?: Diagnostic[];
+    /** Stamped on the page's messages; control messages must carry it. Non-finite values become 0. */
+    renderId?: number;
+    shaderControls?: ShaderPreviewControls | null;
+    /** `ch/sec/top` of the example: the textures are loaded from that topic's assets. */
+    topicPath?: string | null;
+}
+
+/** The `controls` of the page payload: the initial state of the shader page. */
+interface ShaderPageControls {
+    customUniforms: ShaderCustomUniformValue[];
+    paused: boolean;
+    resolution: ShaderResolution;
+    stillFrame: boolean;
+    textures: ShaderTexture[];
+}
+
+/** What the page script receives as `payload` (serialized into the page). */
+interface ShaderPagePayload {
+    /** URL prefix of the topic's assets (`''` without a topic: textures then report 'missing-asset-base'). */
+    assetBase: string;
+    consoleEnabled: boolean;
+    /** The page reads every field defensively, so a partial object (or `{}`) is valid. */
+    controls: Partial<ShaderPageControls>;
+    fragmentSource: string;
+    renderId: number;
+    /** Canvas size; the page falls back to 800×600 for missing values. */
+    resolution: ShaderResolution;
+    vertexSource: string;
+}
+
+/** Inputs of `buildShaderRuntimeScript()`: the payload fields, all optional. */
+type ShaderRuntimeScriptOptions = Partial<ShaderPagePayload>;
+
+/** The overlay that shows why the shader is not running (`hidden` when there is neither title nor message). */
+function buildShaderStatusMarkup(title: string = '', message: string = ''): string {
     return `
       <div id="shader-status" class="shader-status"${title || message ? '' : ' hidden'}>
         <strong id="shader-status-title">${escapeHtml(title)}</strong>
@@ -11,10 +102,12 @@ function buildShaderStatusMarkup(title = '', message = '') {
       </div>`;
 }
 
-function buildShaderBridgeMarkup({ consoleEnabled = false, renderId = 0 } = {}) {
+/** The runtime bridge <script>, only when the preview has a console. */
+function buildShaderBridgeMarkup({ consoleEnabled = false, renderId = 0 }: { consoleEnabled?: boolean; renderId?: number } = {}): string {
     return consoleEnabled ? buildRuntimeBridgeMarkup(renderId) : '';
 }
 
+/** The page script (a `<script>` element, as text) with its payload inlined. */
 function buildShaderRuntimeScript({
     vertexSource = '',
     fragmentSource = '',
@@ -23,7 +116,7 @@ function buildShaderRuntimeScript({
     renderId = 0,
     controls = {},
     assetBase = '',
-} = {}) {
+}: ShaderRuntimeScriptOptions = {}): string {
     const payload = serializeForInlineScript({
         assetBase,
         consoleEnabled: Boolean(consoleEnabled),
@@ -32,7 +125,7 @@ function buildShaderRuntimeScript({
         renderId: Number.isFinite(renderId) ? renderId : 0,
         resolution,
         vertexSource,
-    });
+    } satisfies ShaderPagePayload);
 
     return `
   <script>
@@ -840,16 +933,21 @@ function buildShaderRuntimeScript({
   </script>`;
 }
 
-export function renderShaderExampleDocument(documentModel = {}, options = {}) {
+/**
+ * Build the preview document (complete HTML text) of a shader example. The page needs WebGL; when the
+ * document lacks a vertex or fragment block, or `diagnostics` has an error, it only shows why.
+ */
+export function renderShaderExampleDocument(documentModel: ExampleDocumentInput = {}, options: RenderShaderExampleOptions = {}): string {
     const blocks = Array.isArray(documentModel?.blocks) ? documentModel.blocks : [];
     const diagnostics = Array.isArray(options.diagnostics) ? options.diagnostics : [];
     const shaderConfig = getShaderConfig(documentModel);
     const consoleEnabled = Boolean(options.consoleEnabled);
-    const shaderControls = options.shaderControls && typeof options.shaderControls === 'object'
+    const shaderControls: ShaderPreviewControls = options.shaderControls && typeof options.shaderControls === 'object'
         ? options.shaderControls
         : {};
     const topicPath = String(options.topicPath || '').trim();
-    const renderId = Number.isFinite(options.renderId) ? options.renderId : 0;
+    // `!`: Number.isFinite() is true only for a number, but it does not narrow.
+    const renderId = Number.isFinite(options.renderId) ? options.renderId! : 0;
     const vertexBlock = blocks.find((block) => block.type === 'vertex') || null;
     const fragmentBlock = blocks.find((block) => block.type === 'fragment') || null;
     const blockingDiagnostics = diagnostics.filter((diagnostic) => diagnostic.level === 'error');
@@ -858,7 +956,7 @@ export function renderShaderExampleDocument(documentModel = {}, options = {}) {
         && Number.isFinite(shaderControls.currentResolution.height)
         ? shaderControls.currentResolution
         : resolution;
-    const customUniformSource = Array.isArray(shaderControls?.customUniforms)
+    const customUniformSource: ShaderCustomUniformValue[] = Array.isArray(shaderControls?.customUniforms)
         ? shaderControls.customUniforms
         : (shaderConfig.customUniforms || []);
     const customUniforms = customUniformSource.map((uniform) => ({

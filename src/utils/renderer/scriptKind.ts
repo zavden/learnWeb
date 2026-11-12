@@ -1,5 +1,8 @@
 // Decide whether learner JavaScript must run as `<script type="module">`.
 //
+// Used by documentRenderer.ts (the `<script>` tag of an example) and src/utils/compiler/syntaxCheck.ts
+// (which parses the code the same way the page will run it).
+//
 // Classic scripts stay the default so beginner patterns keep working (top-level `const`/`function`
 // visible to inline `onclick="fn()"` handlers and the console REPL). We switch to a module only when the
 // code cannot run as a classic script:
@@ -13,7 +16,7 @@
 const LINE_IMPORT_EXPORT_PATTERN = /^[ \t]*(?:import(?:\s+[\w$]|\s*[*{"'`])|export(?:\s+[\w$]|\s*[*{]))/m;
 const IMPORT_META_PATTERN = /\bimport\s*\.\s*meta\b/;
 
-function stripComments(code = '') {
+function stripComments(code: string = ''): string {
     // Good enough for detection: removes block comments and line comments that start a line or follow
     // whitespace/semicolons (avoids touching `//` inside URLs in strings in most practical cases).
     return String(code || '')
@@ -21,7 +24,11 @@ function stripComments(code = '') {
         .replace(/(^|[\s;])\/\/.*$/gm, '$1');
 }
 
-function parsesAs(constructorFactory, code) {
+/**
+ * Whether `code` parses as the body of the function constructor returned by `constructorFactory`:
+ * `true`, `false` on a SyntaxError, `null` when that cannot be tested (no constructor, CSP, other errors).
+ */
+function parsesAs(constructorFactory: () => unknown, code: string): boolean | null {
     try {
         const Constructor = constructorFactory();
         if (typeof Constructor !== 'function') return null;
@@ -34,7 +41,8 @@ function parsesAs(constructorFactory, code) {
     }
 }
 
-export function isModuleScript(code = '') {
+/** Whether the code needs `<script type="module">` (see the rules at the top of this file). */
+export function isModuleScript(code: string | null = ''): boolean {
     const source = String(code || '');
     if (!source.trim()) return false;
 

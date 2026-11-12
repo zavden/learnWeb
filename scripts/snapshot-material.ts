@@ -17,8 +17,8 @@
 // rendered documents and hashed once under "runtime#source", so editing the runtime shows up as a
 // single difference instead of one per example.
 //
-// Compiles every example once in the isolated worker (one CPU core, a few minutes for the whole
-// course). Exit code 1 when --compare finds differences.
+// Compiles every example once in the isolated worker (one CPU core, about a minute for a course of
+// 3000 examples). Exit code 1 when --compare finds differences.
 //
 // The client modules call `fetch('/api/…')`, so this script replaces `globalThis.fetch` with a local
 // stand-in that answers only `POST /api/compile` and `GET /api/topic/.../examples/<file>` from disk
@@ -48,6 +48,7 @@ import { buildMaterialTree } from '../src/utils/materialTree.ts';
 import { errorMessage } from '../src/utils/errors.ts';
 import type { CompileRequest, CompileResponse, CompileResult } from '../src/types/compile.ts';
 import type { ExampleDocument } from '../src/types/document.ts';
+import type { TheoryExerciseEmbeds } from '../src/types/theory.ts';
 import { buildRuntimeBridgeScriptBody } from '../src/utils/renderer/runtimeBridge.ts';
 import { validateShaderPreviewDocument } from '../src/utils/shaderPreviewDiagnostics.ts';
 import { extractTheoryExerciseReferences, loadTheoryExerciseEmbeds } from '../src/utils/theoryExerciseEmbeds.ts';
@@ -238,8 +239,7 @@ async function snapshotExample(topicPath: string, topicDir: string, filename: st
         return;
     }
 
-    // TODO(ts-migration): `never[]` is what the untyped exampleRenderer.ts infers for its `diagnostics = []` default; drop the assertion once it is typed
-    const diagnostics = (result.compileDiagnostics || []) as never[];
+    const diagnostics = result.compileDiagnostics || [];
     const renderOptions = { consoleEnabled: true, renderId: 1, suppressDialogs: false };
     record(`${key}#compile`, { compiledDocument: result.compiledDocument, compileDiagnostics: diagnostics });
     record(`${key}#compiled-views`, attempt(() => ({
@@ -265,8 +265,7 @@ async function snapshotTheory(topicPath: string, topicDir: string): Promise<void
     const content = fs.readFileSync(file, 'utf-8');
     record(`${key}#references`, attempt(() => extractTheoryExerciseReferences(content)));
 
-    // TODO(ts-migration): use the embed type of theoryExerciseEmbeds.ts once it is typed
-    let exerciseEmbeds: Record<string, { previewSrcdoc: string }> = {};
+    let exerciseEmbeds: TheoryExerciseEmbeds = {};
     try {
         exerciseEmbeds = await loadTheoryExerciseEmbeds(topicPath, content);
         for (const embed of Object.values(exerciseEmbeds)) embed.previewSrcdoc = withoutRuntime(embed.previewSrcdoc);

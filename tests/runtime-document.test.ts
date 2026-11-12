@@ -7,14 +7,17 @@ import { isModuleScript } from '../src/utils/renderer/scriptKind.ts';
 import { extractInlineSourceMapLines } from '../src/utils/renderer/sourceMap.ts';
 import { createCompileCacheKey } from '../src/utils/compileCache.ts';
 import { parseExampleDocument } from '../src/utils/markdown.ts';
+import type { Diagnostic } from '../src/types/diagnostics.ts';
+import type { RuntimeBridgeConfig } from '../src/types/runtime.ts';
 
-function extractBridgeConfig(html) {
+/** The config the renderer serialized into the bridge script (it always writes every field). */
+function extractBridgeConfig(html: string): Required<RuntimeBridgeConfig> {
     const match = html.match(/\(0,eval\)\(".*?"\)\((\{.*?\})\);<\/script>/s);
     assert.ok(match, 'bridge config present');
     return JSON.parse(match[1]);
 }
 
-function lineOf(html, needle) {
+function lineOf(html: string, needle: string): number {
     const index = html.indexOf(needle);
     assert.ok(index >= 0, `missing ${needle}`);
     return html.slice(0, index).split('\n').length;
@@ -66,8 +69,8 @@ test('source ranges map document lines back to the editor files', () => {
         runtimeScriptPath: 'script.js',
     }, '', [], { consoleEnabled: true, renderId: 1, markupPath: 'index.html' });
     const config = extractBridgeConfig(html);
-    const script = config.ranges.find((range) => range.kind === 'script');
-    const markup = config.ranges.find((range) => range.kind === 'markup');
+    const script = config.ranges.find((range) => range.kind === 'script')!;
+    const markup = config.ranges.find((range) => range.kind === 'markup')!;
 
     assert.equal(script.startLine, lineOf(html, 'console.log(1);'));
     assert.equal(script.sourceName, 'script.js');
@@ -79,7 +82,7 @@ test('source ranges map document lines back to the editor files', () => {
 
 test('HTML-FULL injection keeps every learner line number unchanged', () => {
     const source = '<!DOCTYPE html>\n<html>\n<head>\n<title>t</title>\n</head>\n<body>\n<script>\nnull.boom;\n</script>\n</body>\n</html>';
-    const html = renderCompiledExampleDocument({ fullDocumentHtml: source }, 'a/b/c', [{ level: 'error', message: 'x' }], { renderId: 2, markupPath: 'page.html' });
+    const html = renderCompiledExampleDocument({ fullDocumentHtml: source }, 'a/b/c', [{ level: 'error', message: 'x' }] as Diagnostic[], { renderId: 2, markupPath: 'page.html' });
     assert.equal(html.split('\n').length, source.split('\n').length);
     assert.equal(lineOf(html, 'null.boom;'), 8);
     const config = extractBridgeConfig(html);
@@ -139,13 +142,13 @@ test('module detection: classic by default, module for import/export/top-level a
 
 test('TypeScript inline source maps are shipped as a compact line map', () => {
     const { js } = compileScript({ type: 'typescript', content: 'class C {\n  #n: number = 0;\n  run(): void {\n    (null as any).x();\n  }\n}' }, { sourcePath: 'script.ts' });
-    const map = extractInlineSourceMapLines(js);
+    const map = extractInlineSourceMapLines(js)!;
     assert.deepEqual(map.sources, ['script.ts']);
     const generatedLine = js.split('\n').findIndex((line) => line.includes('.x()')) + 1;
     assert.deepEqual(map.lineMap[generatedLine], [0, 4]);
 
     const html = renderCompiledExampleDocument({ html: '', js, runtimeScriptPath: 'script.ts' }, '', [], {});
-    const script = extractBridgeConfig(html).ranges.find((range) => range.kind === 'script');
+    const script = extractBridgeConfig(html).ranges.find((range) => range.kind === 'script')!;
     assert.equal(script.sourceName, 'learncode-compiled.js');
     assert.equal(script.path, 'script.ts');
     assert.ok(Array.isArray(script.lineMap));
