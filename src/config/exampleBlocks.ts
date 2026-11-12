@@ -1,5 +1,23 @@
-export const SLOT_ORDER = ['app', 'markup', 'style', 'script', 'vertex', 'fragment'];
+// Block types of legacy-blocks examples (`# Heading` + fenced block): the registry that defines them,
+// the fence-language aliases, the slot order used to sort blocks, and the session presets offered when an
+// example is created. Used by the Markdown parser/serializer (src/utils/markdown/), the editor (badges,
+// headings, "new file" menus), src/config/fileTemplates.ts, src/components/CreateDialog.ts and server.ts
+// (`/api/create` builds the new example from a preset).
+//
+// `BLOCK_REGISTRY` is the single source of truth of `BlockType` and `BLOCK_ALIASES` of `BlockAlias`
+// (src/types/document.ts): register a new block type here.
 
+import type {
+    BlockDefinition,
+    BlockType,
+    ExampleBlock,
+    SessionPreset,
+} from '../types/document.ts';
+
+/** Slots in page order: blocks are sorted by it, and `sessionId` lists block types in this order. */
+export const SLOT_ORDER = ['app', 'markup', 'style', 'script', 'vertex', 'fragment'] as const;
+
+/** Every block type, with its slot, canonical heading and editor badge. */
 export const BLOCK_REGISTRY = {
     jsx: {
         slot: 'app',
@@ -92,8 +110,9 @@ export const BLOCK_REGISTRY = {
         badgeClass: 'shader',
         enabled: true,
     },
-};
+} satisfies Record<string, BlockDefinition>;
 
+/** Alternative fence languages and the block type they stand for (matched after lower-casing). */
 export const BLOCK_ALIASES = {
     frag: 'fragment',
     fs: 'fragment',
@@ -104,9 +123,13 @@ export const BLOCK_ALIASES = {
     ts: 'typescript',
     vert: 'vertex',
     vs: 'vertex',
-};
+} satisfies Record<string, BlockType>;
 
-export const SESSION_PRESETS = [
+/**
+ * Starting documents offered when an example is created (the create dialog lists them by `label`;
+ * `/api/create` builds the file from the chosen one). `__EXAMPLE_NAME__` is replaced with the example name.
+ */
+export const SESSION_PRESETS: readonly SessionPreset[] = [
     {
         id: 'shader-basic',
         label: 'Shader Basic',
@@ -835,23 +858,33 @@ export const SESSION_PRESETS = [
     },
 ];
 
-export function normalizeBlockType(type = '') {
+// Lookups by arbitrary text: the tables are typed by their literal keys, so they are read through these
+// string-indexed views. (Like the plain JavaScript lookup, an inherited key such as `constructor` is not
+// filtered out.)
+const BLOCK_ALIAS_LOOKUP: Readonly<Record<string, BlockType | undefined>> = BLOCK_ALIASES;
+const BLOCK_REGISTRY_LOOKUP: Readonly<Record<string, BlockDefinition | undefined>> = BLOCK_REGISTRY;
+
+/** Trims, lower-cases and resolves aliases (`JS` → `javascript`); `''` for empty input. Unknown types are returned as they are. */
+export function normalizeBlockType(type: string = ''): string {
     const normalized = String(type).trim().toLowerCase();
     if (!normalized) return '';
-    return BLOCK_ALIASES[normalized] || normalized;
+    return BLOCK_ALIAS_LOOKUP[normalized] || normalized;
 }
 
-export function getBlockDefinition(type = '') {
+/** Definition of a block type or alias, `null` when it is not registered. */
+export function getBlockDefinition(type: string = ''): BlockDefinition | null {
     const normalized = normalizeBlockType(type);
-    return BLOCK_REGISTRY[normalized] || null;
+    return BLOCK_REGISTRY_LOOKUP[normalized] || null;
 }
 
-export function isEnabledBlockType(type = '') {
+/** Whether the type (or alias) is registered and enabled. */
+export function isEnabledBlockType(type: string = ''): boolean {
     const definition = getBlockDefinition(type);
     return Boolean(definition && definition.enabled);
 }
 
-export function sortBlocks(blocks = []) {
+/** A sorted copy of the blocks, in `SLOT_ORDER` (stable: blocks of the same slot keep their order). */
+export function sortBlocks<T extends Pick<ExampleBlock, 'slot'>>(blocks: readonly T[] = []): T[] {
     return [...blocks].sort((left, right) => {
         const leftIndex = SLOT_ORDER.indexOf(left.slot);
         const rightIndex = SLOT_ORDER.indexOf(right.slot);
@@ -859,13 +892,15 @@ export function sortBlocks(blocks = []) {
     });
 }
 
-export function deriveSessionId(blocks = []) {
+/** The `sessionId` of a legacy document: its block types in slot order joined with `-` (`html-css-javascript`). */
+export function deriveSessionId(blocks: readonly Pick<ExampleBlock, 'slot' | 'type'>[] = []): string {
     return sortBlocks(blocks)
         .map((block) => block.type)
         .join('-');
 }
 
-export function getSessionPreset(id) {
+/** The preset with this id; falls back to `html-css-javascript` (then the first preset) for unknown ids. */
+export function getSessionPreset(id: string): SessionPreset {
     return SESSION_PRESETS.find((preset) => preset.id === id)
         || SESSION_PRESETS.find((preset) => preset.id === 'html-css-javascript')
         || SESSION_PRESETS[0];
