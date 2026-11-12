@@ -1,34 +1,77 @@
+// File and document operations of the editor: loading, saving, renaming and deleting examples on disk
+// (src/utils/api.ts), installing a new document (`_applyDocument`: example, theory or the empty state), and
+// the file toolbar: the add/edit file dialog (with the React/Vue scaffolds of src/config/fileTemplates.ts),
+// duplicate, delete, entry selection and font size.
+//
+// `fileOperationsMixin` is an Editor mixin: src/components/Editor.ts copies its methods onto
+// `Editor.prototype`, so `this` is the Editor and every field used here is declared there. Editor.ts wires
+// the toolbar and dialog inputs to these methods; src/main.ts calls the public ones (`setTopicPath`,
+// `loadExample`, `loadTheoryDocument`, `clearCurrentExample`, `setCurrentExampleFavorite`/`…Pending`) and
+// is told about created, deleted and renamed examples through `onExampleListChanged`.
+//
+// Before editing:
+// - Documents are immutable: every change builds a new document with the mutation API of
+//   src/utils/markdown.ts and installs it with `_applyDocument()`, which re-renders the whole workspace.
+// - Loads and saves are asynchronous and the user may move on meanwhile: `_exampleLoadRequestId` drops
+//   stale loads, and saves check that the same topic/file is still open before updating the editor.
+// - While theory is edited, `currentDocument` is the theory pseudo-document: the save paths hand over to
+//   `_handleModifyTheory` (./theoryEditor.ts) before anything example-specific runs.
+
 import { buildFrameworkFileTemplate, getFrameworkFileTemplateOptions } from '../../config/fileTemplates.ts';
 import { getBlockDefinition, normalizeBlockType } from '../../config/exampleBlocks.ts';
 import { fetchExample, modifyExample, removeExample, renameExample, saveExample } from '../../utils/api.ts';
+import { errorMessage } from '../../utils/errors.ts';
 import { buildExampleDocument, cloneExampleDocument, createDocumentFile, createEmptyExampleDocument, duplicateDocumentFile, getDocumentEntryCandidates, getDocumentLanguageOptions, hasBlockingDiagnostics, isShaderDocument, parseExampleDocument, removeDocumentFile, setDocumentEntryPath, synchronizeDocument, updateDocumentFileDetails, updateDocumentFileContent, VIRTUAL_FILE_ROLE_OPTIONS } from '../../utils/markdown.ts';
 import { createTheoryDocument } from '../../utils/theoryDocument.ts';
 import { parseHighlights, serializeHighlights } from '../../utils/highlights.ts';
-import type { Editor } from '../Editor.ts';
+import type { FileLanguage, NewDocumentFile, VirtualFileRole } from '../../types/document.ts';
+import type { CachedEditorState, Editor, EditorDocument, FileDialogMode } from '../Editor.ts';
 
+/** Options of `_applyDocument()`. */
+export interface ApplyDocumentOptions {
+    /** Send the new document to `onCodeChange` (the preview). Default true. */
+    notify?: boolean;
+    /**
+     * A different document is being loaded (example, theory, empty state) rather than the current one
+     * edited: cached editor states are dropped and highlights come from the document's metadata. Default false.
+     */
+    reset?: boolean;
+    /** With `reset`: the editor states to start the cache with (a workspace snapshot's); none by default. */
+    editorStates?: Map<string, CachedEditorState> | null;
+}
+
+/** What `_getDefaultFileContent()` uses to fill a new file: its language, and for some languages its path and role. */
+export type DefaultFileContentRequest = Pick<NewDocumentFile, 'language' | 'path' | 'role'>;
+
+/** Editor mixin: example files on disk, the open document and the file dialog (see the header). */
 export const fileOperationsMixin = {
-    _getDocumentFramework() {
+    /** `metadata.framework` lower-cased (`react`, `vue`), `''` for plain web and shader examples. */
+    _getDocumentFramework(): string {
         return String(this.currentDocument?.metadata?.framework || '').trim().toLowerCase();
     },
 
-    _isVirtualFileDocument() {
+    /** Whether the document is written as `@file` sections (true for theory as well). */
+    _isVirtualFileDocument(): boolean {
         return this.currentDocument?.sourceFormat === 'virtual-files';
     },
 
-    _isFrameworkMultiFileDocument() {
+    /** A React or Vue example written as `@file` sections: the only kind that has file templates and an entry file. */
+    _isFrameworkMultiFileDocument(): boolean {
         return this._isVirtualFileDocument() && ['react', 'vue'].includes(this._getDocumentFramework());
     },
 
-    _isShaderDocument() {
+    _isShaderDocument(): boolean {
         return isShaderDocument(this.currentDocument);
     },
 
-    _getActiveTemplateId() {
+    /** The template picked in the file dialog; `custom` means none. */
+    _getActiveTemplateId(): string {
         const value = this.fileDialogTemplate?.value || this.fileDialogState.templateId || 'custom';
         return value || 'custom';
     },
 
-    _populateTemplateOptions() {
+    /** Fills the template select for the current document and shows it only when creating a file that has templates. */
+    _populateTemplateOptions(): void {
         if (!this.fileDialogTemplate || !this.fileDialogTemplateGroup) return;
 
         const templateOptions = getFrameworkFileTemplateOptions(this.currentDocument);
@@ -43,7 +86,8 @@ export const fileOperationsMixin = {
             const option = document.createElement('option');
             option.value = template.id;
             option.textContent = template.label;
-            this.fileDialogTemplate.appendChild(option);
+            // Checked at the top of the method.
+            this.fileDialogTemplate!.appendChild(option);
         });
 
         const shouldShow = this.fileDialogState.mode === 'create' && templateOptions.length > 0;
@@ -53,7 +97,11 @@ export const fileOperationsMixin = {
         this.fileDialogState.templateId = 'custom';
     },
 
-    _handleFileTemplateChange() {
+    /**
+     * The template select changed. Back to `custom`: the suggested path and role follow the language again
+     * (only where the user had not typed their own); a template: its scaffold fills the dialog.
+     */
+    _handleFileTemplateChange(): void {
         const templateId = this._getActiveTemplateId();
         this.fileDialogState.templateId = templateId;
 
@@ -81,7 +129,11 @@ export const fileOperationsMixin = {
         this._applySelectedTemplateToDialog();
     },
 
-    _applySelectedTemplateToDialog() {
+    /**
+     * Shows the selected template's primary file in the dialog (language, path, role, hint). A path or role
+     * the user typed is passed to the template; values still equal to the dialog's suggestions are not.
+     */
+    _applySelectedTemplateToDialog(): void {
         const templateId = this._getActiveTemplateId();
         if (templateId === 'custom') return;
 
@@ -125,7 +177,8 @@ export const fileOperationsMixin = {
         }
     },
 
-    _normalizeVirtualPathInput(value = '') {
+    /** A typed path made relative and tidy: `\` → `/`, no leading `./` or `/`, no repeated slashes. */
+    _normalizeVirtualPathInput(value: string = ''): string {
         return String(value)
             .trim()
             .replaceAll('\\', '/')
@@ -134,13 +187,15 @@ export const fileOperationsMixin = {
             .replace(/\/{2,}/g, '/');
     },
 
-    _getPathDirectory(path = '') {
+    /** The folder part of a path (`src/components` for `src/components/App.jsx`), `''` for a top-level file. */
+    _getPathDirectory(path: string = ''): string {
         const normalized = this._normalizeVirtualPathInput(path);
         const slashIndex = normalized.lastIndexOf('/');
         return slashIndex === -1 ? '' : normalized.slice(0, slashIndex);
     },
 
-    _getLanguageFromPath(path = '') {
+    /** The file language a path's extension suggests, `''` when unknown. (Nothing calls it at the moment.) */
+    _getLanguageFromPath(path: string = ''): FileLanguage | '' {
         const normalized = this._normalizeVirtualPathInput(path).toLowerCase();
 
         if (normalized.endsWith('.tsx')) return 'tsx';
@@ -158,14 +213,19 @@ export const fileOperationsMixin = {
         return '';
     },
 
-    _getSuggestedVirtualPath(language = '') {
+    /**
+     * A free path for a new file of `language`, next to the active file (or in `src/`): `src/styles.css`,
+     * then `src/styles-2.css`… Unknown languages get `new-file.txt`.
+     */
+    _getSuggestedVirtualPath(language: string = ''): string {
         const normalizedLanguage = normalizeBlockType(language);
         const framework = this._getDocumentFramework();
         const activeDirectory = this._getPathDirectory(this._getActiveFile()?.path || '');
         const baseDirectory = activeDirectory || 'src';
         const existingPaths = new Set((this.currentDocument.files || []).map((file) => file.path));
 
-        const fileNameMap = {
+        // Read with any normalized language, hence the string-indexed type.
+        const fileNameMap: Readonly<Record<string, string | undefined>> = {
             css: 'styles.css',
             fragment: 'shader.frag',
             html: 'template.html',
@@ -203,7 +263,11 @@ export const fileOperationsMixin = {
         return candidatePath;
     },
 
-    _getDefaultVirtualRole(language = '') {
+    /**
+     * The role proposed for a new file of `language`: `entry` for the first script of a React/Vue project
+     * without an entry yet, otherwise by language family (`style`, `markup`, `config`, `component`, `util`).
+     */
+    _getDefaultVirtualRole(language: string = ''): VirtualFileRole {
         const normalizedLanguage = normalizeBlockType(language);
         const framework = this._getDocumentFramework();
         const hasEntry = getDocumentEntryCandidates(this.currentDocument).length > 0;
@@ -223,7 +287,8 @@ export const fileOperationsMixin = {
         return 'util';
     },
 
-    _toPascalCase(value = '') {
+    /** `my-panel.jsx` → `MyPanel` (extension dropped); `NewFile` when nothing is left. */
+    _toPascalCase(value: string = ''): string {
         return String(value)
             .replace(/\.[^.]+$/, '')
             .split(/[^A-Za-z0-9]+/)
@@ -232,7 +297,11 @@ export const fileOperationsMixin = {
             .join('') || 'NewFile';
     },
 
-    _getDefaultFileContent({ language = '', path = '', role = '' } = {}) {
+    /**
+     * Starter content for a new file or block: a small runnable snippet per language, named after the file
+     * (`path`); Vue and React entries (`role: 'entry'`) mount the app. `''` for languages without one.
+     */
+    _getDefaultFileContent({ language = '', path = '', role = '' }: DefaultFileContentRequest = {}): string {
         const normalizedLanguage = normalizeBlockType(language);
         const framework = this._getDocumentFramework();
         const componentName = this._toPascalCase(path.split('/').pop() || 'NewFile');
@@ -358,7 +427,12 @@ const title = ref('${componentName}');
         }
     },
 
-    _openFileDialog(mode = 'create') {
+    /**
+     * Opens the file dialog. `create` adds a file (virtual-files documents: path, language, role, template)
+     * or a block (legacy documents: language only); `edit` changes the active virtual file's path, language
+     * and role. Refused with a toast in exercise mode, without a topic, or when nothing can be added.
+     */
+    _openFileDialog(mode: FileDialogMode = 'create'): void {
         if (this._isExerciseMode()) {
             this._showToast('Exercise mode keeps the file structure fixed.', 'error');
             return;
@@ -383,9 +457,10 @@ const title = ref('${componentName}');
             return;
         }
 
+        // `activeFile!` below: edit mode returned above when there is no active file.
         this.fileDialogState = {
             mode,
-            fileId: mode === 'edit' ? activeFile.id : null,
+            fileId: mode === 'edit' ? activeFile!.id : null,
             suggestedPath: '',
             suggestedRole: '',
             templateId: 'custom',
@@ -396,7 +471,8 @@ const title = ref('${componentName}');
             const option = document.createElement('option');
             option.value = language;
             option.textContent = language.toUpperCase();
-            this.fileDialogLanguage.appendChild(option);
+            // Checked at the top of the method.
+            this.fileDialogLanguage!.appendChild(option);
         });
 
         this.fileDialogRole.innerHTML = '';
@@ -416,10 +492,10 @@ const title = ref('${componentName}');
             this.fileDialogPathGroup.classList.remove('hidden');
             this.fileDialogRoleGroup.classList.remove('hidden');
             this.fileDialogHint.textContent = 'Path, language and role are serialized inside the Markdown document.';
-            this.fileDialogPath.value = activeFile.path;
-            this.fileDialogLanguage.value = activeFile.language;
-            this.fileDialogRole.value = activeFile.role || '';
-            this.fileDialogState.suggestedRole = activeFile.role || '';
+            this.fileDialogPath.value = activeFile!.path;
+            this.fileDialogLanguage.value = activeFile!.language;
+            this.fileDialogRole.value = activeFile!.role || '';
+            this.fileDialogState.suggestedRole = activeFile!.role || '';
         } else {
             const initialLanguage = languageOptions[0] || 'html';
             const suggestedPath = this._getSuggestedVirtualPath(initialLanguage);
@@ -447,7 +523,12 @@ const title = ref('${componentName}');
         }
     },
 
-    _handleFileDialogSubmit() {
+    /**
+     * The file dialog's form was submitted. Edit: updates the active file's details. Create: adds the
+     * template's files, one virtual file, or one legacy block (with starter content). Path conflicts are
+     * refused with a toast and leave the dialog open; on success the new (or edited) file becomes active.
+     */
+    _handleFileDialogSubmit(): void {
         const mode = this.fileDialogState.mode || 'create';
         const language = normalizeBlockType(this.fileDialogLanguage?.value || '');
 
@@ -509,7 +590,7 @@ const title = ref('${componentName}');
                 }
 
                 const existingPaths = new Set((this.currentDocument.files || []).map((file) => file.path));
-                const nextPaths = new Set();
+                const nextPaths = new Set<string>();
 
                 for (const file of scaffold.files) {
                     if (!file.path) {
@@ -577,7 +658,8 @@ const title = ref('${componentName}');
         this._showToast(`Added block: ${language.toUpperCase()}`, 'success');
     },
 
-    _handleDuplicateFile() {
+    /** Duplicates the active file (a free `-copy` path) and activates the copy. Disabled in exercise mode. */
+    _handleDuplicateFile(): void {
         if (this._isExerciseMode()) {
             this._showToast('Duplicate is disabled in exercise mode.', 'error');
             return;
@@ -596,7 +678,11 @@ const title = ref('${componentName}');
         this._showToast(`Duplicated: ${activeFile.path}`, 'success');
     },
 
-    _handleDeleteFile() {
+    /**
+     * Removes the active file after a confirm() and activates the file now at its position. A virtual-files
+     * document keeps at least one file. Disabled in exercise mode.
+     */
+    _handleDeleteFile(): void {
         if (this._isExerciseMode()) {
             this._showToast('Delete is disabled in exercise mode.', 'error');
             return;
@@ -623,7 +709,8 @@ const title = ref('${componentName}');
         this._showToast(`Removed: ${activeFile.path}`, 'success');
     },
 
-    _handleEntryChange(entryPath) {
+    /** The entry select changed: makes `entryPath` the entry file of a React/Vue multi-file example. */
+    _handleEntryChange(entryPath: string): void {
         if (this._isExerciseMode()) {
             this._showToast('Entry selection is disabled in exercise mode.', 'error');
             return;
@@ -639,14 +726,20 @@ const title = ref('${componentName}');
         this._showToast(`Entry set to: ${entryPath}`, 'success');
     },
 
-    _updateFontSize(delta) {
+    /** Changes the editor font size by `delta` px, kept within 10–24 (the `--editor-font-size` CSS variable). */
+    _updateFontSize(delta: number): void {
         const minFont = 10;
         const maxFont = 24;
         this.fontSize = Math.max(minFont, Math.min(maxFont, this.fontSize + delta));
         document.documentElement.style.setProperty('--editor-font-size', `${this.fontSize}px`);
     },
 
-    async _handleSave() {
+    /**
+     * The Save button: writes the document as a NEW example of the topic (the server names it) and makes
+     * it the open file. Theory is saved in place instead. Nothing happens without a topic or content, or
+     * with blocking diagnostics.
+     */
+    async _handleSave(): Promise<void> {
         if (!this.currentTopicPath || hasBlockingDiagnostics(this.currentDocument)) return;
         if ((this.currentDocument.files || []).length === 0) return;
         if (this._isTheoryDocumentTarget()) {
@@ -682,11 +775,12 @@ const title = ref('${componentName}');
             });
         } catch (error) {
             console.error(error);
-            this._showToast(`Failed to save: ${error.message}`, 'error');
+            this._showToast(`Failed to save: ${errorMessage(error)}`, 'error');
         }
     },
 
-    _handleVimWrite() {
+    /** Vim `:w`: saves in place when the example has a file name, as a new example otherwise. */
+    _handleVimWrite(): void {
         if (!this.currentTopicPath) {
             this._showToast('Select a topic before saving.', 'error');
             return;
@@ -705,7 +799,8 @@ const title = ref('${componentName}');
         this._handleSave();
     },
 
-    _initButtons() {
+    /** Wires the document buttons: Save (as new), Modify, Remove, rename (the file name above the preview), favorite, pending. */
+    _initButtons(): void {
         this.btnSave.addEventListener('click', async () => this._handleSave());
 
         this.btnModify.addEventListener('click', () => this._handleModify());
@@ -728,7 +823,7 @@ const title = ref('${componentName}');
                 });
             } catch (error) {
                 console.error(error);
-                this._showToast(`Delete failed: ${error.message}`, 'error');
+                this._showToast(`Delete failed: ${errorMessage(error)}`, 'error');
             }
         });
 
@@ -750,7 +845,11 @@ const title = ref('${componentName}');
         });
     },
 
-    async _handleRenameCurrentFile() {
+    /**
+     * Asks for a new name (prompt) and renames the open example on disk; `.md` is appended when missing.
+     * Not for theory. Names with `/`, `\` or a leading `.` are refused.
+     */
+    async _handleRenameCurrentFile(): Promise<void> {
         if (!this.currentTopicPath || !this.currentFilename || this._isTheoryDocumentTarget()) return;
         const newName = String(prompt('Enter new filename:', this.currentFilename) || '').trim();
         if (!newName || newName === this.currentFilename) return;
@@ -780,15 +879,21 @@ const title = ref('${componentName}');
             });
         } catch (error) {
             console.error(error);
-            this._showToast(`Rename failed: ${error.message}`, 'error');
+            this._showToast(`Rename failed: ${errorMessage(error)}`, 'error');
         }
     },
 
-    async loadExample(filename) {
+    /**
+     * Opens `filename` of the current topic (src/main.ts, after its unsaved-changes guard). Resolves `false`
+     * when the response is stale (another load, or a topic change, started meanwhile) or empty; fetch
+     * errors propagate. An example with blocking diagnostics opens in "safe mode" (saving disabled).
+     */
+    async loadExample(filename: string): Promise<boolean> {
         // Latest request wins: a slower response for an older click is ignored.
         const requestId = ++this._exampleLoadRequestId;
         const topicPath = this.currentTopicPath;
-        const data = await fetchExample(topicPath, filename);
+        // `!`: the app only opens examples of a selected topic.
+        const data = await fetchExample(topicPath!, filename);
         if (requestId !== this._exampleLoadRequestId || topicPath !== this.currentTopicPath) return false;
         if (!data?.content) return false;
 
@@ -812,8 +917,8 @@ const title = ref('${componentName}');
         return true;
     },
 
-    // Drops the current example from the editor (e.g. after it was deleted on disk).
-    clearCurrentExample() {
+    /** Drops the current example from the editor (e.g. after it was deleted on disk). */
+    clearCurrentExample(): void {
         this._exampleLoadRequestId += 1;
         this.currentFilename = null;
         this.compileDiagnostics = [];
@@ -826,7 +931,11 @@ const title = ref('${componentName}');
         this._emitSessionStateChange();
     },
 
-    _commitPersistedDocument(documentBeforeSave, documentToPersist) {
+    /**
+     * After a successful save: `documentToPersist` (what was written) becomes the saved version, and the
+     * current document when it is still `documentBeforeSave`.
+     */
+    _commitPersistedDocument(documentBeforeSave: EditorDocument, documentToPersist: EditorDocument): void {
         // Keep edits typed while the save request was in flight.
         if (this.currentDocument === documentBeforeSave) {
             this.currentDocument = documentToPersist;
@@ -835,7 +944,11 @@ const title = ref('${componentName}');
         this._markDocumentSaved(documentToPersist, { recheck: true });
     },
 
-    loadTheoryDocument(content = '') {
+    /**
+     * Opens the topic's theory (`main.md` text) for editing, always in Tabs; the user's layout is restored
+     * when an example or the empty state replaces it (`_restoreLayoutAfterTheory`).
+     */
+    loadTheoryDocument(content: string = ''): void {
         this._exampleLoadRequestId += 1;
         if (!this._isTheoryDocumentTarget()) {
             // Theory edits in Tabs, but the user's layout preference is restored afterwards.
@@ -854,7 +967,8 @@ const title = ref('${componentName}');
         this._showToast('Editing theory: main.md', 'success');
     },
 
-    setTopicPath(path) {
+    /** Switches to another topic (`null`: none): the editor is emptied and any pending load is dropped. */
+    setTopicPath(path: string | null): void {
         this._exampleLoadRequestId += 1;
         this._restoreLayoutAfterTheory();
         this.currentTopicPath = path;
@@ -869,11 +983,17 @@ const title = ref('${componentName}');
         this._emitSessionStateChange();
     },
 
-    // `reset: true` means a different document is being loaded (example, theory,
-    // empty state): cached editor states are dropped and highlights come from the
-    // document metadata. Otherwise this is an in-place mutation of the current
-    // document and live (unsaved) highlights / editor states are carried over.
-    _applyDocument(documentModel, { notify = true, reset = false, editorStates = null } = {}) {
+    /**
+     * Installs a synchronized copy of `documentModel` as the current document and re-renders everything
+     * that depends on it (exercise config, workspace, status, hints, buttons, diagnostics, highlights);
+     * compile and runtime diagnostics are cleared.
+     *
+     * `reset: true` means a different document is being loaded (example, theory, empty state): cached
+     * editor states are dropped and highlights come from the document metadata. Otherwise this is an
+     * in-place mutation of the current document and live (unsaved) highlights / editor states are carried
+     * over, and a dirty check is scheduled.
+     */
+    _applyDocument(documentModel: EditorDocument, { notify = true, reset = false, editorStates = null }: ApplyDocumentOptions = {}): void {
         let carriedHighlights = '';
 
         if (!reset) {
@@ -913,7 +1033,8 @@ const title = ref('${componentName}');
         }
     },
 
-    _ensureActiveFile() {
+    /** Keeps `activeFileId` on a visible file: the first visible one when it is not, `null` when none is. */
+    _ensureActiveFile(): void {
         const files = this._getVisibleFiles();
 
         if (files.length === 0) {
@@ -926,7 +1047,11 @@ const title = ref('${componentName}');
         }
     },
 
-    async _handleModify() {
+    /**
+     * Saves the open example in place (Ctrl/Cmd+S, the Modify button, Vim `:w`); theory is saved through
+     * `_handleModifyTheory`. Nothing happens without a topic and file name, or with blocking diagnostics.
+     */
+    async _handleModify(): Promise<void> {
         if (!this.currentTopicPath || !this.currentFilename || hasBlockingDiagnostics(this.currentDocument)) return;
         if (this._isTheoryDocumentTarget()) {
             await this._handleModifyTheory();
@@ -954,16 +1079,18 @@ const title = ref('${componentName}');
             this._showToast(`Modified: ${this.currentFilename}`, 'success');
         } catch (error) {
             console.error(error);
-            this._showToast(`Modify failed: ${error.message}`, 'error');
+            this._showToast(`Modify failed: ${errorMessage(error)}`, 'error');
         }
     },
 
-    setCurrentExampleFavorite(enabled) {
+    /** Set by the app: whether the open example is a favorite (drives the star button). */
+    setCurrentExampleFavorite(enabled: boolean): void {
         this.currentExampleFavorite = enabled === true;
         this._updateButtonStates();
     },
 
-    setCurrentExamplePending(enabled) {
+    /** Set by the app: whether the open example is marked pending. */
+    setCurrentExamplePending(enabled: boolean): void {
         this.currentExamplePending = enabled === true;
         this._updateButtonStates();
     },
