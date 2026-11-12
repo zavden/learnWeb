@@ -111,6 +111,15 @@ user's choice). Branch `course` = master + one commit that force-adds material/c
 untracked course folders (switching back deletes them): update those branches with a temporary index
 (`GIT_INDEX_FILE=… git read-tree <base>; git add -f material/ch0…; git write-tree; git commit-tree; git update-ref`).
 
+App in TypeScript (2026-11-12): the whole app (src/, server.ts, scripts/, tools/, tests/) was converted to strict
+TypeScript, formatted with Prettier and documented (docs/ARCHITECTURE.md, docs/DEVELOPMENT.md) without touching the
+course: the whole-course snapshot (`node scripts/snapshot-material.ts --compare <baseline>`) was identical before and
+after, the checker reports 0 errors and 0 warnings, and the verify harness gave the same console output in the old and
+the new app on a sample of 360 examples. Commands that changed: `node scripts/check-material.ts <path>` (was `.mjs`),
+`npm run check` (types + lint + format + tests). `master` now holds the TypeScript app; `course` = a merge of the
+previous `course` with `master` (same course files, new app). The rule about never checking out `course`/`curso33` in
+the working tree with the untracked course folders still applies.
+
 Next actions when resuming (pick with the user):
 1. `npm run dev`; read this file; check the Chrome extension (tabs_context_mcp) before any review; agents are fresh
    each module (prompts: "Prompt template" below; the seventh session's shared rules (`session7-common.txt`) + per-module assignment files in
