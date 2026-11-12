@@ -7,6 +7,8 @@
 // `internal` ones, files of the attempt document itself (hidden solution files). Matching is by
 // normalized file path.
 
+import type { ExerciseComparePair } from '../types/document.ts';
+
 /** The file fields a comparison reads; a document file of the editor has more. */
 export interface ComparableFile {
     path: string;
@@ -19,17 +21,10 @@ export interface ComparableDocument {
     files?: readonly ComparableFile[];
 }
 
-// TODO(ts-migration): use the compare-pair type of the exercise config from src/types/document.ts once it exists
-/** An explicit pairing from the exercise config: compare `attemptPath` against `solutionPath`. */
-export interface ComparePairConfig {
-    attemptPath: string;
-    solutionPath: string;
-}
-
 /** The part of the exercise config that drives comparison. */
 export interface ExerciseComparisonConfig {
     /** When non-empty, only these pairs are compared; otherwise files with the same path in both documents are. */
-    comparePairs?: readonly ComparePairConfig[];
+    comparePairs?: readonly ExerciseComparePair[];
 }
 
 /** Options of {@link resolveExerciseComparison}. */
@@ -302,7 +297,7 @@ interface ExplicitPairsInput {
     attemptMap: Map<string, ComparableFile>;
     internalSolutionMap: Map<string, ComparableFile>;
     externalSolutionMap: Map<string, ComparableFile>;
-    comparePairs: readonly ComparePairConfig[];
+    comparePairs: readonly ExerciseComparePair[];
     /** Receives a message for every file that cannot be resolved. */
     issues: string[];
 }

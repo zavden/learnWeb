@@ -4,7 +4,7 @@
 // the serialized content, never on object key order. Changing the hash changes every cache hit
 // (scripts/snapshot-material.ts also uses it to memoize compiles).
 
-import type { CompileRequest } from '../types/api.ts';
+import type { CompileRequest } from '../types/compile.ts';
 
 // JSON-like serialization with sorted object keys, so equal documents serialize equally.
 function stableSerialize(value: unknown): string {

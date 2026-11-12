@@ -3,34 +3,28 @@
 // (main.ts) and the exercise embeds of theory pages (theoryExerciseEmbeds.ts). The metadata itself is
 // parsed and validated by src/utils/markdown; these helpers only format it.
 
-/** Pill data for each importance level; `accent` is the CSS modifier (`is-<accent>`) of the pill. */
+import type { ExampleEditorialMetadata, ExampleImportance } from '../types/document.ts';
+
+/**
+ * Pill data for each importance level; `accent` is the CSS modifier (`is-<accent>`) of the pill.
+ * `satisfies` keeps this table in step with the `ExampleImportance` union (derived from
+ * EXAMPLE_IMPORTANCE_VALUES): adding or removing a level there makes this fail to compile.
+ */
 export const EXAMPLE_IMPORTANCE_META = Object.freeze({
     critical: { accent: 'critical', label: 'Critical' },
     important: { accent: 'important', label: 'Important' },
     trivial: { accent: 'trivial', label: 'Trivial' },
     useful: { accent: 'useful', label: 'Useful' },
-});
-
-// TODO(ts-migration): the list of importance levels is also in EXAMPLE_IMPORTANCE_VALUES (src/utils/markdown/constants.ts); keep ONE source once the document types exist
-/** The importance levels that have a pill. */
-export type ExampleImportance = keyof typeof EXAMPLE_IMPORTANCE_META;
+} satisfies Record<ExampleImportance, { accent: string; label: string }>);
 
 /** Pill data of one importance level. */
 export type ExampleImportanceMeta = (typeof EXAMPLE_IMPORTANCE_META)[ExampleImportance];
 
-// TODO(ts-migration): derive from the example editorial metadata type of src/types/document.ts once it exists
 /**
  * The editorial fields {@link hasExampleEditorialMetadata} looks at. Any of them may be missing or
  * empty, so a partly filled metadata object is accepted.
  */
-export interface ExampleEditorialFields {
-    description?: string;
-    tags?: readonly string[];
-    /** Whole number of stars, 1 to 5; `null` when unrated. */
-    rating?: number | null;
-    /** An {@link ExampleImportance}, or `''` when not set. */
-    importance?: string;
-}
+export type ExampleEditorialFields = Partial<Pick<ExampleEditorialMetadata, 'description' | 'tags' | 'rating' | 'importance'>>;
 
 /** The pill data for an importance name (case and surrounding spaces ignored), or `null` when it is not a known level. */
 export function getExampleImportanceMeta(value = ''): ExampleImportanceMeta | null {

@@ -9,20 +9,12 @@
 // (`GET /api/topic/:ch/:sec/:top/assets/<file>`, raw file bytes) are not JSON payloads of this app and
 // are not described here.
 
+import type { LoadedVimShortcutConfig } from '../editor/vimShortcutConfig.ts';
 import type { ExampleReferenceEntry, HiddenState, MaterialTree } from './material.ts';
 
-// TODO(ts-migration): use ExampleDocument from src/types/document.ts once it exists
-/** A parsed example document as the compile route receives it (the real model lives in src/types/document.ts). */
-export type CompileRequestDocument = object;
-
-// TODO(ts-migration): use the compile result types from src/types/compile.ts once they exist
-/** The compiled output of a document (the real model lives in src/types/compile.ts). */
-export interface CompileResponse {
-    document: CompileRequestDocument;
-    compiledDocument: object;
-    compileDiagnostics: object[];
-    compileMeta: object;
-}
+// The compile payloads are defined with the rest of the compile contract; re-exported so every
+// endpoint family can be imported from this file.
+export type { CompileErrorResponse, CompileRequest, CompileResponse } from './compile.ts';
 
 /** Body of every failed response (status 400, 403, 404, 409, 410 or 500, depending on the route). */
 export interface ApiErrorBody {
@@ -75,20 +67,13 @@ export type ClipboardDefaultState = EditorFlagState;
 
 // ─── Vim shortcuts ─────────────────────────────────────────────
 
-// TODO(ts-migration): use VimShortcutConfig from src/editor/vimShortcutConfig.ts once it exists
-/** Vim shortcut table: section (`global`, `tabs`, `panels`, `shaders`) > key group (`shift`, `leader`, ...) > action > key token. */
-export type VimShortcutConfigPayload = Record<string, Record<string, Record<string, string>>>;
-
-/** Response of `GET /api/editor/vim-shortcuts`. */
-export interface VimShortcutsResponse {
-    /** The effective shortcuts: the defaults merged with `vim-shortcuts.yaml`. */
-    config: VimShortcutConfigPayload;
+/**
+ * Response of `GET /api/editor/vim-shortcuts`: what `loadVimShortcutConfig` returns (`config`: the
+ * defaults merged with `vim-shortcuts.yaml`; `source`; `warnings`) plus the file's name.
+ */
+export interface VimShortcutsResponse extends LoadedVimShortcutConfig {
     /** Always `vim-shortcuts.yaml`: the file the user edits. */
     path: string;
-    /** `file` when the YAML was valid and used; `default` when it was missing, empty or rejected. */
-    source: 'default' | 'file';
-    /** Why the YAML was rejected (empty when `source` is `file` or the file is empty). */
-    warnings: string[];
 }
 
 // ─── Favorites and pending ─────────────────────────────────────
@@ -259,9 +244,5 @@ export interface PreviewDocumentResponse {
 }
 
 // ─── Compile ───────────────────────────────────────────────────
-
-/** Body of `POST /api/compile`: a parsed document, or raw example text when there is no document. */
-export interface CompileRequest {
-    document?: CompileRequestDocument;
-    content?: string;
-}
+// `POST /api/compile`: `CompileRequest` (a parsed document, or raw example text), answered with
+// `CompileResponse` or, with status 500, `CompileErrorResponse`. Re-exported from ./compile.ts above.

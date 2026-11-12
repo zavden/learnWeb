@@ -13,8 +13,6 @@
 import type {
     ApiErrorBody,
     ClipboardDefaultState,
-    CompileRequest,
-    CompileResponse,
     CreateItemRequest,
     CreateItemResponse,
     CreateItemType,
@@ -43,6 +41,7 @@ import type {
     VimDefaultState,
     VimShortcutsResponse,
 } from '../types/api.ts';
+import type { CompileRequest, CompileResponse } from '../types/compile.ts';
 
 const BASE = '/api';
 
