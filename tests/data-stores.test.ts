@@ -110,7 +110,7 @@ test('exercise comparison aligns lines with a real diff', () => {
     const solution = { files: [{ path: 'styles.css', content: '.card {\n  padding: 20px;\n  border: 1px solid;\n  color: red;\n}' }] };
     const attempt = { files: [{ path: 'styles.css', content: '/* my work */\n.card {\n  padding: 10px;\n  border: 1px solid;\n}\n' }] };
     const comparison = resolveExerciseComparison({ attemptDocument: attempt, solutionDocument: solution, exerciseConfig: {} });
-    const rows = comparison.selectedPair.rows.map((row) => [row.state, row.attemptLineNumber, row.solutionLineNumber]);
+    const rows = comparison.selectedPair!.rows.map((row) => [row.state, row.attemptLineNumber, row.solutionLineNumber]);
 
     assert.deepEqual(rows, [
         ['removed', 1, null],
@@ -120,13 +120,13 @@ test('exercise comparison aligns lines with a real diff', () => {
         ['added', null, 4],
         ['same', 5, 5],
     ]);
-    assert.deepEqual(comparison.selectedPair.summary, { sameCount: 3, changedCount: 1, addedCount: 1, removedCount: 1 });
+    assert.deepEqual(comparison.selectedPair!.summary, { sameCount: 3, changedCount: 1, addedCount: 1, removedCount: 1 });
 });
 
 test('identical and empty files compare as same', () => {
     const doc = { files: [{ path: 'index.html', content: '' }] };
     const comparison = resolveExerciseComparison({ attemptDocument: doc, solutionDocument: doc, exerciseConfig: {} });
-    assert.deepEqual(comparison.selectedPair.rows.map((row) => row.state), ['same']);
+    assert.deepEqual(comparison.selectedPair!.rows.map((row) => row.state), ['same']);
 });
 
 // ─── api client ─────────────────────────────────────────

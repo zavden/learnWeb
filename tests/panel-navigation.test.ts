@@ -13,6 +13,7 @@ test('wraps panel index cyclically for next and previous movement', () => {
 test('returns -1 for wrapped movement when panel count is too small or direction is invalid', () => {
     assert.equal(getWrappedPanelIndex(1, 0, 'up'), -1);
     assert.equal(getWrappedPanelIndex(0, 0, 'down'), -1);
+    // @ts-expect-error 'noop' is not a PanelDirection: invalid input on purpose
     assert.equal(getWrappedPanelIndex(4, 1, 'noop'), -1);
 });
 

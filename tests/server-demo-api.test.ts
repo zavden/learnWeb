@@ -1,18 +1,20 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
+import type { Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import express from 'express';
 import { createDemoApiRouter } from '../src/utils/demoApi.ts';
 
-let server;
-let base;
+let server: Server;
+let base: string;
 
 before(async () => {
     const app = express();
     app.use('/api/demo', createDemoApiRouter());
-    await new Promise((resolve) => {
+    await new Promise<void>((resolve) => {
         server = app.listen(0, '127.0.0.1', resolve);
     });
-    base = `http://127.0.0.1:${server.address().port}/api/demo`;
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/demo`;
 });
 
 after(() => new Promise((resolve) => server.close(resolve)));
@@ -85,7 +87,7 @@ test('cors=no omits CORS headers, cors=origin reflects the origin, expose=1 expo
         method: 'OPTIONS',
     });
     assert.equal(preflight.status, 204);
-    assert.match(preflight.headers.get('access-control-allow-methods'), /PUT/);
+    assert.match(preflight.headers.get('access-control-allow-methods')!, /PUT/);
     assert.equal(preflight.headers.get('access-control-allow-headers'), 'content-type, x-cart');
 
     const closedPreflight = await fetch(`${base}/echo?cors=no`, { method: 'OPTIONS' });
@@ -108,7 +110,7 @@ test('stream sends the body in chunks with a Content-Length unless length=no', a
 
     const ndjson = await fetch(`${base}/stream?chunks=2&interval=0&format=ndjson&length=no`);
     assert.equal(ndjson.headers.get('content-length'), null);
-    assert.match(ndjson.headers.get('content-type'), /application\/x-ndjson/);
+    assert.match(ndjson.headers.get('content-type')!, /application\/x-ndjson/);
     const lines = (await ndjson.text()).trim().split('\n').map((line) => JSON.parse(line));
     assert.deepEqual(lines, [{ n: 1, of: 2, text: 'Bloque 1 de 2' }, { n: 2, of: 2, text: 'Bloque 2 de 2' }]);
 });

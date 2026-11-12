@@ -1,8 +1,16 @@
+// Storage of the pending examples (examples still to review): the `.pending` dotfile in the repository
+// root, a JSON list of repository-relative example paths. Same format, same rules and same
+// hand-edit tolerance as the favorites; the logic is a deliberate copy of favoritesStore.ts (only the
+// JSON file helpers are shared), so change both together. Runs under Node, imported by server.ts.
+
 import fs from 'fs';
 import path from 'path';
+import type { ExampleListState, ExampleReferenceEntry, PendingState, RawExampleListState } from '../types/material.ts';
 import { backupUnreadableStateFile, readJsonStateFile, salvageQuotedStrings } from './favoritesStore.ts';
+import type { JsonStateFile } from './favoritesStore.ts';
 
-function normalizePendingPath(value = '') {
+// Entries come from a hand-edited file, so they can be any JSON value.
+function normalizePendingPath(value: unknown = ''): string {
     return String(value || '')
         .trim()
         .replaceAll('\\', '/')
@@ -11,22 +19,23 @@ function normalizePendingPath(value = '') {
         .replace(/\/{2,}/g, '/');
 }
 
-function isExampleMarkdownPath(relativePath = '') {
+function isExampleMarkdownPath(relativePath = ''): boolean {
     return /^material\/[^/]+\/[^/]+\/[^/]+\/examples\/.+\.md$/i.test(relativePath);
 }
 
-function buildState(items = []) {
+function buildState(items: string[] = []): ExampleListState {
     return {
         items,
     };
 }
 
-function getStateItems(fileState) {
+// The untrusted entries of a state file, before normalization.
+function getStateItems(fileState: JsonStateFile): unknown[] {
     if (fileState.status === 'invalid') {
         return salvageQuotedStrings(fileState.raw);
     }
 
-    const parsed = fileState.value;
+    const parsed = fileState.value as RawExampleListState | null;
     return Array.isArray(parsed)
         ? parsed
         : Array.isArray(parsed?.items)
@@ -34,7 +43,8 @@ function getStateItems(fileState) {
             : [];
 }
 
-export function readPendingState(filePath) {
+/** The pending list in `filePath`, cleaned: normalized paths, only example `.md` files, no duplicates. */
+export function readPendingState(filePath: string): PendingState {
     const inputItems = getStateItems(readJsonStateFile(filePath));
     const items = Array.from(new Set(
         inputItems
@@ -45,7 +55,8 @@ export function readPendingState(filePath) {
     return buildState(items);
 }
 
-export function writePendingState(filePath, items = []) {
+/** Overwrites the pending file with the cleaned `items` (backing up an unparseable file first). */
+export function writePendingState(filePath: string, items: readonly string[] = []): PendingState {
     const state = buildState(Array.from(new Set(
         (Array.isArray(items) ? items : [])
             .map((entry) => normalizePendingPath(entry))
@@ -57,7 +68,8 @@ export function writePendingState(filePath, items = []) {
     return state;
 }
 
-export function addPending(filePath, relativePath) {
+/** Appends an example path to the pending list. Anything that is not an example `.md` path is ignored. */
+export function addPending(filePath: string, relativePath: string): PendingState {
     const normalizedPath = normalizePendingPath(relativePath);
     if (!isExampleMarkdownPath(normalizedPath)) {
         return readPendingState(filePath);
@@ -71,7 +83,8 @@ export function addPending(filePath, relativePath) {
     return writePendingState(filePath, [...state.items, normalizedPath]);
 }
 
-export function removePending(filePath, relativePath) {
+/** Removes an example path from the pending list (a no-op rewrite when it was not there). */
+export function removePending(filePath: string, relativePath: string): PendingState {
     const normalizedPath = normalizePendingPath(relativePath);
     const state = readPendingState(filePath);
     return writePendingState(
@@ -80,12 +93,17 @@ export function removePending(filePath, relativePath) {
     );
 }
 
-export function isPendingPath(filePath, relativePath) {
+/** Whether the (normalized) path is currently pending. */
+export function isPendingPath(filePath: string, relativePath: string): boolean {
     const normalizedPath = normalizePendingPath(relativePath);
     return readPendingState(filePath).items.includes(normalizedPath);
 }
 
-export function resolvePending(filePath, materialDir) {
+/**
+ * The pending examples with their file name, topic and whether the file still exists. `materialDir` is
+ * the `material/` folder: the stored paths are relative to its parent.
+ */
+export function resolvePending(filePath: string, materialDir: string): ExampleReferenceEntry[] {
     const state = readPendingState(filePath);
 
     return state.items.map((relativePath) => {

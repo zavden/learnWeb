@@ -1,0 +1,14 @@
+# Course content and generated output are never reformatted.
+material/
+dist/
+node_modules/
+claude_resume/
+package-lock.json
+
+# Hand-formatted or whitespace-sensitive files.
+index.html
+tools/*.html
+*.md
+vim-shortcuts.yaml
+.claude/
+.codex/

@@ -10,7 +10,7 @@ import {
     setChapterHidden,
 } from '../src/utils/materialTree.ts';
 
-function createTopic(materialDir, chapterId, sectionId, topicId) {
+function createTopic(materialDir: string, chapterId: string, sectionId: string, topicId: string) {
     const topicDir = path.join(materialDir, chapterId, sectionId, topicId);
     fs.mkdirSync(path.join(topicDir, 'examples'), { recursive: true });
     fs.writeFileSync(path.join(topicDir, 'main.md'), '# Test topic\n', 'utf-8');

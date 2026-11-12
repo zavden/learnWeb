@@ -12,7 +12,7 @@ import {
     writeFavoritesState,
 } from '../src/utils/favoritesStore.ts';
 
-function createTempDir(prefix) {
+function createTempDir(prefix: string) {
     return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 

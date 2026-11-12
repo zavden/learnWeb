@@ -1,4 +1,6 @@
 import express from 'express';
+// The fetch API's global `Request` is used below, so Express's types get other names.
+import type { Request as ExpressRequest, Response as ExpressResponse, Router } from 'express';
 
 // A small demo API for the course's network lessons (fetch, CORS, streams), served by the local API
 // server under /api/demo. It reads nothing from disk and only echoes back what the request itself
@@ -16,6 +18,10 @@ import express from 'express';
 //                          bytes of text (or one NDJSON line with `format=ndjson`); Content-Length
 //                          unless `length=no`.
 //   anything else          404 with an HTML page, like a typical server.
+//
+// Course examples call these endpoints and depend on every detail (status codes, delays, headers,
+// bodies, even the Spanish chunk text), so treat the behaviour as a public contract. Runs under Node,
+// mounted by server.ts; tests/server-demo-api.test.ts covers it.
 
 const ECHO_BODY_LIMIT = '1mb';
 const MAX_DELAY_MS = 10000;
@@ -35,7 +41,35 @@ const NOT_FOUND_PAGE = [
     '',
 ].join('\n');
 
-function clampInteger(value, min, max, fallback) {
+/** Query parameters as the demo reads them: a repeated name gives an array of its values. */
+export type DemoQuery = Record<string, string | string[]>;
+
+/** JSON answer of `/api/demo/echo`: what the server received. */
+export interface DemoEchoPayload {
+    method: string;
+    /** Full path including the mount point, without the query string. */
+    path: string;
+    query: DemoQuery;
+    /** Only `accept`, `authorization`, `content-type` and `x-*` headers are echoed. */
+    headers: Record<string, string | string[] | undefined>;
+    /** The parsed body: JSON value, form fields, multipart fields (files as `{ name, size, type }`), text, `{ bytes }`, or `null` when empty. */
+    body: unknown;
+    /** Set (with a 400 status) when the body could not be parsed. */
+    error?: string;
+}
+
+/** Outcome of reading a request body. */
+interface ParsedBody {
+    body: unknown;
+    error?: string;
+}
+
+/** A demo request after the first middleware has parsed its query. */
+interface DemoRequest extends ExpressRequest {
+    demoQuery: DemoQuery;
+}
+
+function clampInteger(value: unknown, min: number, max: number, fallback: number): number {
     const number = Number.parseInt(String(value ?? ''), 10);
     if (!Number.isFinite(number)) return fallback;
     return Math.min(max, Math.max(min, number));
@@ -43,16 +77,16 @@ function clampInteger(value, min, max, fallback) {
 
 // Query parameters the way URLSearchParams reads them (Express's parser would build nested objects
 // from `a[b]=1`); repeated names become arrays.
-function readQuery(req) {
+function readQuery(req: ExpressRequest): DemoQuery {
     const search = String(req.originalUrl || '').split('?')[1] || '';
     return groupEntries(new URLSearchParams(search));
 }
 
-function groupEntries(entries) {
-    const result = {};
+function groupEntries<V>(entries: Iterable<readonly [string, V]>): Record<string, V | V[]> {
+    const result: Record<string, V | V[]> = {};
     for (const [key, value] of entries) {
         if (Object.hasOwn(result, key)) {
-            result[key] = [].concat(result[key], value);
+            result[key] = ([] as V[]).concat(result[key], value);
         } else {
             result[key] = value;
         }
@@ -60,11 +94,13 @@ function groupEntries(entries) {
     return result;
 }
 
-function isAllowedRequestHeader(name) {
+function isAllowedRequestHeader(name: string): boolean {
     return ECHOED_HEADERS.has(name) || name.startsWith('x-');
 }
 
-function applyCorsHeaders(req, res, query) {
+// Sets the always-on headers and the CORS ones the `cors` / `expose` query asks for; returns whether
+// CORS is allowed for this request (false for `cors=no`, and for `cors=origin` without an Origin header).
+function applyCorsHeaders(req: ExpressRequest, res: ExpressResponse, query: DemoQuery): boolean {
     res.set('Cache-Control', 'no-store');
     res.set('X-Demo-Server', 'LearnWeb');
 
@@ -84,7 +120,7 @@ function applyCorsHeaders(req, res, query) {
     return true;
 }
 
-function answerPreflight(req, res, corsAllowed) {
+function answerPreflight(req: ExpressRequest, res: ExpressResponse, corsAllowed: boolean): void {
     if (corsAllowed) {
         res.set('Access-Control-Allow-Methods', ALLOWED_METHODS);
         const requested = String(req.headers['access-control-request-headers'] || '')
@@ -98,15 +134,15 @@ function answerPreflight(req, res, corsAllowed) {
     res.status(204).end();
 }
 
-function echoHeaders(req) {
-    const headers = {};
+function echoHeaders(req: ExpressRequest): DemoEchoPayload['headers'] {
+    const headers: DemoEchoPayload['headers'] = {};
     for (const [name, value] of Object.entries(req.headers)) {
         if (isAllowedRequestHeader(name)) headers[name] = value;
     }
     return headers;
 }
 
-async function parseBody(req) {
+async function parseBody(req: ExpressRequest): Promise<ParsedBody> {
     const raw = Buffer.isBuffer(req.body) ? req.body : null;
     if (!raw || raw.length === 0) return { body: null };
 
@@ -127,11 +163,11 @@ async function parseBody(req) {
     if (mediaType === 'multipart/form-data') {
         try {
             const formData = await new Request('http://demo.invalid/', {
-                body: raw,
+                body: raw as BodyInit,
                 headers: { 'content-type': contentType },
                 method: 'POST',
             }).formData();
-            const fields = [];
+            const fields: Array<[string, string | { name: string; size: number; type: string }]> = [];
             for (const [name, value] of formData) {
                 fields.push([name, typeof value === 'string'
                     ? value
@@ -146,30 +182,31 @@ async function parseBody(req) {
     return { body: { bytes: raw.length } };
 }
 
-function streamChunk(index, total, size, format) {
+function streamChunk(index: number, total: number, size: number, format: 'ndjson' | 'text'): string {
     const label = `Bloque ${index} de ${total}`;
     if (format === 'ndjson') return `${JSON.stringify({ n: index, of: total, text: label })}\n`;
     const line = `${label} `;
     return `${line}${'.'.repeat(Math.max(0, size - line.length - 1))}\n`;
 }
 
-export function createDemoApiRouter() {
+/** The Express router to mount at `/api/demo`. */
+export function createDemoApiRouter(): Router {
     const router = express.Router();
 
     router.use((req, res, next) => {
         const query = readQuery(req);
-        req.demoQuery = query;
+        (req as DemoRequest).demoQuery = query;
         const corsAllowed = applyCorsHeaders(req, res, query);
         if (req.method === 'OPTIONS') return answerPreflight(req, res, corsAllowed);
         return next();
     });
 
     router.all('/echo', express.raw({ type: () => true, limit: ECHO_BODY_LIMIT }), async (req, res) => {
-        const query = req.demoQuery;
+        const query = (req as DemoRequest).demoQuery;
         const parsed = await parseBody(req);
         const status = parsed.error ? 400 : clampInteger(query.status, 200, 599, 200);
         const delay = clampInteger(query.delay, 0, MAX_DELAY_MS, 0);
-        const payload = {
+        const payload: DemoEchoPayload = {
             method: req.method,
             path: `${req.baseUrl}${req.path}`,
             query,
@@ -196,7 +233,7 @@ export function createDemoApiRouter() {
     });
 
     router.get('/stream', (req, res) => {
-        const query = req.demoQuery;
+        const query = (req as DemoRequest).demoQuery;
         const total = clampInteger(query.chunks, 1, MAX_STREAM_CHUNKS, 10);
         const interval = clampInteger(query.interval, 0, MAX_STREAM_INTERVAL_MS, 200);
         const size = clampInteger(query.size, MIN_STREAM_CHUNK_SIZE, MAX_STREAM_CHUNK_SIZE, 1024);
@@ -211,7 +248,7 @@ export function createDemoApiRouter() {
         res.flushHeaders();
 
         let next = 0;
-        let timer = null;
+        let timer: ReturnType<typeof setTimeout> | undefined;
         const writeNext = () => {
             if (res.writableEnded || res.destroyed) return;
             res.write(chunks[next]);

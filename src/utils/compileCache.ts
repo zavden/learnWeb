@@ -1,4 +1,13 @@
-function stableSerialize(value) {
+// Compile cache helpers shared by the two places that memoize compile results: the API server
+// (server.ts, keyed per request) and the compile worker (src/workers/compileWorker.ts, keyed per
+// browser request). Both must derive the SAME key for the same document, so the key depends only on
+// the serialized content, never on object key order. Changing the hash changes every cache hit
+// (scripts/snapshot-material.ts also uses it to memoize compiles).
+
+import type { CompileRequest } from '../types/api.ts';
+
+// JSON-like serialization with sorted object keys, so equal documents serialize equally.
+function stableSerialize(value: unknown): string {
     if (value === null || value === undefined) {
         return String(value);
     }
@@ -18,7 +27,8 @@ function stableSerialize(value) {
 
     if (valueType === 'object') {
         const keys = Object.keys(value).sort();
-        return `{${keys.map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`).join(',')}}`;
+        const record = value as Record<string, unknown>;
+        return `{${keys.map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`).join(',')}}`;
     }
 
     return JSON.stringify(String(value));
@@ -49,7 +59,11 @@ function hashString(value = '') {
     return `${cyrb53(value, 0x9e3779b9)}.${cyrb53(value, 0x85ebca6b)}.${value.length.toString(36)}`;
 }
 
-export function createCompileCacheKey({ document, content } = {}) {
+/**
+ * Cache key of a compile request: `compile:` plus a hash of the document, or of the raw `content` when
+ * there is no document. Equal documents give equal keys regardless of property order.
+ */
+export function createCompileCacheKey({ document, content }: CompileRequest = {}): string {
     const payload = document
         ? { type: 'document', value: document }
         : { type: 'content', value: String(content || '') };
@@ -58,6 +72,10 @@ export function createCompileCacheKey({ document, content } = {}) {
     return `compile:${hashString(serialized)}`;
 }
 
-export function cloneSerializable(value) {
-    return JSON.parse(JSON.stringify(value));
+/**
+ * Deep copy through JSON, so cached results can be handed out without being mutated. `value` must be
+ * JSON-serializable: anything else (`undefined` fields, functions, dates) does not survive the copy.
+ */
+export function cloneSerializable<T>(value: T): T {
+    return JSON.parse(JSON.stringify(value)) as T;
 }
